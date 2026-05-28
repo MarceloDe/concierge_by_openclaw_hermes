@@ -1,0 +1,573 @@
+# Decisions
+
+Record implementation decisions here.
+
+Each decision includes:
+- Date
+- Context
+- Options considered
+- Decision
+- Reason
+- Cost of changing later
+
+## 2026-05-17: Implementation Must Wait For Product Interview
+
+Context:
+`docs/CODEX_START_PROMPT.md`, `AGENTS.md`, and `brainstyworkers_ai_concierge_prompt.md` require a prompt sufficiency audit before coding. The source prompt provides a strong architecture vision but leaves first-demo product behavior unresolved.
+
+Options considered:
+- Start coding from the inferred Milestone 1 web chat direction.
+- Ask the full interview before writing any files.
+- Update planning docs with the audit and interview blockers, then ask focused questions.
+
+Decision:
+Update the planning docs with a sufficiency audit and wait for user answers before implementation.
+
+Reason:
+The project touches healthcare and insurance workflows. The first user role, first workflow, data policy, memory boundaries, and local proof expectations affect architecture and safety behavior.
+
+Cost of changing later:
+Low before coding. Medium to high after implementation if the wrong first user, workflow, or data boundary is assumed.
+
+## 2026-05-27: Pause Breadth And Collapse To One LangGraph Product Runtime
+
+Context:
+The project has real LangGraph wiring, local browser extraction, an OpenClaw skill artifact, proposal-only validation, local audit/session state, and many deterministic tests. A new MVP hardening review found that the product still has two divergent runtimes: `/api/chat` uses `engine.mjs` and can perform real browser observation, while `/api/langgraph/run` and orchestrator endpoints use `langgraphRunner.mjs` and mostly prepare proposal JSON. The same review also found that product memory is not yet a real Hindsight/Zen/LangMem/Mem0/Zep-style memory runtime and that tests can pass while validating contracts rather than completing a real healthcare journey.
+
+Options considered:
+- Continue with the previously documented next step: initialize the dedicated official OpenClaw profile/workspace.
+- Add more workflows, UI panels, or OpenClaw metadata.
+- Pause expansion and harden one non-mocked eligibility/benefits journey through one LangGraph product runtime.
+
+Decision:
+Pause breadth expansion and make Phase 1 of `docs/CODEX_MVP_HARDENING_PLAYBOOK.md` the next implementation target: collapse public product paths into one LangGraph runtime and move real browser/evidence observation into a graph node.
+
+Reason:
+The MVP must prove one real healthcare journey end to end. Initializing OpenClaw profile state before fixing runtime divergence would increase surface area without proving that LangGraph truly owns the product workflow. Cortex remains project memory only; product memory must be implemented through a runtime retain/recall adapter before it is claimed as shipping memory.
+
+Cost of changing later:
+Medium. The project already has code in both `engine.mjs` and `langgraphRunner.mjs`, so collapsing runtime paths requires careful migration and regression tests. Deferring this would make later OpenClaw execution, product memory, and PHI hardening harder to audit.
+
+## 2026-05-17: Default Slice 1 Should Be Mocked And Local Unless User Says Otherwise
+
+Context:
+The source prompt aims at production integrations, but the startup prompt requires an early interactive slice and the safety boundary prohibits real payer communication, PHI handling, account login, medical advice, or external message sending without approval.
+
+Options considered:
+- Use live integrations immediately.
+- Build a mocked local demo first.
+- Build only planning documents.
+
+Decision:
+Assume slice 1 should use mocked or seeded data locally, pending user confirmation.
+
+Reason:
+This gives the user something to try quickly while preserving healthcare safety boundaries.
+
+Cost of changing later:
+Low. Mock adapters can be replaced by real channel, memory, model, and payer integrations in later slices.
+
+## 2026-05-17: Slice 1 Revised To Real User Enrollment And Browser Portal Depuration
+
+Context:
+The user rejected the safe mocked-only default and provided interview answers for a more ambitious slice 1: enroll Marcelo Felix, build the local application database, use local web chat, attach to a logged Chrome insurance portal through remote debugging/browser automation, extract eligibility/benefits data, and produce browser/action/data trace proof.
+
+Options considered:
+- Keep the mocked eligibility demo as slice 1.
+- Move directly to production PHI storage and Vercel deployment.
+- Revise slice 1 to local real-user enrollment and read-only browser portal depuration with approval gates.
+
+Decision:
+Revise slice 1 to local real-user enrollment plus logged Chrome portal navigation/extraction, but keep implementation pending until the user approves the revised plan and provides portal details.
+
+Reason:
+This better matches the user's intended product value: the concierge should enroll the member, understand the member's actual insurance website context, and verify eligibility/benefits through the user-authenticated browser. Keeping the slice local and gated limits risk while testing the hardest workflow early.
+
+Cost of changing later:
+Medium. The data model, browser automation boundary, and audit model will shape future slices, but keeping Vercel production persistence and Hindsight retention deferred reduces rework risk.
+
+## 2026-05-17: Stateful Session Manager Before Real LangGraph Runtime
+
+Context:
+The user asked for professional user session management to allow LangChain statefulness. The prototype already had `sessions.langgraph_thread_id`, but lacked lifecycle fields, resumable chat behavior, checkpoints, and a state API that can map directly to LangGraph/LangChain thread configuration.
+
+Options considered:
+- Install LangChain/LangGraph immediately and wire the runtime into the workflow.
+- Keep only the existing `sessions` table and pass thread IDs manually.
+- Build a local SQLite-backed session manager with LangGraph-compatible thread IDs, checkpoints, events, and state JSON, then add the real runtime later.
+
+Decision:
+Build the local SQLite-backed session manager now and defer real LangGraph runtime installation/API usage.
+
+Reason:
+This adds the durable state contract needed by LangChain without introducing external package/API risk during the PHI-heavy browser workflow. It also keeps the local RALPH proof loop fast and auditable.
+
+Cost of changing later:
+Low to medium. The state JSON and checkpoint rows can be adapted to a LangGraph checkpointer or persisted store later; some field naming may need mapping when the real runtime is introduced.
+
+## 2026-05-17: Local Memory Harness Before Real Hindsight Runtime
+
+Context:
+The user asked whether cross-session memory, OpenClaw heartbeat behavior, and proactive scheduled follow-ups should be implemented through Hindsight, a hook-style harness, or both. The source prompt defines a recall node before orchestration, a retain node after orchestration, Hindsight as temporal memory, and OpenClaw as channel/tool surface. The local prototype already has real PHI-like Aetna records in SQLite, but no approved Hindsight package/API, no real OpenClaw worker, no Vercel AI Gateway credential, and no approved email/WhatsApp sending adapter.
+
+Options considered:
+- Install and wire a real Hindsight/LangGraph runtime immediately.
+- Keep memory deferred and only document the plan.
+- Build a local hook-style memory harness now, with adapter seams for Hindsight, LangGraph, and OpenClaw.
+- Put heartbeat logic inside OpenClaw only.
+
+Decision:
+Implement the hook-style local memory harness now and design it to be consumed by both LangGraph/LangChain and OpenClaw. Keep real Hindsight/vector recall and real OpenClaw channel execution as explicit adapters for the next integration slice.
+
+Reason:
+The hook harness gives the system the needed production shape immediately: context packets before each task, retained memory pointers after each task, user-scoped OpenClaw arm state, scheduled jobs, pending tasks, and approval-gated outbox proposals. It avoids pretending that external memory/channel systems are active while still making the schema and code ready for them.
+
+Cost of changing later:
+Low to medium. Hindsight can replace or augment `memory_items` retrieval, LangGraph can consume `context_packets` as graph state, and OpenClaw can execute `scheduled_jobs`/`agent_tasks`. The main migration cost will be mapping local schedule labels and memory metadata into the selected production adapters.
+
+## 2026-05-17: Prompt Contracts Before Real Agent Runtime
+
+Context:
+The user asked whether the orchestrator and OpenClaw prompts are appropriate for a personalized dedicated healthcare concierge, and whether memory should shape identity and guardrails. The current local harness can inject memory and DB pointers, but real LangGraph/OpenClaw execution should not proceed until prompt identity, allowed domains, untrusted-context boundaries, and refusal behavior are explicit and testable.
+
+Options considered:
+- Move directly to real LangGraph/OpenClaw adapter compatibility tests.
+- Keep prompt rules only inside the source markdown prompt.
+- Implement executable prompt contracts and policy tests first.
+
+Decision:
+Implement explicit prompt contracts now for the orchestrator and OpenClaw arm, and include them in the context packet before real runtime adapters.
+
+Reason:
+This prevents memory, portal text, or tool output from becoming accidental instructions. The orchestrator owns workflow and policy decisions. The OpenClaw arm owns delegated observation/action execution only. Memory personalizes context, but it does not grant authority.
+
+Cost of changing later:
+Low. Real LangGraph nodes and OpenClaw workers can consume the same prompt bundle; only transport formatting should need adjustment.
+
+## 2026-05-17: Runtime Adapter Compatibility Before Real Runtime Install
+
+Context:
+The user asked to verify whether the memory/session harness is compatible with LangChain, LangGraph, OpenClaw, and future Hindsight-style memory. The local prototype now has real SQLite-backed users, sessions, context packets, prompt contracts, memory items, OpenClaw arm state, tasks, and scheduled jobs. However, real LangGraph, OpenClaw, Hindsight, OpenAI API, and Vercel AI Gateway runtimes are not installed or approved for live execution in this slice.
+
+Options considered:
+- Install and call the real runtimes immediately.
+- Keep compatibility as documentation only.
+- Build executable local runtime adapters that map the current context packet into LangChain config/messages, LangGraph agent state, OpenClaw channel/heartbeat envelopes, and future Hindsight retain candidates.
+
+Decision:
+Implement executable local runtime compatibility adapters now, and defer live external/runtime package verification until those packages/APIs are explicitly approved and configured.
+
+Reason:
+This proves the harness can project its state into the shapes required by the next integration layer without pretending that live external runtimes are active. It also gives tests and an API endpoint that can catch adapter drift before the real runtimes are connected.
+
+Cost of changing later:
+Low to medium. Field names and transport wrappers may need adjustment when the actual LangGraph/OpenClaw/Hindsight libraries are installed, but the user/session/thread IDs, database pointers, prompt bundle, memory context, approval policy, and heartbeat semantics should remain stable.
+
+## 2026-05-17: Workflow Architecture Registry Before Live LangGraph/OpenClaw
+
+Context:
+The user asked whether the big plan already defines how the orchestrator routes by memory, workflow readiness, learned prior takeaways, required tools, user journey stage, OpenClaw browser skills, heartbeat prompting, and authoritative knowledge skills. The existing local harness injected memory and database pointers, but it did not yet have first-class workflow definitions, tool requirements, journey events, knowledge-source registry, OpenClaw skill catalog, or temporal fields needed for Hindsight-style memory.
+
+Options considered:
+- Move directly to live LangGraph/OpenClaw and let the graph logic emerge inside runtime nodes.
+- Keep the workflow/tool/journey architecture only in documentation.
+- Add executable local registries and context-packet fields now, then let live LangGraph/OpenClaw consume those structures later.
+
+Decision:
+Add executable local workflow architecture registries before live runtime integration. Context packets now include workflow readiness, route candidates, user-profile completeness, tool status, journey stage, authoritative knowledge sources, OpenClaw skill catalog, and ISO-8601 UTC temporal memory fields.
+
+Reason:
+Real LangGraph routing should make decisions from explicit state, not implicit prompt text. Real OpenClaw skills should receive a narrow task envelope with allowed tools and fallback paths. Hindsight should receive temporally useful retain candidates instead of flat memory strings. Building this now reduces rework and prevents the live runtimes from becoming a pile of one-off branching logic.
+
+Cost of changing later:
+Medium. The registry entries can be edited cheaply, but once real LangGraph/OpenClaw nodes depend on these names, workflow keys, tool keys, journey stages, and temporal fields become stable contracts.
+
+## 2026-05-17: Live LangGraph Runtime With External Model Gate
+
+Context:
+The user approved moving to the next step and provided an OpenAI API key for LangChain agents. The project now has workflow readiness, memory packets, prompt contracts, and runtime adapters. However, using a live OpenAI model can disclose user/session/workflow context to an external service, so model invocation must be separately gated from local LangGraph orchestration.
+
+Options considered:
+- Store the provided API key directly in source or docs.
+- Execute live OpenAI calls unconditionally inside the graph.
+- Implement the real LangGraph runtime locally, read `OPENAI_API_KEY` only from environment/ignored local env files, and make OpenAI model invocation opt-in per run.
+
+Decision:
+Install and use the real `@langchain/langgraph` runtime now. Keep the OpenAI key out of committed files and logs. The graph can use `@langchain/openai` through `OPENAI_API_KEY`, but live model invocation remains an explicit per-request option and may still require external-disclosure approval before sending context to OpenAI.
+
+Reason:
+This proves the graph runtime, checkpointer, workflow route, OpenClaw envelope, and audit loop without unnecessarily disclosing PHI or portal context. It keeps the model provider swappable for Vercel AI Gateway later.
+
+Cost of changing later:
+Low. The graph is already isolated in a runner module. Replacing direct `ChatOpenAI` with Vercel AI Gateway or a stricter PHI-safe model gateway should mainly affect the model node.
+
+## 2026-05-18: Live OpenAI Proof Uses PHI-Allowed Identifier-Masked Payloads
+
+Context:
+The user clarified that the product scope allows insurance, portal, and clinical PHI to be exchanged with the company and OpenAI LLM after patient approval. The previous minimized-payload policy would block too much of the intended healthcare insurance reasoning flow. The user specified that patient name, SSN, and subscription/member identifiers should be masked by database pointers, while insurance and clinical data should be allowed in the LLM payload.
+
+Options considered:
+- Keep minimized non-PHI route proof as the default.
+- Send full raw context including patient direct identifiers.
+- Allow PHI-bearing insurance/clinical context by default, but mask direct identifiers into database pointers.
+
+Decision:
+Use PHI-allowed, identifier-masked reasoning payloads by default for live OpenAI model calls. Keep route-proof-only payloads as an optional lower-disclosure mode. The normal test suite now includes the live OpenAI smoke test and will fail if `OPENAI_API_KEY` is missing or invalid.
+
+Reason:
+This matches the intended product behavior: the LLM must reason over real insurance and clinical context to help navigate eligibility, claims, prior authorization, and appeals. Masking direct identifiers reduces unnecessary identity disclosure while preserving the data needed for reasoning.
+
+Cost of changing later:
+Low to medium. The payload policy is isolated and can be tightened later with a stronger de-identification layer or Vercel AI Gateway policy enforcement, but downstream tests will now expect live model calls and PHI-allowed payload behavior.
+
+## 2026-05-26: Repo-Scoped OpenClaw Skill Artifact Before Real Worker Execution
+
+Context:
+The implementation plan already modeled an `insurance_portal_browser` OpenClaw skill in the local workflow registry, but the repo did not contain an actual skill directory or manifest. The machine has OpenClaw user configuration, but the safe project install path and production worker execution boundary are not yet approved.
+
+Options considered:
+- Mutate the local user-level OpenClaw configuration directly.
+- Leave OpenClaw skill behavior only as database registry rows and prompt text.
+- Add a repo-scoped skill artifact with manifest, instructions, validation, API exposure, and UI proof while keeping real worker execution gated.
+
+Decision:
+Create a repo-scoped `openclaw/skills/insurance-portal-browser` artifact and validate it locally. Do not install or execute it through a production OpenClaw worker in this slice.
+
+Reason:
+This turns the OpenClaw skill contract into a concrete artifact future agents and workers can inspect, while avoiding uncontrolled changes to user-level OpenClaw config or unsafe browser/action execution.
+
+Cost of changing later:
+Low to medium. The artifact can be copied or linked into the eventual OpenClaw runtime path. The main migration cost will be mapping the local manifest fields to the final OpenClaw skill packaging format if it differs.
+
+## 2026-05-26: Validate OpenClaw Skill Envelopes Before Worker Execution
+
+Context:
+The repo now has a concrete `insurance_portal_browser` artifact, but the local LangGraph runner previously only prepared an OpenClaw channel envelope and marked real worker execution as deferred. The next safe integration step is to prove that a proposed browser task matches the skill contract before any external worker, browser adapter, or user-level OpenClaw install is touched.
+
+Options considered:
+- Execute the real OpenClaw worker immediately from the prepared envelope.
+- Install the repo skill into the machine-wide personal OpenClaw configuration and test there.
+- Add a local validator/proposal gate that consumes the envelope, validates against the repo-scoped skill artifact, and records a pending approval task without executing a worker.
+
+Decision:
+Add a local OpenClaw skill envelope validator and approval-gated proposal record before connecting a real OpenClaw worker. The validator/proposal gate uses the repo-scoped `insurance_portal_browser` manifest as the contract source.
+
+Reason:
+This proves the proposed browser task, required inputs, approval gates, fallback path, stop conditions, and blocked actions before any high-risk external execution. It also preserves the user's personal OpenClaw skills and configuration by keeping this slice entirely repo-scoped and proposal-only.
+
+Cost of changing later:
+Low to medium. A real OpenClaw runtime adapter may need field mapping, but the safety contract should remain stable: validate first, record proposal/audit proof, require explicit approval, then execute only through the selected project-scoped runtime.
+
+## 2026-05-26: Use Installed Official OpenClaw With Dedicated Brainstyworkers Profile
+
+Context:
+The user clarified that OpenClaw should mean the official OpenClaw/Claw stack, not a local imitation of similar behavior. The current repo has a deterministic LangGraph proposal gate and a repo-scoped skill artifact, but the next architecture step must decide whether to use the personal machine-wide OpenClaw profile, install a second OpenClaw binary, or use the already installed official CLI with an isolated project profile.
+
+Options considered:
+- Reuse the default personal `~/.openclaw` profile, skills, channels, memory, and config.
+- Install a second OpenClaw binary or clone before proving the profile/workspace boundary.
+- Use the already installed official OpenClaw CLI with `--profile brainstyworkers` and a dedicated agent workspace.
+
+Decision:
+Use the already installed official OpenClaw CLI, but never the default personal profile for this project. The Brainstyworkers runtime path is `openclaw --profile brainstyworkers`, with state/config under `~/.openclaw-brainstyworkers`, recommended agent id `brainstyworkers-insurance-browser`, and recommended workspace `~/.openclaw-brainstyworkers/workspace-brainstyworkers`.
+
+Reason:
+Local CLI proof shows OpenClaw 2026.5.4 is installed and supports named profiles that isolate state/config. Official docs align with this: profiles isolate state, agents isolate workspaces/auth/routing, and skills can be installed from local directories containing `SKILL.md`. This gives the project the real official OpenClaw stack while protecting the user's personal OpenClaw skills, channels, memory, and state.
+
+Cost of changing later:
+Low before profile initialization. Medium after worker adapters depend on the profile, agent id, workspace path, and skill install target. The repo validator/proposal gate should remain stable either way.
+
+## 2026-05-26: LangGraph Owns OpenClaw Worker Job Planning
+
+Context:
+The user identified a core architecture risk: if OpenClaw workers are connected before the orchestrator contract is firm, the system could split workflow authority between LangGraph and OpenClaw. That would make session transmission, data schemas, memory retention, worker parallelism, and auditability fragile.
+
+Options considered:
+- Perfect all healthcare workflows in LangGraph before touching OpenClaw.
+- Let OpenClaw dynamically decide which jobs and subagents to create.
+- Add a deterministic LangGraph-owned worker job/result contract before official OpenClaw execution.
+
+Decision:
+Add a LangGraph-owned OpenClaw worker job contract now. LangGraph creates the worker job id, correlation id, target OpenClaw profile/agent/workspace, input schema, allowed work, expected result schema, fan-out group, and fan-in rules. OpenClaw workers may execute only the assigned job after approval and must not choose workflows, create subtasks, retain memory, contact payers, send external messages, submit forms, enter credentials, or provide medical advice.
+
+Reason:
+This teaches the orchestrator first. LangGraph remains the workflow master and OpenClaw remains the adaptive execution layer. The architecture can later run multiple OpenClaw workers in parallel, but only from a deterministic job DAG created by LangGraph.
+
+Cost of changing later:
+Medium. Worker job ids, correlation ids, fan-out/fan-in fields, and deterministic controls will become runtime contracts for official OpenClaw adapters and UI/API proof.
+
+## 2026-05-27: Orchestrator Proof Must Use Real LangGraph And Live GPT
+
+Context:
+The user rejected mocked orchestrator proof and asked for real agent and LLM testing. The prior local checks could prove deterministic contracts, but they did not prove the webapp path with live model calls across all workflow journeys.
+
+Options considered:
+- Keep live model invocation optional for the orchestrator demo.
+- Add a separate mocked demo runner.
+- Require live model invocation by default for orchestrator chat and flow-test endpoints.
+
+Decision:
+Require real OpenAI model invocation for the orchestrator proof endpoints by default. Add a live test command, `npm run test:orchestrator:live`, that runs all planned workflow/journey cases through the real LangGraph runner and verifies each case invokes the live model.
+
+Reason:
+This proves the actual orchestration path: planned-user local auth, LangGraph session/thread, workflow routing, decision points, worker job contracts, proposal gates, memory context, and live GPT model reasoning. It also exposed and fixed real routing issues that only appeared against the persistent app database.
+
+Cost of changing later:
+Low to medium. The live proof path can later route through Vercel AI Gateway by changing `BRAINSTY_OPENAI_BASE_URL` and credentials, but the test expectation that the orchestrator uses a real model should remain.
+
+## 2026-05-27: Collapse Product Chat Paths Into One LangGraph Runtime
+
+Context:
+The MVP hardening playbook identified a product-risk split: `/api/chat` used the legacy hand-coded engine and could perform browser/evidence observation, while `/api/langgraph/run` used the formal LangGraph path and mostly prepared proposal JSON. That made it possible for browser-capable product behavior to bypass the healthcare journey graph.
+
+Options considered:
+- Keep `/api/chat` on the legacy engine and treat `/api/langgraph/run` as an experimental orchestration proof.
+- Deprecate `/api/chat` immediately.
+- Route `/api/chat` through `runLangGraphOrchestration` and move the evidence observation behavior into a graph node.
+
+Decision:
+Route `/api/chat` through `runLangGraphOrchestration` and add a LangGraph evidence-observation node. The legacy engine remains only as supporting code for trace compatibility and older tests; it is no longer the public product chat runtime.
+
+Reason:
+This makes LangGraph the healthcare workflow master for public chat. The same runtime now owns policy, context recall, workflow routing, OpenClaw proposal validation, optional read-only evidence capture, source pointers, final response composition, audit, and memory retain.
+
+Cost of changing later:
+Medium. Approval-resume, live authenticated portal proof, and product memory adapters should now attach to the graph path instead of the legacy engine. The old engine can be retired after the UI/API and test suite stop depending on its helper exports.
+
+## 2026-05-27: Route Healthcare Journeys From Structured Intent Output
+
+Context:
+After the runtime collapse, LangGraph was the product path, but workflow routing still depended too much on keyword/regex route scores from the workflow registry. That could pass tests when messages contained literal workflow labels but fail natural customer phrasing such as "my doctor wants approval for an MRI" or "they said no and I want to fight it."
+
+Options considered:
+- Keep the existing registry score order and add more route keywords.
+- Require a live LLM classifier for every local routing test.
+- Add a strict curated classifier now, with an output contract that can later be swapped or augmented by an LLM classifier.
+
+Decision:
+Add a strict structured healthcare intent classifier before workflow routing. The classifier returns intent, workflow, confidence, required evidence, missing evidence, refusal/escalation flag, and rationale. LangGraph routes from this classifier output while deterministic safety refusals still run first.
+
+Reason:
+This makes route selection causal and testable without depending on fragile literal keywords or live model availability. It also creates the JSON contract a future LLM classifier must satisfy.
+
+Cost of changing later:
+Low to medium. The classifier module can become a hybrid deterministic plus LLM classifier, but the graph should keep routing from the same strict output contract.
+
+## 2026-05-27: Convert Proposal-Only Into Read-Only Approval Resume Gate
+
+Context:
+The OpenClaw skill validator created pending approval proposals, but those proposals were a wall rather than a resumable gate. The graph could prepare contracts and proposals, but there was no endpoint that bound a user approval to a task/session/workflow/scope or allowed the next graph run to safely continue.
+
+Options considered:
+- Let any `browserSnapshot` or remote debugger request trigger evidence observation.
+- Mark proposals as approved in task metadata without a scoped token.
+- Add a bounded approval token recorded in `approval_gates` and require LangGraph to consume it before evidence observation.
+
+Decision:
+Add `POST /api/orchestrator/approve` and a graph approval-consumption path for read-only observation. Approvals bind to task id, session id, user id, workflow, scope, expiration, and allowed action. The graph consumes a valid approval token before performing browser/evidence observation.
+
+Reason:
+This turns proposal-only into a real gate while keeping MVP scope narrow. The only approved action is read-only observation. Denied, expired, missing, mismatched, or already-consumed approvals preserve `actionsTaken=[]` and do not create evidence.
+
+Cost of changing later:
+Medium. Later OpenClaw dispatch should reuse the same approval binding model, but may need stronger persistence and one-action-per-token semantics when real worker execution is connected.
+
+## 2026-05-27: Require Verified Authenticated Portal Proof Before Live Evidence
+
+Context:
+After approval/resume existed, the graph could capture read-only evidence, but it still needed a live-proof boundary: a page from public Aetna marketing content must not be stored as healthcare evidence, and live portal proof must be opt-in rather than accidental.
+
+Options considered:
+- Treat any approved browser snapshot as live healthcare evidence.
+- Require only a URL match against the payer domain.
+- Require an explicit live flag plus authenticated member-portal verification and source hashes before creating live evidence.
+
+Decision:
+Add authenticated portal evidence verification for live proof. When `requireLivePortalProof` or `BRAINSTY_PORTAL_LIVE=1` is active, the graph requires `BRAINSTY_PORTAL_LIVE=1`, verifies an authenticated member portal host/page kind/member-page signals, stores source pointer hashes, and blocks without eligibility evidence when verification fails.
+
+Reason:
+This prevents false evidence from public payer pages and makes live proof intentional. It gives the next live test a strict pass condition: real authenticated read-only member portal evidence with URL, title, page kind, timestamp, DOM hash, extraction hash, and evidence fields.
+
+Cost of changing later:
+Low to medium. The verifier can expand to more payers and stronger DOM/auth signals, but the fail-closed behavior and source-pointer hash contract should remain.
+
+## 2026-05-27: Make The MVP UI Auth Plus Chat First
+
+Context:
+The implementation dashboard proved LangGraph/OpenClaw activity, but the final MVP should feel like a user-facing concierge: sign in, ask or select a workflow in chat, provide missing information when asked, approve read-only observation when needed, and receive workflow output plus source/proof in the chat.
+
+Options considered:
+- Keep the dashboard as the primary product UI.
+- Add LangSmith as the visible proof surface.
+- Render workflow proof directly in the local app while keeping the dashboard for debugging.
+
+Decision:
+Make the primary webapp surface an auth plus chat workflow. Keep the proof dashboard as an operator/debug surface. Render LangGraph workflow proof, OpenClaw proposals, approval state, evidence state, missing info, and source pointers directly in chat cards.
+
+Reason:
+LangSmith is useful later for developer observability, but it is not required for MVP proof. The app already has the runtime trace, audit, proposal, source pointer, and graph state needed to show proof to the user and operator without adding a new dependency.
+
+Cost of changing later:
+Low. LangSmith can be added later as observability/evaluation infrastructure without changing the user-facing auth/chat flow.
+
+## 2026-05-27: Use Zep Graphiti As The MVP Product Memory Runtime
+
+Context:
+The hardening playbook corrected the architecture: Cortex is only project memory for agents and handoffs, not product memory for the healthcare concierge. The MVP target requires a real retain/recall memory runtime such as Hindsight, Zen, LangMem, Mem0, or Zep/Graphiti.
+
+Options considered:
+- Keep the existing SQLite `memory_items` harness as product memory.
+- Add another interface and defer runtime installation.
+- Install Zep Graphiti from the official repo and connect it behind the current LangGraph memory seam.
+
+Decision:
+Use Zep Graphiti as the Phase 5 product memory runtime. Keep the local SQLite memory harness as operational/audit support, but route product retain/recall through the Graphiti contract when `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti`.
+
+Reason:
+Graphiti gives the MVP a real temporal knowledge graph retain/recall runtime without turning Cortex into product state. LangGraph remains the healthcare workflow master and calls Graphiti before and after graph execution. OpenClaw remains the adaptive worker/tool arm and does not own product memory.
+
+Implementation notes:
+- Official repo checkout: `vendor/getzep-graphiti`.
+- Python runtime: `.venv-graphiti`.
+- Verified runtime requirements: Python `>=3.10,<4`, a supported graph backend, and an OpenAI-compatible LLM/embedding provider.
+- Active local backend: FalkorDB in Docker on host port `6380`.
+- Node contract: `src/concierge/productMemory.mjs`.
+- Python bridge: `tools/graphiti/graphiti_bridge.py`.
+- UI proof: Product Memory panel and chat proof card.
+
+Cost of changing later:
+Medium. The contract can later swap Graphiti backend or hosted Zep service, but the app should preserve the same product-memory boundary: safe summaries/source pointers only, no Cortex product memory, no OpenClaw-owned memory, and LangGraph-owned retain/recall timing.
+
+## 2026-05-27: Add Observe-Only Outbound Payload Audits Before Full PHI Enforcement
+
+Context:
+Phase 6 requires PHI, audit, and state hardening. Jumping straight to hard blocking and database rewrites before the full worker path is connected could slow the MVP and create brittle false failures. Deferring all PHI work would be worse because later tests would not know what actually left the app.
+
+Options considered:
+- Defer PHI hardening until after OpenClaw execution is connected.
+- Implement a full PHI taxonomy and blocking engine immediately.
+- First capture exact outbound payloads and labels in audit, then enforce once the real payload surfaces are visible.
+
+Decision:
+Implement Phase 6A-lite as observe-only outbound payload observability. Record exact serialized OpenAI and Graphiti payloads before send, attach payload hashes and coarse labels, and expose a summary in the UI. Do not block yet.
+
+Reason:
+This gives the project runtime evidence instead of assumptions. It catches direct-identifier leaks, raw portal-text leaks, and source-pointer presence in the real payload body while preserving the current approved PHI policy: direct identifiers are masked, but insurance/clinical reasoning context can be sent to the approved LLM path.
+
+Cost of changing later:
+Low. Enforcement can build on the same audit event and label contract. The next hardening step should turn selected labels into fail-closed tests and then policy gates, rather than replacing this observability layer.
+
+## 2026-05-27: Enforce Outbound Payload Policy Before OpenClaw Worker Dispatch
+
+Context:
+Phase 6A made outbound payloads visible, but visible-only checks still allowed unsafe payloads to leave if future code accidentally included patient identifiers or raw portal text. Before connecting real OpenClaw worker dispatch, the runtime needs fail-closed behavior for the most dangerous payload classes.
+
+Options considered:
+- Keep observability-only until after OpenClaw execution is connected.
+- Build a broad PHI taxonomy and full transactional database rewrite immediately.
+- Enforce the highest-risk outbound labels now, then deepen PHI taxonomy and database hardening in later slices.
+
+Decision:
+Make outbound payload policy enforced by default for OpenAI and Graphiti calls. Block direct identifiers and raw portal text by default, and support required source-pointer assertions for call types that need sourced evidence. Record both observed and blocked payload audit events.
+
+Reason:
+This catches the most dangerous regressions without overfitting a partial PHI classifier. It preserves the approved product policy: insurance and clinical reasoning context may go to the approved LLM path, but direct identifiers must be masked and raw portal text must not silently become model or memory payload.
+
+Cost of changing later:
+Low to medium. Future hardening can add richer detectors, destination-specific approvals, screenshot/document checks, and database-level policy gates while preserving the current audit/event contract.
+
+## 2026-05-27: Add Local Audit Hash Chain And Same-Session Checkpoint Lock
+
+Context:
+The app had append-only audit rows in practice, but no tamper-evident hash chain. Session checkpointing also used read-then-write state version increments, which can collide under concurrent local requests.
+
+Options considered:
+- Defer both concerns until the Postgres or `better-sqlite3` migration.
+- Replace the database layer immediately.
+- Add a local hash chain and a same-process checkpoint lock as an MVP hardening baseline.
+
+Decision:
+Add `previous_event_hash`, `event_hash`, and `chain_version` to `audit_events`; compute hashes on every new audit event; add `verifyAuditChain`. Add an in-process per-session checkpoint lock around `checkpointSession`.
+
+Reason:
+The MVP now has tamper-evident audit proof for new events and a concrete guard against same-process state version collisions, without blocking the next product slice on a full storage migration.
+
+Cost of changing later:
+Medium. Production should still move to transactional `better-sqlite3` or Postgres with database-level locking and stronger append-only guarantees, but the event hash material and verification contract can carry forward.
+
+## 2026-05-27: Connect Official OpenClaw Only Through Dedicated Profile And LangGraph Approval
+
+Context:
+The project needs OpenClaw to become a real adaptive worker arm, not just a contract document. At the same time, the user's personal machine-wide OpenClaw profile contains personal skills and must not be used for healthcare MVP execution. The official OpenClaw profile setup had to be proven before any worker dispatch, and worker dispatch had to remain under LangGraph's approval/resume boundary.
+
+Options considered:
+- Use the already-installed default personal `~/.openclaw` profile and rely on prompt instructions to avoid personal skills.
+- Install a completely separate OpenClaw binary for the project.
+- Reuse the installed official OpenClaw CLI with a dedicated project profile, workspace, agent, skill allowlist, and managed browser profile.
+
+Decision:
+Use the already-installed official OpenClaw CLI, but only through `openclaw --profile brainstyworkers`. The project profile owns `~/.openclaw-brainstyworkers`, workspace `~/.openclaw-brainstyworkers/workspace-brainstyworkers`, agent `brainstyworkers-insurance-browser`, and managed browser profile `openclaw`. LangGraph may dispatch exactly one approved read-only observation to this profile after consuming a scoped approval token.
+
+Reason:
+This preserves the official OpenClaw stack and avoids reinventing the adaptive worker layer while protecting the user's personal OpenClaw profile, personal skills, personal channels, and personal memory. The real worker path now proves the boundary: OpenClaw can observe, but LangGraph decides workflow, approval, evidence verification, persistence, memory retain, and final response.
+
+Implementation notes:
+- Local OpenClaw CLI: `/opt/homebrew/bin/openclaw`, version `2026.5.4`.
+- Dedicated gateway port: `19789`.
+- Dedicated browser CDP port observed: `19800`.
+- Repo skill is installed as a workspace skill under the dedicated workspace.
+- `browser-automation` and `insurance-portal-browser` are ready for the project agent; personal skills are excluded.
+- Official OpenClaw dispatch records outbound payload audit metadata but does not send raw portal text to LLM or product memory.
+- Public payer marketing content is blocked after observation and creates no eligibility snapshot.
+
+Cost of changing later:
+Medium. Production should add token/authenticated gateway mode, stronger lifecycle management for the project gateway, richer payer-specific portal verification, and hosted/managed worker infrastructure. The profile/agent/workspace isolation and LangGraph-owned approval contract should remain.
+
+## 2026-05-28 - OpenClaw Browser Skill Layering
+
+Context:
+The user's personal OpenClaw installation includes the secure `browser-automation` skill. The project also has a repo/workspace `insurance-portal-browser` skill. The question was whether the personal `browser-automation` skill is better than the complete project skill.
+
+Options considered:
+- Replace `insurance-portal-browser` with `browser-automation`.
+- Ignore `browser-automation` and keep all browser guidance inside the healthcare skill.
+- Layer the skills so each owns its proper responsibility.
+
+Decision:
+Layer the skills. `insurance-portal-browser` remains the healthcare-specific safety envelope and task/result contract. `browser-automation` is required as the low-level browser-control substrate. `ocr-local` is required as the local visual evidence substrate.
+
+Reason:
+`browser-automation` is stronger for general browser reliability, but it does not contain the healthcare workflow allowlist, approval gates, PHI/source-pointer boundaries, no-credential/no-2FA/no-form-submit rules, or LangGraph-owned job contract. Keeping the layer boundary lets the project reuse official OpenClaw browser craft without weakening healthcare safety.
+
+Implementation notes:
+- The dedicated project agent allowlist remains `insurance-portal-browser`, `browser-automation`, and `ocr-local`.
+- The project does not use the user's default personal OpenClaw profile for Brainstyworkers execution.
+- The repo skill manifest now declares `required_companion_skills` and `browser_control_policy`.
+
+Cost of changing later:
+Low. Future browser reliability updates should go into the browser substrate, while payer/healthcare policy updates should go into the `insurance-portal-browser` envelope and LangGraph contract.
+
+## 2026-05-28 - Empower OpenClaw Inside Assigned LangGraph Tasks
+
+Context:
+The earlier contract kept OpenClaw too narrow: it treated the worker like a single deterministic browser action. The user clarified that OpenClaw should use its adaptive intelligence to get the delegated goal done, including subtasks, alternate automation paths, web scraping, read-only API attempts, task-scoped skill creation, OS automation, heartbeat memory, and progress reporting.
+
+Options considered:
+- Keep the strict no-subtask/no-memory worker contract.
+- Give OpenClaw full autonomy over workflow selection and external actions.
+- Empower OpenClaw inside the assigned LangGraph task while preserving healthcare approval boundaries.
+
+Decision:
+Empower OpenClaw inside its delegated task. LangGraph still chooses the healthcare workflow, owns approval gates, ingests final results/memory, and composes the final response. OpenClaw may create subtasks, run task-scoped status subagents, choose browser/web/API/scrape/tool paths, create task-scoped helper skills/scripts, use local OS automation inside the task scope, and update worker heartbeat memory.
+
+Reason:
+This captures the value of OpenClaw as an adaptive worker without letting it bypass the healthcare orchestrator. The worker should try hard, report progress, and avoid silent failure. LangGraph should decide when to continue synchronously, convert to async follow-up, or ask the user for missing data.
+
+Implementation notes:
+- Worker progress reports are required every 30 seconds while active.
+- Terminal outcomes are explicit: sourced result, missing user data, insurance/portal block, policy/approval block, long-running follow-up, or partial result with blockers.
+- The OpenClaw envelope carries product-memory recall, prior sessions, open tasks, scheduled jobs, and database pointers.
+- Credentials, passkeys, 2FA, SSNs, payer contact, external messaging, form submission, record changes, appeals, authorizations, payments, cancellations, and medical advice remain gated or forbidden as applicable.
+
+Cost of changing later:
+Medium. Future execution code must implement the status subagent and async continuation path, but the contract now points in the correct direction for a capable OpenClaw worker.

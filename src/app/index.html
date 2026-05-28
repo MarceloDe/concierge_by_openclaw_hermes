@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brainstyworkers AI Concierge</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Slice 1</p>
+            <h1>Brainstyworkers AI Concierge</h1>
+          </div>
+          <button id="probe">Probe Chrome</button>
+        </header>
+
+        <section class="member-panel">
+          <label>
+            Name
+            <input id="name" value="Marcelo Felix" autocomplete="name" />
+          </label>
+          <label>
+            Email
+            <input id="email" value="mocfelix@gmail.com" autocomplete="email" />
+          </label>
+          <label>
+            Payer
+            <input id="payer" value="Aetna" />
+          </label>
+          <label>
+            Portal URL
+            <input id="portalUrl" value="https://www.aetna.com/" />
+          </label>
+          <label>
+            Chrome Debugger
+            <input id="remoteDebuggerUrl" value="http://127.0.0.1:9223" />
+          </label>
+          <label>
+            Session ID
+            <input id="sessionId" placeholder="new session" />
+          </label>
+          <label class="checkbox-label">
+            <input id="resumeLatestSession" type="checkbox" />
+            Resume latest
+          </label>
+          <label class="checkbox-label">
+            <input id="useLiveModel" type="checkbox" checked />
+            Live GPT
+          </label>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">LangGraph Orchestrator</p>
+              <h2>Workflow Journey Test App</h2>
+            </div>
+            <div class="review-actions">
+              <span id="orchestratorStatus">Not authenticated</span>
+              <button id="authStart" type="button">Auth User</button>
+              <button id="runOrchestratorChat" type="button">Run Chat</button>
+              <button id="runFlowCases" type="button">Run Flow Cases</button>
+            </div>
+          </div>
+          <div id="orchestrator" class="orchestrator-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Stateful Session</p>
+              <h2>LangChain Thread State</h2>
+            </div>
+            <div class="review-actions">
+              <span id="sessionStatus">No active session</span>
+              <button id="loadSessions" type="button">Load Sessions</button>
+              <button id="loadSessionState" type="button">Load State</button>
+            </div>
+          </div>
+          <div id="sessions" class="session-list"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Memory Harness</p>
+              <h2>OpenClaw Arm Heartbeat</h2>
+            </div>
+            <div class="review-actions">
+              <span id="harnessStatus">No heartbeat yet</span>
+              <button id="loadHarness" type="button">Load Harness</button>
+              <button id="runHeartbeat" type="button">Run Heartbeat</button>
+              <button id="planClaimFollowup" type="button">Plan Claim Follow-up</button>
+            </div>
+          </div>
+          <div id="harness" class="harness-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Product Memory</p>
+              <h2>Zep Graphiti Runtime</h2>
+            </div>
+            <div class="review-actions">
+              <span id="productMemoryStatus">Not checked</span>
+              <button id="checkProductMemory" type="button">Check Graphiti</button>
+              <button id="probeProductMemory" type="button">Retain + Recall</button>
+            </div>
+          </div>
+          <div id="productMemory" class="product-memory-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">OpenClaw Skill</p>
+              <h2>Insurance Portal Browser Contract</h2>
+            </div>
+            <div class="review-actions">
+              <span id="skillStatus">Not loaded</span>
+              <button id="loadSkills" type="button">Load Skills</button>
+              <button id="validateSkillEnvelope" type="button">Validate Envelope</button>
+              <button id="loadOfficialOpenClawStatus" type="button">Official Status</button>
+            </div>
+          </div>
+          <div id="skills" class="skill-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Phase 4</p>
+              <h2>Live Portal Proof Gate</h2>
+            </div>
+            <div class="review-actions">
+              <span id="phase4Status">Not run</span>
+              <button id="runPhase4Proof" type="button">Run Proof Gate</button>
+            </div>
+          </div>
+          <div id="phase4" class="phase4-grid"></div>
+        </section>
+
+        <section class="chat-panel">
+          <div class="chat-header">
+            <div>
+              <p class="eyebrow">Concierge Chat</p>
+              <h2>Auth + Workflow Conversation</h2>
+            </div>
+            <div class="chat-status">
+              <span id="productAuthStatus">Not signed in</span>
+              <button id="productAuth" type="button">Sign In</button>
+            </div>
+          </div>
+          <div class="workflow-actions" aria-label="Workflow shortcuts">
+            <button type="button" data-workflow-message="Do I still owe anything before insurance starts paying?">Benefits</button>
+            <button type="button" data-workflow-message="Why didn't insurance pay my last visit?">Claim Status</button>
+            <button type="button" data-workflow-message="My doctor wants approval for an MRI next month.">Prior Auth</button>
+            <button type="button" data-workflow-message="They said no and I want to fight it.">Appeal</button>
+            <button type="button" data-workflow-message="Use my authenticated member portal in read-only mode and return source pointers.">Portal Proof</button>
+          </div>
+          <label class="checkbox-label live-proof-toggle">
+            <input id="requireLivePortalProof" type="checkbox" />
+            Require live portal proof
+          </label>
+          <label class="checkbox-label live-proof-toggle">
+            <input id="useOfficialOpenClawWorker" type="checkbox" />
+            Use official OpenClaw worker
+          </label>
+          <div id="messages" class="messages"></div>
+          <form id="chatForm" class="composer">
+            <textarea id="message">Enroll me as Marcelo Felix, connect to my logged insurance website in Chrome, review my eligibility and benefits, and show the trace of what you found.</textarea>
+            <button type="submit">Send</button>
+          </form>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Review</p>
+              <h2>Extracted Aetna Records</h2>
+            </div>
+            <div class="review-actions">
+              <span id="reviewStatus">No extraction yet</span>
+              <button id="loadReview" type="button">Load Latest</button>
+            </div>
+          </div>
+          <div id="review" class="review-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Portal Scan</p>
+              <h2>Captured Page Proof</h2>
+            </div>
+            <div class="review-actions">
+              <span id="portalStatus">No pages loaded</span>
+              <button id="loadPortalPages" type="button">Load Pages</button>
+            </div>
+          </div>
+          <div id="portalPages" class="portal-pages"></div>
+        </section>
+      </section>
+
+      <aside class="trace-panel">
+        <div class="trace-header">
+          <p class="eyebrow">Operator Trace</p>
+          <button id="health">Refresh</button>
+        </div>
+        <pre id="trace">No run yet.</pre>
+      </aside>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

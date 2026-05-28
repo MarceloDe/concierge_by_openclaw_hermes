@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+node_modules/
+.venv-graphiti/
+__pycache__/
+*.py[cod]
+data/
+!data/.gitkeep
+eng.traineddata
+*.log

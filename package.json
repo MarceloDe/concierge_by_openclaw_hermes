@@ -1,0 +1,27 @@
+{
+  "name": "brainstyworkers-ai-concierge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server/server.mjs",
+    "dev": "node src/server/server.mjs",
+    "test": "npm run test:local && npm run test:live",
+    "test:local": "node --test src/tests/approval-resume.test.mjs src/tests/audit-integrity.test.mjs src/tests/concurrent-session-state.test.mjs src/tests/database.test.mjs src/tests/enrollment.test.mjs src/tests/langgraph-runner.test.mjs src/tests/memory-harness.test.mjs src/tests/model-payload-policy.test.mjs src/tests/openclaw-api.test.mjs src/tests/openclaw-official-runtime.test.mjs src/tests/openclaw-skill-artifacts.test.mjs src/tests/openclaw-skill-invocation.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/outbound-payload-observability.test.mjs src/tests/outbound-payload-policy-enforcement.test.mjs src/tests/policy.test.mjs src/tests/portal-evidence-verifier.test.mjs src/tests/portal-scan-real.test.mjs src/tests/product-memory-contract.test.mjs src/tests/prompt-contracts.test.mjs src/tests/real-aetna-structured.test.mjs src/tests/runtime-adapters.test.mjs src/tests/runtime-collapse.test.mjs src/tests/session-manager.test.mjs src/tests/structured-intent-classifier.test.mjs src/tests/workflow-architecture.test.mjs src/tests/workflow.test.mjs",
+    "test:live": "node --test src/tests/live-openai.test.mjs",
+    "test:live:portal": "node --test src/tests/live-portal.test.mjs",
+    "test:openclaw:official": "BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 node --test src/tests/openclaw-official-runtime.test.mjs",
+    "test:memory:graphiti": "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_GRAPHITI_LIVE=1 GRAPHITI_BACKEND=falkordb FALKORDB_HOST=localhost FALKORDB_PORT=6380 GRAPHITI_GROUP_ID=brainstyworkers_test node --test src/tests/product-memory-graphiti.test.mjs",
+    "test:orchestrator:live": "node --test src/tests/orchestrator-live.test.mjs",
+    "graphiti:falkordb": "bash scripts/start-graphiti-falkordb.sh",
+    "build": "node src/server/build-check.mjs"
+  },
+  "engines": {
+    "node": ">=25"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.1.46",
+    "@langchain/langgraph": "^1.3.0",
+    "@langchain/openai": "^1.4.5"
+  }
+}
