@@ -8,6 +8,8 @@ import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
+import { createWorkerContinuation, listWorkerContinuations, requestWorkerContinuation } from "../concierge/workerContinuations.mjs";
+import { listRuntimeEvents } from "../concierge/runtimeEvents.mjs";
 
 test("official OpenClaw config uses the dedicated project profile by default", () => {
   const config = getOfficialOpenClawConfig({});
@@ -53,6 +55,20 @@ test("official OpenClaw readiness and read-only dispatch fail closed on public p
     rawMessage: { source: "official_openclaw_test", executeEvidenceObservation: false, useLiveModel: false }
   });
   const taskId = proposalRun.state.openclaw_skill_proposal.task.id;
+  const continuation = await createWorkerContinuation(store, {
+    taskId,
+    sessionId: session.id,
+    userId: user.id,
+    correlationId: proposalRun.state.graph_trace_id,
+    reason: "Official live OpenClaw proof may take longer than the current chat turn."
+  });
+  assert.equal(continuation.ok, true);
+  const continued = await requestWorkerContinuation(store, {
+    continuationId: continuation.continuation.id,
+    sessionId: session.id,
+    userId: user.id
+  });
+  assert.equal(continued.ok, true);
   const approval = await createReadOnlyObservationApproval(store, {
     taskId,
     sessionId: session.id,
@@ -73,6 +89,7 @@ test("official OpenClaw readiness and read-only dispatch fail closed on public p
       requireLivePortalProof: true,
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
+      workerContinuationId: continuation.continuation.id,
       officialOpenClawTargetUrl: "https://www.aetna.com/",
       useLiveModel: false
     }
@@ -87,6 +104,14 @@ test("official OpenClaw readiness and read-only dispatch fail closed on public p
   assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_browser_screenshot_cdp"));
   assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_browser_visual_ocr_local"));
   assert.ok(result.state.evidence_observation.actionsTaken.includes("verify_authenticated_member_portal"));
+  assert.equal(result.state.worker_continuation.status, "blocked");
+  assert.equal(result.state.worker_continuation.continuation.terminalOutcome, "not_possible_insurance_or_portal_block");
+  assert.ok(result.state.worker_continuation.continuation.actionsTaken.includes("openclaw_browser_snapshot_aria"));
   assert.deepEqual(result.state.source_pointers, []);
   assert.equal((await store.list("eligibility_snapshots", { session_id: session.id })).length, 0);
+  const continuations = await listWorkerContinuations(store, { sessionId: session.id });
+  assert.equal(continuations[0].status, "blocked");
+  const events = await listRuntimeEvents(store, { sessionId: session.id, limit: 80 });
+  assert.ok(events.some((event) => event.eventType === "worker.followup.dispatching"));
+  assert.ok(events.some((event) => event.eventType === "worker.followup.blocked"));
 });

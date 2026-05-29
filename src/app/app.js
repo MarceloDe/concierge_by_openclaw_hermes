@@ -21,9 +21,17 @@ const productAuthStatus = document.querySelector("#productAuthStatus");
 const productAuth = document.querySelector("#productAuth");
 const requireLivePortalProof = document.querySelector("#requireLivePortalProof");
 const useOfficialOpenClawWorker = document.querySelector("#useOfficialOpenClawWorker");
+const chatJourney = document.querySelector("#chatJourney");
+const runtimeTimeline = document.querySelector("#runtimeTimeline");
+const portalReady = document.querySelector("#portalReady");
+const loadRuntimeEventsButton = document.querySelector("#loadRuntimeEvents");
 
 let latestChatRun = null;
 let latestUserMessage = "";
+let runtimeEvents = [];
+let runtimeEventSource = null;
+let runtimeStreamSessionId = null;
+let productSignedIn = false;
 
 function value(id) {
   return document.querySelector(`#${id}`).value.trim();
@@ -91,15 +99,227 @@ function outboundPayloadAuditSummary(result) {
     .join(" · ");
 }
 
+function currentSessionId() {
+  return value("sessionId") || latestChatRun?.session?.id || "";
+}
+
+function journeyClass(ok, waiting = false) {
+  if (ok) return "done";
+  return waiting ? "waiting" : "";
+}
+
+function renderJourneyState(result = null) {
+  const state = result?.graphRun?.state ?? {};
+  const proposalTask = state.openclaw_skill_proposal?.task ?? {};
+  const evidence = state.evidence_observation ?? {};
+  const memoryRetain = state.product_memory_retain ?? result?.graphRun?.productMemory?.retain ?? {};
+  const llmDecision = state.llm_orchestration_decision ?? {};
+  const approvalStatus = state.approval_resume?.status ?? (proposalTask.id ? "waiting_for_read_only_approval" : "not_requested");
+  const sourceCount = state.source_pointers?.length ?? 0;
+  const signedIn = productSignedIn || Boolean(currentSessionId());
+  const steps = [
+    {
+      label: "Local Auth",
+      detail: signedIn ? currentSessionId() : "sign in first",
+      className: journeyClass(signedIn, !signedIn)
+    },
+    {
+      label: "GPT Route",
+      detail: llmDecision.mode ? `${llmDecision.mode}${llmDecision.usedByRouter ? " · used" : ""}` : "waiting for workflow",
+      className: journeyClass(Boolean(llmDecision.usedByRouter), Boolean(result && !llmDecision.usedByRouter))
+    },
+    {
+      label: "Approval",
+      detail: approvalStatus,
+      className: journeyClass(approvalStatus === "approval_consumed", proposalTask.id && approvalStatus !== "approval_consumed")
+    },
+    {
+      label: "OpenClaw",
+      detail: evidence.status ?? "not requested",
+      className: journeyClass(sourceCount > 0, evidence.status === "missing_approval_token" || proposalTask.id)
+    },
+    {
+      label: "Memory",
+      detail: memoryRetain.adapter ? `${memoryRetain.adapter} retain=${Boolean(memoryRetain.retained)}` : "waiting",
+      className: journeyClass(Boolean(memoryRetain.retained), Boolean(result))
+    }
+  ];
+  chatJourney.innerHTML = `
+    <div class="journey-grid">
+      ${steps
+        .map(
+          (step) => `
+            <div class="journey-step ${escapeHtml(step.className)}">
+              <strong>${escapeHtml(step.label)}</strong>
+              <span>${escapeHtml(step.detail)}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function summarizeRuntimeEvent(event) {
+  const payload = event.payload ?? {};
+  if (event.eventType === "workflow.classified") {
+    const llm = payload.llmDecision ?? {};
+    return `curated=${payload.curatedIntent?.workflow ?? "unknown"} · gpt=${llm.mode ?? "not run"} · ${llm.usedByRouter ? "used" : "not used"}`;
+  }
+  if (event.eventType === "workflow.routed") {
+    return `${payload.workflow ?? "unknown"} · ${payload.routeReason ?? "unknown"}`;
+  }
+  if (event.eventType === "worker.plan.prepared") {
+    return `${payload.dispatchStatus ?? "unknown"} · jobs ${(payload.workerJobIds ?? []).length} · progress ${payload.progressEverySeconds ?? "n/a"}s`;
+  }
+  if (event.eventType === "approval.recorded") {
+    return `${payload.status ?? "unknown"} · ${payload.taskId ?? "no task"} · ${payload.allowedAction ?? "read_only_observation"}`;
+  }
+  if (event.eventType === "approval.consumed") {
+    return `${payload.status ?? "unknown"} · ${payload.taskId ?? "no task"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.status.updated") {
+    return `${payload.status ?? "unknown"}${payload.terminalOutcome ? ` · ${payload.terminalOutcome}` : ""} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.followup.scheduled") {
+    return `${payload.status ?? "pending_async_followup"} · ${payload.terminalOutcome ?? "needs_long_running_followup"} · next ${payload.nextCheckAt ?? "not scheduled"}`;
+  }
+  if (event.eventType === "worker.followup.cancelled") {
+    return `${payload.status ?? "cancelled"} · ${payload.reason ?? "cancelled"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.followup.continue_requested") {
+    return `${payload.status ?? "continue_requested"} · ${payload.note ?? "awaiting approved graph run"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.followup.dispatching") {
+    return `${payload.status ?? "dispatching_official_openclaw"} · ${payload.runtime ?? "official_openclaw"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.followup.completed" || event.eventType === "worker.followup.blocked") {
+    return `${payload.status ?? "unknown"} · ${payload.terminalOutcome ?? "unknown"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "worker.followup.expired") {
+    return `${payload.status ?? "expired"} · ${payload.reason ?? "expired"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+  }
+  if (event.eventType === "approval.requested") {
+    return `${payload.status ?? "unknown"} · ${payload.taskId ?? "no task"}`;
+  }
+  if (event.eventType === "evidence.status") {
+    return `${payload.status ?? "unknown"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"} · sources ${payload.sourcePointerCount ?? 0}`;
+  }
+  if (event.eventType === "final.answer.created") {
+    return `${payload.outcome ?? "unknown"} · sources ${payload.sourcePointerCount ?? 0}`;
+  }
+  if (event.eventType === "memory.retained") {
+    return `${payload.productMemoryAdapter ?? "disabled"} · retained ${payload.productMemoryRetained ?? false}`;
+  }
+  return textPreview(JSON.stringify(payload), 220) || event.source || "event";
+}
+
+function renderRuntimeTimeline(events = runtimeEvents, status = "") {
+  const visible = events.slice(0, 10);
+  runtimeTimeline.innerHTML = `
+    <h3>Runtime Timeline${status ? ` · ${escapeHtml(status)}` : ""}</h3>
+    ${
+      visible.length
+        ? visible
+            .map(
+              (event) => `
+                <div class="runtime-event">
+                  <strong>${escapeHtml(event.eventType ?? "event")}</strong>
+                  <span>${escapeHtml(summarizeRuntimeEvent(event))}</span>
+                </div>
+              `
+            )
+            .join("")
+        : '<p class="eyebrow">No graph events for this session yet.</p>'
+    }
+  `;
+}
+
+function rememberRuntimeEvent(event) {
+  if (!event?.id || runtimeEvents.some((item) => item.id === event.id)) return;
+  runtimeEvents = [event, ...runtimeEvents].slice(0, 20);
+  renderRuntimeTimeline(runtimeEvents, "live");
+}
+
+async function loadRuntimeEventsForSession(sessionId = currentSessionId()) {
+  if (!sessionId) {
+    renderRuntimeTimeline([], "sign in first");
+    return [];
+  }
+  const payload = await api(`/api/runtime/events?sessionId=${encodeURIComponent(sessionId)}&limit=20`, { timeoutMs: 30000 });
+  runtimeEvents = payload.events ?? [];
+  renderRuntimeTimeline(runtimeEvents, `${runtimeEvents.length} event${runtimeEvents.length === 1 ? "" : "s"}`);
+  return runtimeEvents;
+}
+
+function startRuntimeEventStream(sessionId = currentSessionId(), userId = latestChatRun?.user?.id) {
+  if (!sessionId || runtimeStreamSessionId === sessionId) return;
+  if (runtimeEventSource) runtimeEventSource.close();
+  runtimeStreamSessionId = sessionId;
+  runtimeEvents = [];
+  renderRuntimeTimeline([], "stream open");
+  const params = new URLSearchParams({ sessionId });
+  if (userId) params.set("userId", userId);
+  runtimeEventSource = new EventSource(`/api/runtime/events/stream?${params.toString()}`);
+  for (const type of [
+    "runtime.stream.opened",
+    "workflow.classified",
+    "workflow.routed",
+    "worker.plan.prepared",
+    "approval.requested",
+    "approval.recorded",
+    "approval.consumed",
+    "worker.status.updated",
+    "worker.followup.scheduled",
+    "worker.followup.cancelled",
+    "worker.followup.continue_requested",
+    "worker.followup.dispatching",
+    "worker.followup.completed",
+    "worker.followup.blocked",
+    "worker.followup.expired",
+    "evidence.status",
+    "final.answer.created",
+    "memory.retained"
+  ]) {
+    runtimeEventSource.addEventListener(type, (event) => {
+      try {
+        rememberRuntimeEvent(JSON.parse(event.data));
+      } catch {
+        renderRuntimeTimeline(runtimeEvents, "stream parse error");
+      }
+    });
+  }
+  runtimeEventSource.onerror = () => {
+    renderRuntimeTimeline(runtimeEvents, "stream paused");
+  };
+}
+
+function requireSignedInBeforeWorkflow() {
+  if (productSignedIn && currentSessionId()) return true;
+  renderJourneyState(null);
+  addMessage(
+    "assistant",
+    "Please sign in to the local planned-user session first. Portal passwords, passkeys, SSN, and 2FA stay with you; the app only records the local session and then routes the workflow through LangGraph."
+  );
+  productAuth.focus();
+  return false;
+}
+
 function renderChatProof(result) {
   const state = result.graphRun?.state ?? {};
   const proposalTask = state.openclaw_skill_proposal?.task ?? {};
   const workerPlan = state.openclaw_worker_plan ?? {};
   const evidence = state.evidence_observation ?? {};
+  const llmDecision = state.llm_orchestration_decision ?? {};
   const productMemoryRecall = state.product_memory_recall ?? result.graphRun?.productMemory?.recall ?? {};
   const productMemoryRetain = state.product_memory_retain ?? result.graphRun?.productMemory?.retain ?? {};
   const missing = missingInfoLines(state);
   const sourcePointers = state.source_pointers ?? [];
+  const workerHasCapturedEvidence =
+    ["captured_visible_page", "captured_official_openclaw_read_only_observation", "captured_multi_page_scan"].includes(
+      evidence.status
+    ) || sourcePointers.length > 0;
+  const canRequestWorkerAction = proposalTask.id && !workerHasCapturedEvidence;
   return `
     <article class="chat-proof-card">
       <h3>Workflow Proof</h3>
@@ -108,6 +328,8 @@ function renderChatProof(result) {
         <dd>${escapeHtml(state.workflow ?? "unknown")} · ${escapeHtml(state.route_reason ?? "unknown")}</dd>
         <dt>Intent</dt>
         <dd>${escapeHtml(state.structured_intent?.intent ?? state.intent ?? "unknown")} · confidence ${escapeHtml(state.structured_intent?.confidence ?? "n/a")}</dd>
+        <dt>GPT decision</dt>
+        <dd>${escapeHtml(llmDecision.mode ?? "not run")} · ${escapeHtml(llmDecision.usedByRouter ? "used by router" : "not used")} · ${escapeHtml(llmDecision.workflow ?? "no workflow")} · confidence ${escapeHtml(llmDecision.confidence ?? "n/a")}</dd>
         <dt>Missing info</dt>
         <dd>${escapeHtml(missing.join(" · ") || "none")}</dd>
         <dt>OpenClaw proposal</dt>
@@ -128,8 +350,11 @@ function renderChatProof(result) {
         <dd>${escapeHtml(state.graph_trace_id ?? result.session?.langgraph_thread_id ?? "none")}</dd>
       </dl>
       ${
-        proposalTask.id
-          ? `<button type="button" data-approve-readonly="${escapeHtml(proposalTask.id)}">Approve Read-Only Observation</button>`
+        canRequestWorkerAction
+          ? `<div class="button-row">
+              <button type="button" data-approve-readonly="${escapeHtml(proposalTask.id)}">Approve Read-Only Observation</button>
+              <button type="button" data-worker-followup="${escapeHtml(proposalTask.id)}">Leave As Async Follow-Up</button>
+            </div>`
           : ""
       }
     </article>
@@ -143,6 +368,127 @@ function renderMissingInfoPrompt(result) {
     "assistant",
     `I can continue, but the workflow is still missing:\n\n${missing.map((item) => `- ${item}`).join("\n")}\n\nYou can answer here in chat, or approve read-only observation if the missing evidence should come from the portal.`
   );
+}
+
+function friendlyWorkerBlocker(evidence = {}) {
+  const raw = [evidence.reason, ...(evidence.verification?.issues ?? [])].filter(Boolean).join(" ");
+  if (!raw) return "No blocker reported.";
+  if (/approval token|missing_approval_token|requires an approval/i.test(raw)) {
+    return "Read-only observation needs your approval before a worker can look at portal evidence.";
+  }
+  if (/BRAINSTY_PORTAL_LIVE=1/i.test(raw)) {
+    return "Live portal proof is off. Enable it only when the browser is already on an authenticated member portal page.";
+  }
+  if (/public Aetna marketing|not an approved authenticated member portal|public payer marketing/i.test(raw)) {
+    return "The page looked public, not like an authenticated member portal, so no healthcare evidence was stored.";
+  }
+  if (/Start Chrome with remote debugging|remote debugging|Chrome DevTools/i.test(raw)) {
+    return "I could not reach an authenticated browser session. Sign in yourself in the approved browser, then run the read-only approval again.";
+  }
+  if (/ocr|screenshot|visual/i.test(raw)) {
+    return "The visual evidence check did not complete, so the worker stopped before creating healthcare evidence.";
+  }
+  return raw;
+}
+
+function structuredBenefitSummary(balances = []) {
+  if (!balances.length) return "none yet";
+  return balances
+    .map(
+      (item) =>
+        `${item.label}: total ${money(item.total_amount)}, spent ${money(item.spent_amount)}, remaining ${money(item.remaining_amount)}`
+    )
+    .join(" · ");
+}
+
+function evidenceChannelSummary(channels = []) {
+  if (!channels.length) return "not reported";
+  return channels
+    .map((channel) => {
+      const parts = [channel.channel, channel.status];
+      if (channel.confidence !== null && channel.confidence !== undefined) parts.push(`confidence ${channel.confidence}`);
+      if (channel.wordCount !== null && channel.wordCount !== undefined) parts.push(`${channel.wordCount} words`);
+      return parts.filter(Boolean).join(" · ");
+    })
+    .join(" | ");
+}
+
+function renderWorkerContinuationCard(continuation) {
+  const progress = continuation.lastProgressEvent?.payload ?? {};
+  const isTerminal = ["cancelled", "completed", "blocked", "expired"].includes(continuation.status);
+  const terminalNote =
+    continuation.status === "cancelled"
+      ? "Cancelled follow-up is closed. Actions taken remain none."
+      : "This follow-up is closed. Actions taken are shown above.";
+  return `
+    <article class="chat-proof-card worker-continuation-card" data-continuation-card="${escapeHtml(continuation.id)}">
+      <h3>Async Worker Follow-Up</h3>
+      <dl>
+        <dt>Status</dt>
+        <dd>${escapeHtml(continuation.status)}</dd>
+        <dt>Outcome</dt>
+        <dd>${escapeHtml(continuation.terminalOutcome ?? "needs_long_running_followup")}</dd>
+        <dt>Task</dt>
+        <dd>${escapeHtml(continuation.taskId)}</dd>
+        <dt>Workflow</dt>
+        <dd>${escapeHtml(continuation.workflow ?? "unknown")}</dd>
+        <dt>Approval scope</dt>
+        <dd>${escapeHtml(continuation.approvalScope)} · ${escapeHtml(continuation.allowedAction)}</dd>
+        <dt>Next check</dt>
+        <dd>${escapeHtml(continuation.nextCheckAt ?? "not scheduled")}</dd>
+        <dt>Last progress</dt>
+        <dd>${escapeHtml(progress.status ?? continuation.lastProgressEvent?.eventType ?? "not reported")}</dd>
+        <dt>Actions taken</dt>
+        <dd>${escapeHtml((continuation.actionsTaken ?? []).join(", ") || "none")}</dd>
+      </dl>
+      ${
+        isTerminal
+          ? `<p class="continuation-note">${escapeHtml(terminalNote)}</p>`
+          : `<div class="button-row">
+              <button type="button" data-worker-followup-run="${escapeHtml(continuation.id)}" data-worker-followup-task="${escapeHtml(continuation.taskId)}">Approve + Run Official Read-Only</button>
+              <button type="button" data-worker-followup-continue="${escapeHtml(continuation.id)}">Continue Status Check</button>
+              <button type="button" data-worker-followup-cancel="${escapeHtml(continuation.id)}">Cancel Follow-Up</button>
+            </div>`
+      }
+    </article>
+  `;
+}
+
+function renderWorkerOutcomeCard(result) {
+  const state = result.graphRun?.state ?? {};
+  const evidence = state.evidence_observation ?? {};
+  const sourcePointers = state.source_pointers ?? [];
+  const balances = result.trace?.coverageBalances ?? [];
+  const reason = friendlyWorkerBlocker(evidence);
+  const terminalOutcome =
+    sourcePointers.length > 0
+      ? "completed_with_sourced_result"
+      : evidence.status === "missing_approval_token"
+        ? "not_possible_policy_or_approval_block"
+        : evidence.status?.startsWith("blocked")
+          ? "not_possible_insurance_or_portal_block"
+          : evidence.status ?? "pending";
+  return `
+    <article class="chat-proof-card">
+      <h3>Worker Result</h3>
+      <dl>
+        <dt>Outcome</dt>
+        <dd>${escapeHtml(terminalOutcome)}</dd>
+        <dt>Status</dt>
+        <dd>${escapeHtml(evidence.status ?? "not requested")}</dd>
+        <dt>Actions</dt>
+        <dd>${escapeHtml((evidence.actionsTaken ?? []).join(", ") || "none")}</dd>
+        <dt>Source pointers</dt>
+        <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
+        <dt>Structured benefits</dt>
+        <dd>${escapeHtml(structuredBenefitSummary(balances))}</dd>
+        <dt>Evidence channels</dt>
+        <dd>${escapeHtml(evidenceChannelSummary(evidence.evidenceChannels ?? []))}</dd>
+        <dt>Blocker</dt>
+        <dd>${escapeHtml(sourcePointers.length ? "none" : reason)}</dd>
+      </dl>
+    </article>
+  `;
 }
 
 function setBusy(button, busyText = "Working...") {
@@ -617,6 +963,8 @@ function renderOrchestratorChat(payload) {
         <dd>${escapeHtml(run.actualWorkflow ?? "unknown")} · journey ${escapeHtml(run.journeyStage ?? "unknown")}</dd>
         <dt>Route reason</dt>
         <dd>${escapeHtml(run.routeReason ?? "unknown")}</dd>
+        <dt>GPT routing</dt>
+        <dd>${escapeHtml(run.llmOrchestrationDecision?.mode ?? "not run")} · ${escapeHtml(run.llmOrchestrationDecision?.usedByRouter ? "used" : "not used")} · ${escapeHtml(run.llmOrchestrationDecision?.workflow ?? "none")}</dd>
         <dt>Model</dt>
         <dd>${escapeHtml(run.modelInvocation?.mode ?? "not_requested")} · ${escapeHtml(run.modelInvocation?.model ?? payload.openAI?.model ?? "unknown")}</dd>
         <dt>Worker plan</dt>
@@ -835,14 +1183,29 @@ async function runPhase4Proof() {
   trace.textContent = JSON.stringify(payload, null, 2);
 }
 
+function markPortalReady() {
+  if (!requireSignedInBeforeWorkflow()) return;
+  requireLivePortalProof.checked = true;
+  useOfficialOpenClawWorker.checked = true;
+  addMessage(
+    "assistant",
+    "Portal readiness noted. I will still ask for read-only approval before any OpenClaw observation. You handle all login, passwords, passkeys, SSN, and 2FA in the portal."
+  );
+  renderJourneyState(latestChatRun);
+}
+
 async function productAuthenticate() {
   const result = await api("/api/orchestrator/auth-start", {
     method: "POST",
     body: JSON.stringify(memberPayload())
   });
   document.querySelector("#sessionId").value = result.session?.id ?? "";
+  productSignedIn = true;
   productAuthStatus.textContent = `${result.auth?.status ?? "signed in"} · ${result.session?.id ?? "no session"}`;
   sessionStatus.textContent = `${result.session?.current_step ?? "created"} · v${result.session?.state_version ?? 0}`;
+  renderJourneyState();
+  startRuntimeEventStream(result.session?.id, result.user?.id);
+  await loadRuntimeEventsForSession(result.session?.id);
   addMessage(
     "assistant",
     `
@@ -865,7 +1228,9 @@ async function productAuthenticate() {
 }
 
 async function runProductChat(message, options = {}) {
+  if (!requireSignedInBeforeWorkflow()) return null;
   latestUserMessage = message;
+  renderRuntimeTimeline(runtimeEvents, "running graph");
   const payload = {
     message,
     ...memberPayload(),
@@ -874,19 +1239,25 @@ async function runProductChat(message, options = {}) {
     useOfficialOpenClawWorker: Boolean(options.useOfficialOpenClawWorker ?? useOfficialOpenClawWorker.checked),
     useLiveModel: document.querySelector("#useLiveModel").checked,
     approvalToken: options.approvalToken,
-    approvalTaskId: options.approvalTaskId
+    approvalTaskId: options.approvalTaskId,
+    workerContinuationId: options.workerContinuationId
   };
   const result = await api("/api/chat", {
     method: "POST",
     body: JSON.stringify(payload)
   });
   latestChatRun = result;
+  productSignedIn = true;
   document.querySelector("#sessionId").value = result.session.id;
   productAuthStatus.textContent = `Signed in · ${result.session.id}`;
   sessionStatus.textContent = `${result.session.current_step} · v${result.session.state_version}`;
+  startRuntimeEventStream(result.session.id, result.user?.id);
   addMessage("assistant", result.finalResponse);
   addMessage("assistant", renderChatProof(result), { html: true });
+  addMessage("assistant", renderWorkerOutcomeCard(result), { html: true });
   renderMissingInfoPrompt(result);
+  renderJourneyState(result);
+  await loadRuntimeEventsForSession(result.session.id);
   renderReview(result.trace);
   trace.textContent = JSON.stringify(result, null, 2);
   return result;
@@ -924,6 +1295,7 @@ async function approveLatestReadOnly(taskId) {
     `,
     { html: true }
   );
+  await loadRuntimeEventsForSession(latestChatRun.session.id);
   return runProductChat(latestUserMessage || value("message"), {
     approvalToken: approval.approvalToken,
     approvalTaskId: taskId,
@@ -931,6 +1303,108 @@ async function approveLatestReadOnly(taskId) {
     requireLivePortalProof: requireLivePortalProof.checked,
     useOfficialOpenClawWorker: useOfficialOpenClawWorker.checked
   });
+}
+
+async function createAsyncWorkerFollowup(taskId) {
+  if (!latestChatRun) throw new Error("Run a workflow first.");
+  const payload = await api("/api/worker-continuations", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId,
+      sessionId: latestChatRun.session.id,
+      userId: latestChatRun.user.id,
+      correlationId: latestChatRun.graphRun?.state?.graph_trace_id ?? latestChatRun.session.langgraph_thread_id,
+      approvalScope: "read_only_observation",
+      allowedAction: "read_only_observation",
+      reason: "The read-only worker task may take longer than this chat turn. Keep checking status without taking external action.",
+      reportEverySeconds: 30,
+      metadata: {
+        source: "chat_worker_followup_button",
+        workflow: latestChatRun.graphRun?.state?.workflow ?? null
+      }
+    })
+  });
+  if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Async follow-up was not created.");
+  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  await loadRuntimeEventsForSession(latestChatRun.session.id);
+  if (payload.trace) renderReview(payload.trace);
+  trace.textContent = JSON.stringify(payload, null, 2);
+  return payload;
+}
+
+async function continueAsyncWorkerFollowup(continuationId) {
+  const payload = await api(`/api/worker-continuations/${encodeURIComponent(continuationId)}/continue`, {
+    method: "POST",
+    body: JSON.stringify({
+      sessionId: currentSessionId(),
+      userId: latestChatRun?.user?.id ?? null
+    })
+  });
+  if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Could not request continuation.");
+  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  await loadRuntimeEventsForSession(payload.continuation.sessionId);
+  trace.textContent = JSON.stringify(payload, null, 2);
+  return payload;
+}
+
+async function runApprovedWorkerFollowup(continuationId, taskId) {
+  if (!latestChatRun) throw new Error("Run a workflow first.");
+  useOfficialOpenClawWorker.checked = true;
+  const approval = await api("/api/orchestrator/approve", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId,
+      sessionId: latestChatRun.session.id,
+      userId: latestChatRun.user.id,
+      approvalScope: "read_only_observation",
+      allowedAction: "read_only_observation",
+      expiresInMinutes: 15
+    })
+  });
+  addMessage(
+    "assistant",
+    `
+      <article class="chat-proof-card">
+        <h3>Follow-Up Approval Recorded</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(approval.status)}</dd>
+          <dt>Continuation</dt>
+          <dd>${escapeHtml(continuationId)}</dd>
+          <dt>Allowed action</dt>
+          <dd>${escapeHtml(approval.approval?.allowedAction ?? "read_only_observation")}</dd>
+          <dt>Actions taken</dt>
+          <dd>${escapeHtml((approval.approval?.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+      </article>
+    `,
+    { html: true }
+  );
+  await loadRuntimeEventsForSession(latestChatRun.session.id);
+  return runProductChat(latestUserMessage || value("message"), {
+    approvalToken: approval.approvalToken,
+    approvalTaskId: taskId,
+    workerContinuationId: continuationId,
+    executeEvidenceObservation: true,
+    requireLivePortalProof: requireLivePortalProof.checked,
+    useOfficialOpenClawWorker: true
+  });
+}
+
+async function cancelAsyncWorkerFollowup(continuationId) {
+  const payload = await api(`/api/worker-continuations/${encodeURIComponent(continuationId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({
+      sessionId: currentSessionId(),
+      userId: latestChatRun?.user?.id ?? null,
+      reason: "Cancelled from chat."
+    })
+  });
+  if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Could not cancel continuation.");
+  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  await loadRuntimeEventsForSession(payload.continuation.sessionId);
+  trace.textContent = JSON.stringify(payload, null, 2);
+  return payload;
 }
 
 async function authStart() {
@@ -972,7 +1446,8 @@ async function runFlowCases() {
 }
 
 async function api(path, options = {}) {
-  const timeoutMs = options.timeoutMs ?? 45000;
+  const liveModelEnabled = document.querySelector("#useLiveModel")?.checked;
+  const timeoutMs = options.timeoutMs ?? (liveModelEnabled ? 180000 : 45000);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, ...fetchOptions } = options;
@@ -1175,6 +1650,18 @@ productAuth.addEventListener("click", async () => {
   }
 });
 
+portalReady.addEventListener("click", () => {
+  markPortalReady();
+});
+
+loadRuntimeEventsButton.addEventListener("click", async () => {
+  try {
+    await loadRuntimeEventsForSession();
+  } catch (error) {
+    renderRuntimeTimeline(runtimeEvents, error.message);
+  }
+});
+
 document.querySelector(".workflow-actions").addEventListener("click", async (event) => {
   const message = event.target?.dataset?.workflowMessage;
   if (!message) return;
@@ -1199,6 +1686,63 @@ messages.addEventListener("click", async (event) => {
     await approveLatestReadOnly(taskId);
   } catch (error) {
     addMessage("assistant", `Approval error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const taskId = event.target?.dataset?.workerFollowup;
+  if (!taskId) return;
+  const restore = setBusy(event.target, "Scheduling...");
+  try {
+    await createAsyncWorkerFollowup(taskId);
+  } catch (error) {
+    addMessage("assistant", `Async follow-up error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const continuationId = event.target?.dataset?.workerFollowupContinue;
+  if (!continuationId) return;
+  const restore = setBusy(event.target, "Checking...");
+  try {
+    await continueAsyncWorkerFollowup(continuationId);
+  } catch (error) {
+    addMessage("assistant", `Continuation error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const continuationId = event.target?.dataset?.workerFollowupRun;
+  const taskId = event.target?.dataset?.workerFollowupTask;
+  if (!continuationId || !taskId) return;
+  const restore = setBusy(event.target, "Approving...");
+  try {
+    await runApprovedWorkerFollowup(continuationId, taskId);
+  } catch (error) {
+    addMessage("assistant", `Follow-up run error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const continuationId = event.target?.dataset?.workerFollowupCancel;
+  if (!continuationId) return;
+  const restore = setBusy(event.target, "Cancelling...");
+  try {
+    await cancelAsyncWorkerFollowup(continuationId);
+  } catch (error) {
+    addMessage("assistant", `Cancel error: ${error.message}`);
     trace.textContent = error.stack ?? error.message;
   } finally {
     restore();
@@ -1236,9 +1780,16 @@ sessions.addEventListener("click", async (event) => {
   if (!sessionId) return;
   document.querySelector("#sessionId").value = sessionId;
   document.querySelector("#resumeLatestSession").checked = true;
+  productSignedIn = true;
+  productAuthStatus.textContent = `Signed in · ${sessionId}`;
   await loadSessionState();
+  renderJourneyState();
+  startRuntimeEventStream(sessionId);
+  await loadRuntimeEventsForSession(sessionId);
 });
 
+renderJourneyState();
+renderRuntimeTimeline();
 addMessage(
   "assistant",
   "Sign in, choose a workflow, or type a benefits question. I will route it through the real LangGraph harness and show workflow proof here in chat. OpenClaw remains approval-gated."

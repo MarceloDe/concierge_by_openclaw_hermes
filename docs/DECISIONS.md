@@ -571,3 +571,193 @@ Implementation notes:
 
 Cost of changing later:
 Medium. Future execution code must implement the status subagent and async continuation path, but the contract now points in the correct direction for a capable OpenClaw worker.
+
+## 2026-05-28 - Make GPT A Causal LangGraph Orchestration Decision Node
+
+Context:
+Phase 8 needs to prove that the MVP is not a scripted harness with an LLM call attached at the end. The user explicitly asked for GPT to provide real LangChain/LangGraph intelligence, with extra-high scrutiny for non-mocked LLM and agent interoperability.
+
+Options considered:
+- Keep structured routing deterministic and use GPT only for final response wording.
+- Let GPT fully control workflow, approvals, and worker execution.
+- Insert GPT as a governed LangGraph decision node after deterministic safety/classification and before workflow routing.
+
+Decision:
+Add a real GPT orchestration decision node inside LangGraph. The node returns strict JSON for intent, workflow, confidence, required evidence, missing evidence, approval requirements, worker goal, response strategy, and next user question. LangGraph may route from the GPT decision only when it is valid and confident. Deterministic safety refusals, approval gates, and policy overrides still win.
+
+Reason:
+This gives the orchestrator genuine model intelligence while preserving the healthcare control boundary. GPT can reason over user wording, source-pointer hints, route candidates, product-memory recall, and OpenClaw capability policy, but LangGraph still owns final workflow selection, execution gates, persistence, audit, product memory, and user response.
+
+Implementation notes:
+- GPT payloads use the existing PHI-approved direct-identifier masking policy.
+- Replay mode exists only for deterministic tests; live proof requires real `ChatOpenAI`.
+- The UI/API now expose whether GPT was invoked and whether its decision was actually used by the router.
+
+Cost of changing later:
+Medium. Prompt shape and workflow keys become contracts for future evaluation and UI debugging. However, the decision node is isolated enough to swap direct OpenAI access for Vercel AI Gateway, LangSmith-evaluated prompts, or a different structured-output model provider.
+
+## 2026-05-28 - Add Runtime Events Before Richer Chat And Worker Progress UI
+
+Context:
+The MVP needs a user-facing chat that shows what the graph is doing, plus programmable hooks for LangGraph/OpenClaw cycles, external systems, webhooks, code hooks, and long-running worker status. Adding UI panels without an event spine would create another proof surface disconnected from the runtime.
+
+Options considered:
+- Add a custom chat timeline directly from final graph state.
+- Add LangSmith immediately as the only observability layer.
+- Add a local runtime pub/sub event spine first, then render or export it through UI, SSE, webhooks, and code hooks.
+
+Decision:
+Add a local runtime event platform now. LangGraph publishes lifecycle events after each graph run. Events persist locally, stream over SSE, can trigger in-process code hooks, and can be delivered to webhooks only when outbound webhooks are explicitly enabled.
+
+Reason:
+This makes the app itself capable of showing workflow proof without requiring LangSmith for the MVP. It also gives OpenClaw progress reporting and future third-party triggers a shared contract instead of one-off callbacks.
+
+Implementation notes:
+- Webhooks are dry-run blocked unless `BRAINSTY_ENABLE_OUTBOUND_WEBHOOKS=1`.
+- Event types currently include workflow classification/routing, worker plan preparation, approval request, evidence status, final answer, and memory retention.
+- Runtime events are diagnostic and orchestration-supporting; they are not product memory.
+
+Cost of changing later:
+Low to medium. The event schema can expand as OpenClaw status subagents and async follow-up delivery become real, but event type names and correlation ids should remain stable once UI and integrations depend on them.
+
+## 2026-05-28 - Make Auth Plus Chat The Primary MVP Proof Surface
+
+Context:
+The project already had strong operator proof panels, but the user clarified that the MVP must be a user-facing app with friendly local auth, chat, workflow buttons, missing-information prompts, approval cards, OpenClaw result routing, and visible LangGraph activity.
+
+Options considered:
+- Keep the dashboard panels as the main proof surface.
+- Build a separate new app shell.
+- Promote the existing chat panel into the primary MVP loop while keeping dashboard panels for debugging.
+
+Decision:
+Use the existing local web app and make auth plus chat the primary proof surface. Workflow buttons become chat shortcuts. Local planned-user sign-in gates workflow execution. The chat surface renders guided state, read-only approval, GPT routing proof, OpenClaw worker/evidence status, product memory proof, and runtime graph events.
+
+Reason:
+This proves the system from the perspective of the future user without losing the operator audit/debug tools. It also keeps the project focused on one benefits journey before adding workflow breadth.
+
+Implementation notes:
+- The `Portal Ready` control records only user readiness in the UI and enables the live portal/official worker toggles; it does not enter credentials or execute the worker.
+- Runtime timeline data comes from `/api/runtime/events` and the SSE stream, not from mocked UI state.
+- OpenClaw remains pending approval until the user approves read-only observation.
+
+Cost of changing later:
+Low. The chat panel can later be split into a dedicated route or Next.js app, but the event/state contract should remain.
+
+## 2026-05-29 - Publish Approval And Worker Status As First-Class Runtime Events
+
+Context:
+Phase 8B made the chat surface visible, but approval/resume still depended mostly on final graph state refresh. The OpenClaw worker empowerment contract requires no silent failure, 30-second progress reporting, and clear terminal outcomes.
+
+Options considered:
+- Keep worker progress only in audit rows and final graph state.
+- Add frontend-only pseudo-progress.
+- Publish approval and worker status transitions as runtime events from the server and LangGraph nodes.
+
+Decision:
+Make approval and worker status first-class runtime events. The approval API publishes `approval.recorded`. The graph publishes `approval.consumed` and `worker.status.updated` during evidence observation, including terminal outcomes and actions taken.
+
+Reason:
+This lets the chat timeline show real runtime state while preserving LangGraph as the workflow master. It also prepares the event contract for an actual OpenClaw status subagent and async follow-up handoff.
+
+Implementation notes:
+- Worker terminal outcomes use the OpenClaw empowerment vocabulary: `completed_with_sourced_result`, `not_possible_insurance_or_portal_block`, and `not_possible_policy_or_approval_block`.
+- The chat worker-result card renders source pointers and structured benefits when available, or blocker text when evidence fails closed.
+- These events are diagnostic/orchestration proof; they are not product memory.
+
+Cost of changing later:
+Low to medium. Event payloads can gain richer subtasks and heartbeat details later, but event names should remain stable for UI and hooks.
+
+## 2026-05-29 - Treat Structured Benefit Rows As Source-Backed Evidence
+
+Context:
+Phase 8C made approval/resume visible, but a successful authenticated portal proof still risked feeling like a generic page snapshot. The MVP needs to prove value in the first benefits journey by showing concrete deductible and out-of-pocket rows while staying source-pointer grounded.
+
+Options considered:
+- Keep only `eligibility_snapshots` and verified extraction artifacts as source pointers.
+- Put parsed balances only in the operator review dashboard.
+- Promote persisted `coverage_balances` rows into the LangGraph source-pointer and chat result contract.
+
+Decision:
+Promote structured benefit rows to first-class source-backed evidence. When a verified portal proof extracts deductible or out-of-pocket balances, LangGraph persists them in `coverage_balances`, includes those rows as source pointers, summarizes them in the final sourced answer, and renders them in the chat Worker Result card.
+
+Reason:
+The user-facing MVP should answer the actual benefits question with concrete evidence, not merely prove that a page was observed. Keeping the rows tied to database source pointers preserves auditability and product-memory boundaries.
+
+Implementation notes:
+- Structured parsing now handles DOM/accessibility and OCR-style amount formats.
+- Official OpenClaw evidence can carry accessibility-tree and local OCR channel metadata into `evidence_observation`.
+- Friendly blocker mapping happens in the chat UI; raw trace details remain available in the operator/debug trace.
+- Product memory remains source-pointer oriented and does not use Cortex or raw portal text as product memory.
+
+Cost of changing later:
+Low. The parser can be replaced with a richer extraction model later as long as `coverage_balances` source pointers and evidence-channel metadata remain stable.
+
+## 2026-05-29 - Persist Long-Running Worker Follow-Up As Bound Continuation State
+
+Context:
+Phase 8C and 8D made approval/resume and evidence quality visible in chat, but longer OpenClaw work still needed an explicit state record instead of relying on the current synchronous browser turn. The OpenClaw empowerment contract requires no silent failure, 30-second status reporting, and a clear handoff when a worker task takes longer than the active chat turn.
+
+Options considered:
+- Keep long-running tasks as chat text only.
+- Execute continuation controls directly from the browser UI.
+- Persist a bound continuation record and scheduled status-check job, while leaving real worker execution to a fresh approved graph run.
+
+Decision:
+Persist worker continuations as first-class runtime state. A pending read-only worker proposal can become a `worker_continuations` row tied to task, session, user, workflow, approval scope, allowed action, correlation id, scheduled job, and last progress event. Create/continue/cancel controls publish runtime events and audit rows but do not execute worker actions directly.
+
+Reason:
+This creates a real gate instead of another proposal wall. The app can now acknowledge long-running worker work, show status/cancel/continue controls, and preserve LangGraph ownership of the workflow before an official OpenClaw status subagent is wired to consume the continuation.
+
+Implementation notes:
+- Continuation controls are limited to `read_only_observation` in this MVP.
+- `actionsTaken` remains empty for create, continue, and cancel.
+- Chat renders the continuation card and timeline events from persisted runtime state.
+- The next bridge should consume this state from LangGraph and dispatch only the bound read-only status/observation action.
+
+Cost of changing later:
+Medium. The continuation table and event names should stay stable because the UI, audit, and future status-subagent bridge will depend on them. The scheduled-job backend can later move from local SQLite polling to a durable queue without changing the user-facing contract.
+
+## 2026-05-29 - Consume Worker Continuations Only Through Fresh Approved LangGraph Runs
+
+Context:
+Phase 8E persisted long-running worker follow-up state, but the continuation was still only a queue record and chat control. The next architectural risk was allowing the continuation to become either another proposal wall or a UI shortcut that bypassed LangGraph approval/resume.
+
+Options considered:
+- Let the continue button execute the worker directly.
+- Treat continuation state as documentation only and keep using the original approval button.
+- Require a fresh read-only approval run to validate, consume, dispatch, and finalize the continuation inside LangGraph.
+
+Decision:
+Continuation dispatch must happen only inside a fresh approved LangGraph run. The graph validates the continuation before consuming approval, requires the dedicated official OpenClaw read-only worker path, then marks the continuation as `dispatching_official_openclaw`. Official worker result ingest finalizes the continuation as `completed` or `blocked` and publishes follow-up runtime events.
+
+Reason:
+This preserves LangGraph as the healthcare workflow master while giving OpenClaw a real execution bridge. It also prevents approval tokens from being burned on wrong-session, wrong-task, cancelled, expired, or non-official continuation attempts.
+
+Implementation notes:
+- Chat now exposes `Approve + Run Official Read-Only` on active continuation cards.
+- `worker.followup.dispatching`, `worker.followup.completed`, `worker.followup.blocked`, and `worker.followup.expired` extend the Phase 8 runtime event vocabulary.
+- The live official OpenClaw continuation test is wired but remains gated by `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+- The continuation bridge still permits only read-only observation; irreversible/external actions remain outside scope.
+
+Cost of changing later:
+Medium. The validation-before-approval rule, event names, and continuation status values are now part of the orchestration contract. The underlying scheduler can later move to a queue or OpenClaw status subagent loop without changing the approval boundary.
+
+## 2026-05-28 - Compact Runtime Context Packets And Stream SQLite Writes
+
+Context:
+The live multi-flow orchestrator audit exposed a non-obvious runtime failure: repeated real graph runs could grow context-packet inserts until SQLite shell process arguments hit `spawn E2BIG`.
+
+Options considered:
+- Limit live orchestrator test breadth.
+- Remove context-packet persistence.
+- Keep context persistence but compact payload surfaces and stream SQL through stdin.
+
+Decision:
+Keep context persistence, strip raw task metadata and scheduled-job payload JSON from runtime context packets, preserve bounded summaries, and stream large SQL write batches through sqlite stdin.
+
+Reason:
+The MVP needs repeated real flow tests to catch state growth and interoperability issues. Hiding the failure by shrinking tests would weaken proof. Streaming writes and compacting repeated payloads preserve auditability while avoiding a process-argument ceiling.
+
+Cost of changing later:
+Low. A future move to `better-sqlite3` or Postgres should replace this storage workaround with proper transactional writes, while preserving bounded context-packet semantics.

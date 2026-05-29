@@ -6,11 +6,15 @@ export const TABLES = [
   "session_state",
   "session_checkpoints",
   "session_events",
+  "runtime_events",
+  "runtime_hook_subscriptions",
+  "runtime_hook_deliveries",
   "memory_items",
   "context_packets",
   "openclaw_instances",
   "agent_tasks",
   "scheduled_jobs",
+  "worker_continuations",
   "agent_outbox",
   "memory_harness_runs",
   "workflow_definitions",
@@ -124,6 +128,48 @@ CREATE TABLE IF NOT EXISTS session_events (
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE IF NOT EXISTS runtime_events (
+  id TEXT PRIMARY KEY,
+  session_id TEXT,
+  user_id TEXT,
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  correlation_id TEXT,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS runtime_hook_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  session_id TEXT,
+  event_type TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_url TEXT,
+  secret TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS runtime_hook_deliveries (
+  id TEXT PRIMARY KEY,
+  subscription_id TEXT,
+  runtime_event_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_url TEXT,
+  status TEXT NOT NULL,
+  response_status INTEGER,
+  response_body TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (subscription_id) REFERENCES runtime_hook_subscriptions(id),
+  FOREIGN KEY (runtime_event_id) REFERENCES runtime_events(id)
+);
+
 CREATE TABLE IF NOT EXISTS memory_items (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -219,6 +265,32 @@ CREATE TABLE IF NOT EXISTS scheduled_jobs (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS worker_continuations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  scheduled_job_id TEXT,
+  workflow_key TEXT,
+  approval_scope TEXT NOT NULL,
+  allowed_action TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  terminal_outcome TEXT,
+  last_runtime_event_id TEXT,
+  last_progress_event_json TEXT NOT NULL DEFAULT '{}',
+  next_check_at TEXT,
+  expires_at TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (task_id) REFERENCES agent_tasks(id),
+  FOREIGN KEY (scheduled_job_id) REFERENCES scheduled_jobs(id),
+  FOREIGN KEY (last_runtime_event_id) REFERENCES runtime_events(id)
 );
 
 CREATE TABLE IF NOT EXISTS agent_outbox (

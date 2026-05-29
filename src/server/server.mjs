@@ -18,6 +18,19 @@ import { closeManagedSession, getManagedSessionState, listManagedSessions } from
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisode } from "../concierge/productMemory.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
+import {
+  createRuntimeHookSubscription,
+  listRuntimeEvents,
+  listRuntimeHookSubscriptions,
+  publishRuntimeEvent,
+  subscribeRuntimeEvents
+} from "../concierge/runtimeEvents.mjs";
+import {
+  cancelWorkerContinuation,
+  createWorkerContinuation,
+  listWorkerContinuations,
+  requestWorkerContinuation
+} from "../concierge/workerContinuations.mjs";
 
 const PORT = Number(process.env.PORT ?? 4173);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -44,6 +57,11 @@ async function readJson(req) {
   for await (const chunk of req) chunks.push(chunk);
   const body = Buffer.concat(chunks).toString("utf8");
   return body ? JSON.parse(body) : {};
+}
+
+function sendSse(res, event) {
+  res.write(`event: ${event.eventType ?? "message"}\n`);
+  res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
 async function serveStatic(req, res) {
@@ -76,6 +94,165 @@ async function handleApi(req, res, url) {
         config: undefined
       }
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/runtime/events") {
+    sendJson(
+      res,
+      200,
+      {
+        events: await listRuntimeEvents(store, {
+          sessionId: url.searchParams.get("sessionId") ?? null,
+          userId: url.searchParams.get("userId") ?? null,
+          eventType: url.searchParams.get("eventType") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 100)
+        })
+      }
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/runtime/events/stream") {
+    const sessionId = url.searchParams.get("sessionId") ?? null;
+    const userId = url.searchParams.get("userId") ?? null;
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive"
+    });
+    sendSse(res, {
+      eventType: "runtime.stream.opened",
+      source: "server",
+      sessionId,
+      userId,
+      createdAt: new Date().toISOString()
+    });
+    const unsubscribe = subscribeRuntimeEvents((event) => {
+      if (sessionId && event.sessionId !== sessionId) return;
+      if (userId && event.userId !== userId) return;
+      sendSse(res, event);
+    });
+    req.on("close", unsubscribe);
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/worker-continuations") {
+    sendJson(res, 200, {
+      continuations: await listWorkerContinuations(store, {
+        sessionId: url.searchParams.get("sessionId") ?? null,
+        userId: url.searchParams.get("userId") ?? null,
+        status: url.searchParams.get("status") ?? null,
+        limit: Number(url.searchParams.get("limit") ?? 20)
+      })
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/worker-continuations") {
+    const body = await readJson(req);
+    const payload = await createWorkerContinuation(store, {
+      taskId: body.taskId,
+      sessionId: body.sessionId,
+      userId: body.userId,
+      approvalScope: body.approvalScope ?? "read_only_observation",
+      allowedAction: body.allowedAction ?? "read_only_observation",
+      correlationId: body.correlationId,
+      reason: body.reason,
+      reportEverySeconds: Number(body.reportEverySeconds ?? 30),
+      expiresInMinutes: Number(body.expiresInMinutes ?? 120),
+      lastProgressEvent: body.lastProgressEvent,
+      metadata: body.metadata ?? {}
+    });
+    sendJson(res, payload.ok ? 200 : 400, {
+      ...payload,
+      trace: payload.continuation?.sessionId ? await traceForSession(store, payload.continuation.sessionId) : null
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.match(/^\/api\/worker-continuations\/[^/]+\/cancel$/)) {
+    const body = await readJson(req);
+    const continuationId = decodeURIComponent(url.pathname.split("/")[3]);
+    const payload = await cancelWorkerContinuation(store, {
+      continuationId,
+      sessionId: body.sessionId ?? null,
+      userId: body.userId ?? null,
+      reason: body.reason ?? "Cancelled by user."
+    });
+    sendJson(res, payload.ok ? 200 : 400, {
+      ...payload,
+      trace: payload.continuation?.sessionId ? await traceForSession(store, payload.continuation.sessionId) : null
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.match(/^\/api\/worker-continuations\/[^/]+\/continue$/)) {
+    const body = await readJson(req);
+    const continuationId = decodeURIComponent(url.pathname.split("/")[3]);
+    const payload = await requestWorkerContinuation(store, {
+      continuationId,
+      sessionId: body.sessionId ?? null,
+      userId: body.userId ?? null
+    });
+    sendJson(res, payload.ok ? 200 : 400, {
+      ...payload,
+      trace: payload.continuation?.sessionId ? await traceForSession(store, payload.continuation.sessionId) : null
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/runtime/hooks") {
+    sendJson(
+      res,
+      200,
+      {
+        subscriptions: await listRuntimeHookSubscriptions(store, {
+          sessionId: url.searchParams.get("sessionId") ?? null,
+          userId: url.searchParams.get("userId") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 100)
+        })
+      }
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/hooks") {
+    const body = await readJson(req);
+    sendJson(
+      res,
+      200,
+      {
+        subscription: await createRuntimeHookSubscription(store, {
+          userId: body.userId ?? null,
+          sessionId: body.sessionId ?? null,
+          eventType: body.eventType ?? "*",
+          targetType: body.targetType ?? "webhook",
+          targetUrl: body.targetUrl ?? null,
+          secret: body.secret ?? null,
+          status: body.status ?? "active"
+        })
+      }
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/events/publish") {
+    const body = await readJson(req);
+    sendJson(
+      res,
+      200,
+      {
+        event: await publishRuntimeEvent(store, {
+          userId: body.userId ?? null,
+          sessionId: body.sessionId ?? null,
+          source: body.source ?? "api_runtime_events_publish",
+          eventType: body.eventType,
+          correlationId: body.correlationId ?? null,
+          payload: body.payload ?? {}
+        })
+      }
+    );
     return;
   }
 
@@ -423,6 +600,22 @@ async function handleApi(req, res, url) {
       sendJson(res, 400, approval);
       return;
     }
+    await publishRuntimeEvent(store, {
+      userId: task.user_id,
+      sessionId: task.session_id,
+      source: "orchestrator_approval",
+      eventType: "approval.recorded",
+      correlationId: task.id,
+      payload: {
+        status: approval.status,
+        taskId: task.id,
+        workflow: task.workflow_key,
+        approvalScope: approval.approval?.approvalScope ?? body.approvalScope ?? "read_only_observation",
+        allowedAction: approval.approval?.allowedAction ?? body.allowedAction ?? "read_only_observation",
+        expiresAt: approval.approval?.expiresAt ?? null,
+        actionsTaken: approval.approval?.actionsTaken ?? []
+      }
+    });
     sendJson(res, 200, {
       ...approval,
       trace: await traceForSession(store, task.session_id)

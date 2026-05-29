@@ -318,6 +318,107 @@ Next implementation:
 - Improve structured extraction for the authenticated Aetna home page by reconciling DOM/accessibility text plus visual OCR text so deductible/out-of-pocket values become structured coverage balance rows, not only visible source evidence.
 - Keep all non-read-only actions out of scope.
 
+## Phase 8 Status
+
+Phase 8A is implemented:
+
+- LangGraph now contains a GPT-backed orchestration decision node after deterministic safety/structured classification and before workflow routing.
+- GPT returns strict JSON for workflow, intent, confidence, required evidence, missing evidence, approval requirement, worker goal, response strategy, and next user question.
+- A valid and confident GPT decision can causally route the workflow.
+- Deterministic safety refusals and approval gates still override GPT.
+- The app records and displays whether GPT was invoked, whether the router used it, the workflow, confidence, and rationale.
+- Runtime event infrastructure now persists graph lifecycle events, exposes an SSE stream, supports in-process code hooks, and records outbound webhook subscriptions in dry-run mode unless explicitly enabled.
+- Context-packet growth uncovered by live multi-flow testing was hardened by compacting repeated task/job payloads and streaming SQLite write batches through stdin.
+
+Phase 8B is the next implementation:
+
+Phase 8B is implemented:
+
+- The user-facing chat now requires local planned-user sign-in before workflow execution.
+- Workflow buttons act as chat shortcuts into the same LangGraph runtime.
+- Chat shows a guided state strip for Local Auth, GPT Route, Approval, OpenClaw, and Memory.
+- Chat includes a `Portal Ready` control that marks manual user portal readiness and enables live portal/official worker toggles without entering credentials or executing the worker.
+- Chat renders a runtime event timeline from `/api/runtime/events` and the SSE stream.
+- Browser proof showed Benefits routing through live GPT with `openai_chatopenai_invoked`, `used by router`, `pending_approval`, `actions none`, and seven graph lifecycle events.
+
+Phase 8C is the next implementation:
+
+Phase 8C is implemented:
+
+- `POST /api/orchestrator/approve` publishes `approval.recorded`.
+- Approved graph resume publishes `approval.consumed`.
+- Evidence observation publishes `worker.status.updated` events for approval wait, official worker dispatch, fail-closed blockers, and sourced success.
+- Chat timeline renders approval and worker status events.
+- Chat renders a worker-result card with terminal outcome, evidence status, actions, source pointers, structured benefits, and blocker text.
+
+Phase 8D is implemented:
+
+- Improve authenticated portal success quality:
+  - structured deductible and out-of-pocket rows are parsed from DOM/accessibility/OCR-style text,
+  - persisted `coverage_balances` rows are included as source pointers,
+  - chat Worker Result cards show total/spent/remaining rows and evidence channels,
+  - official OpenClaw accessibility-tree and local OCR evidence channels can be surfaced in the LangGraph result contract,
+  - source-pointer-only memory/model behavior is preserved,
+  - fail-closed worker blockers are rendered with friendly user-facing copy.
+
+Phase 8C browser proof is complete:
+
+- Auth plus chat runs through the same LangGraph runtime.
+- Approval/resume emits `approval.recorded`, `approval.consumed`, and `worker.status.updated`.
+- The post-approval chat renders a `Worker Result` card.
+- Missing authenticated portal state fails closed with `blocked_no_authenticated_evidence`.
+- `npm run test:local` passes with 85 passing tests and 1 intentionally skipped live official OpenClaw dispatch proof.
+
+Phase 8D browser and test proof is complete:
+
+- Verified portal proof can return two structured benefit rows plus `coverage_balances` source pointers.
+- Runtime events include `structuredBenefitCount`.
+- The browser fail-closed card uses friendly authenticated-browser guidance and hides the raw Chrome command from the Worker Result card.
+- `npm run test:local` passes with 87 passing tests and 1 intentionally skipped live official OpenClaw dispatch proof.
+
+Phase 8E is implemented:
+
+- Added async-follow-up state for longer worker tasks after the synchronous approval/resume loop.
+- Persisted worker continuation records bound to session id, user id, task id, scheduled job id, approval scope, correlation id, and last progress event.
+- Added worker continuation API controls for create, continue-status, cancel, and list.
+- Rendered continue/cancel/status controls in chat without adding new healthcare workflows.
+- Published `worker.followup.scheduled`, `worker.followup.continue_requested`, and `worker.followup.cancelled` runtime events.
+- Preserved read-only observation boundaries, source-pointer memory, approval gates, and `actionsTaken: []` for continuation controls.
+
+Phase 8E browser and test proof is complete:
+
+- `npm run test:local` passes with 91 passing tests and 1 intentionally skipped live official OpenClaw dispatch proof.
+- Browser proof showed live GPT benefits routing, async follow-up scheduling, continue-request, cancel, timeline events, read-only scope, and actions taken none.
+- The terminal cancelled card now closes the controls and does not offer an active continue button.
+
+Phase 8F is implemented:
+
+- Turned the continuation record into the official OpenClaw status/observation bridge:
+  - validates a pending continuation before approval is consumed,
+  - requires the dedicated official OpenClaw read-only worker for continuation dispatch,
+  - consumes the continuation only from a fresh approved graph run,
+  - dispatches only the bound read-only status/observation action,
+  - finalizes the continuation as completed or blocked after official worker result ingest,
+  - publishes `worker.followup.dispatching`, `worker.followup.completed`, `worker.followup.blocked`, and `worker.followup.expired`,
+  - keeps manual continue/cancel as user controls,
+  - keeps all external/irreversible actions outside this MVP scope.
+
+Phase 8F browser and test proof is complete:
+
+- Focused tests prove continuation validation, approved dispatch consumption, completion finalization, and pre-approval block when the official worker flag is missing.
+- Browser proof shows the auth-plus-chat flow can schedule a continuation, render `Approve + Run Official Read-Only`, keep the read-only scope visible, and emit scheduled/continue events with actions none before official dispatch.
+- The live official OpenClaw continuation-dispatch test is wired but remains intentionally gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+
+Phase 8G is the next implementation:
+
+- Run and polish the full authenticated 8F path with a logged dedicated OpenClaw browser profile:
+  - manually sign in,
+  - schedule/approve/run the continuation,
+  - verify official OpenClaw DOM/accessibility plus OCR evidence,
+  - show completed or blocked continuation status in chat,
+  - retain only source-pointer grounded product memory,
+  - keep the existing read-only and irreversible-action boundaries.
+
 ## Full Working Test Recommendation
 
 - Phase 4 is the right phase to test the real authenticated portal evidence loop: approval -> read-only observation -> verified source pointer -> sourced answer.

@@ -99,6 +99,13 @@ export function summarizeOrchestratorRun(caseSpec, graphRun) {
         detail: state.route_reason
       },
       {
+        key: "llm_orchestration_decision",
+        status: state.llm_orchestration_decision?.mode ?? "not_run",
+        detail: state.llm_orchestration_decision?.usedByRouter
+          ? `used ${state.llm_orchestration_decision.workflow}`
+          : `not used ${state.llm_orchestration_decision?.workflow ?? "none"}`
+      },
+      {
         key: "openclaw_skill_validation",
         status: state.openclaw_skill_validation?.status ?? "not_prepared",
         detail: (state.openclaw_skill_validation?.issues ?? []).join("; ") || "no validation issues"
@@ -154,6 +161,16 @@ export function summarizeOrchestratorRun(caseSpec, graphRun) {
       model: state.model_invocation?.model ?? null,
       payloadMode: state.model_invocation?.payloadMode ?? null,
       responsePreview: String(state.model_invocation?.response ?? "").slice(0, 500)
+    },
+    llmOrchestrationDecision: {
+      mode: state.llm_orchestration_decision?.mode ?? null,
+      provider: state.llm_orchestration_decision?.provider ?? null,
+      model: state.llm_orchestration_decision?.model ?? null,
+      valid: state.llm_orchestration_decision?.valid ?? null,
+      usedByRouter: state.llm_orchestration_decision?.usedByRouter ?? false,
+      workflow: state.llm_orchestration_decision?.workflow ?? null,
+      confidence: state.llm_orchestration_decision?.confidence ?? null,
+      rationale: state.llm_orchestration_decision?.rationale ?? null
     },
     finalResponse: state.final_response
   };

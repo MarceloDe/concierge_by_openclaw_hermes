@@ -155,6 +155,7 @@
               <button id="productAuth" type="button">Sign In</button>
             </div>
           </div>
+          <div id="chatJourney" class="chat-journey" aria-live="polite"></div>
           <div class="workflow-actions" aria-label="Workflow shortcuts">
             <button type="button" data-workflow-message="Do I still owe anything before insurance starts paying?">Benefits</button>
             <button type="button" data-workflow-message="Why didn't insurance pay my last visit?">Claim Status</button>
@@ -162,14 +163,19 @@
             <button type="button" data-workflow-message="They said no and I want to fight it.">Appeal</button>
             <button type="button" data-workflow-message="Use my authenticated member portal in read-only mode and return source pointers.">Portal Proof</button>
           </div>
-          <label class="checkbox-label live-proof-toggle">
-            <input id="requireLivePortalProof" type="checkbox" />
-            Require live portal proof
-          </label>
-          <label class="checkbox-label live-proof-toggle">
-            <input id="useOfficialOpenClawWorker" type="checkbox" />
-            Use official OpenClaw worker
-          </label>
+          <div class="chat-controls">
+            <label class="checkbox-label live-proof-toggle">
+              <input id="requireLivePortalProof" type="checkbox" />
+              Require live portal proof
+            </label>
+            <label class="checkbox-label live-proof-toggle">
+              <input id="useOfficialOpenClawWorker" type="checkbox" />
+              Use official OpenClaw worker
+            </label>
+            <button id="portalReady" type="button">Portal Ready</button>
+            <button id="loadRuntimeEvents" type="button">Refresh Timeline</button>
+          </div>
+          <div id="runtimeTimeline" class="runtime-timeline" aria-live="polite"></div>
           <div id="messages" class="messages"></div>
           <form id="chatForm" class="composer">
             <textarea id="message">Enroll me as Marcelo Felix, connect to my logged insurance website in Chrome, review my eligibility and benefits, and show the trace of what you found.</textarea>

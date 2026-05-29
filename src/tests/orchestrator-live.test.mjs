@@ -30,6 +30,14 @@ test("live orchestrator flow cases use real LangGraph and real OpenAI model call
   assert.equal(result.aggregate.notDispatched, true);
   assert.deepEqual(result.aggregate.actionsTaken, []);
   for (const run of result.cases) {
+    assert.equal(run.llmOrchestrationDecision.mode, "openai_chatopenai_invoked");
+    assert.equal(run.llmOrchestrationDecision.valid, true);
+    if (run.expectedWorkflow === "human_approval_escalation") {
+      assert.equal(run.llmOrchestrationDecision.usedByRouter, false);
+      assert.equal(run.routeReason, "explicit_approval_gate_required");
+    } else {
+      assert.equal(run.llmOrchestrationDecision.usedByRouter, true);
+    }
     assert.equal(run.modelInvocation.mode, "openai_chatopenai_invoked");
     assert.ok(run.modelInvocation.responsePreview);
     assert.equal(run.workerPlan.dispatchStatus, "not_dispatched");

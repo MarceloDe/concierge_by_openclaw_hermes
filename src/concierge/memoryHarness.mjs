@@ -31,6 +31,35 @@ function stripBlank(value) {
   return text || null;
 }
 
+function compactText(value, limit = 1200) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
+}
+
+function compactTaskMetadata(metadata = {}) {
+  const workerPlan = metadata.workerPlan ?? {};
+  return {
+    executionMode: metadata.executionMode ?? null,
+    validationStatus: metadata.validation?.status ?? metadata.validationStatus ?? null,
+    validationIssues: metadata.validation?.issues ?? metadata.validationIssues ?? [],
+    validationWarnings: metadata.validation?.warnings ?? metadata.validationWarnings ?? [],
+    workerPlanId: workerPlan.planId ?? metadata.workerPlanId ?? null,
+    workerDispatchStatus: workerPlan.dispatchStatus ?? metadata.workerDispatchStatus ?? null,
+    workerJobIds: (workerPlan.workerJobs ?? []).map((job) => job.jobId),
+    approvalsRequired: metadata.validation?.approvalsRequired ?? metadata.approvalsRequired ?? []
+  };
+}
+
+function compactScheduledJobPayload(payload = {}) {
+  return {
+    sourceTable: payload.sourceTable ?? null,
+    sourceId: payload.sourceId ?? null,
+    claimId: payload.claimId ?? null,
+    workflowKey: payload.workflowKey ?? null,
+    summary: payload.summary ? compactText(payload.summary, 300) : null
+  };
+}
+
 async function getLatestPortalAccount(store, userId) {
   return store.get(
     `SELECT * FROM portal_accounts WHERE user_id = ${sql(userId)} ORDER BY created_at DESC LIMIT 1;`
@@ -55,10 +84,13 @@ async function getRecentMemoryItems(store, userId, limit = 12) {
      ORDER BY created_at DESC
      LIMIT ${Number(limit)};`
   );
-  return rows.map((row) => ({
-    ...row,
-    metadata: parseJson(row.metadata_json, {})
-  }));
+  return rows.map((row) => {
+    const { metadata_json, ...rest } = row;
+    return {
+      ...rest,
+      metadata: parseJson(metadata_json, {})
+    };
+  });
 }
 
 async function getOpenTasks(store, userId, limit = 10) {
@@ -69,10 +101,13 @@ async function getOpenTasks(store, userId, limit = 10) {
      ORDER BY COALESCE(due_at, created_at) ASC
      LIMIT ${Number(limit)};`
   );
-  return rows.map((row) => ({
-    ...row,
-    metadata: parseJson(row.metadata_json, {})
-  }));
+  return rows.map((row) => {
+    const { metadata_json, ...rest } = row;
+    return {
+      ...rest,
+      metadata: compactTaskMetadata(parseJson(metadata_json, {}))
+    };
+  });
 }
 
 async function getScheduledJobs(store, userId, limit = 10) {
@@ -83,10 +118,13 @@ async function getScheduledJobs(store, userId, limit = 10) {
      ORDER BY COALESCE(next_run_at, created_at) ASC
      LIMIT ${Number(limit)};`
   );
-  return rows.map((row) => ({
-    ...row,
-    payload: parseJson(row.payload_json, {})
-  }));
+  return rows.map((row) => {
+    const { payload_json, ...rest } = row;
+    return {
+      ...rest,
+      payload: compactScheduledJobPayload(parseJson(payload_json, {}))
+    };
+  });
 }
 
 async function getLatestStructuredPointers(store, userId, limit = 8) {
@@ -479,7 +517,7 @@ export async function buildContextPacket(store, { user, session = null, channel 
       id: item.id,
       scope: item.memory_scope,
       type: item.memory_type,
-      content: item.content,
+      content: compactText(item.content, 1200),
       source: {
         table: item.source_table,
         id: item.source_id,

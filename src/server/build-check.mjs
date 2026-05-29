@@ -23,6 +23,8 @@ const requiredFiles = [
   "src/concierge/orchestratorDemo.mjs",
   "src/concierge/outboundPayloadObservability.mjs",
   "src/concierge/productMemory.mjs",
+  "src/concierge/llmOrchestrationDecision.mjs",
+  "src/concierge/runtimeEvents.mjs",
   "tools/graphiti/graphiti_bridge.py",
   "vendor/getzep-graphiti/pyproject.toml",
   "openclaw/skills/insurance-portal-browser/SKILL.md",
@@ -62,6 +64,14 @@ if (
 
 if (!SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS audit_events")) {
   throw new Error("Database schema is missing audit_events table");
+}
+
+if (!TABLES.includes("runtime_events") || !TABLES.includes("runtime_hook_subscriptions")) {
+  throw new Error("Database schema is missing Phase 8 runtime event/hook tables");
+}
+
+if (!TABLES.includes("worker_continuations") || !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS worker_continuations")) {
+  throw new Error("Database schema is missing Phase 8E worker continuation table");
 }
 
 if (!SCHEMA_SQL.includes("event_hash TEXT") || !SCHEMA_SQL.includes("previous_event_hash TEXT")) {

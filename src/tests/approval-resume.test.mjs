@@ -102,6 +102,11 @@ test("orchestrator approval API binds proposal task and enables one read-only gr
     assert.equal(approvalPayload.approval.userId, proposalPayload.user.id);
     assert.equal(approvalPayload.approval.allowedAction, "read_only_observation");
     assert.deepEqual(approvalPayload.approval.actionsTaken, []);
+    const approvalEventsResponse = await fetch(
+      `http://127.0.0.1:${port}/api/runtime/events?sessionId=${encodeURIComponent(proposalPayload.session.id)}&limit=10`
+    );
+    const approvalEventsPayload = await approvalEventsResponse.json();
+    assert.ok(approvalEventsPayload.events.some((event) => event.eventType === "approval.recorded"));
 
     const resumeResponse = await fetch(`http://127.0.0.1:${port}/api/chat`, {
       method: "POST",
@@ -127,6 +132,16 @@ test("orchestrator approval API binds proposal task and enables one read-only gr
     assert.equal(resumePayload.graphRun.state.evidence_observation.status, "captured_visible_page");
     assert.deepEqual(resumePayload.graphRun.state.evidence_observation.actionsTaken, ["read_only_visible_text_extracted"]);
     assert.equal(resumePayload.graphRun.state.source_pointers[0].table, "eligibility_snapshots");
+    const resumeEventsResponse = await fetch(
+      `http://127.0.0.1:${port}/api/runtime/events?sessionId=${encodeURIComponent(proposalPayload.session.id)}&limit=20`
+    );
+    const resumeEventsPayload = await resumeEventsResponse.json();
+    assert.ok(resumeEventsPayload.events.some((event) => event.eventType === "approval.consumed"));
+    assert.ok(
+      resumeEventsPayload.events.some(
+        (event) => event.eventType === "worker.status.updated" && event.payload.terminalOutcome === "completed_with_sourced_result"
+      )
+    );
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }

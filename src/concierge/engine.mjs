@@ -286,6 +286,7 @@ export async function traceForSession(store, sessionId) {
     journeyEvents,
     agentTasks,
     scheduledJobs,
+    workerContinuations,
     agentOutbox,
     memoryHarnessRuns
   ] = await Promise.all([
@@ -307,6 +308,7 @@ export async function traceForSession(store, sessionId) {
     store.list("user_journey_events", { session_id: sessionId }),
     store.list("agent_tasks", { session_id: sessionId }),
     store.list("scheduled_jobs", { session_id: sessionId }),
+    store.list("worker_continuations", { session_id: sessionId }),
     store.list("agent_outbox", { session_id: sessionId }),
     store.list("memory_harness_runs", { session_id: sessionId })
   ]);
@@ -328,6 +330,7 @@ export async function traceForSession(store, sessionId) {
     journeyEvents,
     agentTasks,
     scheduledJobs,
+    workerContinuations,
     agentOutbox,
     memoryHarnessRuns,
     auditEvents

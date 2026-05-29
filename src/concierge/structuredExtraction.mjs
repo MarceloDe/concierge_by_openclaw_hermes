@@ -9,6 +9,67 @@ function moneyPattern() {
   return "\\$[0-9][0-9,]*(?:\\.[0-9]{2})?";
 }
 
+function moneyRegex(flags = "g") {
+  return new RegExp(moneyPattern(), flags);
+}
+
+function amountNearLabel(region, labelPattern, direction = "after") {
+  const money = moneyPattern();
+  const regex =
+    direction === "before"
+      ? new RegExp(`(${money})\\s*(?:\\w+\\s*){0,4}${labelPattern}`, "i")
+      : new RegExp(`${labelPattern}(?:\\W+\\w+){0,8}?\\W*(${money})`, "i");
+  return parseMoney(region.match(regex)?.[1]);
+}
+
+function inferredBalanceAmounts(region) {
+  const amounts = [...region.matchAll(moneyRegex())].map((match) => parseMoney(match[0])).filter((value) => value !== null);
+  if (!amounts.length) return null;
+
+  const total =
+    amountNearLabel(region, "\\b(?:total|maximum|max|limit|annual|plan)\\b") ??
+    amountNearLabel(region, "\\b(?:total|maximum|max|limit|annual|plan)\\b", "before") ??
+    amounts[0];
+  const remainingAfter = amountNearLabel(region, "\\b(?:remaining|left|remain)\\b");
+  const remainingBefore = amountNearLabel(region, "\\b(?:remaining|left|remain)\\b", "before");
+  const remaining = remainingAfter ?? remainingBefore ?? (amounts.length >= 3 ? amounts[2] : null);
+  const spentAfter = amountNearLabel(region, "\\b(?:spent|met|used|applied|paid)\\b");
+  const spentBefore = amountNearLabel(region, "\\b(?:spent|met|used|applied|paid)\\b", "before");
+  const spent =
+    spentAfter !== null && spentBefore !== null && remainingAfter === null && remainingBefore !== null && spentAfter === remainingBefore
+      ? spentBefore
+      : spentAfter ?? spentBefore ?? (amounts.length >= 3 ? amounts[1] : null);
+
+  const normalizedTotal = total ?? null;
+  const normalizedSpent =
+    spent ??
+    (normalizedTotal !== null && remaining !== null ? Number((normalizedTotal - remaining).toFixed(2)) : null);
+  const normalizedRemaining =
+    remaining ??
+    (normalizedTotal !== null && normalizedSpent !== null ? Number((normalizedTotal - normalizedSpent).toFixed(2)) : null);
+
+  if (normalizedTotal === null && normalizedSpent === null && normalizedRemaining === null) return null;
+  return {
+    total_amount: normalizedTotal,
+    spent_amount: normalizedSpent,
+    remaining_amount: normalizedRemaining
+  };
+}
+
+function balanceRegions(normalized, aliases) {
+  const regions = [];
+  for (const alias of aliases) {
+    const regex = new RegExp(alias, "ig");
+    let match;
+    while ((match = regex.exec(normalized)) !== null) {
+      const start = match.index;
+      const end = Math.min(normalized.length, match.index + 260);
+      regions.push(normalized.slice(start, end));
+    }
+  }
+  return regions;
+}
+
 export function parseCoverageBalances(text) {
   const normalized = text.replace(/\s+/g, " ");
   const money = moneyPattern();
@@ -16,29 +77,47 @@ export function parseCoverageBalances(text) {
     {
       balance_type: "deductible",
       label: "Deductible",
-      regex: new RegExp(`Deductible\\s*[–-]\\s*(${money}).{0,80}?(${money})\\s*Spent\\s*(${money})\\s*Remaining`, "i")
+      regex: new RegExp(`Deductible\\s*[–-]\\s*(${money}).{0,80}?(${money})\\s*Spent\\s*(${money})\\s*Remaining`, "i"),
+      aliases: ["deductible"]
     },
     {
       balance_type: "out_of_pocket_max",
       label: "Out-of-Pocket Max",
-      regex: new RegExp(`Out-of-Pocket Max\\s*[–-]\\s*(${money}).{0,120}?(${money})\\s*Spent\\s*(${money})\\s*Remaining`, "i")
+      regex: new RegExp(`Out-of-Pocket Max\\s*[–-]\\s*(${money}).{0,120}?(${money})\\s*Spent\\s*(${money})\\s*Remaining`, "i"),
+      aliases: ["out[- ]of[- ]pocket(?: max(?:imum)?| maximum)?", "\\boop(?: max)?\\b"]
     }
   ];
 
-  return patterns.flatMap((pattern) => {
+  const parsed = patterns.flatMap((pattern) => {
     const match = normalized.match(pattern.regex);
-    if (!match) return [];
-    return [
-      {
-        balance_type: pattern.balance_type,
-        label: pattern.label,
-        total_amount: parseMoney(match[1]),
-        spent_amount: parseMoney(match[2]),
-        remaining_amount: parseMoney(match[3]),
-        currency: "USD"
-      }
-    ];
+    if (match) {
+      return [
+        {
+          balance_type: pattern.balance_type,
+          label: pattern.label,
+          total_amount: parseMoney(match[1]),
+          spent_amount: parseMoney(match[2]),
+          remaining_amount: parseMoney(match[3]),
+          currency: "USD"
+        }
+      ];
+    }
+    for (const region of balanceRegions(normalized, pattern.aliases)) {
+      const amounts = inferredBalanceAmounts(region);
+      if (!amounts) continue;
+      return [
+        {
+          balance_type: pattern.balance_type,
+          label: pattern.label,
+          ...amounts,
+          currency: "USD"
+        }
+      ];
+    }
+    return [];
   });
+
+  return parsed.filter((balance, index, rows) => rows.findIndex((row) => row.balance_type === balance.balance_type) === index);
 }
 
 function cleanLines(text) {

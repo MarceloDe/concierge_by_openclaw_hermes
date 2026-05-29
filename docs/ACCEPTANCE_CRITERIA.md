@@ -348,6 +348,76 @@ Phase 7G OpenClaw adaptive-worker empowerment is acceptable when:
 - Payer contact, external messaging, form submission, record change, appeals, authorizations, payments, cancellations, and other irreversible actions remain blocked unless a separate explicit per-action approval exists.
 - Medical advice remains not allowed.
 
+Phase 8A GPT-governed LangGraph orchestration is acceptable when:
+
+- A real LangGraph node asks GPT for a strict JSON orchestration decision when live model mode is requested.
+- The GPT decision occurs before workflow routing and can causally determine the workflow.
+- The decision payload includes the user request, deterministic policy result, curated classifier output, route candidates, source-pointer hints, product-memory recall summary, and OpenClaw capability policy.
+- Direct identifiers are masked before the payload leaves the app.
+- Deterministic safety refusals and approval gates override GPT decisions.
+- Invalid, low-confidence, missing-key, or unavailable-model decisions fall back to the deterministic classifier without crashing.
+- Tests fail if a valid GPT/replay decision is ignored by the router.
+- Live proof calls the real OpenAI API and asserts `llm_orchestration_decision.mode=openai_chatopenai_invoked`, `valid=true`, and `usedByRouter=true` for non-policy-override cases.
+- Orchestrator summaries and UI proof expose model mode, workflow, confidence, rationale, and whether GPT was used by routing.
+
+Phase 8B runtime events and programmable hooks are acceptable when:
+
+- LangGraph publishes runtime events for classification, routing, worker plan preparation, approval requested, evidence status, final answer, and memory retention.
+- Runtime events persist with user id, session id, correlation id, event type, payload, and timestamp.
+- The server exposes list and SSE stream endpoints for runtime events.
+- In-process code hooks can subscribe to event types.
+- Webhook subscriptions are persisted but outbound delivery is dry-run blocked unless `BRAINSTY_ENABLE_OUTBOUND_WEBHOOKS=1`.
+- Webhook deliveries use signed payloads when enabled.
+- Tests prove event persistence, code-hook delivery, dry-run webhook blocking, and graph lifecycle event publication.
+
+Phase 8C auth-plus-chat MVP hardening is acceptable when:
+
+- The user-facing app starts with local planned-user authentication before chat actions.
+- Workflow buttons and free-text chat both enter the same LangGraph runtime.
+- Chat can ask for missing information, show login-needed/manual-ready states, and render read-only approval cards.
+- Chat displays GPT decision proof, runtime event timeline, OpenClaw worker plan/status, source pointers, and product-memory retain/recall proof.
+- Long-running OpenClaw work can continue through status events rather than failing silently.
+- The proof dashboard remains available as an operator/debug surface, but the primary MVP value is testable from auth plus chat.
+- No new healthcare workflow breadth is added until this loop works end to end for the eligibility/benefits journey.
+- Approval recording emits a runtime event before resume.
+- Approval consumption emits a runtime event during the graph run.
+- Worker status updates emit runtime events with terminal outcomes such as `completed_with_sourced_result`, `not_possible_insurance_or_portal_block`, or `not_possible_policy_or_approval_block`.
+- The chat UI renders a post-approval worker result card with actions taken, source pointers, structured benefits when available, and fail-closed blocker text when evidence cannot be created.
+
+Phase 8D authenticated evidence quality is acceptable when:
+
+- Verified authenticated portal proof can produce structured deductible and out-of-pocket rows from DOM/accessibility and OCR-style text.
+- Structured rows are persisted in `coverage_balances` and exposed as source pointers.
+- Final sourced answers cite source pointers and summarize total, spent, and remaining amounts for structured benefit rows.
+- Worker status events include structured benefit counts and evidence-channel metadata when available.
+- The chat Worker Result card displays structured benefits, evidence channels, and friendly fail-closed blocker text.
+- Missing auth, public payer pages, missing `BRAINSTY_PORTAL_LIVE=1`, OCR failure, and visual proof failure must fail closed without creating false healthcare evidence.
+- Product-memory and model payloads remain source-pointer oriented and must not retain raw portal text as product memory.
+
+Phase 8E async worker follow-up is acceptable when:
+
+- A pending read-only worker proposal can be converted into an async follow-up record from the chat UI.
+- The continuation is bound to task id, session id, user id, workflow, approval scope, allowed action, correlation id, scheduled job id, and last progress event.
+- Only `read_only_observation` scope/action can be scheduled in this MVP.
+- Creating, continuing, or cancelling a continuation publishes runtime events visible in the chat timeline.
+- Chat renders the continuation status, terminal outcome, task, workflow, approval scope, next check time, last progress, and `actions taken: none`.
+- Continue/cancel controls never execute the worker directly or perform external actions; they only record user intent/status transitions until a fresh approved graph run consumes the state.
+- Cancelled continuations cannot be resumed and remain audit-visible.
+- Source-pointer memory, approval gates, and no-silent-failure worker status contracts remain intact.
+
+Phase 8F approved continuation dispatch is acceptable when:
+
+- A worker continuation is validated before approval consumption.
+- Continuation dispatch requires the dedicated official OpenClaw read-only worker path.
+- The continuation task, session, user, workflow, approval scope, and allowed action must match the fresh approval run.
+- Cancelled, expired, completed, blocked, wrong-scope, wrong-task, wrong-session, or wrong-workflow continuations do not dispatch.
+- A valid approval token is consumed only when the continuation is dispatchable.
+- Dispatch publishes `worker.followup.dispatching` and keeps `actionsTaken=[]` until the official worker starts.
+- Official OpenClaw result ingest finalizes the continuation as `completed` or `blocked`, publishes a matching runtime event, updates the scheduled job/task, and records read-only actions taken.
+- User-facing chat exposes the official read-only run control but keeps continue/cancel controls separate.
+- The live official OpenClaw continuation proof remains explicitly gated by `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+- Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

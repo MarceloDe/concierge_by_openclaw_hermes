@@ -2553,3 +2553,426 @@ Proof:
 
 Incidental test fix:
 - Tightened a brittle missing-OpenAI-key assertion in `src/tests/langgraph-runner.test.mjs`; the old assertion looked for the substring `sk-`, which falsely matched the expected word `skipped_missing_openai_api_key`. The test now rejects actual secret-key-shaped strings.
+
+## Phase 8A: GPT-Governed LangGraph Decision Node And Runtime Event Spine - 2026-05-28
+
+User direction:
+- Start Phase 8 with extra-high scrutiny because the MVP must prove non-mocked LLM and agent interoperability.
+- Use GPT as real LangChain/LangGraph intelligence for workflow decisions, not only as post-hoc response wording.
+- Keep the MVP focused on the auth-plus-chat user-facing app while preserving OpenClaw worker versatility, progress updates, hooks, and future automation triggers.
+
+Implementation:
+- Added `src/concierge/llmOrchestrationDecision.mjs`.
+  - Builds strict JSON-only orchestration decision messages for GPT.
+  - Masks direct identifiers before external model calls.
+  - Carries route candidates, source-pointer hints, product-memory recall, and OpenClaw worker capability policy into the model decision payload.
+  - Normalizes and validates GPT output before LangGraph can route from it.
+- Updated `src/concierge/langgraphRunner.mjs`.
+  - Added an `llm_decision` LangGraph node after structured classification and before workflow routing.
+  - Deterministic refusals and approval gates still override the model.
+  - Real `ChatOpenAI` is invoked when live model mode is requested and `OPENAI_API_KEY` is available.
+  - Replay mode exists only for deterministic regression tests.
+  - Workflow routing now uses a valid, confident GPT decision when available.
+- Added `src/concierge/runtimeEvents.mjs`.
+  - Runtime events are persisted and mirrored into session events.
+  - In-process code hooks can subscribe to events.
+  - Webhook subscriptions are recorded but dry-run blocked unless `BRAINSTY_ENABLE_OUTBOUND_WEBHOOKS=1`.
+  - Events can stream to the UI through Server-Sent Events.
+- Updated `src/concierge/schema.mjs` with `runtime_events`, `runtime_hook_subscriptions`, and `runtime_hook_deliveries`.
+- Updated `src/server/server.mjs` with:
+  - `GET /api/runtime/events`
+  - `GET /api/runtime/events/stream`
+  - `GET /api/runtime/hooks`
+  - `POST /api/runtime/hooks`
+  - `POST /api/runtime/events/publish`
+- Updated `src/app/app.js` so the proof UI exposes GPT decision mode, whether GPT was used by the router, chosen workflow, and confidence.
+- Updated `src/app/app.js` so live-model UI calls wait up to 180 seconds instead of timing out after 45 seconds.
+- Updated `src/concierge/orchestratorDemo.mjs` and `src/concierge/modelPayloadPolicy.mjs` so orchestration summaries and outbound payload proof include the GPT decision stage.
+- Hardened `src/concierge/database.mjs` so large SQLite write batches stream through stdin instead of process arguments.
+- Hardened `src/concierge/memoryHarness.mjs` to compact context packets by stripping raw task metadata/payload JSON and retaining bounded summaries.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/llmOrchestrationDecision.mjs`
+  - `node --check src/concierge/runtimeEvents.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/server/server.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/concierge/memoryHarness.mjs`
+  - `node --check src/concierge/database.mjs`
+- Build passed:
+  - `npm run build`
+- Focused deterministic tests passed:
+  - `node --test src/tests/llm-orchestration-decision.test.mjs`
+  - `node --test src/tests/runtime-events.test.mjs`
+  - `node --test src/tests/langgraph-runner.test.mjs`
+- Live GPT proof passed:
+  - `npm run test:live`
+  - `npm run test:orchestrator:live`
+- Full local suite passed:
+  - `npm run test:local`
+  - Result: 83 tests, 82 passed, 1 skipped live official OpenClaw public-page proof unless `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1` is set.
+- Browser proof passed at `http://127.0.0.1:4173/`:
+  - Started the current dev server.
+  - Signed in through the local chat UI.
+  - Ran the Benefits workflow with Live GPT enabled.
+  - UI showed `Workflow eligibility_benefits_navigation · llm_orchestration_decision`.
+  - UI showed `GPT decision openai_chatopenai_invoked · used by router · eligibility_benefits_navigation`.
+  - UI showed OpenClaw proposal `pending_approval`, worker `not_dispatched`, approval `missing_approval_token`, evidence actions `none`, Graphiti recall/retain proof, and outbound payload audits.
+  - `GET /api/runtime/events?limit=5` returned graph lifecycle events for the same run: `memory.retained`, `final.answer.created`, `evidence.status`, `approval.requested`, and `worker.plan.prepared`.
+  - Screenshot capture through the in-app browser bridge timed out, so the browser proof is recorded from DOM-visible UI text rather than an image artifact.
+
+Failures found and fixed:
+- LangGraph rejected a node named the same as the state channel; the implementation now uses node id `llm_decision` and state key `llm_orchestration_decision`.
+- A live OpenAI smoke prompt accidentally triggered medical-advice refusal, which correctly skipped GPT routing; the test now uses an insurance-navigation prompt.
+- Repeated live orchestrator cases exposed `spawn E2BIG` from large SQLite write arguments; writes now stream over stdin and context packet payloads are compacted.
+- Human approval escalation correctly overrides GPT routing; live orchestrator assertions now verify that policy behavior instead of treating it as failure.
+- Browser proof initially exposed a stale-server/UX timeout issue: the old server process did not have the Phase 8 runtime, and the UI aborted live GPT chat after 45 seconds. The server was restarted and the UI timeout now expands to 180 seconds when Live GPT is enabled.
+
+Result:
+- GPT is now a causal LangGraph decision participant for workflow routing when live model mode is enabled.
+- The app can audit whether the model was invoked, what workflow it selected, whether the router used it, and why policy overrode it when applicable.
+- A runtime event spine now exists for chat timelines, debug dashboards, webhooks, code hooks, and future OpenClaw worker progress messages.
+- The implementation still keeps LangGraph as workflow master and OpenClaw as the adaptive worker arm.
+
+Next step:
+- Phase 8B should turn this backend proof into the auth-plus-chat MVP interaction:
+  - login-needed state in chat,
+  - manual user sign-in readiness,
+  - read-only approval card,
+  - live GPT decision proof,
+  - runtime event timeline,
+  - OpenClaw worker status/progress events,
+  - sourced final answer and product-memory proof in the same conversation.
+
+## Phase 8B: Auth-Plus-Chat Guided MVP Surface - 2026-05-28
+
+User direction:
+- Continue to the next phase after Phase 8A.
+- Keep the MVP centered on the user-facing app: auth first, chat second, workflow buttons as shortcuts, and visible LangGraph/OpenClaw proof.
+
+Implementation:
+- Updated `src/app/index.html`:
+  - Added a chat journey strip.
+  - Added a `Portal Ready` control for the manual user-login/readiness boundary.
+  - Added a runtime timeline panel in the chat area.
+  - Added a `Refresh Timeline` control backed by runtime events.
+- Updated `src/app/app.js`:
+  - Chat workflows now require local planned-user sign-in before running LangGraph.
+  - If the user clicks a workflow before sign-in, chat shows a login-needed message and does not create a graph run.
+  - `Portal Ready` enables live portal proof and official OpenClaw worker toggles, but still requires explicit read-only approval before any worker observation.
+  - The chat journey strip shows Local Auth, GPT Route, Approval, OpenClaw, and Memory states.
+  - The runtime timeline fetches `/api/runtime/events?sessionId=...` and can also subscribe to the SSE stream.
+  - Timeline summaries show GPT classification, route, worker plan, approval request, evidence state, final answer, and memory retain events.
+- Updated `src/app/styles.css` with responsive journey/timeline UI.
+- Added `src/tests/chat-ui-contract.test.mjs`.
+- Updated `package.json` so `npm run test:local` includes the chat UI contract test.
+
+Proof:
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 2 passing tests.
+- `npm run build` passed.
+- `node --test src/tests/llm-orchestration-decision.test.mjs src/tests/runtime-events.test.mjs` passed with 8 passing tests.
+- `npm run test:local` passed:
+  - 85 tests total.
+  - 84 passed.
+  - 1 skipped live official OpenClaw public-page proof unless `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1` is set.
+  - 0 failed.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Clicking Benefits before local sign-in showed `sign in first` and did not show `Workflow Proof`.
+  - Signing in created a session and rendered the guided state.
+  - Clicking `Portal Ready` checked `Require live portal proof` and `Use official OpenClaw worker`, and reminded that credentials/passkeys/SSN/2FA stay user-controlled.
+  - Running Benefits with Live GPT produced `openai_chatopenai_invoked`, `used by router`, `pending_approval`, and `actions none`.
+  - Runtime Timeline showed 7 graph events:
+    - `workflow.classified`
+    - `workflow.routed`
+    - `worker.plan.prepared`
+    - `approval.requested`
+    - `evidence.status`
+    - `final.answer.created`
+    - `memory.retained`
+
+Result:
+- The primary MVP surface now proves the real LangGraph/GPT/OpenClaw cycle from chat instead of relying only on operator panels.
+- The user can see what is waiting for sign-in, what GPT decided, what OpenClaw is allowed to do, why approval is required, and what memory/events were retained.
+- OpenClaw remains approval-gated; no worker action is taken before approval.
+
+Next step:
+- Phase 8C should make the approval/resume experience smoother in chat:
+  - after approval, stream or refresh worker progress into the timeline,
+  - surface long-running worker status and async-follow-up recommendations,
+  - route official OpenClaw read-only results back into the same chat conversation,
+  - show source pointers and structured benefits evidence when the authenticated portal proof succeeds,
+  - keep fail-closed behavior when portal auth/evidence verification is not ready.
+
+## Phase 8C: Chat Approval/Resume And Worker Status Continuity - 2026-05-29
+
+User direction:
+- Continue to the next phase after the guided auth-plus-chat MVP surface.
+- Make approval/resume continuous in chat and route OpenClaw worker status/results back into the same conversation.
+
+Implementation:
+- Updated `src/server/server.mjs`:
+  - `POST /api/orchestrator/approve` now publishes `approval.recorded` runtime events with task, workflow, scope, expiration, and no-action proof.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - Evidence observation now publishes `worker.status.updated` when it is waiting for approval.
+  - Approved resume publishes `approval.consumed`.
+  - Official OpenClaw dispatch publishes `worker.status.updated` before dispatching.
+  - Worker/evidence terminal status events now distinguish:
+    - `completed_with_sourced_result`
+    - `not_possible_insurance_or_portal_block`
+    - `not_possible_policy_or_approval_block`
+  - Fail-closed paths publish worker status before returning blocked evidence.
+- Updated `src/app/app.js`:
+  - Runtime timeline now understands `approval.recorded`, `approval.consumed`, and `worker.status.updated`.
+  - Approval/resume runs now render a `Worker Result` card in chat with terminal outcome, status, actions, source pointers, structured benefits, and blocker text.
+- Updated tests:
+  - `src/tests/chat-ui-contract.test.mjs` now asserts the chat UI keeps approval/worker status event handling and worker result rendering.
+  - `src/tests/runtime-events.test.mjs` now proves an approved graph resume emits `approval.consumed` and `worker.status.updated` with `completed_with_sourced_result`.
+  - `src/tests/approval-resume.test.mjs` now proves the approval API emits `approval.recorded`, and approved resume emits approval consumption plus worker-status terminal events.
+
+Proof:
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 2 passing tests.
+- `node --test src/tests/runtime-events.test.mjs` passed with 5 passing tests.
+- `node --test src/tests/approval-resume.test.mjs` passed with 2 passing tests.
+- `node --test src/tests/langgraph-runner.test.mjs` passed with 8 passing tests.
+- `npm run build` passed.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Local planned-user sign-in created session `session_cab7352a-588a-4f7b-a38e-888302e08400`.
+  - Clicking `Benefits` routed through live GPT classification with `openai_chatopenai_invoked` and `used by router`.
+  - The first run showed `pending_approval`, `missing_approval_token`, `worker.status.updated`, and `actions none`.
+  - Clicking `Approve Read-Only Observation` emitted `approval.recorded`.
+  - The resumed graph emitted `approval.consumed` and additional `worker.status.updated` events.
+  - Because the browser did not expose an authenticated member portal page, the resumed worker result failed closed with `blocked_no_authenticated_evidence` and `not_possible_insurance_or_portal_block`.
+  - The chat showed a post-approval `Worker Result` card with actions `none`, source pointers `none`, structured benefits `none yet`, and the blocker text.
+- `npm run test:local` passed:
+  - 86 tests total.
+  - 85 passed.
+  - 0 failed.
+  - 1 skipped: the live official OpenClaw dispatch proof remains gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+
+Result:
+- Chat approval now has a real event trail: approval recorded, approval consumed, worker status, evidence status, final response, and memory retention.
+- The worker status event contract is ready for the 30-second OpenClaw status subagent and future async follow-up conversion.
+- Fail-closed outcomes are visible to the user instead of being hidden in raw trace JSON.
+- Phase 8C is verified in both the local browser and the full deterministic test suite.
+
+Next step:
+- Phase 8D should focus on authenticated portal source-pointer success quality: show structured deductible/out-of-pocket rows from DOM plus OCR evidence when the portal is truly authenticated, and keep blocked/async outcomes friendly when it is not.
+
+## Phase 8D: Authenticated Evidence Quality And Friendly Worker Outcomes - 2026-05-29
+
+User direction:
+- Continue to Phase 8D after approval/resume continuity.
+- Improve the value of a successful authenticated benefits proof before adding workflow breadth.
+- Keep the app honest when portal auth, live proof, OCR, or verification is missing.
+
+Implementation:
+- Updated `src/concierge/structuredExtraction.mjs`:
+  - Added more tolerant deductible and out-of-pocket balance parsing for DOM/accessibility text and OCR-style text.
+  - Supports label-before-money and money-before-label formats such as `Total $600`, `Spent $558.72`, `Remaining $41.28`, and `Out of pocket maximum $9,000 total $1,476.98 spent $7,523.02 remaining`.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - Adds persisted `coverage_balances` rows to the source-pointer list.
+  - Adds `structuredBenefits` rows to `evidence_observation`.
+  - Adds evidence-channel metadata such as `visible_dom_text`, `accessibility_tree`, and `visual_ocr` when available.
+  - Publishes `structuredBenefitCount` and evidence channels on successful `worker.status.updated` events.
+  - Keeps source-pointer-only retention/model surfaces; raw portal text is still not sent as product memory.
+- Updated `src/concierge/outputPolicy.mjs`:
+  - Final sourced answers now summarize structured deductible/out-of-pocket rows when they are extracted.
+- Updated `src/app/app.js`:
+  - Worker Result cards now show total/spent/remaining structured benefits.
+  - Worker Result cards now show evidence channels.
+  - Fail-closed blockers are mapped to friendly user-facing explanations for missing approval, missing live flag, public page verification, missing authenticated browser session, and OCR/visual proof failure.
+- Updated tests:
+  - Added `src/tests/structured-extraction.test.mjs`.
+  - Added LangGraph coverage for verified portal proof returning structured benefit rows and `coverage_balances` source pointers.
+  - Extended runtime-event coverage to assert `structuredBenefitCount`.
+  - Extended the chat UI contract test for friendly blocker/structured benefit/evidence-channel rendering.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/structuredExtraction.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/concierge/outputPolicy.mjs`
+  - `node --check src/app/app.js`
+- Focused tests passed:
+  - `node --test src/tests/structured-extraction.test.mjs`
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+  - `node --test src/tests/runtime-events.test.mjs`
+  - `node --test src/tests/langgraph-runner.test.mjs`
+  - `node --test src/tests/portal-evidence-verifier.test.mjs`
+- Build passed:
+  - `npm run build`
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Fresh server was restarted for Phase 8D code.
+  - Local sign-in worked.
+  - Benefits flow produced approval, consumed approval, and worker status events.
+  - With no authenticated browser evidence available, the latest Worker Result card showed `blocked_no_authenticated_evidence`, actions `none`, source pointers `none`, structured benefits `none yet`, evidence channels `not reported`, and the friendly blocker: `I could not reach an authenticated browser session. Sign in yourself in the approved browser, then run the read-only approval again.`
+  - The latest Worker Result card did not expose the raw Chrome startup command.
+- Full local suite passed:
+  - `npm run test:local`
+  - 88 tests total.
+  - 87 passed.
+  - 0 failed.
+  - 1 skipped: live official OpenClaw dispatch remains gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+
+Result:
+- A verified authenticated portal proof can now produce user-visible structured deductible/out-of-pocket evidence with source pointers, not only a generic snapshot citation.
+- The official OpenClaw path can carry accessibility-tree and OCR evidence-channel metadata into the LangGraph result contract.
+- The chat result is more useful when evidence succeeds and more humane when evidence fails closed.
+
+Next step:
+- Phase 8E should make the synchronous result loop ready for longer worker tasks:
+  - add explicit async-follow-up state when a worker task exceeds the current chat turn,
+  - persist a pending worker continuation record bound to session/task/correlation id,
+  - expose cancel/continue status in the chat timeline,
+  - keep the current read-only evidence guardrails and source-pointer-only memory behavior.
+
+## Phase 8E: Async Worker Follow-Up State - 2026-05-29
+
+User direction:
+- Continue past the synchronous approval/resume loop toward correct cycle management between LangGraph and OpenClaw workers.
+- Keep the MVP focused on the benefits journey and do not add workflow breadth.
+- Make longer worker tasks visible and cancellable instead of allowing silent failure.
+
+Implementation:
+- Added `worker_continuations` runtime storage in `src/concierge/schema.mjs` and migration support in `src/concierge/database.mjs`.
+- Added `src/concierge/workerContinuations.mjs`:
+  - creates a task/session/user/workflow-bound continuation from a pending worker proposal,
+  - enforces `read_only_observation` as the only MVP continuation scope/action,
+  - creates a matching `scheduled_jobs` status-check row,
+  - captures the last worker progress event,
+  - publishes `worker.followup.scheduled`, `worker.followup.continue_requested`, and `worker.followup.cancelled`,
+  - audits create/continue/cancel transitions,
+  - keeps `actionsTaken: []` for all continuation controls.
+- Added API endpoints in `src/server/server.mjs`:
+  - `GET /api/worker-continuations`
+  - `POST /api/worker-continuations`
+  - `POST /api/worker-continuations/:id/continue`
+  - `POST /api/worker-continuations/:id/cancel`
+- Extended `traceForSession` to include worker continuation records.
+- Extended the chat UI:
+  - pending worker proposals can be left as async follow-up,
+  - continuation cards show status, outcome, task, workflow, approval scope, next check, last progress, and actions taken,
+  - continue/cancel controls record state transitions without executing worker actions,
+  - cancelled continuation cards close the controls and show that actions remain none.
+- Added `src/tests/worker-continuations.test.mjs`.
+- Extended `src/tests/chat-ui-contract.test.mjs` for async follow-up controls and terminal cancelled UI.
+- Updated `docs/IMPLEMENTATION_PLAN.md`, `docs/ACCEPTANCE_CRITERIA.md`, and `docs/DECISIONS.md`.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/workerContinuations.mjs`
+  - `node --check src/concierge/schema.mjs`
+  - `node --check src/concierge/database.mjs`
+  - `node --check src/server/server.mjs`
+  - `node --check src/app/app.js`
+- Focused tests passed:
+  - `node --test src/tests/worker-continuations.test.mjs`
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+  - `node --test src/tests/runtime-events.test.mjs`
+- Build passed:
+  - `npm run build`
+- Full local suite passed after final UI polish:
+  - `npm run test:local`
+  - 92 tests total.
+  - 91 passed.
+  - 0 failed.
+  - 1 skipped: live official OpenClaw dispatch remains gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+- Browser proof at `http://127.0.0.1:4173/` passed after a fresh server/app reload:
+  - Local sign-in worked.
+  - Benefits flow used live GPT routing with `openai_chatopenai_invoked · used`.
+  - The pending worker proposal showed `Leave As Async Follow-Up`.
+  - Creating follow-up produced `pending_async_followup`, `needs_long_running_followup`, `read_only_observation · read_only_observation`, `Actions taken none`, and `worker.followup.scheduled`.
+  - Continue produced `continue_requested`, `worker.followup.continue_requested`, and no worker action.
+  - Cancel produced `cancelled`, `not_possible_policy_or_approval_block`, `worker.followup.cancelled`, and no worker action.
+  - The final cancelled card displayed `Cancelled follow-up is closed. Actions taken remain none.` and did not show an active continue button.
+
+Result:
+- Phase 8E turns long worker work into explicit persisted runtime state instead of another proposal-only dead end.
+- LangGraph still owns the workflow, approval gate, and future worker dispatch.
+- OpenClaw worker continuation is now ready to be consumed by the next official status-subagent bridge without relaxing the read-only MVP boundary.
+
+Next step:
+- Phase 8F should consume the persisted continuation from a fresh approved LangGraph run and bridge it to the dedicated official OpenClaw status/observation worker:
+  - dispatch only the bound read-only status/observation action,
+  - ingest worker progress and result through runtime events,
+  - preserve user continue/cancel controls,
+  - keep credentials, external messages, payer contact, form submission, record changes, and medical advice out of scope.
+
+## Phase 8F: Approved Continuation Dispatch Bridge - 2026-05-29
+
+User direction:
+- Go to 8F.
+- If it passes, write the project handoff to Cortex and build a PR for the changes.
+
+Implementation:
+- Extended `src/concierge/workerContinuations.mjs`:
+  - validates continuation/task/session/user/workflow/read-only bindings before dispatch,
+  - rejects cancelled, expired, completed, blocked, wrong-scope, wrong-task, wrong-session, and wrong-workflow continuations,
+  - marks a valid continuation as `dispatching_official_openclaw` only after a fresh approval run,
+  - finalizes official worker results as `completed` or `blocked`,
+  - updates matching `scheduled_jobs` and `agent_tasks`,
+  - publishes `worker.followup.dispatching`, `worker.followup.completed`, `worker.followup.blocked`, and `worker.followup.expired`,
+  - preserves action history only after real official read-only worker actions occur.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - `workerContinuationId` now makes evidence observation enter the continuation bridge,
+  - continuation dispatch requires `useOfficialOpenClawWorker: true`,
+  - continuation readiness is checked before approval token consumption,
+  - fresh approval is consumed only when the continuation can dispatch,
+  - official OpenClaw result ingest finalizes the continuation and keeps the existing source-pointer/evidence flow.
+- Updated `src/app/app.js`:
+  - active continuation cards show `Approve + Run Official Read-Only`,
+  - continuation run approval calls the existing read-only approval endpoint,
+  - the next chat run carries `workerContinuationId` into LangGraph,
+  - timeline rendering understands dispatching/completed/blocked/expired continuation events.
+- Updated tests:
+  - `src/tests/worker-continuations.test.mjs` now covers validation, consume-for-dispatch, finalize, and the pre-approval block when the official worker flag is missing.
+  - `src/tests/openclaw-official-runtime.test.mjs` now wires the live official OpenClaw test through the continuation bridge when `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+  - `src/tests/chat-ui-contract.test.mjs` now asserts the 8F control and event vocabulary.
+- Updated `docs/IMPLEMENTATION_PLAN.md`, `docs/ACCEPTANCE_CRITERIA.md`, and `docs/DECISIONS.md`.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/workerContinuations.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/server/server.mjs`
+  - `node --check src/app/app.js`
+- Focused tests passed:
+  - `node --test src/tests/worker-continuations.test.mjs`
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+  - `node --test src/tests/langgraph-runner.test.mjs`
+  - `node --test src/tests/openclaw-official-runtime.test.mjs`
+  - `node --test src/tests/runtime-events.test.mjs`
+- Build passed:
+  - `npm run build`
+- Browser proof at `http://127.0.0.1:4173/` passed after a fresh server/app restart:
+  - Local sign-in worked.
+  - Benefits workflow produced `Workflow Proof`.
+  - Async follow-up scheduling showed `Approve + Run Official Read-Only`.
+  - Follow-up card retained `read_only_observation`.
+  - Runtime timeline showed `worker.followup.scheduled` and `worker.followup.continue_requested`.
+  - Actions remained none before official dispatch.
+- Full local suite passed:
+  - `npm run test:local`
+  - 94 tests total.
+  - 93 passed.
+  - 0 failed.
+  - 1 skipped: live official OpenClaw continuation dispatch remains gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+
+Result:
+- Phase 8F converts the 8E continuation record into a real LangGraph-owned bridge instead of a UI-only queue item.
+- The system now has the intended cycle boundary: pending proposal -> async continuation -> fresh read-only approval -> official OpenClaw dispatch -> result/blocked finalization -> runtime events/audit.
+- A wrong or incomplete continuation run fails before approval is consumed.
+
+Next step:
+- Phase 8G should run and polish the full authenticated continuation path with the dedicated logged-in OpenClaw browser:
+  - user manually signs in,
+  - chat schedules follow-up,
+  - user approves and runs official read-only follow-up,
+  - LangGraph verifies DOM/accessibility plus OCR evidence,
+  - chat shows completed/blocked continuation status and sourced benefits,
+  - product memory retains only source-pointer grounded summaries.

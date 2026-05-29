@@ -24,7 +24,7 @@ test("live OpenAI smoke test uses PHI-allowed identifier-masked reasoning payloa
     session,
     channel: session.channel,
     userInput:
-      "Route Test User asks about an Aetna claim with CPT 99213, ICD-10 E11.9, member ID W123456789, and deductible status. Do not give medical advice.",
+      "Route Test User asks about an Aetna claim with CPT 99213, ICD-10 E11.9, member ID W123456789, and deductible status. Stay within insurance navigation.",
     rawMessage: {
       source: "live_openai_test",
       useLiveModel: true,
@@ -32,6 +32,9 @@ test("live OpenAI smoke test uses PHI-allowed identifier-masked reasoning payloa
     }
   });
 
+  assert.equal(result.state.llm_orchestration_decision.mode, "openai_chatopenai_invoked");
+  assert.equal(result.state.llm_orchestration_decision.valid, true);
+  assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
   assert.equal(result.state.model_invocation.mode, "openai_chatopenai_invoked");
   assert.equal(result.state.model_invocation.payloadMode, "phi_allowed_identifier_masked_reasoning");
   assert.equal(result.state.model_invocation.externalPhiDisclosureAllowed, true);
@@ -45,7 +48,7 @@ test("live OpenAI smoke test uses PHI-allowed identifier-masked reasoning payloa
   const payloadAudits = await store.all(
     `SELECT * FROM audit_events WHERE session_id = '${session.id.replaceAll("'", "''")}' AND event_type = 'outbound_payload_observed';`
   );
-  const openAiAudit = payloadAudits.map((row) => JSON.parse(row.details)).find((details) => details.destination === "openai");
+  const openAiAudit = payloadAudits.map((row) => JSON.parse(row.details)).find((details) => details.payloadType === "openai_chat_messages");
   assert.ok(openAiAudit, "OpenAI invocation should record an outbound payload audit event.");
   assert.equal(openAiAudit.payloadType, "openai_chat_messages");
   assert.equal(openAiAudit.policyMode, "phi_allowed_identifier_masked_reasoning");

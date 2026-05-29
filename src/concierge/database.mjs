@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -28,6 +28,30 @@ function whereClause(where = {}) {
   const entries = Object.entries(where);
   if (entries.length === 0) return "";
   return ` WHERE ${entries.map(([key, value]) => `${key} = ${quote(value)}`).join(" AND ")}`;
+}
+
+async function runSqliteStatement(dbPath, statement) {
+  await new Promise((resolve, reject) => {
+    const child = spawn("sqlite3", ["-cmd", ".timeout 5000", dbPath], {
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr || stdout || `sqlite3 exited with code ${code}`));
+    });
+    child.stdin.end(statement);
+  });
 }
 
 export class SqliteStore {
@@ -79,6 +103,28 @@ export class SqliteStore {
       ["workflow_key", "ALTER TABLE scheduled_jobs ADD COLUMN workflow_key TEXT;"],
       ["journey_stage", "ALTER TABLE scheduled_jobs ADD COLUMN journey_stage TEXT;"]
     ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS worker_continuations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        scheduled_job_id TEXT,
+        workflow_key TEXT,
+        approval_scope TEXT NOT NULL,
+        allowed_action TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        terminal_outcome TEXT,
+        last_runtime_event_id TEXT,
+        last_progress_event_json TEXT NOT NULL DEFAULT '{}',
+        next_check_at TEXT,
+        expires_at TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
     await this.migrateColumns("audit_events", [
       ["previous_event_hash", "ALTER TABLE audit_events ADD COLUMN previous_event_hash TEXT;"],
       ["event_hash", "ALTER TABLE audit_events ADD COLUMN event_hash TEXT;"],
@@ -103,7 +149,7 @@ export class SqliteStore {
   }
 
   async exec(sql) {
-    await execFileAsync("sqlite3", ["-cmd", ".timeout 5000", this.dbPath, sql], { maxBuffer: 1024 * 1024 * 20 });
+    await runSqliteStatement(this.dbPath, sql);
   }
 
   async all(sql) {

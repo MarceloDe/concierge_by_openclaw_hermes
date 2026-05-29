@@ -176,6 +176,74 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
   assert.equal(messages.length, 4);
 });
 
+test("LangGraph verified portal proof returns structured benefit rows and source pointers", async () => {
+  const previous = process.env.BRAINSTY_PORTAL_LIVE;
+  process.env.BRAINSTY_PORTAL_LIVE = "1";
+  try {
+    const store = await createStore();
+    const { user, session } = await enrollDefaultMember(store);
+    const proposalRun = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Do I still owe anything before insurance starts paying?",
+      rawMessage: { source: "phase_8d_test", useLiveModel: false, executeEvidenceObservation: false }
+    });
+    const approval = await createReadOnlyObservationApproval(store, {
+      taskId: proposalRun.state.openclaw_skill_proposal.task.id,
+      sessionId: session.id,
+      userId: user.id,
+      decision: "approved",
+      expiresInMinutes: 15
+    });
+
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Do I still owe anything before insurance starts paying?",
+      rawMessage: {
+        source: "phase_8d_test",
+        useLiveModel: false,
+        requireLivePortalProof: true,
+        approvalToken: approval.approvalToken,
+        approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
+        browserSnapshot: {
+          title: "Aetna Member Benefits",
+          url: "https://health.aetna.com/member/benefits",
+          text: `
+            Welcome member plan benefits coverage.
+            Deductible
+            Total $600
+            Spent $558.72
+            Remaining $41.28
+            [Visual OCR]
+            Out of pocket maximum $9,000 total $1,476.98 spent $7,523.02 remaining
+          `,
+          links: []
+        }
+      }
+    });
+
+    assert.equal(result.state.evidence_observation.status, "captured_visible_page");
+    assert.equal(result.state.evidence_observation.livePortalProof, "verified");
+    assert.equal(result.state.evidence_observation.structuredBenefits.length, 2);
+    assert.equal(result.state.evidence_observation.evidenceChannels[0].channel, "visible_dom_text");
+    assert.ok(result.state.source_pointers.some((pointer) => pointer.table === "coverage_balances"));
+    assert.match(result.state.final_response, /Structured benefits evidence:/);
+    assert.match(result.state.final_response, /Deductible: total \$600\.00, spent \$558\.72, remaining \$41\.28/);
+    assert.match(result.state.final_response, /Out-of-Pocket Max: total \$9,000\.00, spent \$1,476\.98, remaining \$7,523\.02/);
+
+    const balances = await store.all(
+      `SELECT * FROM coverage_balances WHERE snapshot_id = '${result.state.eligibility_result.snapshot.id.replaceAll("'", "''")}' ORDER BY created_at ASC;`
+    );
+    assert.equal(balances.length, 2);
+  } finally {
+    if (previous === undefined) delete process.env.BRAINSTY_PORTAL_LIVE;
+    else process.env.BRAINSTY_PORTAL_LIVE = previous;
+  }
+});
+
 test("LangGraph manages the worker cycle from proposal to single-use approval to result ingest", async () => {
   const store = await createStore();
   const { user, session } = await enrollDefaultMember(store);
@@ -194,12 +262,13 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     "input_policy",
     "memory_recall_context",
     "structured_intent_classifier",
+    "llm_orchestration_decision",
     "workflow_router",
     "workflow_executor",
     "evidence_observation",
-    "response_policy",
-    "model_invocation"
+    "response_policy"
   ]);
+  assert.equal(proposalSteps[8], "model_invocation");
   assert.ok(proposalSteps.includes("openclaw_skill_invocation_proposal"));
   assert.ok(proposalSteps.includes("product_memory_retain"));
   assert.equal(proposalRun.state.workflow, "eligibility_benefits_navigation");

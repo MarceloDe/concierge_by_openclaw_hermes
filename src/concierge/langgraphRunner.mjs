@@ -26,6 +26,17 @@ import { recordOpenClawSkillInvocationProposal, validateOpenClawEnvelopeAgainstS
 import { runOfficialOpenClawReadOnlyObservation } from "./openclawOfficialRuntime.mjs";
 import { buildLangGraphOpenClawWorkerPlan } from "./openclawWorkerContract.mjs";
 import { recallProductMemoryForRequest, retainProductMemoryFromGraphRun } from "./productMemory.mjs";
+import {
+  buildLlmOrchestrationDecisionMessages,
+  normalizeLlmOrchestrationDecision,
+  shouldUseLlmDecision
+} from "./llmOrchestrationDecision.mjs";
+import { publishRuntimeEvent } from "./runtimeEvents.mjs";
+import {
+  consumeWorkerContinuationForApprovedDispatch,
+  finalizeWorkerContinuationDispatch,
+  validateWorkerContinuationForDispatch
+} from "./workerContinuations.mjs";
 
 export const LANGGRAPH_RUNNER_VERSION = "2026-05-17.langgraph-runner.v1";
 
@@ -55,6 +66,7 @@ const BrainstyState = Annotation.Root({
   policy_result: field(null),
   intent: field(null),
   structured_intent: field(null),
+  llm_orchestration_decision: field(null),
   workflow: field(null),
   workflow_route: field(null),
   route_reason: field(null),
@@ -62,6 +74,7 @@ const BrainstyState = Annotation.Root({
   openclaw_skill_validation: field(null),
   openclaw_worker_plan: field(null),
   openclaw_skill_proposal: field(null),
+  worker_continuation: field(null),
   approval_resume: field(null),
   evidence_observation: field(null),
   browser_result: field(null),
@@ -147,10 +160,30 @@ function pointerFromEligibility(eligibility) {
   };
 }
 
+function money(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "unknown";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value));
+}
+
+function coverageBalancePointersFromEligibility(eligibility) {
+  return (eligibility?.structured?.coverageBalances ?? []).map((balance) => ({
+    table: "coverage_balances",
+    id: balance.id,
+    sourceUrl: balance.source,
+    summary: `${balance.label}: total ${money(balance.total_amount)}, spent ${money(balance.spent_amount)}, remaining ${money(balance.remaining_amount)}`,
+    createdAt: balance.created_at,
+    balanceType: balance.balance_type,
+    totalAmount: balance.total_amount,
+    spentAmount: balance.spent_amount,
+    remainingAmount: balance.remaining_amount
+  }));
+}
+
 function sourcePointersFromObservation({ browserResult = null, eligibility = null, portalScan = null }) {
   const pointers = [];
   const eligibilityPointer = pointerFromEligibility(eligibility);
   if (eligibilityPointer) pointers.push(eligibilityPointer);
+  pointers.push(...coverageBalancePointersFromEligibility(eligibility));
   for (const page of portalScan?.pageRows ?? []) {
     pointers.push({
       table: "portal_page_snapshots",
@@ -163,6 +196,7 @@ function sourcePointersFromObservation({ browserResult = null, eligibility = nul
   for (const result of portalScan?.eligibilityResults ?? []) {
     const pointer = pointerFromEligibility(result);
     if (pointer) pointers.push(pointer);
+    pointers.push(...coverageBalancePointersFromEligibility(result));
   }
   if (browserResult?.browserRunId && browserResult?.page?.url && pointers.length === 0) {
     pointers.push({
@@ -176,11 +210,58 @@ function sourcePointersFromObservation({ browserResult = null, eligibility = nul
   return pointers;
 }
 
+function evidenceChannelsFromBrowserResult(browserResult = null) {
+  if (!browserResult?.extraction) return [];
+  const channels = [];
+  if (browserResult.extraction.ariaTextPreview) {
+    channels.push({
+      channel: "accessibility_tree",
+      status: "captured",
+      textLength: browserResult.extraction.ariaTextPreview.length,
+      confidence: null
+    });
+  }
+  if (browserResult.extraction.visualOcrTextPreview) {
+    channels.push({
+      channel: "visual_ocr",
+      status: "captured",
+      textLength: browserResult.extraction.visualOcrTextPreview.length,
+      confidence: browserResult.extraction.visualOcrConfidence ?? null,
+      wordCount: browserResult.extraction.visualOcrWordCount ?? null
+    });
+  }
+  if (!channels.length && (browserResult.extraction.fullText || browserResult.extraction.textPreview)) {
+    channels.push({
+      channel: "visible_dom_text",
+      status: "captured",
+      textLength: (browserResult.extraction.fullText ?? browserResult.extraction.textPreview ?? "").length,
+      confidence: null
+    });
+  }
+  return channels;
+}
+
+function structuredBenefitRowsFromEligibility(eligibility) {
+  return (eligibility?.structured?.coverageBalances ?? []).map((balance) => ({
+    table: "coverage_balances",
+    id: balance.id,
+    label: balance.label,
+    balanceType: balance.balance_type,
+    totalAmount: balance.total_amount,
+    spentAmount: balance.spent_amount,
+    remainingAmount: balance.remaining_amount,
+    currency: balance.currency,
+    sourceUrl: balance.source,
+    createdAt: balance.created_at
+  }));
+}
+
 function shouldObserveEvidence(state) {
   const raw = state.raw_message ?? {};
   return Boolean(
       raw.executeEvidenceObservation === true ||
       raw.useOfficialOpenClawWorker === true ||
+      raw.workerContinuationId ||
       raw.browserSnapshot ||
       raw.remoteDebuggerUrl ||
       raw.portalPageSnapshots?.length
@@ -189,6 +270,24 @@ function shouldObserveEvidence(state) {
 
 function requireLivePortalProof(state) {
   return Boolean(state.raw_message?.requireLivePortalProof || process.env.BRAINSTY_PORTAL_LIVE === "1");
+}
+
+async function publishGraphRuntimeEvent(store, state, { eventType, payload, session = null, user = null }) {
+  if (!store || !eventType) return null;
+  try {
+    const resolvedSession = session ?? sessionFromState(state);
+    const resolvedUser = user ?? userFromContext(state.context_packet) ?? { id: state.user_id };
+    return await publishRuntimeEvent(store, {
+      userId: resolvedUser?.id ?? state.user_id ?? null,
+      sessionId: resolvedSession?.id ?? state.session_id ?? null,
+      correlationId: state.graph_trace_id,
+      source: "langgraph",
+      eventType,
+      payload
+    });
+  } catch {
+    return null;
+  }
 }
 
 async function inputPolicyNode(state) {
@@ -249,6 +348,166 @@ async function structuredIntentNode(state) {
   };
 }
 
+async function llmOrchestrationDecisionNode(state) {
+  if (!state.policy_result?.allowed) {
+    return {
+      llm_orchestration_decision: {
+        mode: "skipped_policy_refusal",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "Deterministic safety policy blocked the request before any external LLM decision.",
+        issues: ["deterministic_policy_refusal"],
+        warnings: []
+      },
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_policy_refusal" })
+    };
+  }
+
+  if (state.raw_message?.llmOrchestrationDecisionReplay) {
+    const decision = normalizeLlmOrchestrationDecision(state.raw_message.llmOrchestrationDecisionReplay, {
+      mode: "replayed_live_decision",
+      model: state.raw_message.llmOrchestrationDecisionReplay.model ?? "replay",
+      fallbackWorkflow: state.structured_intent?.workflow
+    });
+    return {
+      llm_orchestration_decision: decision,
+      proof: appendProof(state, "llm_orchestration_decision", {
+        mode: decision.mode,
+        valid: decision.valid,
+        workflow: decision.workflow,
+        confidence: decision.confidence,
+        issues: decision.issues
+      })
+    };
+  }
+
+  const useLiveModel = Boolean(state.raw_message?.useLiveModel);
+  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  const baseURL = process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  if (!useLiveModel) {
+    return {
+      llm_orchestration_decision: {
+        mode: "not_requested",
+        provider: "openai",
+        model,
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "Live GPT orchestration decision was not requested.",
+        issues: [],
+        warnings: []
+      },
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "not_requested" })
+    };
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      llm_orchestration_decision: {
+        mode: "skipped_missing_openai_api_key",
+        provider: "openai",
+        model,
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "OPENAI_API_KEY is not configured, so LangGraph fell back to the curated classifier.",
+        issues: ["missing_openai_api_key"],
+        warnings: []
+      },
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_missing_openai_api_key" })
+    };
+  }
+
+  const messages = buildLlmOrchestrationDecisionMessages(state);
+  const store = activeStores.get(state.session_id);
+  const payloadObservation = store
+    ? await recordOutboundPayloadObservation(store, {
+        sessionId: state.session_id,
+        payload: { model, baseURL, messages },
+        payloadType: "openai_orchestration_decision_messages",
+        destination: "openai",
+        policyMode: state.raw_message?.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
+        user: userFromContext(state.context_packet),
+        requireSourcePointers: true
+      })
+    : null;
+  try {
+    const llm = new ChatOpenAI({
+      model,
+      timeout: 60000,
+      maxRetries: 1,
+      configuration: { baseURL }
+    });
+    const response = await llm.invoke(messages);
+    const decision = normalizeLlmOrchestrationDecision(response.content, {
+      mode: "openai_chatopenai_invoked",
+      provider: "openai",
+      model,
+      fallbackWorkflow: state.structured_intent?.workflow
+    });
+    return {
+      llm_orchestration_decision: {
+        ...decision,
+        baseURL,
+        response: response.content,
+        outboundPayloadObservation: payloadObservation
+          ? {
+              eventType: "outbound_payload_observed",
+              payloadHash: payloadObservation.payloadHash,
+              containsPortalText: payloadObservation.containsPortalText,
+              containsDirectIdentifier: payloadObservation.containsDirectIdentifier,
+              containsSourcePointers: payloadObservation.containsSourcePointers,
+              enforcementMode: payloadObservation.enforcementMode
+            }
+          : null
+      },
+      proof: appendProof(state, "llm_orchestration_decision", {
+        mode: "openai_chatopenai_invoked",
+        valid: decision.valid,
+        workflow: decision.workflow,
+        confidence: decision.confidence,
+        issues: decision.issues
+      })
+    };
+  } catch (error) {
+    return {
+      llm_orchestration_decision: {
+        mode: "openai_chatopenai_failed",
+        provider: "openai",
+        model,
+        baseURL,
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: error.message,
+        issues: [error.message],
+        warnings: ["falling_back_to_curated_classifier"],
+        outboundPayloadObservation: payloadObservation
+          ? {
+              eventType: "outbound_payload_observed",
+              payloadHash: payloadObservation.payloadHash,
+              containsPortalText: payloadObservation.containsPortalText,
+              containsDirectIdentifier: payloadObservation.containsDirectIdentifier,
+              containsSourcePointers: payloadObservation.containsSourcePointers,
+              enforcementMode: payloadObservation.enforcementMode
+            }
+          : null
+      },
+      proof: appendProof(state, "llm_orchestration_decision", {
+        mode: "openai_chatopenai_failed",
+        error: error.message
+      })
+    };
+  }
+}
+
 async function workflowRouterNode(state) {
   const refusal = refusalForIntent(state.intent);
   if (refusal) {
@@ -277,24 +536,37 @@ async function workflowRouterNode(state) {
       })
     };
   }
+  const llmDecisionUsed = shouldUseLlmDecision(state.llm_orchestration_decision);
   const classifierWorkflow = state.structured_intent?.workflow;
+  const selectedWorkflow = llmDecisionUsed ? state.llm_orchestration_decision.workflow : classifierWorkflow;
   const route =
-    state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === classifierWorkflow) ??
-    state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === classifierWorkflow) ??
+    state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === selectedWorkflow) ??
+    state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === selectedWorkflow) ??
     state.context_packet?.workflowArchitecture?.routeCandidates?.[0] ??
     null;
   return {
     workflow: route?.workflowKey ?? "human_approval_escalation",
     workflow_route: route,
-    route_reason: classifierWorkflow
-      ? "structured_intent_classifier"
-      : route?.routeScore > 0
-        ? "matched_user_input_memory_or_pointers"
-        : "default_preflight_route",
+    route_reason: llmDecisionUsed
+      ? "llm_orchestration_decision"
+      : classifierWorkflow
+        ? "structured_intent_classifier"
+        : route?.routeScore > 0
+          ? "matched_user_input_memory_or_pointers"
+          : "default_preflight_route",
+    llm_orchestration_decision: state.llm_orchestration_decision
+      ? {
+          ...state.llm_orchestration_decision,
+          usedByRouter: llmDecisionUsed
+        }
+      : null,
     proof: appendProof(state, "workflow_router", {
       route: route?.workflowKey ?? "human_approval_escalation",
       classifierWorkflow,
+      llmWorkflow: state.llm_orchestration_decision?.workflow ?? null,
+      llmDecisionUsed,
       classifierConfidence: state.structured_intent?.confidence ?? null,
+      llmConfidence: state.llm_orchestration_decision?.confidence ?? null,
       executableNow: Boolean(route?.executableNow)
     })
   };
@@ -416,6 +688,96 @@ async function evidenceObservationNode(state) {
     };
   }
 
+  let workerContinuationValidation = null;
+  if (state.raw_message?.workerContinuationId) {
+    const taskId = state.raw_message?.approvalTaskId ?? state.raw_message?.taskId;
+    if (state.raw_message?.useOfficialOpenClawWorker !== true) {
+      const reason = "Worker continuation dispatch requires the dedicated official OpenClaw read-only worker.";
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: "blocked_worker_continuation_requires_official_openclaw",
+          terminalOutcome: "not_possible_policy_or_approval_block",
+          reason,
+          workflow: state.workflow,
+          taskId,
+          continuationId: state.raw_message.workerContinuationId,
+          actionsTaken: []
+        }
+      });
+      await audit(store, session.id, "worker_continuation_dispatch_blocked", {
+        status: "blocked_worker_continuation_requires_official_openclaw",
+        reason,
+        taskId,
+        continuationId: state.raw_message.workerContinuationId,
+        workflow: state.workflow,
+        actionsTaken: []
+      });
+      return {
+        evidence_observation: {
+          status: "blocked_worker_continuation_requires_official_openclaw",
+          reason,
+          actionsTaken: [],
+          sourcePointers: []
+        },
+        source_pointers: [],
+        proof: appendProof(state, "evidence_observation", {
+          status: "blocked_worker_continuation_requires_official_openclaw",
+          actionsTaken: []
+        })
+      };
+    }
+    workerContinuationValidation = await validateWorkerContinuationForDispatch(store, {
+      continuationId: state.raw_message.workerContinuationId,
+      sessionId: state.session_id,
+      userId: state.user_id,
+      taskId,
+      workflow: state.workflow
+    });
+    if (!workerContinuationValidation.ok) {
+      const reason = workerContinuationValidation.error ?? "Worker continuation is not ready for approved dispatch.";
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: `blocked_worker_continuation_${workerContinuationValidation.status}`,
+          terminalOutcome: "not_possible_policy_or_approval_block",
+          reason,
+          workflow: state.workflow,
+          taskId,
+          continuationId: state.raw_message.workerContinuationId,
+          actionsTaken: []
+        }
+      });
+      await audit(store, session.id, "worker_continuation_dispatch_blocked", {
+        status: workerContinuationValidation.status,
+        reason,
+        taskId,
+        continuationId: state.raw_message.workerContinuationId,
+        workflow: state.workflow,
+        actionsTaken: []
+      });
+      return {
+        worker_continuation: workerContinuationValidation,
+        evidence_observation: {
+          status: `blocked_worker_continuation_${workerContinuationValidation.status}`,
+          reason,
+          actionsTaken: [],
+          sourcePointers: [],
+          workerContinuation: workerContinuationValidation.continuation ?? null
+        },
+        source_pointers: [],
+        proof: appendProof(state, "evidence_observation", {
+          status: `blocked_worker_continuation_${workerContinuationValidation.status}`,
+          actionsTaken: []
+        })
+      };
+    }
+  }
+
   const approvalResume = await consumeReadOnlyObservationApproval(store, {
     approvalToken: state.raw_message?.approvalToken,
     taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId,
@@ -424,6 +786,19 @@ async function evidenceObservationNode(state) {
     workflow: state.workflow
   });
   if (!approvalResume.ok) {
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: "waiting_for_read_only_approval",
+        terminalOutcome: "not_possible_policy_or_approval_block",
+        reason: approvalResume.reason,
+        workflow: state.workflow,
+        taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+        actionsTaken: []
+      }
+    });
     await audit(store, session.id, "evidence_observation_waiting_for_approval", {
       status: approvalResume.status,
       reason: approvalResume.reason,
@@ -447,8 +822,88 @@ async function evidenceObservationNode(state) {
       })
     };
   }
+  await publishGraphRuntimeEvent(store, state, {
+    eventType: "approval.consumed",
+    session,
+    user,
+    payload: {
+      status: approvalResume.status,
+      workflow: state.workflow,
+      taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+      approvalGateId: approvalResume.approvalGateId ?? null,
+      actionsTaken: approvalResume.actionsTaken ?? []
+    }
+  });
+
+  let workerContinuationDispatch = workerContinuationValidation;
+  if (state.raw_message?.workerContinuationId) {
+    workerContinuationDispatch = await consumeWorkerContinuationForApprovedDispatch(store, {
+      continuationId: state.raw_message.workerContinuationId,
+      sessionId: state.session_id,
+      userId: state.user_id,
+      taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId,
+      workflow: state.workflow,
+      approvalGateId: approvalResume.approvalGateId ?? null
+    });
+    if (!workerContinuationDispatch.ok) {
+      const reason = workerContinuationDispatch.error ?? "Worker continuation could not be consumed for approved dispatch.";
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: `blocked_worker_continuation_${workerContinuationDispatch.status}`,
+          terminalOutcome: "not_possible_policy_or_approval_block",
+          reason,
+          workflow: state.workflow,
+          taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+          continuationId: state.raw_message.workerContinuationId,
+          actionsTaken: []
+        }
+      });
+      await audit(store, session.id, "worker_continuation_dispatch_blocked_after_approval", {
+        status: workerContinuationDispatch.status,
+        reason,
+        taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+        continuationId: state.raw_message.workerContinuationId,
+        workflow: state.workflow,
+        actionsTaken: []
+      });
+      return {
+        approval_resume: approvalResume,
+        worker_continuation: workerContinuationDispatch,
+        evidence_observation: {
+          status: `blocked_worker_continuation_${workerContinuationDispatch.status}`,
+          reason,
+          approval: approvalResume,
+          actionsTaken: [],
+          sourcePointers: [],
+          workerContinuation: workerContinuationDispatch.continuation ?? null
+        },
+        source_pointers: [],
+        proof: appendProof(state, "evidence_observation", {
+          status: `blocked_worker_continuation_${workerContinuationDispatch.status}`,
+          actionsTaken: []
+        })
+      };
+    }
+  }
 
   if (state.raw_message?.useOfficialOpenClawWorker === true) {
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: "dispatching_official_openclaw_read_only_worker",
+        terminalOutcome: null,
+        workflow: state.workflow,
+        taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+        runtime: "official_openclaw",
+        progressEverySeconds: 30,
+        actionsTaken: []
+      }
+    });
     const browserResult = await runOfficialOpenClawReadOnlyObservation({
       store,
       session,
@@ -457,8 +912,38 @@ async function evidenceObservationNode(state) {
       approval: approvalResume
     });
     const actionsTaken = browserResult.actionsTaken ?? [];
+    const finalizeContinuation = (details) =>
+      state.raw_message?.workerContinuationId
+        ? finalizeWorkerContinuationDispatch(store, {
+            continuationId: state.raw_message.workerContinuationId,
+            sessionId: state.session_id,
+            userId: state.user_id,
+            ...details
+          })
+        : null;
 
     if (!browserResult.connected || !browserResult.page) {
+      const finalizedContinuation = await finalizeContinuation({
+        resultStatus: "blocked_no_authenticated_evidence",
+        terminalOutcome: "not_possible_insurance_or_portal_block",
+        reason: browserResult.message ?? "Official OpenClaw read-only observation did not return portal evidence.",
+        browserRunId: browserResult.browserRunId ?? null,
+        actionsTaken
+      });
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: "blocked_no_authenticated_evidence",
+          terminalOutcome: "not_possible_insurance_or_portal_block",
+          reason: browserResult.message ?? "Official OpenClaw read-only observation did not return portal evidence.",
+          workflow: state.workflow,
+          runtime: "official_openclaw",
+          browserRunId: browserResult.browserRunId ?? null,
+          actionsTaken
+        }
+      });
       await audit(store, session.id, "evidence_observation_blocked", {
         browserRunId: browserResult.browserRunId,
         status: browserResult.status,
@@ -467,12 +952,14 @@ async function evidenceObservationNode(state) {
         actionsTaken
       });
       return {
+        worker_continuation: finalizedContinuation ?? workerContinuationDispatch,
         evidence_observation: {
           status: "blocked_no_authenticated_evidence",
           reason: browserResult.message ?? "Official OpenClaw read-only observation did not return portal evidence.",
           approval: approvalResume,
           actionsTaken,
-          sourcePointers: []
+          sourcePointers: [],
+          workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
         approval_resume: approvalResume,
         browser_result: browserResult,
@@ -504,8 +991,30 @@ async function evidenceObservationNode(state) {
         source: "official_openclaw_read_only_worker",
         actionsTaken
       });
+      const finalizedContinuation = await finalizeContinuation({
+        resultStatus: blocked.status,
+        terminalOutcome: "not_possible_policy_or_approval_block",
+        reason: blocked.message,
+        browserRunId: browserResult.browserRunId ?? null,
+        actionsTaken
+      });
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: blocked.status,
+          terminalOutcome: "not_possible_policy_or_approval_block",
+          reason: blocked.message,
+          workflow: state.workflow,
+          runtime: "official_openclaw",
+          browserRunId: browserResult.browserRunId ?? null,
+          actionsTaken
+        }
+      });
       return {
         approval_resume: approvalResume,
+        worker_continuation: finalizedContinuation ?? workerContinuationDispatch,
         evidence_observation: {
           status: blocked.status,
           reason: blocked.message,
@@ -513,7 +1022,8 @@ async function evidenceObservationNode(state) {
           actionsTaken,
           sourcePointers: [],
           verification,
-          officialOpenClaw: browserResult.officialOpenClaw
+          officialOpenClaw: browserResult.officialOpenClaw,
+          workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
         browser_result: blocked,
         eligibility_result: null,
@@ -538,8 +1048,30 @@ async function evidenceObservationNode(state) {
         source: "official_openclaw_read_only_worker",
         actionsTaken: [...actionsTaken, "verify_authenticated_member_portal"]
       });
+      const finalizedContinuation = await finalizeContinuation({
+        resultStatus: blocked.status,
+        terminalOutcome: "not_possible_insurance_or_portal_block",
+        reason: blocked.message,
+        browserRunId: browserResult.browserRunId ?? null,
+        actionsTaken: blocked.actionsTaken
+      });
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: blocked.status,
+          terminalOutcome: "not_possible_insurance_or_portal_block",
+          reason: blocked.message,
+          workflow: state.workflow,
+          runtime: "official_openclaw",
+          browserRunId: browserResult.browserRunId ?? null,
+          actionsTaken: blocked.actionsTaken
+        }
+      });
       return {
         approval_resume: approvalResume,
+        worker_continuation: finalizedContinuation ?? workerContinuationDispatch,
         evidence_observation: {
           status: blocked.status,
           reason: blocked.message,
@@ -547,7 +1079,8 @@ async function evidenceObservationNode(state) {
           actionsTaken: blocked.actionsTaken,
           sourcePointers: [],
           verification,
-          officialOpenClaw: browserResult.officialOpenClaw
+          officialOpenClaw: browserResult.officialOpenClaw,
+          workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
         browser_result: blocked,
         eligibility_result: null,
@@ -568,6 +1101,8 @@ async function evidenceObservationNode(state) {
     });
     const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
     const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
+    const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
+    const evidenceChannels = evidenceChannelsFromBrowserResult(browserResult);
     sourcePointers.push({
       table: "extraction_artifacts",
       id: artifact.id,
@@ -584,15 +1119,43 @@ async function evidenceObservationNode(state) {
       "record_verified_source_pointer",
       "persist_eligibility_snapshot"
     ];
+    const finalizedContinuation = await finalizeContinuation({
+      resultStatus: "captured_official_openclaw_read_only_observation",
+      terminalOutcome: "completed_with_sourced_result",
+      browserRunId: browserResult.browserRunId ?? null,
+      sourcePointerCount: sourcePointers.length,
+      structuredBenefitCount: structuredBenefits.length,
+      actionsTaken: completedActions
+    });
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: "completed_with_sourced_result",
+        terminalOutcome: "completed_with_sourced_result",
+        workflow: state.workflow,
+        runtime: "official_openclaw",
+        browserRunId: browserResult.browserRunId ?? null,
+        sourcePointerCount: sourcePointers.length,
+        structuredBenefitCount: structuredBenefits.length,
+        evidenceChannels,
+        actionsTaken: completedActions
+      }
+    });
     return {
+      worker_continuation: finalizedContinuation ?? workerContinuationDispatch,
       evidence_observation: {
         status: "captured_official_openclaw_read_only_observation",
         actionsTaken: completedActions,
         approval: approvalResume,
         livePortalProof: "verified",
         sourcePointers,
+        structuredBenefits,
+        evidenceChannels,
         verification,
-        officialOpenClaw: browserResult.officialOpenClaw
+        officialOpenClaw: browserResult.officialOpenClaw,
+        workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
       },
       approval_resume: approvalResume,
       browser_result: browserResult,
@@ -602,6 +1165,7 @@ async function evidenceObservationNode(state) {
         status: "captured_official_openclaw_read_only_observation",
         runtime: "official_openclaw",
         sourcePointerCount: sourcePointers.length,
+        structuredBenefitCount: structuredBenefits.length,
         actionsTaken: completedActions
       })
     };
@@ -703,13 +1267,30 @@ async function evidenceObservationNode(state) {
         });
       }
     }
+    const structuredBenefits = portalScan.eligibilityResults.flatMap((result) => structuredBenefitRowsFromEligibility(result));
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: "completed_with_sourced_result",
+        terminalOutcome: "completed_with_sourced_result",
+        workflow: state.workflow,
+        runtime: "portal_page_snapshots",
+        browserRunId: portalScan.browserRun.id,
+        sourcePointerCount: sourcePointers.length,
+        structuredBenefitCount: structuredBenefits.length,
+        actionsTaken: ["read_only_portal_page_snapshot_persisted"]
+      }
+    });
     return {
       evidence_observation: {
         status: "captured_multi_page_scan",
         actionsTaken: ["read_only_portal_page_snapshot_persisted"],
         approval: approvalResume,
         livePortalProof: requireLivePortalProof(state) ? "verified" : "not_required",
-        sourcePointers
+        sourcePointers,
+        structuredBenefits
       },
       approval_resume: approvalResume,
       browser_result: {
@@ -740,6 +1321,19 @@ async function evidenceObservationNode(state) {
         portal,
         remoteDebuggerUrl: state.raw_message?.remoteDebuggerUrl
       });
+  await publishGraphRuntimeEvent(store, state, {
+    eventType: "worker.status.updated",
+    session,
+    user,
+    payload: {
+      status: "read_only_observation_attempted",
+      terminalOutcome: browserResult.connected || browserResult.extraction ? null : "not_possible_insurance_or_portal_block",
+      workflow: state.workflow,
+      runtime: state.raw_message?.browserSnapshot ? "claimed_browser_snapshot" : "chrome_remote_debugger",
+      browserRunId: browserResult.browserRunId ?? null,
+      actionsTaken: browserResult.connected || browserResult.extraction ? ["read_only_visible_text_extracted"] : []
+    }
+  });
 
   if (requireLivePortalProof(state) && process.env.BRAINSTY_PORTAL_LIVE !== "1") {
     const verification = {
@@ -756,6 +1350,20 @@ async function evidenceObservationNode(state) {
       page: browserResult.page ?? state.raw_message?.browserSnapshot ?? null,
       verification,
       source: state.raw_message?.browserSnapshot ? "claimed_chrome_snapshot_live_proof" : "remote_debugger_live_proof"
+    });
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: blocked.status,
+        terminalOutcome: "not_possible_policy_or_approval_block",
+        reason: blocked.message,
+        workflow: state.workflow,
+        runtime: state.raw_message?.browserSnapshot ? "claimed_browser_snapshot" : "chrome_remote_debugger",
+        browserRunId: browserResult.browserRunId ?? null,
+        actionsTaken: []
+      }
     });
     return {
       approval_resume: approvalResume,
@@ -779,6 +1387,20 @@ async function evidenceObservationNode(state) {
   }
 
   if (!browserResult.connected || !browserResult.extraction) {
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "worker.status.updated",
+      session,
+      user,
+      payload: {
+        status: "blocked_no_authenticated_evidence",
+        terminalOutcome: "not_possible_insurance_or_portal_block",
+        reason: browserResult.message ?? "Read-only portal evidence was not available.",
+        workflow: state.workflow,
+        runtime: state.raw_message?.browserSnapshot ? "claimed_browser_snapshot" : "chrome_remote_debugger",
+        browserRunId: browserResult.browserRunId ?? null,
+        actionsTaken: []
+      }
+    });
     await audit(store, session.id, "evidence_observation_blocked", {
       browserRunId: browserResult.browserRunId,
       status: browserResult.status,
@@ -814,6 +1436,20 @@ async function evidenceObservationNode(state) {
         page: browserResult.page,
         verification,
         source: state.raw_message?.browserSnapshot ? "claimed_chrome_snapshot_live_proof" : "remote_debugger_live_proof"
+      });
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "worker.status.updated",
+        session,
+        user,
+        payload: {
+          status: blocked.status,
+          terminalOutcome: "not_possible_insurance_or_portal_block",
+          reason: blocked.message,
+          workflow: state.workflow,
+          runtime: state.raw_message?.browserSnapshot ? "claimed_browser_snapshot" : "chrome_remote_debugger",
+          browserRunId: browserResult.browserRunId ?? null,
+          actionsTaken: []
+        }
       });
       return {
         approval_resume: approvalResume,
@@ -854,14 +1490,34 @@ async function evidenceObservationNode(state) {
 
   const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
   const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
+  const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
+  const evidenceChannels = evidenceChannelsFromBrowserResult(browserResult);
   if (verifiedSourcePointer) sourcePointers.push(verifiedSourcePointer);
+  await publishGraphRuntimeEvent(store, state, {
+    eventType: "worker.status.updated",
+    session,
+    user,
+    payload: {
+      status: "completed_with_sourced_result",
+      terminalOutcome: "completed_with_sourced_result",
+      workflow: state.workflow,
+      runtime: state.raw_message?.browserSnapshot ? "claimed_browser_snapshot" : "chrome_remote_debugger",
+      browserRunId: browserResult.browserRunId ?? null,
+      sourcePointerCount: sourcePointers.length,
+      structuredBenefitCount: structuredBenefits.length,
+      evidenceChannels,
+      actionsTaken: ["read_only_visible_text_extracted"]
+    }
+  });
   return {
     evidence_observation: {
       status: "captured_visible_page",
       actionsTaken: ["read_only_visible_text_extracted"],
       approval: approvalResume,
       livePortalProof: requireLivePortalProof(state) ? "verified" : "not_required",
-      sourcePointers
+      sourcePointers,
+      structuredBenefits,
+      evidenceChannels
     },
     approval_resume: approvalResume,
     browser_result: browserResult,
@@ -869,7 +1525,8 @@ async function evidenceObservationNode(state) {
     source_pointers: sourcePointers,
     proof: appendProof(state, "evidence_observation", {
       status: "captured_visible_page",
-      sourcePointerCount: sourcePointers.length
+      sourcePointerCount: sourcePointers.length,
+      structuredBenefitCount: structuredBenefits.length
     })
   };
 }
@@ -1050,11 +1707,105 @@ async function maybeModelNode(state) {
   };
 }
 
+async function publishLangGraphLifecycleEvents(store, { user, session, state, productMemoryRetain }) {
+  const common = {
+    userId: user.id,
+    sessionId: session.id,
+    correlationId: state.graph_trace_id,
+    source: "langgraph"
+  };
+  const events = [
+    {
+      eventType: "workflow.classified",
+      payload: {
+        curatedIntent: state.structured_intent,
+        llmDecision: state.llm_orchestration_decision
+          ? {
+              mode: state.llm_orchestration_decision.mode,
+              valid: state.llm_orchestration_decision.valid,
+              usedByRouter: state.llm_orchestration_decision.usedByRouter,
+              workflow: state.llm_orchestration_decision.workflow,
+              confidence: state.llm_orchestration_decision.confidence,
+              rationale: state.llm_orchestration_decision.rationale,
+              issues: state.llm_orchestration_decision.issues ?? []
+            }
+          : null
+      }
+    },
+    {
+      eventType: "workflow.routed",
+      payload: {
+        workflow: state.workflow,
+        routeReason: state.route_reason,
+        journeyStage: state.workflow_route?.journeyStage ?? null,
+        executableNow: state.workflow_route?.executableNow ?? null
+      }
+    },
+    {
+      eventType: "worker.plan.prepared",
+      payload: {
+        planId: state.openclaw_worker_plan?.planId ?? null,
+        dispatchStatus: state.openclaw_worker_plan?.dispatchStatus ?? null,
+        workerJobIds: (state.openclaw_worker_plan?.workerJobs ?? []).map((job) => job.jobId),
+        mayCreateSubtasks: state.openclaw_worker_plan?.workerJobs?.[0]?.deterministicControls?.workerMayCreateSubtasks ?? null,
+        progressEverySeconds: state.openclaw_worker_plan?.workerJobs?.[0]?.progressProtocol?.reportEverySeconds ?? null
+      }
+    },
+    state.openclaw_skill_proposal?.task
+      ? {
+          eventType: "approval.requested",
+          payload: {
+            taskId: state.openclaw_skill_proposal.task.id,
+            status: state.openclaw_skill_proposal.task.status,
+            executionMode: state.openclaw_skill_proposal.executionMode,
+            approvalsRequired: state.openclaw_skill_validation?.approvalsRequired ?? []
+          }
+        }
+      : null,
+    {
+      eventType: "evidence.status",
+      payload: {
+        status: state.evidence_observation?.status ?? "not_requested",
+        actionsTaken: state.evidence_observation?.actionsTaken ?? [],
+        sourcePointerCount: state.source_pointers?.length ?? 0
+      }
+    },
+    {
+      eventType: "final.answer.created",
+      payload: {
+        workflow: state.workflow,
+        outcome: state.workflow_outcome,
+        sourcePointerCount: state.source_pointers?.length ?? 0,
+        responsePreview: String(state.final_response ?? "").slice(0, 500)
+      }
+    },
+    {
+      eventType: "memory.retained",
+      payload: {
+        localRetained: Boolean(state.should_remember),
+        productMemoryAdapter: productMemoryRetain?.adapter ?? "disabled",
+        productMemoryEnabled: Boolean(productMemoryRetain?.enabled),
+        productMemoryRetained: Boolean(productMemoryRetain?.retained),
+        episodeUuid: productMemoryRetain?.episodeUuid ?? null
+      }
+    }
+  ].filter(Boolean);
+
+  for (const event of events) {
+    await publishRuntimeEvent(store, {
+      ...common,
+      eventType: event.eventType,
+      payload: event.payload
+    });
+  }
+}
+
 export function createBrainstyLangGraph() {
   return new StateGraph(BrainstyState)
     .addNode("input_policy", inputPolicyNode)
     .addNode("recall_context", recallContextNode)
     .addNode("classify_intent", structuredIntentNode)
+    .addNode("llm_decision", llmOrchestrationDecisionNode)
     .addNode("workflow_router", workflowRouterNode)
     .addNode("workflow_executor", workflowExecutorNode)
     .addNode("observe_evidence", evidenceObservationNode)
@@ -1063,7 +1814,8 @@ export function createBrainstyLangGraph() {
     .addEdge(START, "input_policy")
     .addEdge("input_policy", "recall_context")
     .addEdge("recall_context", "classify_intent")
-    .addEdge("classify_intent", "workflow_router")
+    .addEdge("classify_intent", "llm_decision")
+    .addEdge("llm_decision", "workflow_router")
     .addEdge("workflow_router", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
     .addEdge("observe_evidence", "compose_response")
@@ -1126,6 +1878,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     policy_result: null,
     intent: null,
     structured_intent: null,
+    llm_orchestration_decision: null,
     workflow: null,
     workflow_route: null,
     route_reason: null,
@@ -1133,6 +1886,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclaw_skill_validation: null,
     openclaw_worker_plan: null,
     openclaw_skill_proposal: null,
+    worker_continuation: null,
     approval_resume: null,
     evidence_observation: null,
     browser_result: null,
@@ -1257,6 +2011,12 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     retained: productMemoryRetain.retained,
     episodeUuid: productMemoryRetain.episodeUuid ?? null,
     error: productMemoryRetain.error ?? null
+  });
+  await publishLangGraphLifecycleEvents(store, {
+    user,
+    session: { ...session, current_step: "langgraph_run_completed" },
+    state,
+    productMemoryRetain
   });
   return {
     version: LANGGRAPH_RUNNER_VERSION,

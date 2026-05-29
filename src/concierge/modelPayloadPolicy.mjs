@@ -91,6 +91,14 @@ export function buildRouteProofPayload(state) {
         status: state.safety?.policyAllowed ? "allowed" : "blocked_or_gated"
       },
       {
+        key: "llm_orchestration_decision",
+        owner: "langgraph_gpt",
+        status: state.llm_orchestration_decision?.mode ?? "not_run",
+        reason: state.llm_orchestration_decision?.usedByRouter
+          ? `used ${state.llm_orchestration_decision.workflow}`
+          : `not used ${state.llm_orchestration_decision?.workflow ?? "none"}`
+      },
+      {
         key: "workflow_router",
         owner: "langgraph",
         status: state.workflow ?? "not_selected",
