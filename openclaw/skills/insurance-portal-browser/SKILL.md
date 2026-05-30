@@ -76,6 +76,8 @@ Required output fields:
 Optional output fields:
 
 - `portal_page_snapshots`
+- `read_only_navigation_plan`
+- `page_observations`
 - `structured_extraction`
 - `audit_event_ids`
 
@@ -87,10 +89,11 @@ Optional output fields:
 4. Select the first available browser access path from the fallback order, but continue to alternate safe paths if the first one fails.
 5. Use `browser-automation` operating rules for browser work: check status/profile/tabs before acting, reuse labeled tabs when possible, snapshot before clicks, use only fresh refs from the latest snapshot, retry stale refs once with a new snapshot, and report login/captcha/2FA/permission blockers instead of guessing.
 6. Observe only pages the user has already authenticated into or explicitly opened. If more user data or a login step is needed, return `not_possible_missing_user_data` with the exact user-controlled step.
-7. Extract visible facts with page URL, title, page kind, capture time, and database pointer targets.
-8. Always collect two read-only views before returning evidence: a DOM/accessibility snapshot and a visual screenshot OCR pass. If OCR is unavailable or the screenshot is still only a loading screen, return a blocker instead of creating source evidence.
-9. Update worker heartbeat memory with useful task lessons, prior user preferences discovered from the task packet, blockers, and next-attempt hints. Final product-memory writes must be returned to LangGraph for ingest.
-10. Return structured observations, status updates, subtasks, memory updates, and blockers. If blocked, return the exact blocker and the safest next user-controlled step.
+7. For read-only evidence tasks, select same-site internal portal targets that match the assigned workflow, such as benefits, spending, claims, or prior authorization pages. Do not open sign-out, profile, messages, payment, form, upload, document-submission, or other irreversible-action paths.
+8. Extract visible facts with page URL, title, page kind, capture time, and database pointer targets for each observed page.
+9. Always collect two read-only views before returning evidence: a DOM/accessibility snapshot and a visual screenshot OCR pass. If OCR is unavailable or the screenshot is still only a loading screen, return a blocker instead of creating source evidence.
+10. Update worker heartbeat memory with useful task lessons, prior user preferences discovered from the task packet, blockers, and next-attempt hints. Final product-memory writes must be returned to LangGraph for ingest.
+11. Return structured observations, status updates, subtasks, memory updates, and blockers. If blocked, return the exact blocker and the safest next user-controlled step.
 
 ## Progress Protocol
 
@@ -111,4 +114,4 @@ Final status must be one of:
 
 ## Current Project Status
 
-This repository contains the deterministic skill artifact and validation contract. The local MVP now has an approval-gated official OpenClaw read-only worker path through the dedicated `brainstyworkers` profile and `brainstyworkers-insurance-browser` agent. Browser execution is allowed only after LangGraph consumes a valid read-only approval token, and evidence creation must pass authenticated-page verification plus DOM/accessibility and local OCR proof.
+This repository contains the deterministic skill artifact and validation contract. The local MVP now has an approval-gated official OpenClaw read-only worker path through the dedicated `brainstyworkers` profile and `brainstyworkers-insurance-browser` agent. Browser execution is allowed only after LangGraph consumes a valid read-only approval token, and evidence creation must pass authenticated-page verification plus DOM/accessibility and local OCR proof. Multi-page read-only navigation is allowed only inside the same authenticated portal origin and is verified page-by-page by LangGraph before source pointers are created.

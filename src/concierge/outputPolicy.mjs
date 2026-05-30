@@ -14,7 +14,36 @@ function structuredBenefitLine(structured) {
     .join("; ")}.`;
 }
 
-export function composeResponse({ user, portal, policyResult, intent, browserResult, eligibility }) {
+function sourcePointerLine(sourcePointers = []) {
+  if (!sourcePointers.length) return "Source pointers: none stored yet.";
+  return `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`;
+}
+
+function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = [], evidenceObservation = {} }) {
+  const structured = eligibility?.structured;
+  const observationMode =
+    evidenceObservation.status === "captured_official_openclaw_read_only_observation"
+      ? "The approved read-only observation was executed by the dedicated official OpenClaw profile with DOM/accessibility and visual OCR checks before LangGraph retained evidence."
+      : "The approved read-only portal observation was verified by LangGraph before evidence was retained.";
+  const pageTitle = browserResult?.page?.title ? `Observed page: ${browserResult.page.title}.` : null;
+  return [
+    "I captured approved read-only portal evidence and prepared the benefits answer from stored source pointers.",
+    structuredBenefitLine(structured),
+    sourcePointerLine(sourcePointers),
+    pageTitle,
+    observationMode,
+    "No payer contact, external message, credential entry, medical advice, or irreversible portal action was performed.",
+    "This answer was composed inside the LangGraph product runtime."
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function composeResponse({ user, portal, policyResult, intent, browserResult, eligibility, sourcePointers = null, evidenceObservation = null }) {
+  if (Array.isArray(sourcePointers)) {
+    return compactEvidenceResponse({ browserResult, eligibility, sourcePointers, evidenceObservation });
+  }
+
   const checks = policyResult.checks.map((check) => `${check.name}: ${check.severity}`).join("; ");
   const structured = eligibility?.structured;
   const structuredLine = structured

@@ -53,6 +53,58 @@ test("portal evidence verifier rejects public Aetna marketing content", () => {
   assert.ok(verification.issues.some((issue) => issue.includes("public Aetna marketing")));
 });
 
+test("portal evidence verifier rejects Aetna login and credential pages", () => {
+  const verification = verifyAuthenticatedPortalEvidence({
+    portal: { id: "portal_1", payer: "Aetna" },
+    page: {
+      title: "Aetna Member Log-in",
+      url: "https://health.aetna.com/managemyaccount/login?business_event=Login",
+      text: "Aetna member sign in. Username password verification code."
+    }
+  });
+
+  assert.equal(verification.valid, false);
+  assert.equal(verification.status, "blocked_unverified_portal_evidence");
+  assert.ok(verification.issues.some((issue) => issue.includes("login or credential gate")));
+  assert.equal(verification.sourcePointer.pageKind, "login_or_credential_gate");
+});
+
+test("live portal proof blocks login page without creating false healthcare evidence", async () => {
+  const previous = process.env.BRAINSTY_PORTAL_LIVE;
+  process.env.BRAINSTY_PORTAL_LIVE = "1";
+  try {
+    const store = await createStore();
+    const { user, session, proposalRun, approval } = await approvedProposal(store);
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Use my Aetna portal memory to check eligibility and benefits.",
+      rawMessage: {
+        source: "test",
+        requireLivePortalProof: true,
+        approvalToken: approval.approvalToken,
+        approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
+        browserSnapshot: {
+          title: "Aetna Member Log-in",
+          url: "https://health.aetna.com/managemyaccount/login?business_event=Login",
+          text: "Aetna member sign in. Username password verification code.",
+          links: []
+        },
+        useLiveModel: false
+      }
+    });
+
+    assert.equal(result.state.evidence_observation.status, "blocked_live_portal_verification_failed");
+    assert.ok(result.state.evidence_observation.verification.issues.some((issue) => issue.includes("login or credential gate")));
+    assert.deepEqual(result.state.source_pointers, []);
+    assert.equal((await store.list("eligibility_snapshots", { session_id: session.id })).length, 0);
+  } finally {
+    if (previous === undefined) delete process.env.BRAINSTY_PORTAL_LIVE;
+    else process.env.BRAINSTY_PORTAL_LIVE = previous;
+  }
+});
+
 test("live portal proof requires explicit BRAINSTY_PORTAL_LIVE flag before creating evidence", async () => {
   const previous = process.env.BRAINSTY_PORTAL_LIVE;
   delete process.env.BRAINSTY_PORTAL_LIVE;

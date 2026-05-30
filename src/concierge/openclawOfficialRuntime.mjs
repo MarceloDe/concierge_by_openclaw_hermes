@@ -10,7 +10,7 @@ import { recordOutboundPayloadObservation } from "./outboundPayloadObservability
 
 const execFileAsync = promisify(execFile);
 
-export const OFFICIAL_OPENCLAW_RUNTIME_VERSION = "2026-05-27.official-openclaw-runtime.v1";
+export const OFFICIAL_OPENCLAW_RUNTIME_VERSION = "2026-05-29.official-openclaw-runtime.v2";
 
 const DEFAULT_PROFILE = "brainstyworkers";
 const DEFAULT_AGENT_ID = "brainstyworkers-insurance-browser";
@@ -39,7 +39,14 @@ export function getOfficialOpenClawConfig(env = process.env) {
     ocrSkillPath:
       env.BRAINSTY_OPENCLAW_OCR_SKILL_PATH ?? join(stateDir, `workspace-${profile}`, "skills", "ocr-local"),
     visualEvidenceDir: env.BRAINSTY_OPENCLAW_VISUAL_EVIDENCE_DIR ?? join(process.cwd(), "data", "openclaw-visual-evidence"),
-    allowedActions: ["browser_start", "open_url", "snapshot_accessibility_tree", "screenshot_capture", "local_ocr"],
+    allowedActions: [
+      "browser_start",
+      "open_url",
+      "open_internal_read_only_link",
+      "snapshot_accessibility_tree",
+      "screenshot_capture",
+      "local_ocr"
+    ],
     blockedActions: ["credential_entry", "payer_contact", "form_submission", "medical_advice", "external_message"]
   };
 }
@@ -56,6 +63,14 @@ function extractTitleFromAriaSnapshot(stdout) {
 function extractOpenedUrl(stdout, fallbackUrl) {
   const match = String(stdout ?? "").match(/opened:\s*(\S+)/);
   return match?.[1] ?? fallbackUrl;
+}
+
+function parseJson(value, fallback = null) {
+  try {
+    return JSON.parse(value ?? "");
+  } catch {
+    return fallback;
+  }
 }
 
 function sleep(ms) {
@@ -78,6 +93,187 @@ function hostMatches(candidateUrl, targetUrl) {
   } catch {
     return false;
   }
+}
+
+function urlOrigin(value) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+}
+
+function canonicalUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString();
+  } catch {
+    return compact(value);
+  }
+}
+
+function safeFileSlug(value) {
+  return String(value ?? "page")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "page";
+}
+
+function safeReadOnlyPortalUrl(candidateUrl, startUrl) {
+  try {
+    const candidate = new URL(candidateUrl, startUrl);
+    const start = new URL(startUrl);
+    const combined = `${candidate.href}\n${candidate.pathname}`.toLowerCase();
+    if (candidate.protocol !== "https:") return false;
+    if (candidate.hostname.replace(/^www\./, "") !== start.hostname.replace(/^www\./, "")) return false;
+    if (canonicalUrl(candidate.href) === canonicalUrl(start.href)) return false;
+    if (/#(?:main|live-chat-access-point)$/i.test(candidate.href)) return false;
+    if (/\/(?:logout|sign-?out)\b/i.test(combined)) return false;
+    if (/\/(?:digital-claims|documents-and-forms|forms?)\b/i.test(combined)) return false;
+    if (/\/(?:messages|preferences|profile|id-cards?)\b/i.test(combined)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function targetGoalForLink(link = {}) {
+  const combined = `${link.text ?? ""}\n${link.href ?? ""}`.toLowerCase();
+  if (/\/benefits\/medical-plan-summary\b/i.test(combined)) {
+    return { goal: "benefits", score: 100 };
+  }
+  if (/(benefits?\b|coverage\b|medical-plan-summary\b|plan documents?\b|deductible\b|out[- ]of[- ]pocket\b)/i.test(combined)) {
+    return { goal: "benefits", score: 94 };
+  }
+  if (/\/spending\//i.test(combined)) {
+    return { goal: "spending", score: 98 };
+  }
+  if (/(spending\b|costs?\b|medical spending\b)/i.test(combined)) {
+    return { goal: "spending", score: 82 };
+  }
+  if (/\/manage\/claims\b/i.test(combined)) {
+    return { goal: "claims", score: 96 };
+  }
+  if (/(claims?\b|eob\b|explanation of benefits\b)/i.test(combined)) {
+    return { goal: "claims", score: 84 };
+  }
+  if (/\/manage\/prior-authorizations\b/i.test(combined)) {
+    return { goal: "prior_authorizations", score: 90 };
+  }
+  if (/(prior authorization\b|precert\b|authorizations?\b)/i.test(combined)) {
+    return { goal: "prior_authorizations", score: 76 };
+  }
+  return { goal: null, score: 0 };
+}
+
+function normalizeLink(link = {}, baseUrl) {
+  const href = link.href ?? link.url ?? link.sourceUrl ?? "";
+  if (!href) return null;
+  try {
+    const url = new URL(href, baseUrl);
+    return {
+      href: url.href,
+      text: compact(link.text ?? link.label ?? link.title ?? url.pathname),
+      source: link.source ?? "dom_link"
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function buildOfficialOpenClawReadOnlyNavigationPlan({ startUrl, links = [], maxPages = 4 } = {}) {
+  const normalized = links.map((link) => normalizeLink(link, startUrl)).filter(Boolean);
+  const seen = new Set();
+  const candidates = normalized
+    .filter((link) => safeReadOnlyPortalUrl(link.href, startUrl))
+    .map((link) => ({ ...link, ...targetGoalForLink(link) }))
+    .filter((link) => link.goal)
+    .sort((a, b) => b.score - a.score || a.href.localeCompare(b.href))
+    .filter((link) => {
+      const key = canonicalUrl(link.href);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const selected = [];
+  const selectedGoals = new Set();
+  for (const candidate of candidates) {
+    if (selectedGoals.has(candidate.goal)) continue;
+    selected.push({
+      url: candidate.href,
+      label: candidate.text,
+      goal: candidate.goal,
+      source: candidate.source,
+      score: candidate.score
+    });
+    selectedGoals.add(candidate.goal);
+    if (selected.length >= maxPages) break;
+  }
+  return {
+    startUrl,
+    origin: urlOrigin(startUrl),
+    status: selected.length ? "read_only_navigation_targets_selected" : "no_read_only_navigation_targets_found",
+    maxPages,
+    targets: selected,
+    rejectedCount: normalized.length - candidates.length
+  };
+}
+
+function normalizeTab(tab = {}) {
+  const id = tab.id ?? tab.targetId ?? tab.target_id ?? tab.tabId ?? tab.label ?? null;
+  return {
+    id,
+    targetId: tab.targetId ?? tab.target_id ?? tab.id ?? null,
+    tabId: tab.tabId ?? tab.tab_id ?? null,
+    label: tab.label ?? tab.name ?? null,
+    title: tab.title ?? tab.pageTitle ?? tab.label ?? null,
+    url: tab.url ?? tab.href ?? null,
+    type: tab.type ?? "page",
+    active: Boolean(tab.active ?? tab.focused ?? tab.current ?? tab.selected),
+    raw: tab
+  };
+}
+
+function chooseCurrentTab(tabs = []) {
+  return tabs.find((tab) => tab.active && tab.url) ?? tabs.find((tab) => tab.type === "page" && tab.url) ?? tabs.find((tab) => tab.url) ?? null;
+}
+
+async function listOfficialOpenClawTabs({ config = getOfficialOpenClawConfig() } = {}) {
+  const result = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "--json", "tabs"], {
+    config,
+    timeoutMs: 20000
+  });
+  if (!result.ok) {
+    return { ok: false, status: "official_openclaw_tabs_failed", tabs: [], currentTab: null, commandResult: result, error: result.error ?? result.stderr };
+  }
+  const parsed = parseJson(result.stdout, {});
+  const sourceTabs = Array.isArray(parsed) ? parsed : Array.isArray(parsed.tabs) ? parsed.tabs : [];
+  const tabs = sourceTabs.map(normalizeTab).filter((tab) => tab.type === "page" || tab.url);
+  return {
+    ok: true,
+    status: tabs.length ? "official_openclaw_tabs_available" : "official_openclaw_no_tabs",
+    tabs,
+    currentTab: chooseCurrentTab(tabs),
+    commandResult: { ok: result.ok, stderr: result.stderr }
+  };
+}
+
+async function focusOfficialOpenClawTab({ config, tab }) {
+  const target = tab?.id ?? tab?.targetId ?? tab?.tabId ?? tab?.label;
+  if (!target) return { ok: true, status: "official_openclaw_focus_skipped_no_tab_id" };
+  const result = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "focus", String(target)], {
+    config,
+    timeoutMs: 20000
+  });
+  return {
+    ok: result.ok,
+    status: result.ok ? "official_openclaw_current_tab_focused" : "official_openclaw_current_tab_focus_failed",
+    commandResult: result,
+    error: result.ok ? null : result.error ?? result.stderr
+  };
 }
 
 class CdpScreenshotClient {
@@ -138,6 +334,49 @@ class CdpScreenshotClient {
   }
 }
 
+async function readDomEvidenceViaCdp(client) {
+  try {
+    const result = await client.send("Runtime.evaluate", {
+      returnByValue: true,
+      expression: `(() => {
+        const compact = (value) => String(value || "").replace(/\\s+/g, " ").trim();
+        const links = Array.from(document.querySelectorAll("a[href]")).slice(0, 240).map((anchor) => ({
+          href: anchor.href,
+          text: compact(anchor.innerText || anchor.textContent || anchor.getAttribute("aria-label") || anchor.href),
+          source: "cdp_dom_link"
+        }));
+        const buttons = Array.from(document.querySelectorAll("button, [role='button']")).slice(0, 120).map((button) => ({
+          text: compact(button.innerText || button.textContent || button.getAttribute("aria-label") || ""),
+          disabled: Boolean(button.disabled || button.getAttribute("aria-disabled") === "true")
+        }));
+        return JSON.stringify({
+          title: document.title,
+          url: location.href,
+          links,
+          buttons
+        });
+      })()`
+    });
+    const parsed = parseJson(result?.result?.value, {});
+    return {
+      ok: true,
+      status: "official_openclaw_cdp_dom_evidence_captured",
+      title: parsed.title ?? null,
+      url: parsed.url ?? null,
+      links: Array.isArray(parsed.links) ? parsed.links : [],
+      buttons: Array.isArray(parsed.buttons) ? parsed.buttons : []
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "official_openclaw_cdp_dom_evidence_failed",
+      error: error.message,
+      links: [],
+      buttons: []
+    };
+  }
+}
+
 async function execOpenClaw(args, { config = getOfficialOpenClawConfig(), timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   try {
     const result = await execFileAsync(config.binary, ["--profile", config.profile, ...args], {
@@ -161,7 +400,7 @@ async function execOpenClaw(args, { config = getOfficialOpenClawConfig(), timeou
   }
 }
 
-async function captureScreenshotViaCdp({ config, targetUrl, browserRunId }) {
+async function captureScreenshotViaCdp({ config, targetUrl = null, browserRunId, preferredTab = null, artifactKey = null }) {
   const status = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "status"], { config, timeoutMs: 20000 });
   if (!status.ok) {
     return { ok: false, status: "official_openclaw_browser_status_failed", error: status.error ?? status.stderr, commandResult: status };
@@ -176,7 +415,12 @@ async function captureScreenshotViaCdp({ config, targetUrl, browserRunId }) {
   }
   const tabs = await tabsResponse.json();
   const target =
-    tabs.find((tab) => tab.type === "page" && hostMatches(tab.url, targetUrl)) ??
+    (preferredTab?.targetId || preferredTab?.id
+      ? tabs.find((tab) => tab.id === preferredTab.targetId || tab.id === preferredTab.id)
+      : null) ??
+    (targetUrl ? tabs.find((tab) => tab.type === "page" && canonicalUrl(tab.url) === canonicalUrl(targetUrl)) : null) ??
+    (targetUrl ? tabs.find((tab) => tab.type === "page" && hostMatches(tab.url, targetUrl)) : null) ??
+    (preferredTab?.url ? tabs.find((tab) => tab.type === "page" && tab.url === preferredTab.url) : null) ??
     tabs.find((tab) => tab.type === "page" && tab.webSocketDebuggerUrl);
   if (!target?.webSocketDebuggerUrl) {
     return { ok: false, status: "official_openclaw_cdp_target_missing", error: "No page target with a websocket debugger URL was available." };
@@ -184,12 +428,13 @@ async function captureScreenshotViaCdp({ config, targetUrl, browserRunId }) {
   const client = await new CdpScreenshotClient(target.webSocketDebuggerUrl).connect();
   try {
     await client.send("Page.enable");
+    const domEvidence = await readDomEvidenceViaCdp(client);
     const result = await client.send("Page.captureScreenshot", {
       format: "png",
       captureBeyondViewport: false,
       fromSurface: true
     });
-    const filePath = join(config.visualEvidenceDir, `${browserRunId}.png`);
+    const filePath = join(config.visualEvidenceDir, `${safeFileSlug(artifactKey ?? browserRunId)}.png`);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, Buffer.from(result.data, "base64"));
     return {
@@ -199,6 +444,9 @@ async function captureScreenshotViaCdp({ config, targetUrl, browserRunId }) {
       targetUrl: target.url,
       title: target.title ?? null,
       browser,
+      domEvidence,
+      links: domEvidence.links,
+      buttons: domEvidence.buttons,
       bytes: Buffer.byteLength(result.data, "base64")
     };
   } finally {
@@ -302,6 +550,7 @@ export async function checkOfficialOpenClawReadiness({ config = getOfficialOpenC
   const agentStatus = parseAgentList(agents.stdout, config.agentId);
   const skillStatus = parseSkillList(skills.stdout, config.skillKey);
   const browser = parseBrowserStatus(browserStatusResult.stdout);
+  const tabs = browser.running ? await listOfficialOpenClawTabs({ config }) : { ok: false, status: "official_openclaw_browser_not_running", tabs: [], currentTab: null };
   const checks = {
     configExists,
     workspaceSkillExists,
@@ -328,6 +577,24 @@ export async function checkOfficialOpenClawReadiness({ config = getOfficialOpenC
       agents: { ok: agents.ok, stderr: agents.stderr, error: agents.error },
       skills: { ok: skills.ok, stderr: skills.stderr, error: skills.error },
       browserStatus: { ok: browserStatusResult.ok, stderr: browserStatusResult.stderr, error: browserStatusResult.error }
+    },
+    tabs: {
+      status: tabs.status,
+      count: tabs.tabs.length,
+      currentTab: tabs.currentTab
+        ? {
+            id: tabs.currentTab.id,
+            title: tabs.currentTab.title,
+            url: tabs.currentTab.url,
+            active: tabs.currentTab.active
+          }
+        : null,
+      items: tabs.tabs.slice(0, 5).map((tab) => ({
+        id: tab.id,
+        title: tab.title,
+        url: tab.url,
+        active: tab.active
+      }))
     }
   };
 }
@@ -363,13 +630,131 @@ async function insertAction(store, browserRunId, { actionType, targetUrl, descri
   });
 }
 
+async function captureOpenClawVisiblePage({ store, browserRunId, config, targetUrl, currentTab = null, actionsTaken, pageLabel = "current_page" }) {
+  let snapshot = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    if (attempt > 1) await sleep(2000);
+    snapshot = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "snapshot", "--format", "aria", "--limit", "4000"], {
+      config
+    });
+    if (!snapshot.ok || snapshotReadyForVerification(snapshot.stdout)) break;
+  }
+  actionsTaken.push("openclaw_browser_snapshot_aria");
+  await insertAction(store, browserRunId, {
+    actionType: "openclaw_browser_snapshot_aria",
+    targetUrl,
+    description: `Captured a read-only accessibility-tree snapshot from the official OpenClaw browser for ${pageLabel}.`,
+    status: snapshot.ok ? "completed" : "failed"
+  });
+  if (!snapshot.ok) {
+    return {
+      ok: false,
+      status: "official_openclaw_snapshot_failed",
+      message: snapshot.error ?? snapshot.stderr,
+      commandResults: { snapshot }
+    };
+  }
+
+  const screenshot = await captureScreenshotViaCdp({
+    config,
+    targetUrl,
+    browserRunId,
+    preferredTab: currentTab,
+    artifactKey: `${browserRunId}-${pageLabel}`
+  });
+  actionsTaken.push("openclaw_browser_screenshot_cdp");
+  await insertAction(store, browserRunId, {
+    actionType: "openclaw_browser_screenshot_cdp",
+    targetUrl,
+    description: `Captured a read-only screenshot from the dedicated OpenClaw browser via CDP for ${pageLabel}.`,
+    status: screenshot.ok ? "completed" : "failed"
+  });
+  if (!screenshot.ok) {
+    return {
+      ok: false,
+      status: screenshot.status,
+      message: screenshot.error,
+      commandResults: { snapshot },
+      screenshot
+    };
+  }
+
+  const visualOcr = await runLocalOcr({ config, imagePath: screenshot.filePath });
+  actionsTaken.push("openclaw_browser_visual_ocr_local");
+  await insertAction(store, browserRunId, {
+    actionType: "openclaw_browser_visual_ocr_local",
+    targetUrl,
+    description: `Ran local OCR against the read-only OpenClaw browser screenshot for ${pageLabel}.`,
+    status: visualOcr.ok ? "completed" : "failed"
+  });
+  if (!visualOcr.ok) {
+    return {
+      ok: false,
+      status: visualOcr.status,
+      message: visualOcr.error,
+      commandResults: { snapshot },
+      screenshot,
+      visualOcr
+    };
+  }
+
+  const pageUrl = screenshot.domEvidence?.url ?? screenshot.targetUrl ?? targetUrl;
+  const pageTitle = screenshot.domEvidence?.title ?? screenshot.title ?? extractTitleFromAriaSnapshot(snapshot.stdout);
+  const page = {
+    title: pageTitle,
+    url: pageUrl,
+    text: [snapshot.stdout, "\n\n[Visual OCR]\n", visualOcr.text].join(""),
+    links: screenshot.links ?? []
+  };
+  const extraction = {
+    ...summarizeOpenClawSnapshot(page.text),
+    ariaTextPreview: compact(snapshot.stdout).slice(0, 4000),
+    visualOcrTextPreview: compact(visualOcr.text).slice(0, 4000),
+    visualOcrConfidence: visualOcr.confidence,
+    visualOcrWordCount: visualOcr.wordCount,
+    screenshotPath: screenshot.filePath
+  };
+  const artifact = {
+    id: createId("artifact"),
+    browser_run_id: browserRunId,
+    artifact_type: "official_openclaw_page_observation",
+    content: JSON.stringify({
+      title: page.title,
+      url: page.url,
+      pageLabel,
+      text: extraction.textPreview,
+      ariaText: extraction.ariaTextPreview,
+      visualOcrText: extraction.visualOcrTextPreview,
+      visualOcrConfidence: extraction.visualOcrConfidence,
+      screenshotPath: extraction.screenshotPath,
+      links: page.links
+    }),
+    created_at: nowIso()
+  };
+  await store.insert("extraction_artifacts", artifact);
+  return {
+    ok: true,
+    status: "official_openclaw_page_captured",
+    pageLabel,
+    page,
+    extraction,
+    artifact,
+    commandResults: { snapshot: { ok: snapshot.ok, stderr: snapshot.stderr } },
+    screenshot,
+    visualOcr
+  };
+}
+
 export async function runOfficialOpenClawReadOnlyObservation({
   store,
   session,
   portal,
   targetUrl = null,
   config = getOfficialOpenClawConfig(),
-  approval = null
+  approval = null,
+  useCurrentTab = false,
+  multiPage = false,
+  maxPages = 4
 }) {
   const requestedUrl = targetUrl ?? portal.portal_url;
   const startedAt = nowIso();
@@ -393,10 +778,13 @@ export async function runOfficialOpenClawReadOnlyObservation({
       runtime: "official_openclaw_cli",
       profile: config.profile,
       agentId: config.agentId,
-  browserProfile: config.browserProfile,
-  skillKey: config.skillKey,
-  ocrSkillKey: config.ocrSkillKey,
-  targetUrl: requestedUrl,
+      browserProfile: config.browserProfile,
+      skillKey: config.skillKey,
+      ocrSkillKey: config.ocrSkillKey,
+      targetUrl: requestedUrl,
+      useCurrentTab,
+      multiPage,
+      maxPages,
       allowedAction: "read_only_observation",
       approvalGateId: approval?.approvalGateId ?? null
     },
@@ -415,6 +803,8 @@ export async function runOfficialOpenClawReadOnlyObservation({
     browserProfile: config.browserProfile,
     skillKey: config.skillKey,
     targetUrl: requestedUrl,
+    multiPage,
+    maxPages,
     approvalGateId: approval?.approvalGateId ?? null,
     actionsTaken
   });
@@ -449,57 +839,88 @@ export async function runOfficialOpenClawReadOnlyObservation({
     };
   }
 
-  const opened = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "open", requestedUrl], { config });
-  actionsTaken.push("openclaw_browser_open_url");
-  const openedUrl = extractOpenedUrl(opened.stdout, requestedUrl);
-  await insertAction(store, browserRun.id, {
-    actionType: "openclaw_browser_open_url",
-    targetUrl: requestedUrl,
-    description: "Opened the approved URL in the dedicated official OpenClaw browser profile.",
-    status: opened.ok ? "completed" : "failed"
-  });
-  if (!opened.ok) {
-    await store.update("browser_runs", { status: "official_openclaw_open_url_failed", updated_at: nowIso() }, { id: browserRun.id });
-    await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
-      browserRunId: browserRun.id,
-      status: "official_openclaw_open_url_failed",
-      command: opened.command,
-      stderr: opened.stderr,
-      error: opened.error,
-      actionsTaken
+  let opened = null;
+  let currentTab = null;
+  let focus = null;
+  let openedUrl = requestedUrl;
+  if (useCurrentTab) {
+    const tabs = await listOfficialOpenClawTabs({ config });
+    currentTab = tabs.currentTab;
+    actionsTaken.push("openclaw_browser_use_current_tab");
+    await insertAction(store, browserRun.id, {
+      actionType: "openclaw_browser_use_current_tab",
+      targetUrl: currentTab?.url ?? requestedUrl,
+      description: "Used the already-authenticated current tab in the dedicated official OpenClaw browser profile.",
+      status: currentTab?.url ? "completed" : "failed"
     });
-    return {
-      browserRunId: browserRun.id,
-      connected: false,
-      status: "official_openclaw_open_url_failed",
-      message: opened.error ?? opened.stderr,
-      page: null,
-      extraction: null,
-      actionsTaken,
-      officialOpenClaw: { config, commandResults: { start, opened } }
-    };
+    if (!currentTab?.url) {
+      await store.update("browser_runs", { status: "official_openclaw_current_tab_missing", updated_at: nowIso() }, { id: browserRun.id });
+      await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
+        browserRunId: browserRun.id,
+        status: "official_openclaw_current_tab_missing",
+        message: "No current OpenClaw browser tab is available. The user must manually sign in and leave the member portal tab open.",
+        actionsTaken
+      });
+      return {
+        browserRunId: browserRun.id,
+        connected: false,
+        status: "official_openclaw_current_tab_missing",
+        message: "No current OpenClaw browser tab is available. The user must manually sign in and leave the member portal tab open.",
+        page: null,
+        extraction: null,
+        actionsTaken,
+        officialOpenClaw: { config, commandResults: { start }, tabs }
+      };
+    }
+    focus = await focusOfficialOpenClawTab({ config, tab: currentTab });
+    openedUrl = currentTab.url;
+  } else {
+    opened = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "open", requestedUrl], { config });
+    actionsTaken.push("openclaw_browser_open_url");
+    openedUrl = extractOpenedUrl(opened.stdout, requestedUrl);
+    await insertAction(store, browserRun.id, {
+      actionType: "openclaw_browser_open_url",
+      targetUrl: requestedUrl,
+      description: "Opened the approved URL in the dedicated official OpenClaw browser profile.",
+      status: opened.ok ? "completed" : "failed"
+    });
+    if (!opened.ok) {
+      await store.update("browser_runs", { status: "official_openclaw_open_url_failed", updated_at: nowIso() }, { id: browserRun.id });
+      await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
+        browserRunId: browserRun.id,
+        status: "official_openclaw_open_url_failed",
+        command: opened.command,
+        stderr: opened.stderr,
+        error: opened.error,
+        actionsTaken
+      });
+      return {
+        browserRunId: browserRun.id,
+        connected: false,
+        status: "official_openclaw_open_url_failed",
+        message: opened.error ?? opened.stderr,
+        page: null,
+        extraction: null,
+        actionsTaken,
+        officialOpenClaw: { config, commandResults: { start, opened } }
+      };
+    }
   }
 
-  let snapshot = null;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    if (attempt > 1) await sleep(2000);
-    snapshot = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "snapshot", "--format", "aria", "--limit", "4000"], {
-      config
-    });
-    if (!snapshot.ok || snapshotReadyForVerification(snapshot.stdout)) break;
-  }
-  actionsTaken.push("openclaw_browser_snapshot_aria");
-  await insertAction(store, browserRun.id, {
-    actionType: "openclaw_browser_snapshot_aria",
+  const firstObservation = await captureOpenClawVisiblePage({
+    store,
+    browserRunId: browserRun.id,
+    config,
     targetUrl: openedUrl,
-    description: "Captured a read-only accessibility-tree snapshot from the official OpenClaw browser.",
-    status: snapshot.ok ? "completed" : "failed"
+    currentTab,
+    actionsTaken,
+    pageLabel: "start_page"
   });
-  if (!snapshot.ok) {
+  if (!firstObservation.ok) {
     await store.update(
       "browser_runs",
       {
-        status: "official_openclaw_snapshot_failed",
+        status: firstObservation.status,
         current_url: openedUrl,
         updated_at: nowIso()
       },
@@ -507,174 +928,168 @@ export async function runOfficialOpenClawReadOnlyObservation({
     );
     await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
       browserRunId: browserRun.id,
-      status: "official_openclaw_snapshot_failed",
-      command: snapshot.command,
-      stderr: snapshot.stderr,
-      error: snapshot.error,
+      status: firstObservation.status,
+      error: firstObservation.message,
       actionsTaken
     });
     return {
       browserRunId: browserRun.id,
       connected: false,
-      status: "official_openclaw_snapshot_failed",
-      message: snapshot.error ?? snapshot.stderr,
+      status: firstObservation.status,
+      message: firstObservation.message,
       page: null,
       extraction: null,
       actionsTaken,
-      officialOpenClaw: { config, commandResults: { start, opened, snapshot } }
+      officialOpenClaw: { config, commandResults: { start, opened, ...firstObservation.commandResults }, screenshot: firstObservation.screenshot }
     };
   }
 
-  const screenshot = await captureScreenshotViaCdp({ config, targetUrl: openedUrl, browserRunId: browserRun.id });
-  actionsTaken.push("openclaw_browser_screenshot_cdp");
-  await insertAction(store, browserRun.id, {
-    actionType: "openclaw_browser_screenshot_cdp",
-    targetUrl: openedUrl,
-    description: "Captured a read-only screenshot from the dedicated OpenClaw browser via CDP for visual/OCR verification.",
-    status: screenshot.ok ? "completed" : "failed"
-  });
-  if (!screenshot.ok) {
-    await store.update(
-      "browser_runs",
-      {
-        status: "official_openclaw_screenshot_failed",
-        current_url: openedUrl,
-        updated_at: nowIso()
-      },
-      { id: browserRun.id }
-    );
-    await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
-      browserRunId: browserRun.id,
-      status: screenshot.status,
-      error: screenshot.error,
-      actionsTaken
+  const pageObservations = [firstObservation];
+  const pageBlockers = [];
+  const navigationPlan = multiPage
+    ? buildOfficialOpenClawReadOnlyNavigationPlan({
+        startUrl: firstObservation.page.url,
+        links: firstObservation.page.links,
+        maxPages: Math.max(0, Number(maxPages) - 1)
+      })
+    : {
+        startUrl: firstObservation.page.url,
+        origin: urlOrigin(firstObservation.page.url),
+        status: "single_page_observation",
+        maxPages: 1,
+        targets: [],
+        rejectedCount: 0
+      };
+
+  for (const target of navigationPlan.targets) {
+    const navigation = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "open", target.url], { config });
+    actionsTaken.push("openclaw_browser_open_internal_link");
+    await insertAction(store, browserRun.id, {
+      actionType: "openclaw_browser_open_internal_link",
+      targetUrl: target.url,
+      description: `Opened same-site read-only portal target selected by OpenClaw worker planning: ${target.goal}.`,
+      status: navigation.ok ? "completed" : "failed"
     });
-    return {
+    if (!navigation.ok) {
+      pageBlockers.push({
+        status: "official_openclaw_internal_navigation_failed",
+        target,
+        message: navigation.error ?? navigation.stderr
+      });
+      continue;
+    }
+    await sleep(1500);
+    const nextObservation = await captureOpenClawVisiblePage({
+      store,
       browserRunId: browserRun.id,
-      connected: false,
-      status: screenshot.status,
-      message: screenshot.error,
-      page: null,
-      extraction: null,
+      config,
+      targetUrl: target.url,
       actionsTaken,
-      officialOpenClaw: { config, commandResults: { start, opened, snapshot }, screenshot }
-    };
-  }
-
-  const visualOcr = await runLocalOcr({ config, imagePath: screenshot.filePath });
-  actionsTaken.push("openclaw_browser_visual_ocr_local");
-  await insertAction(store, browserRun.id, {
-    actionType: "openclaw_browser_visual_ocr_local",
-    targetUrl: openedUrl,
-    description: "Ran local OCR against the read-only OpenClaw browser screenshot.",
-    status: visualOcr.ok ? "completed" : "failed"
-  });
-  if (!visualOcr.ok) {
-    await store.update(
-      "browser_runs",
-      {
-        status: "official_openclaw_visual_ocr_failed",
-        current_url: openedUrl,
-        updated_at: nowIso()
-      },
-      { id: browserRun.id }
-    );
-    await audit(store, session.id, "official_openclaw_read_only_observation_blocked", {
-      browserRunId: browserRun.id,
-      status: visualOcr.status,
-      error: visualOcr.error,
-      actionsTaken
+      pageLabel: target.goal
     });
-    return {
-      browserRunId: browserRun.id,
-      connected: false,
-      status: visualOcr.status,
-      message: visualOcr.error,
-      page: null,
-      extraction: null,
-      actionsTaken,
-      officialOpenClaw: { config, commandResults: { start, opened, snapshot }, screenshot, visualOcr }
-    };
+    if (nextObservation.ok) {
+      pageObservations.push(nextObservation);
+    } else {
+      pageBlockers.push({
+        status: nextObservation.status,
+        target,
+        message: nextObservation.message
+      });
+    }
   }
 
-  const page = {
-    title: extractTitleFromAriaSnapshot(snapshot.stdout),
-    url: openedUrl,
-    text: [snapshot.stdout, "\n\n[Visual OCR]\n", visualOcr.text].join(""),
-    links: []
-  };
+  const pages = pageObservations.map((observation) => observation.page);
+  const aggregateText = pageObservations
+    .map((observation) => `[${observation.pageLabel}] ${observation.page.title}\n${observation.page.url}\n${observation.page.text}`)
+    .join("\n\n---\n\n");
+  const page = pages[0];
   const extraction = {
-    ...summarizeOpenClawSnapshot(page.text),
-    ariaTextPreview: compact(snapshot.stdout).slice(0, 4000),
-    visualOcrTextPreview: compact(visualOcr.text).slice(0, 4000),
-    visualOcrConfidence: visualOcr.confidence,
-    visualOcrWordCount: visualOcr.wordCount,
-    screenshotPath: screenshot.filePath
+    ...summarizeOpenClawSnapshot(aggregateText),
+    ariaTextPreview: pageObservations.map((item) => `[${item.pageLabel}] ${item.extraction.ariaTextPreview}`).join("\n\n").slice(0, 4000),
+    visualOcrTextPreview: pageObservations
+      .map((item) => `[${item.pageLabel}] ${item.extraction.visualOcrTextPreview}`)
+      .join("\n\n")
+      .slice(0, 4000),
+    visualOcrConfidence: firstObservation.visualOcr.confidence,
+    visualOcrWordCount: pageObservations.reduce((sum, item) => sum + (item.visualOcr.wordCount ?? 0), 0),
+    screenshotPath: firstObservation.screenshot.filePath,
+    pageCount: pageObservations.length,
+    pageSummaries: pageObservations.map((item) => ({
+      pageLabel: item.pageLabel,
+      title: item.page.title,
+      url: item.page.url,
+      signals: item.extraction.signals,
+      artifactId: item.artifact.id,
+      visualOcrConfidence: item.visualOcr.confidence,
+      visualOcrWordCount: item.visualOcr.wordCount
+    })),
+    navigationPlan
   };
   await store.update(
     "browser_runs",
     {
-      status: "official_openclaw_snapshot_captured",
-      current_url: page.url,
+      status: pageObservations.length > 1 ? "official_openclaw_multi_page_snapshot_captured" : "official_openclaw_snapshot_captured",
+      current_url: pages.at(-1)?.url ?? page.url,
       page_title: page.title,
       updated_at: nowIso()
     },
     { id: browserRun.id }
   );
-  await store.insert("extraction_artifacts", {
-    id: createId("artifact"),
-    browser_run_id: browserRun.id,
-    artifact_type: "official_openclaw_aria_snapshot",
-    content: JSON.stringify({
-      title: page.title,
-      url: page.url,
-      text: extraction.textPreview,
-      ariaText: extraction.ariaTextPreview,
-      visualOcrText: extraction.visualOcrTextPreview,
-      visualOcrConfidence: extraction.visualOcrConfidence,
-      screenshotPath: extraction.screenshotPath,
-      links: []
-    }),
-    created_at: nowIso()
-  });
   await audit(store, session.id, "official_openclaw_read_only_observation_snapshot_captured", {
     browserRunId: browserRun.id,
     title: page.title,
     url: page.url,
+    pageCount: pageObservations.length,
+    navigationPlan,
+    pageBlockers,
     profile: config.profile,
     browserProfile: config.browserProfile,
     skillKey: config.skillKey,
     ocrSkillKey: config.ocrSkillKey,
     signals: extraction.signals,
     visualOcr: {
-      status: visualOcr.status,
-      confidence: visualOcr.confidence,
-      wordCount: visualOcr.wordCount,
-      screenshotPath: screenshot.filePath
+      status: firstObservation.visualOcr.status,
+      confidence: firstObservation.visualOcr.confidence,
+      wordCount: firstObservation.visualOcr.wordCount,
+      screenshotPath: firstObservation.screenshot.filePath
     },
     actionsTaken
   });
   return {
     browserRunId: browserRun.id,
     connected: true,
-    status: "official_openclaw_snapshot_captured",
+    status: pageObservations.length > 1 ? "official_openclaw_multi_page_snapshot_captured" : "official_openclaw_snapshot_captured",
     page,
+    pages,
     extraction,
     actionsTaken,
     officialOpenClaw: {
       config,
       commandResults: {
         start: { ok: start.ok, stderr: start.stderr },
-        opened: { ok: opened.ok, stdout: opened.stdout, stderr: opened.stderr },
-        snapshot: { ok: snapshot.ok, stderr: snapshot.stderr }
+        opened: opened ? { ok: opened.ok, stdout: opened.stdout, stderr: opened.stderr } : null,
+        currentTab: currentTab ? { id: currentTab.id, title: currentTab.title, url: currentTab.url, active: currentTab.active } : null,
+        focus: focus ? { ok: focus.ok, status: focus.status, error: focus.error } : null,
+        snapshot: firstObservation.commandResults.snapshot
       },
-      screenshot,
+      screenshot: firstObservation.screenshot,
       visualOcr: {
-        status: visualOcr.status,
-        confidence: visualOcr.confidence,
-        wordCount: visualOcr.wordCount,
-        imagePath: visualOcr.imagePath
-      }
+        status: firstObservation.visualOcr.status,
+        confidence: firstObservation.visualOcr.confidence,
+        wordCount: firstObservation.visualOcr.wordCount,
+        imagePath: firstObservation.visualOcr.imagePath
+      },
+      navigationPlan,
+      pageBlockers,
+      pageObservations: pageObservations.map((item) => ({
+        pageLabel: item.pageLabel,
+        title: item.page.title,
+        url: item.page.url,
+        artifactId: item.artifact.id,
+        screenshotPath: item.screenshot.filePath,
+        visualOcrConfidence: item.visualOcr.confidence,
+        visualOcrWordCount: item.visualOcr.wordCount
+      }))
     }
   };
 }

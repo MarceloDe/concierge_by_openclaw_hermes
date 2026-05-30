@@ -21,10 +21,15 @@ const productAuthStatus = document.querySelector("#productAuthStatus");
 const productAuth = document.querySelector("#productAuth");
 const requireLivePortalProof = document.querySelector("#requireLivePortalProof");
 const useOfficialOpenClawWorker = document.querySelector("#useOfficialOpenClawWorker");
+const officialOpenClawCurrentTab = document.querySelector("#officialOpenClawCurrentTab");
+const officialOpenClawMultiPage = document.querySelector("#officialOpenClawMultiPage");
 const chatJourney = document.querySelector("#chatJourney");
 const runtimeTimeline = document.querySelector("#runtimeTimeline");
 const portalReady = document.querySelector("#portalReady");
 const loadRuntimeEventsButton = document.querySelector("#loadRuntimeEvents");
+const answerPanel = document.querySelector("#answerPanel");
+const resetMvpJourneyButton = document.querySelector("#resetMvpJourney");
+const replayMvpBenefitsButton = document.querySelector("#replayMvpBenefits");
 
 let latestChatRun = null;
 let latestUserMessage = "";
@@ -32,6 +37,8 @@ let runtimeEvents = [];
 let runtimeEventSource = null;
 let runtimeStreamSessionId = null;
 let productSignedIn = false;
+
+const MVP_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 
 function value(id) {
   return document.querySelector(`#${id}`).value.trim();
@@ -69,13 +76,47 @@ function sourcePointerLabel(pointer) {
   return [pointer.table, pointer.id].filter(Boolean).join("/") || pointer.sourceUrl || "source pointer";
 }
 
+function uniqueSourcePointers(state = {}) {
+  const pointers = [...(state.source_pointers ?? []), ...(state.evidence_observation?.sourcePointers ?? [])];
+  const seen = new Set();
+  return pointers.filter((pointer) => {
+    const key = sourcePointerLabel(pointer);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourcePointerCount(state = {}) {
+  return (state.source_pointers?.length ?? 0) + (state.evidence_observation?.sourcePointers?.length ?? 0);
+}
+
+function hasCapturedPortalEvidence(state = {}) {
+  const evidence = state.evidence_observation ?? {};
+  return (
+    sourcePointerCount(state) > 0 ||
+    [
+      "captured_visible_page",
+      "captured_official_openclaw_read_only_observation",
+      "captured_official_openclaw_multi_page_read_only_observation",
+      "captured_multi_page_scan"
+    ].includes(evidence.status)
+  );
+}
+
+function isSatisfiedByCapturedPortalEvidence(line) {
+  return /portal_accounts|portal account|portal evidence|authenticated portal|insurance portal/i.test(line);
+}
+
 function missingInfoLines(state) {
-  return [
+  const lines = [
     ...(state.structured_intent?.missingEvidence ?? []).map((item) => `Missing evidence: ${item}`),
     ...(state.workflow_route?.missingUserFields ?? []).map((item) => `Missing user field: ${item}`),
     ...(state.workflow_route?.missingDataPointers ?? []).map((item) => `Missing data pointer: ${item}`),
     ...(state.workflow_route?.disabledTools ?? []).map((item) => `Tool disabled: ${item}`)
   ];
+  if (!hasCapturedPortalEvidence(state)) return lines;
+  return lines.filter((line) => !isSatisfiedByCapturedPortalEvidence(line));
 }
 
 function outboundPayloadAuditSummary(result) {
@@ -99,6 +140,14 @@ function outboundPayloadAuditSummary(result) {
     .join(" · ");
 }
 
+function pendingReadOnlyTaskId(result) {
+  const state = result?.graphRun?.state ?? {};
+  const task = state.openclaw_skill_proposal?.task ?? {};
+  if (!task.id || hasCapturedPortalEvidence(state)) return "";
+  if (state.approval_resume?.status === "approval_consumed") return "";
+  return task.id;
+}
+
 function currentSessionId() {
   return value("sessionId") || latestChatRun?.session?.id || "";
 }
@@ -106,6 +155,15 @@ function currentSessionId() {
 function journeyClass(ok, waiting = false) {
   if (ok) return "done";
   return waiting ? "waiting" : "";
+}
+
+function renderOperatorProofDetails(title, bodyHtml, options = {}) {
+  return `
+    <details class="chat-proof-card operator-proof ${escapeHtml(options.className ?? "")}" ${options.open ? "open" : ""}>
+      <summary>${escapeHtml(title)}</summary>
+      ${bodyHtml}
+    </details>
+  `;
 }
 
 function renderJourneyState(result = null) {
@@ -157,6 +215,102 @@ function renderJourneyState(result = null) {
         )
         .join("")}
     </div>
+  `;
+}
+
+function renderAnswerPanel(result = null, options = {}) {
+  if (!answerPanel) return;
+  if (!result) {
+    answerPanel.className = "answer-panel empty";
+    answerPanel.innerHTML = `
+      <div class="answer-panel-header">
+        <h3>Current Answer</h3>
+        <span class="answer-status">${escapeHtml(options.status ?? "ready")}</span>
+      </div>
+      <p class="answer-body">${escapeHtml(
+        options.body ??
+          "No benefits answer yet. Start a real local session, then run the Benefits MVP replay or ask in chat."
+      )}</p>
+      <div class="answer-meta">
+        <div>
+          <strong>Session</strong>
+          <span>${escapeHtml(currentSessionId() || "none")}</span>
+        </div>
+        <div>
+          <strong>Evidence</strong>
+          <span>none</span>
+        </div>
+        <div>
+          <strong>Worker</strong>
+          <span>not requested</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  const state = result.graphRun?.state ?? {};
+  const evidence = state.evidence_observation ?? {};
+  const pointers = uniqueSourcePointers(state);
+  const balances = result.trace?.coverageBalances ?? [];
+  const approvalNeeded = pendingReadOnlyTaskId(result);
+  const finalText = result.finalResponse ?? "The workflow completed without a final answer.";
+  const answerStatus =
+    pointers.length > 0
+      ? "sourced answer"
+      : approvalNeeded
+        ? "approval needed"
+        : evidence.status?.startsWith("blocked")
+          ? "blocked"
+          : "workflow result";
+  const workerOutcome =
+    pointers.length > 0
+      ? "completed_with_sourced_result"
+      : evidence.status === "missing_approval_token"
+        ? "approval required"
+        : evidence.status ?? "not requested";
+  answerPanel.className = "answer-panel";
+  answerPanel.innerHTML = `
+    <div class="answer-panel-header">
+      <h3>Current Answer</h3>
+      <span class="answer-status">${escapeHtml(answerStatus)}</span>
+    </div>
+    <p class="answer-body">${escapeHtml(finalText)}</p>
+    <div class="answer-meta">
+      <div>
+        <strong>Workflow</strong>
+        <span>${escapeHtml(state.workflow ?? "unknown")}</span>
+      </div>
+      <div>
+        <strong>Source Pointers</strong>
+        <span>${escapeHtml(pointers.map(sourcePointerLabel).join(" · ") || "none")}</span>
+      </div>
+      <div>
+        <strong>Worker</strong>
+        <span>${escapeHtml(workerOutcome)} · pages ${escapeHtml(evidence.verifiedPageCount ?? 0)}/${escapeHtml(evidence.pageCount ?? 0)} · actions ${escapeHtml((evidence.actionsTaken ?? []).join(", ") || "none")}</span>
+      </div>
+      <div>
+        <strong>Benefits</strong>
+        <span>${escapeHtml(structuredBenefitSummary(balances))}</span>
+      </div>
+      <div>
+        <strong>GPT Decision</strong>
+        <span>${escapeHtml(state.llm_orchestration_decision?.mode ?? "not run")} · ${escapeHtml(
+          state.llm_orchestration_decision?.usedByRouter ? "used" : "not used"
+        )}</span>
+      </div>
+      <div>
+        <strong>Trace</strong>
+        <span>${escapeHtml(state.graph_trace_id ?? result.session?.langgraph_thread_id ?? "none")}</span>
+      </div>
+    </div>
+    ${
+      approvalNeeded
+        ? `<div class="button-row">
+            <button type="button" data-answer-approve-readonly="${escapeHtml(approvalNeeded)}">Approve Read-Only Observation</button>
+            <button type="button" data-answer-worker-followup="${escapeHtml(approvalNeeded)}">Leave As Async Follow-Up</button>
+          </div>`
+        : ""
+    }
   `;
 }
 
@@ -314,15 +468,11 @@ function renderChatProof(result) {
   const productMemoryRecall = state.product_memory_recall ?? result.graphRun?.productMemory?.recall ?? {};
   const productMemoryRetain = state.product_memory_retain ?? result.graphRun?.productMemory?.retain ?? {};
   const missing = missingInfoLines(state);
-  const sourcePointers = state.source_pointers ?? [];
-  const workerHasCapturedEvidence =
-    ["captured_visible_page", "captured_official_openclaw_read_only_observation", "captured_multi_page_scan"].includes(
-      evidence.status
-    ) || sourcePointers.length > 0;
-  const canRequestWorkerAction = proposalTask.id && !workerHasCapturedEvidence;
-  return `
-    <article class="chat-proof-card">
-      <h3>Workflow Proof</h3>
+  const sourcePointers = uniqueSourcePointers(state);
+  const canRequestWorkerAction = proposalTask.id && !hasCapturedPortalEvidence(state);
+  return renderOperatorProofDetails(
+    "Workflow Proof",
+    `
       <dl>
         <dt>Workflow</dt>
         <dd>${escapeHtml(state.workflow ?? "unknown")} · ${escapeHtml(state.route_reason ?? "unknown")}</dd>
@@ -357,8 +507,9 @@ function renderChatProof(result) {
             </div>`
           : ""
       }
-    </article>
-  `;
+    `,
+    { open: !hasCapturedPortalEvidence(state) }
+  );
 }
 
 function renderMissingInfoPrompt(result) {
@@ -406,6 +557,7 @@ function evidenceChannelSummary(channels = []) {
   return channels
     .map((channel) => {
       const parts = [channel.channel, channel.status];
+      if (channel.pageCount !== null && channel.pageCount !== undefined) parts.push(`${channel.pageCount} pages`);
       if (channel.confidence !== null && channel.confidence !== undefined) parts.push(`confidence ${channel.confidence}`);
       if (channel.wordCount !== null && channel.wordCount !== undefined) parts.push(`${channel.wordCount} words`);
       return parts.filter(Boolean).join(" · ");
@@ -419,7 +571,9 @@ function renderWorkerContinuationCard(continuation) {
   const terminalNote =
     continuation.status === "cancelled"
       ? "Cancelled follow-up is closed. Actions taken remain none."
-      : "This follow-up is closed. Actions taken are shown above.";
+      : continuation.status === "completed"
+        ? "Completed follow-up is closed. Source pointers and worker actions are shown in Worker Result."
+        : "This follow-up is closed. Actions taken are shown in Worker Result.";
   return `
     <article class="chat-proof-card worker-continuation-card" data-continuation-card="${escapeHtml(continuation.id)}">
       <h3>Async Worker Follow-Up</h3>
@@ -454,12 +608,35 @@ function renderWorkerContinuationCard(continuation) {
   `;
 }
 
+function workerContinuationFromResult(result) {
+  const state = result?.graphRun?.state ?? {};
+  return state.evidence_observation?.workerContinuation ?? state.worker_continuation?.continuation ?? null;
+}
+
+function upsertWorkerContinuationCard(continuation) {
+  if (!continuation?.id) return null;
+  const existing = [...messages.querySelectorAll("[data-continuation-card]")].find(
+    (node) => node.dataset.continuationCard === continuation.id
+  );
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = renderWorkerContinuationCard(continuation).trim();
+  const next = wrapper.firstElementChild;
+  if (!next) return null;
+  if (existing) {
+    existing.replaceWith(next);
+    messages.scrollTop = messages.scrollHeight;
+    return next;
+  }
+  return addMessage("assistant", renderWorkerContinuationCard(continuation), { html: true });
+}
+
 function renderWorkerOutcomeCard(result) {
   const state = result.graphRun?.state ?? {};
   const evidence = state.evidence_observation ?? {};
-  const sourcePointers = state.source_pointers ?? [];
+  const sourcePointers = uniqueSourcePointers(state);
   const balances = result.trace?.coverageBalances ?? [];
   const reason = friendlyWorkerBlocker(evidence);
+  const navigationTargets = evidence.navigationPlan?.targets ?? [];
   const terminalOutcome =
     sourcePointers.length > 0
       ? "completed_with_sourced_result"
@@ -468,9 +645,9 @@ function renderWorkerOutcomeCard(result) {
         : evidence.status?.startsWith("blocked")
           ? "not_possible_insurance_or_portal_block"
           : evidence.status ?? "pending";
-  return `
-    <article class="chat-proof-card">
-      <h3>Worker Result</h3>
+  return renderOperatorProofDetails(
+    "Worker Result",
+    `
       <dl>
         <dt>Outcome</dt>
         <dd>${escapeHtml(terminalOutcome)}</dd>
@@ -482,13 +659,18 @@ function renderWorkerOutcomeCard(result) {
         <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
         <dt>Structured benefits</dt>
         <dd>${escapeHtml(structuredBenefitSummary(balances))}</dd>
+        <dt>Pages</dt>
+        <dd>${escapeHtml(`${evidence.verifiedPageCount ?? 0}/${evidence.pageCount ?? 0} verified${evidence.blockedPageCount ? ` · ${evidence.blockedPageCount} blocked` : ""}`)}</dd>
+        <dt>Navigation plan</dt>
+        <dd>${escapeHtml(navigationTargets.map((target) => `${target.goal}:${target.label}`).join(" · ") || "single page")}</dd>
         <dt>Evidence channels</dt>
         <dd>${escapeHtml(evidenceChannelSummary(evidence.evidenceChannels ?? []))}</dd>
         <dt>Blocker</dt>
         <dd>${escapeHtml(sourcePointers.length ? "none" : reason)}</dd>
       </dl>
-    </article>
-  `;
+    `,
+    { open: sourcePointers.length === 0 }
+  );
 }
 
 function setBusy(button, busyText = "Working...") {
@@ -811,6 +993,7 @@ function renderSkillProposal(payload) {
 function renderOfficialOpenClawStatus(payload) {
   const checks = payload.checks ?? {};
   const config = payload.config ?? {};
+  const currentTab = payload.tabs?.currentTab ?? null;
   skillStatus.textContent = `${payload.status ?? "unknown"} · ${payload.ready ? "ready" : "attention"}`;
   skills.innerHTML = `
     <article class="skill-card proposal-card">
@@ -825,6 +1008,10 @@ function renderOfficialOpenClawStatus(payload) {
         <dd>${escapeHtml(config.agentId ?? "unknown")}</dd>
         <dt>Browser profile</dt>
         <dd>${escapeHtml(payload.browser?.profile ?? config.browserProfile ?? "unknown")} · running ${escapeHtml(payload.browser?.running ?? false)}</dd>
+        <dt>Current tab</dt>
+        <dd>${escapeHtml(currentTab ? `${currentTab.title ?? "untitled"} · ${currentTab.url ?? "no url"}` : "none open")}</dd>
+        <dt>Open tabs</dt>
+        <dd>${escapeHtml(payload.tabs?.count ?? 0)}</dd>
         <dt>Skill</dt>
         <dd>${escapeHtml(config.skillKey ?? "unknown")} · ready ${escapeHtml(checks.skillReady ?? false)}</dd>
         <dt>Personal skills</dt>
@@ -1172,6 +1359,8 @@ async function runPhase4Proof() {
       approvalTaskId: taskId,
       requireLivePortalProof: true,
       useOfficialOpenClawWorker: Boolean(useOfficialOpenClawWorker.checked),
+      officialOpenClawUseCurrentTab: Boolean(officialOpenClawCurrentTab.checked),
+      officialOpenClawMultiPage: Boolean(officialOpenClawMultiPage.checked),
       executeEvidenceObservation: true,
       useLiveModel: false
     })
@@ -1187,11 +1376,60 @@ function markPortalReady() {
   if (!requireSignedInBeforeWorkflow()) return;
   requireLivePortalProof.checked = true;
   useOfficialOpenClawWorker.checked = true;
+  officialOpenClawCurrentTab.checked = true;
+  officialOpenClawMultiPage.checked = true;
   addMessage(
     "assistant",
-    "Portal readiness noted. I will still ask for read-only approval before any OpenClaw observation. You handle all login, passwords, passkeys, SSN, and 2FA in the portal."
+    "Portal readiness noted. I will use the current dedicated OpenClaw tab and multi-page read-only worker after approval. You handle all login, passwords, passkeys, SSN, and 2FA in the portal."
   );
   renderJourneyState(latestChatRun);
+  renderAnswerPanel(latestChatRun);
+}
+
+function closeRuntimeEventStream() {
+  if (runtimeEventSource) runtimeEventSource.close();
+  runtimeEventSource = null;
+  runtimeStreamSessionId = null;
+}
+
+function resetMvpJourneySurface(options = {}) {
+  closeRuntimeEventStream();
+  latestChatRun = null;
+  latestUserMessage = "";
+  runtimeEvents = [];
+  productSignedIn = false;
+  document.querySelector("#sessionId").value = "";
+  document.querySelector("#resumeLatestSession").checked = false;
+  requireLivePortalProof.checked = false;
+  useOfficialOpenClawWorker.checked = false;
+  officialOpenClawCurrentTab.checked = false;
+  officialOpenClawMultiPage.checked = false;
+  productAuthStatus.textContent = "Not signed in";
+  sessionStatus.textContent = "No active session";
+  reviewStatus.textContent = "No extraction yet";
+  review.innerHTML = "";
+  messages.innerHTML = "";
+  renderJourneyState();
+  renderRuntimeTimeline([], "reset");
+  renderAnswerPanel(null, {
+    status: "reset",
+    body: "Clean local journey surface is ready. Replay starts a new real planned-user session before running Benefits."
+  });
+  trace.textContent = "MVP journey surface reset. Local database records were not deleted.";
+  if (options.announce !== false) {
+    addMessage(
+      "assistant",
+      "MVP journey reset. The next replay will create a fresh local session and route the Benefits question through LangGraph."
+    );
+  }
+}
+
+async function replayMvpBenefitsJourney() {
+  resetMvpJourneySurface({ announce: false });
+  await productAuthenticate();
+  document.querySelector("#message").value = MVP_BENEFITS_MESSAGE;
+  addMessage("user", MVP_BENEFITS_MESSAGE);
+  return runProductChat(MVP_BENEFITS_MESSAGE);
 }
 
 async function productAuthenticate() {
@@ -1204,6 +1442,10 @@ async function productAuthenticate() {
   productAuthStatus.textContent = `${result.auth?.status ?? "signed in"} · ${result.session?.id ?? "no session"}`;
   sessionStatus.textContent = `${result.session?.current_step ?? "created"} · v${result.session?.state_version ?? 0}`;
   renderJourneyState();
+  renderAnswerPanel(null, {
+    status: "signed in",
+    body: "Local session is ready. Ask the benefits question or run the Benefits MVP replay."
+  });
   startRuntimeEventStream(result.session?.id, result.user?.id);
   await loadRuntimeEventsForSession(result.session?.id);
   addMessage(
@@ -1237,6 +1479,8 @@ async function runProductChat(message, options = {}) {
     executeEvidenceObservation: Boolean(options.executeEvidenceObservation),
     requireLivePortalProof: Boolean(options.requireLivePortalProof ?? requireLivePortalProof.checked),
     useOfficialOpenClawWorker: Boolean(options.useOfficialOpenClawWorker ?? useOfficialOpenClawWorker.checked),
+    officialOpenClawUseCurrentTab: Boolean(options.officialOpenClawUseCurrentTab ?? officialOpenClawCurrentTab.checked),
+    officialOpenClawMultiPage: Boolean(options.officialOpenClawMultiPage ?? officialOpenClawMultiPage.checked),
     useLiveModel: document.querySelector("#useLiveModel").checked,
     approvalToken: options.approvalToken,
     approvalTaskId: options.approvalTaskId,
@@ -1255,8 +1499,10 @@ async function runProductChat(message, options = {}) {
   addMessage("assistant", result.finalResponse);
   addMessage("assistant", renderChatProof(result), { html: true });
   addMessage("assistant", renderWorkerOutcomeCard(result), { html: true });
+  upsertWorkerContinuationCard(workerContinuationFromResult(result));
   renderMissingInfoPrompt(result);
   renderJourneyState(result);
+  renderAnswerPanel(result);
   await loadRuntimeEventsForSession(result.session.id);
   renderReview(result.trace);
   trace.textContent = JSON.stringify(result, null, 2);
@@ -1301,7 +1547,9 @@ async function approveLatestReadOnly(taskId) {
     approvalTaskId: taskId,
     executeEvidenceObservation: true,
     requireLivePortalProof: requireLivePortalProof.checked,
-    useOfficialOpenClawWorker: useOfficialOpenClawWorker.checked
+    useOfficialOpenClawWorker: useOfficialOpenClawWorker.checked,
+    officialOpenClawUseCurrentTab: officialOpenClawCurrentTab.checked,
+    officialOpenClawMultiPage: officialOpenClawMultiPage.checked
   });
 }
 
@@ -1325,7 +1573,7 @@ async function createAsyncWorkerFollowup(taskId) {
     })
   });
   if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Async follow-up was not created.");
-  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  upsertWorkerContinuationCard(payload.continuation);
   await loadRuntimeEventsForSession(latestChatRun.session.id);
   if (payload.trace) renderReview(payload.trace);
   trace.textContent = JSON.stringify(payload, null, 2);
@@ -1341,7 +1589,7 @@ async function continueAsyncWorkerFollowup(continuationId) {
     })
   });
   if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Could not request continuation.");
-  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  upsertWorkerContinuationCard(payload.continuation);
   await loadRuntimeEventsForSession(payload.continuation.sessionId);
   trace.textContent = JSON.stringify(payload, null, 2);
   return payload;
@@ -1387,7 +1635,9 @@ async function runApprovedWorkerFollowup(continuationId, taskId) {
     workerContinuationId: continuationId,
     executeEvidenceObservation: true,
     requireLivePortalProof: requireLivePortalProof.checked,
-    useOfficialOpenClawWorker: true
+    useOfficialOpenClawWorker: true,
+    officialOpenClawUseCurrentTab: officialOpenClawCurrentTab.checked,
+    officialOpenClawMultiPage: officialOpenClawMultiPage.checked
   });
 }
 
@@ -1401,7 +1651,7 @@ async function cancelAsyncWorkerFollowup(continuationId) {
     })
   });
   if (!payload.ok) throw new Error(payload.error ?? payload.status ?? "Could not cancel continuation.");
-  addMessage("assistant", renderWorkerContinuationCard(payload.continuation), { html: true });
+  upsertWorkerContinuationCard(payload.continuation);
   await loadRuntimeEventsForSession(payload.continuation.sessionId);
   trace.textContent = JSON.stringify(payload, null, 2);
   return payload;
@@ -1650,6 +1900,24 @@ productAuth.addEventListener("click", async () => {
   }
 });
 
+resetMvpJourneyButton.addEventListener("click", () => {
+  resetMvpJourneySurface();
+});
+
+replayMvpBenefitsButton.addEventListener("click", async () => {
+  const restore = setBusy(replayMvpBenefitsButton, "Replaying...");
+  trace.textContent = "Starting a clean auth-plus-chat Benefits MVP replay...";
+  try {
+    await replayMvpBenefitsJourney();
+  } catch (error) {
+    addMessage("assistant", `Replay error: ${error.message}`);
+    renderAnswerPanel(null, { status: "error", body: error.message });
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 portalReady.addEventListener("click", () => {
   markPortalReady();
 });
@@ -1692,6 +1960,21 @@ messages.addEventListener("click", async (event) => {
   }
 });
 
+answerPanel.addEventListener("click", async (event) => {
+  const taskId = event.target?.dataset?.answerApproveReadonly;
+  if (!taskId) return;
+  const restore = setBusy(event.target, "Approving...");
+  try {
+    await approveLatestReadOnly(taskId);
+  } catch (error) {
+    addMessage("assistant", `Approval error: ${error.message}`);
+    renderAnswerPanel(latestChatRun, { status: "error", body: error.message });
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 messages.addEventListener("click", async (event) => {
   const taskId = event.target?.dataset?.workerFollowup;
   if (!taskId) return;
@@ -1700,6 +1983,21 @@ messages.addEventListener("click", async (event) => {
     await createAsyncWorkerFollowup(taskId);
   } catch (error) {
     addMessage("assistant", `Async follow-up error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+answerPanel.addEventListener("click", async (event) => {
+  const taskId = event.target?.dataset?.answerWorkerFollowup;
+  if (!taskId) return;
+  const restore = setBusy(event.target, "Scheduling...");
+  try {
+    await createAsyncWorkerFollowup(taskId);
+  } catch (error) {
+    addMessage("assistant", `Async follow-up error: ${error.message}`);
+    renderAnswerPanel(latestChatRun, { status: "error", body: error.message });
     trace.textContent = error.stack ?? error.message;
   } finally {
     restore();
@@ -1789,6 +2087,7 @@ sessions.addEventListener("click", async (event) => {
 });
 
 renderJourneyState();
+renderAnswerPanel();
 renderRuntimeTimeline();
 addMessage(
   "assistant",

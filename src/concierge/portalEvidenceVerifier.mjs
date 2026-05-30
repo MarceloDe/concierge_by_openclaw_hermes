@@ -23,11 +23,22 @@ function hostOf(url) {
 
 function classifyPageKind({ title = "", url = "", text = "" }) {
   const combined = `${url}\n${title}\n${text}`.toLowerCase();
+  if (isLoginOrCredentialPage({ title, url, text })) return "login_or_credential_gate";
   if (/\bclaim|claims|eob|explanation of benefits\b/.test(combined)) return "claims";
   if (/\bprior authorization|precert|authorization\b/.test(combined)) return "prior_authorizations";
   if (/\bbenefits?|coverage|deductible|out[- ]of[- ]pocket|spending\b/.test(combined)) return "benefits";
   if (/\bprofile|member id|plan|home\b/.test(combined)) return "home";
   return "unknown";
+}
+
+function isLoginOrCredentialPage({ title = "", url = "", text = "" }) {
+  const urlAndTitle = `${url}\n${title}`;
+  const compactText = compact(text).slice(0, 2000);
+  return (
+    /\b(?:log[- ]?in|login|sign[- ]?in|signin|authenticate|authentication)\b/i.test(urlAndTitle) ||
+    /(?:identityTransaction|business_event=Login|\/login\b|\/signin\b|\/sign-in\b)/i.test(url) ||
+    /\b(?:password|passcode|verification code|one-time code|remember this device)\b/i.test(compactText)
+  );
 }
 
 function evidenceFieldsFromText(text) {
@@ -52,12 +63,15 @@ export function verifyAuthenticatedPortalEvidence({ page, portal }) {
   const warnings = [];
   const authenticatedHost = AUTHENTICATED_HOST_PATTERNS.some((pattern) => pattern.test(host));
   const publicMarketingHost = PUBLIC_MARKETING_HOST_PATTERNS.some((pattern) => pattern.test(host));
+  const loginOrCredentialPage = isLoginOrCredentialPage({ title, url, text });
 
   if (!url) issues.push("Portal evidence page URL is missing.");
   if (!title) warnings.push("Portal evidence page title is missing.");
   if (publicMarketingHost) issues.push("Portal evidence points to public Aetna marketing content, not an authenticated member portal.");
   if (!authenticatedHost) issues.push(`Portal evidence host ${host || "unknown"} is not an approved authenticated member portal host.`);
+  if (loginOrCredentialPage) issues.push("Portal evidence is a login or credential gate, not an authenticated member portal evidence page.");
   if (pageKind === "unknown") issues.push("Portal evidence page kind could not be classified as member benefits, claims, authorizations, or home.");
+  if (pageKind === "login_or_credential_gate") issues.push("Portal evidence page kind is login_or_credential_gate.");
   if (!evidenceFields.hasMemberSignal) issues.push("Portal evidence is missing authenticated member-page signals.");
   if (!evidenceFields.hasBenefitsSignal && !evidenceFields.hasClaimsSignal && !evidenceFields.hasAuthorizationSignal) {
     issues.push("Portal evidence is missing healthcare insurance evidence fields.");

@@ -2976,3 +2976,308 @@ Next step:
   - LangGraph verifies DOM/accessibility plus OCR evidence,
   - chat shows completed/blocked continuation status and sourced benefits,
   - product memory retains only source-pointer grounded summaries.
+
+## Phase 8G: Authenticated Current-Tab Continuation Proof - 2026-05-29
+
+User direction:
+- Go to Phase 8G.
+
+Implementation:
+- Updated `src/concierge/openclawOfficialRuntime.mjs`:
+  - added official OpenClaw tab discovery through `openclaw browser --json tabs`,
+  - exposes tab count/current-tab summary in official readiness,
+  - added current-tab observation mode for already-authenticated portal pages,
+  - fails closed with `official_openclaw_current_tab_missing` when no tab is available,
+  - focuses the current tab when possible,
+  - captures accessibility-tree, CDP screenshot, and local OCR evidence without navigating away first.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - passes `officialOpenClawUseCurrentTab` / `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1` into the official worker observation node.
+- Updated `src/app/index.html` and `src/app/app.js`:
+  - added `Use current OpenClaw tab`,
+  - `Portal Ready` now enables live proof, official worker dispatch, and current-tab mode,
+  - official status shows the current tab and open-tab count,
+  - approved follow-up dispatch carries the current-tab flag.
+- Updated `src/tests/openclaw-official-runtime.test.mjs`:
+  - added a live-gated authenticated current-tab continuation proof.
+- Updated `package.json`:
+  - added `npm run test:live:openclaw-auth`, narrowed to only the authenticated current-tab test so it does not first navigate the browser through the public payer fail-closed test.
+- Updated `src/tests/chat-ui-contract.test.mjs` for the current-tab UI and payload contract.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/openclawOfficialRuntime.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/openclaw-official-runtime.test.mjs`
+  - `node --check src/server/server.mjs`
+- Focused tests passed:
+  - `node --test src/tests/openclaw-official-runtime.test.mjs`
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+  - `node --test src/tests/worker-continuations.test.mjs`
+  - `node --test src/tests/langgraph-runner.test.mjs`
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 95 tests total.
+  - 93 passed.
+  - 0 failed.
+  - 2 skipped: public official OpenClaw live proof and authenticated current-tab live proof.
+- Browser proof at `http://127.0.0.1:4173/` passed after a fresh server restart:
+  - the app rendered `Use current OpenClaw tab`,
+  - official status showed `official_openclaw_profile_ready · ready`,
+  - official status showed current tab `none open` and open tabs `0`,
+  - personal skills were still excluded from the project agent,
+  - after local Sign In, `Portal Ready` checked live portal proof, official worker, and current-tab mode,
+  - the chat message reminded that passwords, passkeys, SSN, and 2FA remain user-controlled.
+- Live authenticated proof attempted:
+  - `npm run test:live:openclaw-auth`
+  - Result: failed loudly because the dedicated OpenClaw profile had no authenticated member-portal tab open.
+  - Failure assertion: `The dedicated OpenClaw profile must have the authenticated member portal tab open.`
+- Live authenticated proof passed after manual user login:
+  - The dedicated profile showed a current `Home - Aetna` tab at `https://health.aetna.com/`.
+  - `npm run test:live:openclaw-auth`
+  - 1 test passed.
+  - 0 failed.
+  - Duration: about 46.8 seconds.
+  - The test created source pointers through the approved current-tab official OpenClaw path.
+- Chat UI proof passed after restarting the app with live-proof flags:
+  - Server flags: `BRAINSTY_PORTAL_LIVE=1`, `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1`, `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
+  - UI path: Sign In -> Benefits -> Leave As Async Follow-Up -> Portal Ready -> Approve + Run Official Read-Only.
+  - Evidence status: `captured_official_openclaw_read_only_observation`.
+  - Continuation status: `completed`.
+  - Terminal outcome: `completed_with_sourced_result`.
+  - Runtime events included `worker.followup.dispatching` and `worker.followup.completed`.
+  - Actions included current-tab official OpenClaw start/use, accessibility snapshot, CDP screenshot, local OCR, member-portal verification, source-pointer recording, and eligibility snapshot persistence.
+  - Result exposed 4 source pointers and 2 structured benefit rows in the chat Worker Result card.
+- Local readiness confirmed:
+  - dedicated profile `brainstyworkers` ready,
+  - browser profile `openclaw` running on CDP port `19800`,
+  - project agent `brainstyworkers-insurance-browser` ready,
+  - `insurance-portal-browser`, `browser-automation`, and `ocr-local` ready,
+  - personal skills excluded.
+
+Result:
+- Phase 8G implementation is wired and live-gated.
+- The code now supports the desired authenticated proof shape: user signs in manually, LangGraph validates the bound continuation, approval is consumed once, OpenClaw observes the current authenticated tab read-only, DOM/accessibility plus OCR evidence is verified, and the continuation completes or blocks.
+- The live proof is complete for both the test-runner lane and the user-facing chat UI lane.
+
+Next step:
+- Harden the post-success MVP loop:
+  - make the completed continuation card terminal in the UI so it no longer shows active continue/cancel/run buttons after completion,
+  - make missing-data wording recognize that portal evidence has now been captured,
+  - add a compact user-facing final answer that cites source pointers without exposing raw portal text,
+  - keep the operator trace available for audit/debug proof.
+
+## Phase 8H: Post-Success Chat Loop Hardening - 2026-05-29
+
+Request:
+- Go to Phase 8H after the authenticated current-tab OpenClaw proof passed.
+
+Implementation:
+- Updated `src/concierge/outputPolicy.mjs` and `src/concierge/langgraphRunner.mjs`:
+  - successful read-only evidence answers now use a compact source-pointer-grounded response,
+  - the answer keeps structured benefit rows and source pointer ids,
+  - the answer avoids raw portal text and direct user identity strings,
+  - the official OpenClaw read-only mode is described as DOM/accessibility plus visual OCR verified by LangGraph.
+- Updated `src/app/app.js`:
+  - added captured-evidence detection for `source_pointers` and evidence statuses,
+  - filtered satisfied portal evidence/data-pointer missing-info lines after source pointers exist,
+  - replaced matching worker continuation cards in place by continuation id,
+  - terminal continuations now show closed-state text and no active approve/run/continue/cancel controls.
+- Updated `src/tests/langgraph-runner.test.mjs`:
+  - asserts compact final answers still cite source pointers and structured benefits,
+  - asserts evidence answers no longer use the older enrollment-style identity text.
+- Updated `src/tests/chat-ui-contract.test.mjs`:
+  - asserts the terminal continuation-card and stale-portal-prompt contracts.
+- Hardened `src/concierge/portalEvidenceVerifier.mjs` after browser proof exposed a safety gap:
+  - Aetna login/sign-in/credential pages are now classified as `login_or_credential_gate`,
+  - login or credential gate pages fail closed and create no source pointers or eligibility snapshots.
+- Hardened `src/concierge/structuredExtraction.mjs` after the official OpenClaw accessibility text shape surfaced parser drift:
+  - consecutive duplicated ARIA money nodes are reconciled,
+  - ARIA/link-style claim rows are parsed,
+  - ARIA/link-style prior authorization rows are parsed.
+- Hardened `src/concierge/database.mjs`:
+  - SQLite shell busy timeout now defaults to 30 seconds through `BRAINSTY_SQLITE_BUSY_TIMEOUT_MS`,
+  - this prevents concurrent local real-data tests from failing on transient shared-DB locks.
+- Updated `src/tests/portal-evidence-verifier.test.mjs` and `src/tests/structured-extraction.test.mjs`:
+  - login-page blocker coverage,
+  - OpenClaw accessibility snapshot parser coverage.
+- Updated planning docs for Phase 8H acceptance and decision context.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/outputPolicy.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/langgraph-runner.test.mjs`
+  - `node --check src/tests/chat-ui-contract.test.mjs`
+  - `node --check src/concierge/portalEvidenceVerifier.mjs`
+  - `node --check src/concierge/structuredExtraction.mjs`
+  - `node --check src/concierge/database.mjs`
+- Focused tests passed:
+  - `node --test src/tests/langgraph-runner.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/worker-continuations.test.mjs`
+  - 18 passed, 0 failed.
+  - `node --test src/tests/structured-extraction.test.mjs src/tests/real-aetna-structured.test.mjs src/tests/portal-scan-real.test.mjs`
+  - 6 passed, 0 failed.
+  - `node --test src/tests/portal-evidence-verifier.test.mjs src/tests/openclaw-official-runtime.test.mjs`
+  - 7 passed, 0 failed, 2 live-gated skipped.
+  - `node --test src/tests/memory-harness.test.mjs src/tests/portal-scan-real.test.mjs`
+  - 5 passed, 0 failed.
+- Build passed:
+  - `npm run build`
+- Full local suite passed after stopping the dev server to avoid shared DB contention:
+  - `npm run test:local`
+  - 99 tests total.
+  - 97 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed with live flags:
+  - server flags: `BRAINSTY_PORTAL_LIVE=1`, `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1`, `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`,
+  - path: Sign In -> Benefits -> Leave As Async Follow-Up -> Portal Ready -> Approve + Run Official Read-Only,
+  - GPT decision mode: `openai_chatopenai_invoked` and used by router,
+  - final answer was compact and cited 4 source pointers,
+  - Workflow Proof showed `Missing info: none`,
+  - Worker Result showed `completed_with_sourced_result`, official OpenClaw actions, 4 source pointers, and 2 structured benefit rows,
+  - completed continuation card replaced the active card and showed no approve/run/continue/cancel controls.
+- Browser proof also revealed and drove a safety fix:
+  - an Aetna login URL/title must not be accepted as authenticated member evidence,
+  - the verifier now blocks login/credential gates and tests assert no false evidence is created.
+- Live authenticated official OpenClaw test passed after the verifier fix:
+  - `npm run test:live:openclaw-auth`
+  - 1 passed, 0 failed.
+
+Next step:
+- Phase 8I should turn the proof into a repeatable MVP harness and user-facing result surface:
+  - a clean local journey reset/replay path,
+  - a more focused final-answer panel in chat,
+  - expandable operator proof for runtime timeline, source pointers, payload audits, and OpenClaw worker status.
+
+## Phase 8I: Repeatable MVP Harness And Answer Surface - 2026-05-29
+
+Request:
+- Go to the next phase with real data and no mocks.
+
+Implementation:
+- Updated `src/app/index.html`, `src/app/styles.css`, and `src/app/app.js`:
+  - added `Reset MVP Journey` and `Replay Benefits MVP` controls in the auth-plus-chat surface,
+  - reset clears the local journey UI, closes the runtime event stream, clears active session selection, resets approval/live toggles, and keeps existing local database/audit records intact,
+  - replay starts a real planned-user local session through `/api/orchestrator/auth-start` and sends the standard benefits question through `/api/chat`,
+  - added a `Current Answer` panel that foregrounds the user answer, workflow, source-pointer ids, worker result/actions, structured benefit rows, GPT decision mode, and graph trace,
+  - added answer-panel controls for read-only approval and async follow-up when the proposal task is still pending,
+  - wrapped Workflow Proof, Worker Result, and the runtime timeline in expandable operator-proof sections so debug proof remains available without dominating the answer.
+- Updated `src/tests/chat-ui-contract.test.mjs`:
+  - asserts reset/replay controls,
+  - asserts the final-answer panel contract,
+  - asserts replay uses real auth plus `/api/chat`,
+  - asserts operator proof remains expandable.
+- Updated planning docs for Phase 8I acceptance, decision context, and Phase 8J direction.
+
+Proof:
+- Static checks passed:
+  - `node --check src/app/app.js`
+  - `node --check src/tests/chat-ui-contract.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+  - 6 passed, 0 failed.
+  - `node --test src/tests/langgraph-runner.test.mjs src/tests/worker-continuations.test.mjs src/tests/openclaw-official-runtime.test.mjs`
+  - 15 passed, 0 failed, 2 live-gated skipped.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 101 tests total.
+  - 99 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - `Reset MVP Journey` cleared the chat surface, session id, local auth state, runtime timeline, approval/live toggles, and answer panel without deleting database/audit records,
+  - `Replay Benefits MVP` created a fresh local session through real planned-user auth,
+  - the replay sent `Do I still owe anything before insurance starts paying?` through `/api/chat`,
+  - live GPT returned `openai_chatopenai_invoked` and was used by the router,
+  - the answer panel showed `approval needed`, the eligibility/benefits workflow, no source pointers yet, worker actions `none`, and the graph trace,
+  - the answer panel exposed `Approve Read-Only Observation` and `Leave As Async Follow-Up`,
+  - Workflow Proof, Worker Result, and Runtime Timeline were expandable operator-proof sections,
+  - browser console had 0 errors.
+- Authenticated current-tab live proof was rerun:
+  - `npm run test:live:openclaw-auth`
+  - failed loudly because the dedicated OpenClaw project profile did not currently have an authenticated member-portal tab open,
+  - this matched the intended safety boundary: no source pointer or eligibility snapshot should be created without an authenticated current tab.
+
+Next step:
+- Phase 8J should test OpenClaw as a richer adaptive read-only worker inside the same benefits workflow:
+  - multi-page authenticated insurance-site navigation,
+  - worker-chosen read-only browser/search/scrape paths inside the approved task,
+  - 30-second status reporting,
+  - per-page source pointers,
+  - LangGraph verification and final-answer composition.
+
+## Phase 8J: Multi-Page Read-Only OpenClaw Worker Navigation - 2026-05-30
+
+Request:
+- Go to the next phase with real data, not mocks, and test OpenClaw as a harder worker inside the existing benefits MVP.
+
+Implementation:
+- Updated `src/concierge/openclawOfficialRuntime.mjs`:
+  - added same-origin read-only navigation planning from observed portal DOM links,
+  - selects benefits, spending, claims, and prior-authorization page goals from real portal links,
+  - rejects logout/signout, profile, messages, forms, upload/document-submission, and other unsafe paths,
+  - captures each observed page with accessibility-tree text, CDP screenshot, local OCR, DOM links, and a local page-observation artifact,
+  - stores unique per-page screenshot files instead of overwriting a single screenshot,
+  - prefers exact CDP target URL matching before same-host fallback.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - passes multi-page worker intent into the official OpenClaw observation node,
+  - verifies every observed page before source-pointer creation,
+  - records `partial_result_with_blockers` when some observed pages fail verification,
+  - publishes worker runtime events with page count, verified page count, blocked page count, evidence channels, navigation plan, structured benefit count, and actions.
+- Updated OpenClaw worker contracts and repo skill artifact:
+  - allowed same-site read-only internal navigation,
+  - added per-page DOM/OCR evidence expectations,
+  - kept LangGraph as workflow master, verifier, product-memory owner, and final-response owner.
+- Updated the chat UI:
+  - added a `Multi-page read-only worker` toggle,
+  - `Portal Ready` enables current-tab and multi-page read-only worker mode,
+  - Worker Result and Current Answer now show pages, verified/blocked page counts, navigation plan, evidence channels, and worker actions.
+- Added `npm run test:live:openclaw-multipage` for the live authenticated multi-page proof path.
+- Updated tests for:
+  - real Aetna link navigation planning,
+  - UI multi-page proof fields,
+  - worker contract per-page navigation/evidence fields,
+  - live authenticated current-tab test compatibility with optional multi-page mode.
+
+Proof so far:
+- Static checks passed:
+  - `node --check src/concierge/openclawOfficialRuntime.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/concierge/openclawWorkerContract.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/openclaw-official-runtime.test.mjs`
+  - `node --check src/tests/chat-ui-contract.test.mjs`
+  - `node --check src/tests/openclaw-worker-contract.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/openclaw-official-runtime.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/openclaw-skill-artifacts.test.mjs`
+  - 17 tests total.
+  - 15 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 103 tests total.
+  - 101 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - page title: `Brainstyworkers AI Concierge`,
+  - auth-plus-chat surface loaded,
+  - `Reset MVP Journey`, `Replay Benefits MVP`, `Use official OpenClaw worker`, `Use current OpenClaw tab`, and `Multi-page read-only worker` controls were present,
+  - answer panel and runtime timeline were present,
+  - browser console had 0 errors.
+
+Next step:
+- Run the live authenticated multi-page proof when the dedicated OpenClaw browser profile is already signed in to the member portal:
+  - `npm run test:live:openclaw-multipage`
+- If it passes, use the app UI to run:
+  - Sign In -> Benefits/Replay -> Leave As Async Follow-Up -> Portal Ready -> Approve + Run Official Read-Only,
+  - verify the Worker Result shows multi-page navigation, per-page verification, source pointers, and no external actions.

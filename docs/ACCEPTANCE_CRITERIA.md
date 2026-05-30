@@ -418,6 +418,52 @@ Phase 8F approved continuation dispatch is acceptable when:
 - The live official OpenClaw continuation proof remains explicitly gated by `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
 - Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
 
+Phase 8G authenticated current-tab continuation proof is acceptable when:
+
+- The dedicated official OpenClaw profile is ready and personal skills remain excluded from the project agent.
+- The user manually signs in to an approved authenticated member portal host in the dedicated OpenClaw browser profile.
+- The worker run can use the already-authenticated current tab without navigating back to a public payer URL.
+- If no current tab exists, the run fails loudly with `official_openclaw_current_tab_missing` and creates no source pointer or eligibility snapshot.
+- The chat UI exposes live proof, official worker, and current-tab toggles.
+- `Portal Ready` enables the current-tab path but still requires a fresh read-only approval before observation.
+- A successful live run validates the continuation before approval consumption, consumes the approval once, marks the continuation `dispatching_official_openclaw`, captures accessibility-tree evidence, captures CDP screenshot evidence, runs local OCR, verifies authenticated member portal evidence, persists source pointers, and finalizes the continuation as `completed`.
+- Failed authentication, public payer pages, missing live flags, missing screenshot, missing OCR, or failed portal verification finalize the continuation as `blocked`.
+- `npm run test:live:openclaw-auth` runs only the authenticated current-tab live proof and must not first navigate the browser through the public payer fail-closed test.
+- Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
+
+Phase 8H post-success chat loop hardening is acceptable when:
+
+- A completed, blocked, cancelled, or expired worker continuation renders as a terminal card with no approve/run/continue/cancel controls.
+- When a fresh graph result includes a worker continuation, the chat replaces the prior continuation card in place instead of leaving stale active controls visible.
+- After source pointers exist or evidence has been captured, missing-info wording no longer asks again for the satisfied portal evidence/data pointer.
+- Successful evidence answers are compact, cite stored source pointers, and avoid raw portal text or direct user identity strings.
+- Login, sign-in, password, passcode, and verification-code pages are blocked as credential gates and must not create healthcare evidence.
+- Official OpenClaw accessibility-tree text can be parsed into deductible/out-of-pocket rows, claim rows, and prior authorization rows when those fields are visible.
+- Worker Result, Workflow Proof, runtime timeline, trace JSON, source pointers, payload audits, and evidence-channel details remain visible for operator/debug proof.
+- Static checks, focused LangGraph/UI tests, build, and `npm run test:local` pass.
+
+Phase 8I repeatable MVP harness is acceptable when:
+
+- The chat UI has a reset control that clears the local journey surface, closes the runtime event stream, clears active session selection, and does not delete existing local audit/database records.
+- The chat UI has a replay control that starts a fresh real planned-user local auth session and sends the standard benefits question through `/api/chat`.
+- The replay path uses the same LangGraph product runtime as manual chat; it does not use seeded canned data or a mock endpoint.
+- A visible final-answer panel shows the current answer, workflow, source-pointer ids, worker outcome/actions, structured benefits, GPT decision mode, and graph trace.
+- If read-only observation is still pending, the final-answer panel exposes approve/follow-up controls bound to the real proposal task.
+- Workflow Proof, Worker Result, source pointers, payload audits, and runtime timeline remain available as expandable operator proof rather than replacing the user answer.
+- Browser proof confirms a clean replay can create the local auth session, run the benefits workflow, and surface the approval-needed or sourced-result state in the answer panel.
+- The authenticated current-tab live proof is rerun when the dedicated OpenClaw tab is authenticated, and docs record only status/source-pointer evidence rather than raw portal text.
+
+Phase 8J multi-page read-only worker navigation is acceptable when:
+
+- The official OpenClaw worker can build a read-only navigation plan from real authenticated portal links without adding new healthcare workflow breadth.
+- The navigation plan selects only same-origin HTTPS portal targets and rejects logout/signout, profile, messages, forms, uploads, public/legal pages, credential gates, and irreversible-action paths.
+- The worker captures DOM/accessibility evidence, CDP screenshot evidence, and local OCR evidence separately for each observed page.
+- LangGraph verifies each observed page before creating source pointers and can return `partial_result_with_blockers` when some pages fail verification.
+- The evidence observation reports page count, verified page count, blocked page count, navigation plan, page blockers, source pointers, structured benefits, and worker actions.
+- The chat answer panel and Worker Result proof show pages, navigation plan, evidence channels, worker outcome, source pointers, structured benefits, and no hidden external action.
+- Live multi-page proof remains gated by explicit flags and an already authenticated dedicated OpenClaw current tab.
+- Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

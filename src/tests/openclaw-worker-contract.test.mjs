@@ -59,6 +59,8 @@ test("OpenClaw worker job keeps LangGraph as workflow master while empowering ta
   assert.equal(job.deterministicControls.workerMayChooseToolPathWithinAssignedTask, true);
   assert.equal(job.deterministicControls.workerMayOpenAdditionalBrowserInstances, true);
   assert.equal(job.deterministicControls.workerMayTryReadOnlyApisAndScrapers, true);
+  assert.ok(job.allowedWork.allowedActions.includes("select_safe_same_site_read_only_navigation_targets"));
+  assert.ok(job.allowedWork.allowedActions.includes("capture_per_page_dom_and_ocr_evidence"));
   assert.equal(job.progressProtocol.reportEverySeconds, 30);
   assert.equal(job.progressProtocol.silentFailureAllowed, false);
   assert.equal(job.workerMemoryPolicy.receiveGraphitiMemoryContext, true);
@@ -96,6 +98,8 @@ test("OpenClaw worker result template requires no actions before execution", asy
   assert.deepEqual(result.statusUpdates, []);
   assert.deepEqual(result.subtasks, []);
   assert.deepEqual(result.workerMemoryUpdates, []);
+  assert.equal(result.readOnlyNavigationPlan, null);
+  assert.deepEqual(result.pageObservations, []);
   assert.deepEqual(result.actionsTaken, []);
   assert.ok(result.risksOrBlockers.includes("official_openclaw_worker_not_dispatched"));
 });

@@ -409,15 +409,82 @@ Phase 8F browser and test proof is complete:
 - Browser proof shows the auth-plus-chat flow can schedule a continuation, render `Approve + Run Official Read-Only`, keep the read-only scope visible, and emit scheduled/continue events with actions none before official dispatch.
 - The live official OpenClaw continuation-dispatch test is wired but remains intentionally gated behind `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`.
 
-Phase 8G is the next implementation:
+Phase 8G is implemented as a live-gated proof path:
 
-- Run and polish the full authenticated 8F path with a logged dedicated OpenClaw browser profile:
-  - manually sign in,
-  - schedule/approve/run the continuation,
-  - verify official OpenClaw DOM/accessibility plus OCR evidence,
-  - show completed or blocked continuation status in chat,
-  - retain only source-pointer grounded product memory,
-  - keep the existing read-only and irreversible-action boundaries.
+- The official OpenClaw runtime can now use the already-authenticated current tab in the dedicated project browser profile instead of forcing navigation back to a public payer URL.
+- The auth-plus-chat UI exposes `Use current OpenClaw tab` next to the existing live portal proof and official worker toggles.
+- `Portal Ready` now enables live proof, official worker dispatch, and current-tab mode together.
+- LangGraph passes `officialOpenClawUseCurrentTab` into the official worker observation node.
+- Official OpenClaw current-tab observation:
+  - starts the dedicated project browser profile,
+  - requires an existing current tab,
+  - focuses that tab when possible,
+  - captures accessibility-tree evidence,
+  - captures a screenshot through CDP,
+  - runs local OCR,
+  - verifies authenticated member-portal evidence,
+  - finalizes the continuation as completed or blocked.
+- Added `npm run test:live:openclaw-auth`, which runs only the authenticated current-tab live proof and requires:
+  - `BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1`
+  - `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`
+  - `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1`
+  - `BRAINSTY_PORTAL_LIVE=1`
+
+Phase 8G live proof status:
+
+- The dedicated official OpenClaw profile is ready and isolated.
+- The first live authenticated proof attempt failed loudly because there was no open authenticated member-portal tab in the dedicated OpenClaw profile.
+- After the user manually opened and logged into the dedicated profile, the authenticated current-tab proof passed:
+  - `npm run test:live:openclaw-auth`
+  - 1 test passed, 0 failed.
+- The proof used the dedicated OpenClaw current tab, validated the continuation and approval path, captured source-pointer evidence, and completed the worker continuation.
+- The same lane also passed from the user-facing chat UI after the app was restarted with live-proof flags:
+  - Sign In -> Benefits -> Leave As Async Follow-Up -> Portal Ready -> Approve + Run Official Read-Only.
+  - The Worker Result card showed `completed_with_sourced_result`, 4 source pointers, and 2 structured benefit rows.
+  - The runtime timeline showed dispatch and completion events.
+
+Phase 8H is implemented as the post-success chat loop hardening slice:
+
+- Polish the successful post-proof chat loop rather than adding workflow breadth:
+  - terminal completed continuation cards no longer show active continue/cancel/run controls,
+  - existing continuation cards are replaced in place when a completed/blocked/cancelled/expired continuation returns,
+  - missing-data prompts no longer re-ask for portal evidence after source pointers or captured evidence exist,
+  - successful evidence answers are compact, cite stored source pointers, and avoid raw portal text,
+  - login/sign-in/credential-gate pages are blocked before evidence creation,
+  - official OpenClaw accessibility-tree evidence is parsed into structured benefits/claims/prior-authorization rows when visible,
+  - transient local SQLite shared-DB locks wait longer instead of failing the proof harness,
+  - operator trace/debug dashboard should remain available for audit proof.
+
+Phase 8I is implemented as the repeatable MVP harness slice:
+
+- Turn the hardened proof into a repeatable MVP test harness:
+  - the chat has `Reset MVP Journey` and `Replay Benefits MVP` controls,
+  - reset clears the local journey surface, closes the runtime event stream, clears active session selection, and leaves existing local audit/database records intact,
+  - replay starts a real planned-user local auth session and sends the benefits question through `/api/chat`,
+  - the answer panel foregrounds the current answer, workflow, source pointers, worker result/actions, structured benefits, GPT routing mode, and graph trace,
+  - approval and async-follow-up controls can be launched from the answer panel when source evidence is still pending,
+  - workflow proof, worker result, source pointers, payload audits, and runtime timeline remain available as expandable operator proof.
+
+Phase 8J is implemented as the multi-page read-only worker navigation slice:
+
+- Deepens the OpenClaw worker navigation proof without adding new healthcare workflows:
+  - the official worker can build a same-origin read-only navigation plan from real authenticated portal links,
+  - selected page goals include benefits, spending, claims, and prior authorizations,
+  - forbidden paths include logout/signout, profile, messages, forms, uploads, credential gates, public/legal pages, and irreversible-action paths,
+  - each observed page captures DOM/accessibility, CDP screenshot, and local OCR evidence,
+  - LangGraph verifies each page before source-pointer creation,
+  - the evidence observation includes page counts, verified/blocked page counts, navigation plan, page blockers, source pointers, structured benefits, and worker actions,
+  - the chat answer panel and Worker Result proof surface the multi-page worker outcome.
+
+Phase 8K is the next implementation:
+
+- Run and harden the live authenticated multi-page OpenClaw proof:
+  - user manually signs into the dedicated project OpenClaw profile,
+  - run `npm run test:live:openclaw-multipage`,
+  - verify source pointers and structured answer from multi-page pages,
+  - inspect page blockers and adjust page-kind rules only from verified evidence,
+  - add a UI-guided live run path if the CLI proof passes,
+  - keep LangGraph as the verifier and final-response owner.
 
 ## Full Working Test Recommendation
 

@@ -8,6 +8,7 @@ import { seedRuntimeRegistries } from "./workflowArchitecture.mjs";
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_DB_PATH = resolve("data/brainstyworkers.sqlite");
+const SQLITE_BUSY_TIMEOUT_MS = Number(process.env.BRAINSTY_SQLITE_BUSY_TIMEOUT_MS ?? 30000);
 
 export function nowIso() {
   return new Date().toISOString();
@@ -32,7 +33,7 @@ function whereClause(where = {}) {
 
 async function runSqliteStatement(dbPath, statement) {
   await new Promise((resolve, reject) => {
-    const child = spawn("sqlite3", ["-cmd", ".timeout 5000", dbPath], {
+    const child = spawn("sqlite3", ["-cmd", `.timeout ${SQLITE_BUSY_TIMEOUT_MS}`, dbPath], {
       stdio: ["pipe", "pipe", "pipe"]
     });
     let stdout = "";
@@ -153,9 +154,14 @@ export class SqliteStore {
   }
 
   async all(sql) {
-    const { stdout } = await execFileAsync("sqlite3", ["-cmd", ".timeout 5000", "-json", this.dbPath, sql], {
-      maxBuffer: 1024 * 1024 * 20
-    });
+    const { stdout } = await execFileAsync(
+      "sqlite3",
+      ["-cmd", `.timeout ${SQLITE_BUSY_TIMEOUT_MS}`, "-json", this.dbPath, sql],
+      {
+        maxBuffer: 1024 * 1024 * 20,
+        timeout: SQLITE_BUSY_TIMEOUT_MS + 10000
+      }
+    );
     const trimmed = stdout.trim();
     return trimmed ? JSON.parse(trimmed) : [];
   }

@@ -164,6 +164,8 @@
             <button type="button" data-workflow-message="Use my authenticated member portal in read-only mode and return source pointers.">Portal Proof</button>
           </div>
           <div class="chat-controls">
+            <button id="resetMvpJourney" type="button">Reset MVP Journey</button>
+            <button id="replayMvpBenefits" type="button">Replay Benefits MVP</button>
             <label class="checkbox-label live-proof-toggle">
               <input id="requireLivePortalProof" type="checkbox" />
               Require live portal proof
@@ -172,10 +174,22 @@
               <input id="useOfficialOpenClawWorker" type="checkbox" />
               Use official OpenClaw worker
             </label>
+            <label class="checkbox-label live-proof-toggle">
+              <input id="officialOpenClawCurrentTab" type="checkbox" />
+              Use current OpenClaw tab
+            </label>
+            <label class="checkbox-label live-proof-toggle">
+              <input id="officialOpenClawMultiPage" type="checkbox" />
+              Multi-page read-only worker
+            </label>
             <button id="portalReady" type="button">Portal Ready</button>
             <button id="loadRuntimeEvents" type="button">Refresh Timeline</button>
           </div>
-          <div id="runtimeTimeline" class="runtime-timeline" aria-live="polite"></div>
+          <section id="answerPanel" class="answer-panel" aria-live="polite"></section>
+          <details class="runtime-proof" open>
+            <summary>Runtime Timeline</summary>
+            <div id="runtimeTimeline" class="runtime-timeline" aria-live="polite"></div>
+          </details>
           <div id="messages" class="messages"></div>
           <form id="chatForm" class="composer">
             <textarea id="message">Enroll me as Marcelo Felix, connect to my logged insurance website in Chrome, review my eligibility and benefits, and show the trace of what you found.</textarea>

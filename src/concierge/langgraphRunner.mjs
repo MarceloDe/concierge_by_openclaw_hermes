@@ -213,6 +213,15 @@ function sourcePointersFromObservation({ browserResult = null, eligibility = nul
 function evidenceChannelsFromBrowserResult(browserResult = null) {
   if (!browserResult?.extraction) return [];
   const channels = [];
+  if ((browserResult.pages?.length ?? browserResult.extraction.pageCount ?? 0) > 1) {
+    channels.push({
+      channel: "multi_page_navigation",
+      status: "captured",
+      textLength: browserResult.extraction.fullText?.length ?? 0,
+      confidence: null,
+      pageCount: browserResult.pages?.length ?? browserResult.extraction.pageCount
+    });
+  }
   if (browserResult.extraction.ariaTextPreview) {
     channels.push({
       channel: "accessibility_tree",
@@ -909,7 +918,10 @@ async function evidenceObservationNode(state) {
       session,
       portal,
       targetUrl: state.raw_message?.officialOpenClawTargetUrl ?? state.raw_message?.portalUrl ?? portal.portal_url,
-      approval: approvalResume
+      approval: approvalResume,
+      useCurrentTab: Boolean(state.raw_message?.officialOpenClawUseCurrentTab || process.env.BRAINSTY_OPENCLAW_USE_CURRENT_TAB === "1"),
+      multiPage: Boolean(state.raw_message?.officialOpenClawMultiPage || process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1"),
+      maxPages: Number(state.raw_message?.officialOpenClawMaxPages ?? process.env.BRAINSTY_OPENCLAW_MAX_PAGES ?? 4)
     });
     const actionsTaken = browserResult.actionsTaken ?? [];
     const finalizeContinuation = (details) =>
@@ -1037,14 +1049,21 @@ async function evidenceObservationNode(state) {
       };
     }
 
-    const verification = verifyAuthenticatedPortalEvidence({ page: browserResult.page, portal });
-    if (!verification.valid) {
+    const observedPages = browserResult.pages?.length ? browserResult.pages : [browserResult.page];
+    const pageVerifications = observedPages.map((page) => ({
+      page,
+      verification: verifyAuthenticatedPortalEvidence({ page, portal })
+    }));
+    const validPageVerifications = pageVerifications.filter((item) => item.verification.valid);
+    const blockedPageVerifications = pageVerifications.filter((item) => !item.verification.valid);
+    if (!validPageVerifications.length) {
+      const failed = blockedPageVerifications[0] ?? pageVerifications[0];
       const blocked = await recordBlockedPortalEvidence(store, {
         session,
         portal,
         browserRunId: browserResult.browserRunId,
-        page: browserResult.page,
-        verification,
+        page: failed.page,
+        verification: failed.verification,
         source: "official_openclaw_read_only_worker",
         actionsTaken: [...actionsTaken, "verify_authenticated_member_portal"]
       });
@@ -1078,7 +1097,8 @@ async function evidenceObservationNode(state) {
           approval: approvalResume,
           actionsTaken: blocked.actionsTaken,
           sourcePointers: [],
-          verification,
+          verification: failed.verification,
+          pageVerifications,
           officialOpenClaw: browserResult.officialOpenClaw,
           workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
@@ -1094,34 +1114,50 @@ async function evidenceObservationNode(state) {
       };
     }
 
-    const artifact = await recordVerifiedPortalSourcePointer(store, {
-      session,
-      browserRunId: browserResult.browserRunId,
-      verification
-    });
+    const verifiedArtifacts = [];
+    for (const item of validPageVerifications) {
+      verifiedArtifacts.push({
+        page: item.page,
+        verification: item.verification,
+        artifact: await recordVerifiedPortalSourcePointer(store, {
+          session,
+          browserRunId: browserResult.browserRunId,
+          verification: item.verification
+        })
+      });
+    }
     const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
     const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
     const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
     const evidenceChannels = evidenceChannelsFromBrowserResult(browserResult);
-    sourcePointers.push({
-      table: "extraction_artifacts",
-      id: artifact.id,
-      sourceUrl: verification.sourcePointer.url,
-      summary: `${verification.sourcePointer.pageKind} verified official OpenClaw live portal source pointer`,
-      createdAt: artifact.created_at,
-      domHash: verification.sourcePointer.domHash,
-      extractionHash: verification.sourcePointer.extractionHash,
-      evidenceFields: verification.sourcePointer.evidenceFields
-    });
+    for (const item of verifiedArtifacts) {
+      sourcePointers.push({
+        table: "extraction_artifacts",
+        id: item.artifact.id,
+        sourceUrl: item.verification.sourcePointer.url,
+        summary: `${item.verification.sourcePointer.pageKind} verified official OpenClaw live portal source pointer: ${item.page.title ?? "untitled"}`,
+        createdAt: item.artifact.created_at,
+        domHash: item.verification.sourcePointer.domHash,
+        extractionHash: item.verification.sourcePointer.extractionHash,
+        evidenceFields: item.verification.sourcePointer.evidenceFields,
+        pageKind: item.verification.sourcePointer.pageKind
+      });
+    }
     const completedActions = [
       ...actionsTaken,
       "verify_authenticated_member_portal",
       "record_verified_source_pointer",
-      "persist_eligibility_snapshot"
+      "persist_eligibility_snapshot",
+      ...(browserResult.pages?.length > 1 ? ["verify_multi_page_read_only_navigation"] : [])
     ];
+    const terminalOutcome = blockedPageVerifications.length ? "partial_result_with_blockers" : "completed_with_sourced_result";
+    const observationStatus =
+      browserResult.pages?.length > 1
+        ? "captured_official_openclaw_multi_page_read_only_observation"
+        : "captured_official_openclaw_read_only_observation";
     const finalizedContinuation = await finalizeContinuation({
-      resultStatus: "captured_official_openclaw_read_only_observation",
-      terminalOutcome: "completed_with_sourced_result",
+      resultStatus: observationStatus,
+      terminalOutcome,
       browserRunId: browserResult.browserRunId ?? null,
       sourcePointerCount: sourcePointers.length,
       structuredBenefitCount: structuredBenefits.length,
@@ -1132,28 +1168,47 @@ async function evidenceObservationNode(state) {
       session,
       user,
       payload: {
-        status: "completed_with_sourced_result",
-        terminalOutcome: "completed_with_sourced_result",
+        status: terminalOutcome,
+        terminalOutcome,
         workflow: state.workflow,
         runtime: "official_openclaw",
         browserRunId: browserResult.browserRunId ?? null,
+        pageCount: observedPages.length,
+        verifiedPageCount: validPageVerifications.length,
+        blockedPageCount: blockedPageVerifications.length,
         sourcePointerCount: sourcePointers.length,
         structuredBenefitCount: structuredBenefits.length,
         evidenceChannels,
+        navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
         actionsTaken: completedActions
       }
     });
     return {
       worker_continuation: finalizedContinuation ?? workerContinuationDispatch,
       evidence_observation: {
-        status: "captured_official_openclaw_read_only_observation",
+        status: observationStatus,
+        terminalOutcome,
         actionsTaken: completedActions,
         approval: approvalResume,
         livePortalProof: "verified",
         sourcePointers,
         structuredBenefits,
         evidenceChannels,
-        verification,
+        verification: validPageVerifications[0]?.verification ?? null,
+        pageVerifications,
+        pageCount: observedPages.length,
+        verifiedPageCount: validPageVerifications.length,
+        blockedPageCount: blockedPageVerifications.length,
+        navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
+        pageBlockers: [
+          ...(browserResult.officialOpenClaw?.pageBlockers ?? []),
+          ...blockedPageVerifications.map((item) => ({
+            status: item.verification.status,
+            url: item.page.url,
+            title: item.page.title,
+            issues: item.verification.issues
+          }))
+        ],
         officialOpenClaw: browserResult.officialOpenClaw,
         workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
       },
@@ -1162,8 +1217,10 @@ async function evidenceObservationNode(state) {
       eligibility_result: eligibility,
       source_pointers: sourcePointers,
       proof: appendProof(state, "evidence_observation", {
-        status: "captured_official_openclaw_read_only_observation",
+        status: observationStatus,
         runtime: "official_openclaw",
+        pageCount: observedPages.length,
+        verifiedPageCount: validPageVerifications.length,
         sourcePointerCount: sourcePointers.length,
         structuredBenefitCount: structuredBenefits.length,
         actionsTaken: completedActions
@@ -1551,19 +1608,12 @@ async function composeResponseNode(state) {
       policyResult: state.policy_result,
       intent: state.intent,
       browserResult: state.browser_result,
-      eligibility: state.eligibility_result
+      eligibility: state.eligibility_result,
+      sourcePointers: state.source_pointers,
+      evidenceObservation: state.evidence_observation
     });
     return {
-      final_response: [
-        finalResponse,
-        `Source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
-        state.evidence_observation?.status === "captured_official_openclaw_read_only_observation"
-          ? "The approved read-only observation was executed by the dedicated official OpenClaw profile and verified by LangGraph before evidence was retained."
-          : null,
-        "This answer was composed inside the LangGraph product runtime."
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
+      final_response: finalResponse,
       should_remember: true,
       memory_summary: `LangGraph captured read-only evidence for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "evidence_capture_event",

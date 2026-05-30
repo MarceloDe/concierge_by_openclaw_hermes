@@ -16,6 +16,7 @@
     "openclaw_authenticated_browser",
     "openclaw_browser_screenshot",
     "openclaw_visual_ocr",
+    "openclaw_same_site_read_only_navigation",
     "browser_remote_debugger",
     "chrome_extension_bridge",
     "mcp_browser_adapter",
@@ -66,6 +67,7 @@
     "worker_may_create_task_scoped_helper_skills_or_scripts": true,
     "worker_may_use_local_os_automation_within_task_scope": true,
     "worker_may_update_heartbeat_memory": true,
+    "worker_may_select_same_site_read_only_portal_targets": true,
     "product_memory_owner": "langgraph",
     "final_memory_writes_return_through_langgraph_ingest": true
   },
@@ -113,6 +115,8 @@
     ],
     "optional": [
       "portal_page_snapshots",
+      "read_only_navigation_plan",
+      "page_observations",
       "structured_extraction",
       "audit_event_ids"
     ]
@@ -121,6 +125,7 @@
     "required": true,
     "dom_or_accessibility_snapshot_required": true,
     "screenshot_ocr_required": true,
+    "per_page_dom_and_ocr_required": true,
     "ocr_engine": "ocr-local",
     "fail_closed_when_visual_evidence_missing": true,
     "store_raw_visual_text_only_in_local_artifacts": true
@@ -157,6 +162,28 @@
     "required": true,
     "store_database_pointer": true,
     "store_raw_secret": false,
-    "store_raw_credentials": false
+    "store_raw_credentials": false,
+    "per_page_source_pointers": true
+  },
+  "read_only_navigation_policy": {
+    "same_authenticated_portal_origin_only": true,
+    "allowed_page_goals": [
+      "benefits",
+      "spending",
+      "claims",
+      "prior_authorizations"
+    ],
+    "forbidden_targets": [
+      "logout",
+      "signout",
+      "profile",
+      "messages",
+      "payments",
+      "forms",
+      "uploads",
+      "document_submission",
+      "record_change"
+    ],
+    "langgraph_must_verify_each_page_before_source_pointer": true
   }
 }

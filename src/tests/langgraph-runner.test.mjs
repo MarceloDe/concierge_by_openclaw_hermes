@@ -169,6 +169,7 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
   assert.equal(result.state.source_pointers[0].table, "eligibility_snapshots");
   assert.match(result.state.final_response, /Source pointers: eligibility_snapshots\//);
   assert.match(result.state.final_response, /LangGraph product runtime/);
+  assert.doesNotMatch(result.state.final_response, /Enrollment complete/);
 
   const snapshots = await store.list("eligibility_snapshots", { session_id: session.id });
   assert.equal(snapshots.length, 1);
@@ -230,9 +231,13 @@ test("LangGraph verified portal proof returns structured benefit rows and source
     assert.equal(result.state.evidence_observation.structuredBenefits.length, 2);
     assert.equal(result.state.evidence_observation.evidenceChannels[0].channel, "visible_dom_text");
     assert.ok(result.state.source_pointers.some((pointer) => pointer.table === "coverage_balances"));
+    assert.match(result.state.final_response, /I captured approved read-only portal evidence/);
+    assert.match(result.state.final_response, /Source pointers: /);
     assert.match(result.state.final_response, /Structured benefits evidence:/);
     assert.match(result.state.final_response, /Deductible: total \$600\.00, spent \$558\.72, remaining \$41\.28/);
     assert.match(result.state.final_response, /Out-of-Pocket Max: total \$9,000\.00, spent \$1,476\.98, remaining \$7,523\.02/);
+    assert.doesNotMatch(result.state.final_response, /Enrollment complete/);
+    assert.doesNotMatch(result.state.final_response, /mocfelix@gmail\.com/);
 
     const balances = await store.all(
       `SELECT * FROM coverage_balances WHERE snapshot_id = '${result.state.eligibility_result.snapshot.id.replaceAll("'", "''")}' ORDER BY created_at ASC;`

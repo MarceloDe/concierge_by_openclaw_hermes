@@ -743,6 +743,109 @@ Implementation notes:
 Cost of changing later:
 Medium. The validation-before-approval rule, event names, and continuation status values are now part of the orchestration contract. The underlying scheduler can later move to a queue or OpenClaw status subagent loop without changing the approval boundary.
 
+## 2026-05-29 - Use The Dedicated OpenClaw Current Tab For Authenticated Live Proof
+
+Context:
+Phase 8F could dispatch the official OpenClaw worker, but the live proof path still opened the configured portal URL. For authenticated payer portals this is brittle: the user may already be logged in on a deeper member page, and opening a root/public URL can discard the exact authenticated context the proof needs.
+
+Options considered:
+- Keep opening the configured payer URL for every official worker run.
+- Ask the user to copy portal text or snapshots manually.
+- Add a current-tab mode for the dedicated project OpenClaw profile and require a fresh approval before observing it.
+
+Decision:
+Add an approved current-tab observation mode. When `officialOpenClawUseCurrentTab` or `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1` is set, the official worker starts the dedicated browser profile, requires an existing current tab, focuses it when possible, and captures accessibility-tree plus screenshot/OCR evidence from that tab without navigating away first.
+
+Reason:
+The MVP proof needs to test the real user journey: the user signs in manually, leaves the authenticated portal tab open, then LangGraph consumes a read-only approval and OpenClaw observes only that approved tab. This preserves user-controlled credentials and avoids replacing authenticated evidence with a public marketing page.
+
+Implementation notes:
+- Missing current tab fails closed as `official_openclaw_current_tab_missing`.
+- The chat UI now has `Use current OpenClaw tab`.
+- `Portal Ready` enables live portal proof, official worker dispatch, and current-tab mode together.
+- `npm run test:live:openclaw-auth` runs only the authenticated current-tab proof so it does not first navigate the browser through the public payer fail-closed test.
+- The first 8G live attempt failed because the dedicated profile had no open authenticated member-portal tab.
+- After manual user login in the dedicated profile, the same live proof passed and created source pointers through the approved current-tab official OpenClaw path.
+
+Cost of changing later:
+Low to medium. Current-tab mode can later become a richer tab-selection UI, but the important boundary should remain: user authenticates manually, LangGraph approves observation, and OpenClaw does not enter credentials or force a workflow decision.
+
+## 2026-05-29 - Harden The Successful Chat Result Before Adding Workflow Breadth
+
+Context:
+Phase 8G proved the authenticated current-tab OpenClaw continuation path, but the chat loop still looked unfinished after success: an earlier async continuation card could remain visible with active buttons, the missing-data prompt could still mention `portal_accounts`, and the final answer was more like an operator trace than a user-facing benefits answer.
+
+Options considered:
+- Add new workflows or richer OpenClaw abilities immediately.
+- Leave the proof dashboard as the primary success surface.
+- Polish the post-success chat loop while preserving the operator proof panels.
+
+Decision:
+Implement Phase 8H as a UI/output hardening slice. Successful evidence answers now use a compact source-pointer-grounded response. The chat suppresses portal-missing prompts once source pointers or captured evidence exist. Worker continuation cards are upserted by continuation id so completed/blocked/cancelled/expired states replace stale active cards and render terminal text without run/continue/cancel buttons.
+
+Reason:
+The MVP needs to feel like a usable auth-plus-chat product, not only a backend proof. Hardening the result state reduces silent user confusion while keeping LangGraph/OpenClaw/audit proof visible for debugging.
+
+Cost of changing later:
+Low. The output wording and continuation card rendering can evolve with the final UI, but the contract should remain: completed worker states are terminal, source pointers satisfy portal evidence prompts, and raw portal text stays out of the user-facing answer.
+
+## 2026-05-29 - Login And Credential Gates Are Not Authenticated Portal Evidence
+
+Context:
+During Phase 8H browser verification, the current dedicated OpenClaw tab could temporarily report an Aetna login/sign-in URL and title while still containing enough generic Aetna/member words to pass the earlier evidence-field checks. That would allow a login page to create source pointers, which is unsafe and misleading.
+
+Options considered:
+- Trust approved Aetna hosts alone.
+- Require member/benefits keywords only.
+- Explicitly classify login, sign-in, authentication, password, passcode, and verification-code pages as credential gates before evidence creation.
+
+Decision:
+Authenticated portal verification now rejects login or credential-gate pages even when the host is an approved member-portal host. Such pages are classified as `login_or_credential_gate`, fail closed, and create no eligibility snapshot or source pointer.
+
+Reason:
+The MVP must prove authenticated healthcare evidence, not merely the ability to observe an approved domain. Credential and login pages are user-controlled authentication surfaces, not source evidence for benefits or claims.
+
+Cost of changing later:
+Low. Future portal-specific adapters can add stronger page-kind rules, but the base rule should remain: login and credential gates are blockers, not evidence.
+
+## 2026-05-29 - Local SQLite Shell Adapter Needs Longer Busy Timeout Under Concurrent Proof
+
+Context:
+The full local test suite runs multiple real-data and graph/audit tests against the shared local SQLite database. After browser proof and real-data tests expanded, the shell-based SQLite adapter occasionally failed with `database is locked` after the old 5 second timeout.
+
+Options considered:
+- Make all tests serial.
+- Move immediately to `better-sqlite3` or Postgres.
+- Keep the shell adapter for this slice but raise the busy timeout.
+
+Decision:
+Keep the current shell adapter for Phase 8H and raise the SQLite busy timeout default to 30 seconds through `BRAINSTY_SQLITE_BUSY_TIMEOUT_MS`.
+
+Reason:
+This is a local proof harness, and the project already tracks transactional storage as a later hardening direction. The longer timeout prevents transient local concurrency from hiding real test outcomes while keeping the current storage layer unchanged for this slice.
+
+Cost of changing later:
+Low. The eventual move to `better-sqlite3` or Postgres should replace this timeout workaround with transactional connections and database-level concurrency control.
+
+## 2026-05-29 - Make The MVP Proof Repeatable Before Adding Multi-Page Worker Search
+
+Context:
+Phase 8H made successful sourced answers clearer, but the local app still depended on a hand-run sequence: sign in, send Benefits, schedule follow-up, mark portal ready, approve, then inspect proof panels. The next requested direction is "not mock, real data" and a harder next phase, but the MVP needs a repeatable auth-plus-chat harness before OpenClaw gets broader multi-page navigation freedom.
+
+Options considered:
+- Move immediately to multi-page OpenClaw portal navigation.
+- Keep the proof dashboard as the main way to verify the system.
+- Add a small repeatable UI harness that starts a fresh local session, replays the benefits journey through `/api/chat`, and foregrounds the final answer while preserving operator proof.
+
+Decision:
+Implement Phase 8I as a repeatable MVP harness. The chat now has reset and replay controls, a visible Current Answer panel, answer-panel approve/follow-up controls, and expandable operator proof for Workflow Proof, Worker Result, payload audits, source pointers, and runtime timeline.
+
+Reason:
+Before OpenClaw performs broader adaptive multi-page work, the product path must be easy to rerun and debug without hidden setup. This keeps the proof user-facing while preserving the LangGraph/OpenClaw/audit details needed for engineering verification.
+
+Cost of changing later:
+Low. The reset/replay controls and answer panel can evolve into the final auth/chat interface. The important contract is that replay uses real auth plus `/api/chat`, and proof remains available without dominating the user answer.
+
 ## 2026-05-28 - Compact Runtime Context Packets And Stream SQLite Writes
 
 Context:
@@ -761,3 +864,22 @@ The MVP needs repeated real flow tests to catch state growth and interoperabilit
 
 Cost of changing later:
 Low. A future move to `better-sqlite3` or Postgres should replace this storage workaround with proper transactional writes, while preserving bounded context-packet semantics.
+
+## 2026-05-30 - Multi-Page OpenClaw Navigation Must Stay LangGraph-Verified
+
+Context:
+Phase 8I made the benefits MVP repeatable, but OpenClaw was still mostly proving a single current-tab observation. The next real-value test is whether the worker can move through the authenticated insurance site to find relevant benefits evidence while the deterministic harness remains in control.
+
+Options considered:
+- Let OpenClaw browse freely and trust its final extraction.
+- Keep official OpenClaw limited to one page until every workflow is complete.
+- Allow same-origin multi-page read-only navigation, but require LangGraph to verify each page before evidence becomes a source pointer.
+
+Decision:
+Implement Phase 8J as same-origin, read-only, multi-page worker navigation inside the existing eligibility/benefits journey. OpenClaw may select and open internal read-only portal pages such as benefits, spending, claims, and prior authorizations. It must avoid logout, profile, messages, forms, uploads, credential gates, and irreversible-action paths. LangGraph verifies every observed page and composes the answer only from verified source pointers.
+
+Reason:
+This tests OpenClaw’s adaptive value without giving it authority over healthcare workflow choice or evidence validity. The worker can search the authenticated portal more deeply, while LangGraph remains the workflow master, approval owner, verifier, source-pointer owner, and final-response owner.
+
+Cost of changing later:
+Medium. Future worker freedom can expand to APIs, web scrape paths, or more page goals, but the page-by-page verification and source-pointer fan-in contract should remain stable.

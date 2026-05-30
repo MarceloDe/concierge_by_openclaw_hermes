@@ -22,23 +22,38 @@ function amountNearLabel(region, labelPattern, direction = "after") {
   return parseMoney(region.match(regex)?.[1]);
 }
 
+function lastMoneyBeforeLabel(region, labelPattern) {
+  const label = region.match(new RegExp(labelPattern, "i"));
+  if (!label || label.index === undefined) return null;
+  const amounts = [...region.slice(0, label.index).matchAll(moneyRegex())]
+    .map((match) => parseMoney(match[0]))
+    .filter((value) => value !== null);
+  return amounts.at(-1) ?? null;
+}
+
 function inferredBalanceAmounts(region) {
-  const amounts = [...region.matchAll(moneyRegex())].map((match) => parseMoney(match[0])).filter((value) => value !== null);
+  const rawAmounts = [...region.matchAll(moneyRegex())].map((match) => parseMoney(match[0])).filter((value) => value !== null);
+  const amounts = rawAmounts.filter((value, index) => index === 0 || value !== rawAmounts[index - 1]);
   if (!amounts.length) return null;
+  const ariaLike = /\b(?:StaticText|InlineTextBox|LabelText|heading|link)\b/i.test(region);
 
   const total =
+    amounts[0] ??
     amountNearLabel(region, "\\b(?:total|maximum|max|limit|annual|plan)\\b") ??
     amountNearLabel(region, "\\b(?:total|maximum|max|limit|annual|plan)\\b", "before") ??
-    amounts[0];
+    null;
+  const ariaRemaining = ariaLike ? lastMoneyBeforeLabel(region, "\\b(?:remaining|left|remain)\\b") : null;
+  const ariaSpent = ariaLike ? lastMoneyBeforeLabel(region, "\\b(?:spent|met|used|applied|paid)\\b") : null;
   const remainingAfter = amountNearLabel(region, "\\b(?:remaining|left|remain)\\b");
   const remainingBefore = amountNearLabel(region, "\\b(?:remaining|left|remain)\\b", "before");
-  const remaining = remainingAfter ?? remainingBefore ?? (amounts.length >= 3 ? amounts[2] : null);
+  const remaining = ariaRemaining ?? remainingAfter ?? remainingBefore ?? (amounts.length >= 3 ? amounts[2] : null);
   const spentAfter = amountNearLabel(region, "\\b(?:spent|met|used|applied|paid)\\b");
   const spentBefore = amountNearLabel(region, "\\b(?:spent|met|used|applied|paid)\\b", "before");
-  const spent =
+  const nonAriaSpent =
     spentAfter !== null && spentBefore !== null && remainingAfter === null && remainingBefore !== null && spentAfter === remainingBefore
       ? spentBefore
       : spentAfter ?? spentBefore ?? (amounts.length >= 3 ? amounts[1] : null);
+  const spent = ariaSpent ?? nonAriaSpent;
 
   const normalizedTotal = total ?? null;
   const normalizedSpent =
@@ -63,7 +78,7 @@ function balanceRegions(normalized, aliases) {
     let match;
     while ((match = regex.exec(normalized)) !== null) {
       const start = match.index;
-      const end = Math.min(normalized.length, match.index + 260);
+      const end = Math.min(normalized.length, match.index + 700);
       regions.push(normalized.slice(start, end));
     }
   }
@@ -151,6 +166,24 @@ export function parseClaimItems(text) {
       return claims;
     }
 
+    const ariaRegion = normalized.match(/(?:region "Claims"|heading "Claims"|Claims).{0,800}?View All Claims(.+?)(?:Prior Authorization|Submit a Claim|$)/i);
+    if (ariaRegion) {
+      const claims = [];
+      const claimPattern =
+        /link "(.+?) For (.+?) - ([A-Z][a-z]+ \d{1,2}, \d{4}) Your share \$?([0-9][0-9,]*(?:\.[0-9]{2})?)"/g;
+      let match;
+      while ((match = claimPattern.exec(ariaRegion[1])) !== null) {
+        claims.push({
+          description: match[1].trim(),
+          member_name: match[2].trim(),
+          service_date: match[3].trim(),
+          share_amount: parseMoney(`$${match[4]}`),
+          raw_text: match[0].trim()
+        });
+      }
+      if (claims.length) return claims;
+    }
+
     const regionMatch = normalized.match(/Claims View All Claims (.+?) Submit a Claim/i);
     if (!regionMatch) return [];
     const claims = [];
@@ -194,6 +227,17 @@ export function parsePriorAuthorizations(text) {
   const start = lines.findIndex((line, index) => line === "Prior Authorization" && lines[index + 1] === "View All");
   if (start < 0) {
     const normalized = text.replace(/\s+/g, " ");
+    const ariaLinkMatch = normalized.match(/Prior Authorization.{0,800}?listitem.{0,80}?link "(.+?)\s+([A-Z][a-z]+ \d{1,2}, \d{4})"/i);
+    if (ariaLinkMatch) {
+      return [
+        {
+          provider_or_facility: ariaLinkMatch[1].trim(),
+          service_date: ariaLinkMatch[2].trim(),
+          status: "visible_in_portal",
+          raw_text: ariaLinkMatch[0].trim()
+        }
+      ];
+    }
     const match = normalized.match(/Prior Authorization View All (.+?) ([A-Z][a-z]+ \d{1,2}, \d{4})/);
     if (!match) return [];
     return [
