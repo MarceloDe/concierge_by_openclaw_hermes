@@ -486,15 +486,32 @@ Phase 8K is implemented as the user-friendly live worker readiness and recovery 
   - integrates `/api/openclaw/official/status` with `liveReadiness` so the UI and operator trace use the same contract,
   - keeps auth recovery user-controlled instead of attempting to bypass login or session challenges.
 
-Phase 8L is the next implementation:
+Phase 8L is implemented as the guided live app multi-page OpenClaw proof:
 
-- Use the Phase 8K guided readiness path to run a live authenticated multi-page OpenClaw proof from the user-facing app:
-  - user signs into the dedicated project OpenClaw profile manually,
-  - `Check Live Worker` must report `ready_for_read_only_approval`,
-  - run the existing Benefits MVP path,
-  - approve the read-only worker task,
-  - verify multi-page source pointers, structured answer, runtime events, and terminal worker status in chat,
-  - if the portal blocks automation, return a clear `not_possible_insurance_portal_block` or `needs_user_manual_export` result.
+- Proved the Phase 8K readiness path with the dedicated project OpenClaw profile already authenticated:
+  - `Check Live Worker` reported `ready_for_read_only_approval`,
+  - `Portal Ready` enabled live portal proof, official worker dispatch, current-tab mode, and multi-page mode,
+  - the Benefits MVP path produced the approval-needed answer with `actions none`,
+  - approving read-only observation consumed the approval and dispatched the official OpenClaw worker,
+  - the current answer became a sourced executed answer rather than proposal-only text,
+  - evidence status was `captured_official_openclaw_multi_page_read_only_observation`,
+  - worker terminal outcome was `completed_with_sourced_result`,
+  - 2/2 pages were verified,
+  - 3 source pointers were displayed,
+  - live GPT routing was invoked and used.
+- Code hardening from the proof:
+  - known authenticated member portal hosts are accepted by readiness when they are not login/challenge/public pages,
+  - multi-page official evidence is treated as captured evidence during response composition,
+  - `partial_result_with_blockers` is a completed continuation outcome when sourced evidence exists,
+  - final-answer tests now prevent sourced executions from being described as "not executed in this slice."
+
+Phase 8M is the next implementation:
+
+- Harden the user-facing MVP result loop without adding new healthcare workflow breadth:
+  - separate the Current Answer from older pre-approval history so users do not confuse proposal-only text with the latest sourced result,
+  - add Graphiti retain retry/repair and clearer memory proof when retain fails or times out,
+  - improve structured extraction for claim/benefits pages while preserving source-pointer-only user responses,
+  - keep the proof dashboard for operators but make auth-plus-chat the primary test surface.
 
 ## Full Working Test Recommendation
 

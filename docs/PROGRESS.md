@@ -3340,3 +3340,67 @@ Next step:
   - approve read-only observation,
   - verify multi-page source pointers, structured answer, worker status, and terminal outcome in chat,
   - if the portal blocks automation, return `not_possible_insurance_portal_block` or `needs_user_manual_export` rather than silently failing.
+
+## Phase 8L: Guided Live App Multi-Page OpenClaw Proof - 2026-05-30
+
+Request:
+- Continue after the user manually logged into the dedicated project OpenClaw browser profile.
+- Prove the user-facing auth-plus-chat MVP path can run the real LangGraph approval loop, dispatch the official OpenClaw read-only worker, navigate multiple authenticated portal pages, and return source-pointer proof in chat.
+
+Implementation:
+- Updated `src/concierge/openclawLiveReadiness.mjs`:
+  - treats known authenticated member portal hosts such as `health.aetna.com` and `member.aetna.com` as valid readiness starts,
+  - still blocks login, credential, challenge, public marketing, and non-member pages before approval.
+- Updated `src/concierge/workerContinuations.mjs`:
+  - treats `partial_result_with_blockers` as a completed continuation when verified source pointers exist,
+  - keeps blocked/no-evidence outcomes as blocked.
+- Updated `src/concierge/langgraphRunner.mjs` and `src/concierge/outputPolicy.mjs`:
+  - recognizes `captured_official_openclaw_multi_page_read_only_observation` as captured evidence,
+  - composes the current answer as an executed sourced result instead of falling through to proposal-only wording,
+  - reports the dedicated official OpenClaw profile, same-site navigation, DOM/accessibility checks, OCR, and verified page count.
+- Added `src/tests/output-policy.test.mjs` and expanded live official OpenClaw assertions so final answers must cite source pointers and must not say the approved worker was "not executed in this slice."
+- Added the new output-policy test to `npm run test:local`.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/concierge/outputPolicy.mjs`
+  - `node --check src/tests/output-policy.test.mjs`
+  - `node --check src/tests/openclaw-official-runtime.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/output-policy.test.mjs src/tests/langgraph-runner.test.mjs src/tests/worker-continuations.test.mjs src/tests/openclaw-live-readiness.test.mjs src/tests/openclaw-official-runtime.test.mjs`
+  - 27 tests total.
+  - 25 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Build passed:
+  - `npm run build`
+- Live authenticated multi-page OpenClaw proof passed:
+  - `npm run test:live:openclaw-multipage`
+  - 1 test passed.
+  - 0 failed.
+- Browser proof at `http://127.0.0.1:4173/` passed after restarting the local server with live flags:
+  - `Check Live Worker` reported `ready_for_read_only_approval` on the dedicated authenticated Aetna member portal tab,
+  - `Portal Ready` enabled live proof, official worker, current-tab, and multi-page mode,
+  - the Benefits MVP path used live GPT routing with `openai_chatopenai_invoked`,
+  - the answer panel first showed approval needed with `actions none`,
+  - after `Approve Read-Only Observation`, the current answer showed `sourced answer`,
+  - evidence status was `captured_official_openclaw_multi_page_read_only_observation`,
+  - Worker Result showed `completed_with_sourced_result`,
+  - pages showed `2/2` verified,
+  - 3 source pointers were displayed,
+  - worker actions included current-tab reuse, accessibility snapshots, CDP screenshots, local OCR, same-site internal link navigation, authenticated portal verification, source-pointer recording, eligibility snapshot persistence, and multi-page verification,
+  - browser console had 0 errors.
+- In-app screenshot capture was attempted for the final proof but the browser CDP screenshot command timed out. DOM/UI/API/console proof passed.
+
+Observed residual risks:
+- The approved live app run returned no structured deductible/out-of-pocket rows because the current authenticated page was Claims-oriented; the worker still produced verified source pointers.
+- Product memory retain reported `graphiti · retained false` in the UI during this run. This did not block the sourced answer, but Phase 8M should harden Graphiti retain/retry and surface memory state more clearly.
+- The UI conversation history still contains the earlier pre-approval proposal-only message, which correctly says the worker was not executed before approval. The Current Answer is now the sourced executed answer.
+
+Next step:
+- Phase 8M should harden the user-facing MVP result loop:
+  - make the Current Answer visually distinguish current sourced result from older pre-approval history,
+  - add a retry/repair path for Graphiti retain failures,
+  - improve structured extraction for Claims/Benefits pages without exposing raw portal text,
+  - keep the proof dashboard available but make the auth-plus-chat path the primary MVP test surface.

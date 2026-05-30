@@ -6,6 +6,7 @@ export const WORKER_CONTINUATIONS_VERSION = "2026-05-29.worker-continuations.v1"
 export const READ_ONLY_CONTINUATION_SCOPE = "read_only_observation";
 const ACTIVE_CONTINUATION_STATUSES = new Set(["pending_async_followup", "continue_requested"]);
 const TERMINAL_CONTINUATION_STATUSES = new Set(["completed", "blocked", "cancelled", "expired"]);
+const COMPLETED_TERMINAL_OUTCOMES = new Set(["completed_with_sourced_result", "partial_result_with_blockers"]);
 
 function sql(value) {
   if (value === null || value === undefined) return "NULL";
@@ -400,7 +401,7 @@ export async function finalizeWorkerContinuationDispatch(
   const bound = await getBoundContinuation(store, { continuationId, sessionId, userId });
   if (!bound.ok) return bound;
   const continuation = bound.continuation;
-  const finalStatus = terminalOutcome === "completed_with_sourced_result" ? "completed" : "blocked";
+  const finalStatus = COMPLETED_TERMINAL_OUTCOMES.has(terminalOutcome) ? "completed" : "blocked";
   const now = nowIso();
   await store.update(
     "worker_continuations",

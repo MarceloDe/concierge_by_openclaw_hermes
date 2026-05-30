@@ -902,3 +902,41 @@ This preserves the desired worker versatility without crossing the authenticatio
 
 Cost of changing later:
 Low. The readiness classifier can gain portal-specific page rules and richer tab selection, but the contract should remain: user controls authentication, LangGraph approves and verifies observation, and OpenClaw reports blockers instead of bypassing them.
+
+## 2026-05-30 - Multi-Page Source Evidence Must Compose As Executed, Not Proposal-Only
+
+Context:
+The Phase 8L live app proof captured verified multi-page official OpenClaw evidence, created source pointers, and completed the worker, but the response composer only recognized the single-page official evidence status. The user-facing Current Answer therefore risked falling back to old proposal-only wording even after approved execution.
+
+Options considered:
+- Leave the final response generic and rely on Worker Result proof.
+- Special-case the UI only.
+- Promote `captured_official_openclaw_multi_page_read_only_observation` into the same captured-evidence response contract as visible-page and single-page official observations.
+
+Decision:
+Treat multi-page official OpenClaw observation as a first-class captured-evidence status. The LangGraph response node now composes the sourced answer from stored source pointers for this status, and output policy explicitly says the approved multi-page read-only observation executed through the dedicated official OpenClaw profile with same-site navigation, DOM/accessibility checks, OCR, and verified page count.
+
+Reason:
+The MVP must let the user trust the Current Answer. If the worker actually executed after approval and evidence was retained, the response must say that clearly and cite source pointers. Older pre-approval proposal-only messages may remain in conversation history, but they must not be confused with the current sourced result.
+
+Cost of changing later:
+Low. More official OpenClaw evidence statuses can be added to the captured-evidence set as worker capabilities expand, but every status that creates source pointers should produce a sourced answer rather than a proposal-only answer.
+
+## 2026-05-30 - Partial Sourced Results Are Completed Continuations With Blockers
+
+Context:
+The multi-page worker can verify some pages and block others. A run with verified source pointers and optional blocked pages should not appear as a failed continuation when the final answer can cite evidence.
+
+Options considered:
+- Mark any page blocker as failed/blocked.
+- Always mark multi-page runs completed even without source pointers.
+- Mark `partial_result_with_blockers` as completed only when it is the terminal outcome returned by the worker evidence path.
+
+Decision:
+`partial_result_with_blockers` is now a completed terminal continuation outcome. The proof surface can still display page blockers and partial status, while LangGraph treats the continuation as terminal and non-active.
+
+Reason:
+This matches the worker contract: a partial sourced result is useful evidence with transparent blockers, not a silent failure. Runs with no verified evidence still fail closed as blocked.
+
+Cost of changing later:
+Low. Future result quality scoring can refine when partial evidence is sufficient for an answer, but terminal continuation state should continue to distinguish sourced partial success from no-evidence failure.

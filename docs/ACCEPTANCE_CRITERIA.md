@@ -480,6 +480,20 @@ Phase 8K user-friendly live worker readiness is acceptable when:
 - Auth recovery remains user-controlled; the app must not imply that OpenClaw can bypass login, enter credentials, or solve authentication challenges.
 - Focused tests prove each readiness state and the UI contract.
 
+Phase 8L guided live app multi-page proof is acceptable when:
+
+- The dedicated official OpenClaw project profile is already authenticated by the user and `Check Live Worker` reports `ready_for_read_only_approval`.
+- `Portal Ready` enables live portal proof, official worker dispatch, current-tab mode, and multi-page mode only through the approval-gated read-only path.
+- The Benefits MVP path first returns an approval-needed state with no worker actions and no source pointers.
+- `Approve Read-Only Observation` records approval, consumes it exactly once, and dispatches the official OpenClaw worker.
+- The worker can reuse the current dedicated tab, navigate same-site read-only links, capture DOM/accessibility evidence, capture CDP screenshots, run local OCR, verify authenticated member portal pages, and persist source pointers.
+- The current answer renders as a sourced executed answer when evidence status is `captured_official_openclaw_multi_page_read_only_observation`.
+- The current answer cites stored source pointers and must not say the approved worker was "not executed in this slice."
+- Worker Result shows terminal outcome, pages verified, actions taken, source pointers, evidence channels, and no hidden external action.
+- `partial_result_with_blockers` is treated as a terminal completed continuation only when sourced evidence exists; no-evidence paths remain blocked.
+- Focused tests, build, live multi-page OpenClaw proof, and browser UI proof pass.
+- Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

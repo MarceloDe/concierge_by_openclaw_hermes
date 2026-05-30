@@ -187,6 +187,46 @@ test("worker continuation consumes approved dispatch and finalizes official read
   assert.ok(events.some((event) => event.eventType === "worker.followup.completed"));
 });
 
+test("worker continuation treats partial sourced results as completed with blockers", async () => {
+  const store = await createStore();
+  const { user, session, taskId } = await proposalFixture(store);
+  const created = await createWorkerContinuation(store, {
+    taskId,
+    sessionId: session.id,
+    userId: user.id,
+    reason: "Run official worker when approved."
+  });
+  await consumeWorkerContinuationForApprovedDispatch(store, {
+    continuationId: created.continuation.id,
+    sessionId: session.id,
+    userId: user.id,
+    taskId,
+    workflow: "eligibility_benefits_navigation",
+    approvalGateId: "gate_partial"
+  });
+
+  const finalized = await finalizeWorkerContinuationDispatch(store, {
+    continuationId: created.continuation.id,
+    sessionId: session.id,
+    userId: user.id,
+    resultStatus: "captured_official_openclaw_multi_page_read_only_observation",
+    terminalOutcome: "partial_result_with_blockers",
+    reason: "Some optional portal pages were blocked, but verified source pointers were created.",
+    browserRunId: "browser_partial",
+    sourcePointerCount: 1,
+    structuredBenefitCount: 1,
+    actionsTaken: ["openclaw_browser_start", "record_verified_source_pointer"]
+  });
+
+  assert.equal(finalized.ok, true);
+  assert.equal(finalized.status, "completed");
+  assert.equal(finalized.continuation.terminalOutcome, "partial_result_with_blockers");
+  const task = await store.findOne("agent_tasks", { id: taskId });
+  assert.equal(task.status, "official_worker_completed");
+  const events = await listRuntimeEvents(store, { sessionId: session.id, limit: 40 });
+  assert.ok(events.some((event) => event.eventType === "worker.followup.completed"));
+});
+
 test("LangGraph blocks continuation dispatch without official OpenClaw worker flag before consuming approval", async () => {
   const store = await createStore();
   const { user, session, taskId } = await proposalFixture(store);

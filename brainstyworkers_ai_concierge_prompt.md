@@ -993,11 +993,21 @@ Next step:
 - OpenClaw is allowed to be versatile only after LangGraph approval: same-site read-only portal navigation, DOM/accessibility scrape, visual OCR confirmation, public/configured read-only lookups, manual-export fallback, and status/follow-up reporting.
 - Auth recovery remains user-controlled. OpenClaw must not bypass login, use password managers, enter credentials, handle passkeys/2FA/captcha, enter SSN, contact payers, send messages, submit forms, modify records, or give medical advice.
 
+Phase 8L guided live app proof:
+
+- The Phase 8K guided app flow has been proven with the dedicated OpenClaw profile signed into a real member portal.
+- `Check Live Worker` can report `ready_for_read_only_approval` from a known authenticated member portal host when the page is not a login, challenge, or public marketing page.
+- The Benefits MVP chat path first returns approval-needed state with no worker actions.
+- After the user approves read-only observation, LangGraph consumes the approval and dispatches the official OpenClaw worker.
+- The worker can reuse the current dedicated tab, navigate same-site read-only portal links, capture DOM/accessibility evidence, capture CDP screenshots, run local OCR, verify authenticated member portal pages, persist source pointers, and report completion.
+- Multi-page evidence status `captured_official_openclaw_multi_page_read_only_observation` is now treated as captured evidence by response composition.
+- The Current Answer must say the approved multi-page read-only observation executed and cite stored source pointers; it must not fall back to proposal-only "not executed in this slice" wording after approval.
+- `partial_result_with_blockers` is a completed terminal continuation when verified source pointers exist; no-evidence paths remain blocked.
+
 Next implementation step:
 
-- Run the Phase 8K guided app flow with the dedicated OpenClaw profile already signed into a real member portal:
-  - check live worker readiness,
-  - run the Benefits MVP chat,
-  - approve read-only observation,
-  - verify multi-page source pointers, structured answer, worker status, and terminal outcome in chat,
-  - if the portal blocks automation, return a sourced blocker state such as `not_possible_insurance_portal_block` or `needs_user_manual_export`.
+- Phase 8M should harden the user-facing MVP result loop:
+  - visually separate Current Answer from older pre-approval conversation history,
+  - add Graphiti retain retry/repair and clearer memory status when retain fails or times out,
+  - improve structured extraction for benefits/claims pages without exposing raw portal text,
+  - keep the proof dashboard available while making auth-plus-chat the primary MVP test surface.

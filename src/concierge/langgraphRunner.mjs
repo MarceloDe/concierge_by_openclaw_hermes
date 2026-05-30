@@ -1588,6 +1588,12 @@ async function evidenceObservationNode(state) {
   };
 }
 
+export const SOURCE_POINTER_RESPONSE_STATUSES = new Set([
+  "captured_visible_page",
+  "captured_official_openclaw_read_only_observation",
+  "captured_official_openclaw_multi_page_read_only_observation"
+]);
+
 async function composeResponseNode(state) {
   if (state.final_response) {
     return {
@@ -1597,7 +1603,7 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   if (
-    ["captured_visible_page", "captured_official_openclaw_read_only_observation"].includes(state.evidence_observation?.status) &&
+    SOURCE_POINTER_RESPONSE_STATUSES.has(state.evidence_observation?.status) &&
     user &&
     portal &&
     state.browser_result

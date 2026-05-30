@@ -21,10 +21,19 @@ function sourcePointerLine(sourcePointers = []) {
 
 function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = [], evidenceObservation = {} }) {
   const structured = eligibility?.structured;
-  const observationMode =
-    evidenceObservation.status === "captured_official_openclaw_read_only_observation"
-      ? "The approved read-only observation was executed by the dedicated official OpenClaw profile with DOM/accessibility and visual OCR checks before LangGraph retained evidence."
-      : "The approved read-only portal observation was verified by LangGraph before evidence was retained.";
+  const observationMode = (() => {
+    if (evidenceObservation.status === "captured_official_openclaw_multi_page_read_only_observation") {
+      const pages =
+        evidenceObservation.pageCount && evidenceObservation.verifiedPageCount
+          ? ` ${evidenceObservation.verifiedPageCount}/${evidenceObservation.pageCount} page(s) were verified.`
+          : "";
+      return `The approved multi-page read-only observation was executed by the dedicated official OpenClaw profile with same-site navigation, DOM/accessibility checks, and visual OCR before LangGraph retained evidence.${pages}`;
+    }
+    if (evidenceObservation.status === "captured_official_openclaw_read_only_observation") {
+      return "The approved read-only observation was executed by the dedicated official OpenClaw profile with DOM/accessibility and visual OCR checks before LangGraph retained evidence.";
+    }
+    return "The approved read-only portal observation was verified by LangGraph before evidence was retained.";
+  })();
   const pageTitle = browserResult?.page?.title ? `Observed page: ${browserResult.page.title}.` : null;
   return [
     "I captured approved read-only portal evidence and prepared the benefits answer from stored source pointers.",

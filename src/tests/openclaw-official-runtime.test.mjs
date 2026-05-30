@@ -231,6 +231,9 @@ test("official OpenClaw authenticated current-tab continuation creates source po
   assert.ok(result.state.source_pointers.length >= 1);
   assert.ok(result.state.evidence_observation.evidenceChannels.some((channel) => channel.channel === "accessibility_tree"));
   assert.ok(result.state.evidence_observation.evidenceChannels.some((channel) => channel.channel === "visual_ocr"));
+  assert.match(result.state.final_response, /I captured approved read-only portal evidence/);
+  assert.match(result.state.final_response, /Source pointers:/);
+  assert.doesNotMatch(result.state.final_response, /not executed in this slice/i);
   if (process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1" && result.state.evidence_observation.pageCount > 1) {
     assert.ok(result.state.evidence_observation.evidenceChannels.some((channel) => channel.channel === "multi_page_navigation"));
     assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_browser_open_internal_link"));

@@ -87,6 +87,26 @@ test("official OpenClaw live readiness marks member portal pages ready for read-
   assert.match(live.safetyBoundary, /cannot handle credentials/i);
 });
 
+test("official OpenClaw live readiness accepts known authenticated member portal home pages", () => {
+  const live = classifyOfficialOpenClawLiveReadiness(
+    baseReadiness({
+      tabs: {
+        currentTab: {
+          id: "tab_home",
+          title: "Home - Aetna",
+          url: "https://health.aetna.com/",
+          active: true
+        },
+        items: [],
+        count: 1
+      }
+    })
+  );
+  assert.equal(live.status, "ready_for_read_only_approval");
+  assert.equal(live.readyForReadOnlyObservation, true);
+  assert.match(live.nextAction, /Home - Aetna/i);
+});
+
 test("official OpenClaw live readiness preserves versatility, blocked actions, and fallback contract", () => {
   const live = classifyOfficialOpenClawLiveReadiness(baseReadiness());
   assert.deepEqual(live.blockedActions, OPENCLAW_BLOCKED_LIVE_ACTIONS);

@@ -37,6 +37,7 @@ const AUTH_CHALLENGE_RE =
 const MEMBER_PORTAL_RE = /\b(member|account|dashboard|benefit|benefits|coverage|eligibility|claims?|deductible|oop|out[- ]of[- ]pocket|secure)\b/i;
 const PUBLIC_MARKETING_PATH_RE =
   /^\/?$|\/individuals-families\b|\/employers-organizations\b|\/health-care-professionals\b|\/about-us\b|\/news\b|\/contact-us\b/i;
+const KNOWN_MEMBER_PORTAL_HOSTS = new Set(["health.aetna.com", "member.aetna.com"]);
 
 function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -62,11 +63,18 @@ function looksLikeMemberPortal(tab = {}) {
   return MEMBER_PORTAL_RE.test(tabText(tab));
 }
 
+function looksLikeKnownMemberPortalHost(tab = {}) {
+  const url = parseUrl(tab.url);
+  if (!url) return false;
+  return KNOWN_MEMBER_PORTAL_HOSTS.has(url.hostname.toLowerCase());
+}
+
 function looksLikePublicMarketingPage(tab = {}) {
   const url = parseUrl(tab.url);
   if (!url) return false;
   const host = url.hostname.toLowerCase();
   if (!/(^|\.)aetna\.com$|(^|\.)healthsafe-id\.com$|(^|\.)cvs\.com$/.test(host)) return false;
+  if (looksLikeKnownMemberPortalHost(tab)) return false;
   if (looksLikeMemberPortal(tab)) return false;
   return PUBLIC_MARKETING_PATH_RE.test(url.pathname);
 }
