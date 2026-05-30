@@ -981,6 +981,23 @@ Important 7C lesson:
 
 Next step:
 
-- Turn the authenticated official OpenClaw proof into a user-friendly auth plus chat flow.
-- The user should see a login-needed state, manually sign in, mark ready, approve read-only observation, and receive a sourced benefits answer in chat.
-- Improve structured extraction so deductible and out-of-pocket values from DOM/accessibility plus visual OCR evidence become structured coverage balance rows, not only verified source evidence.
+- Phase 8K now defines the user-friendly live OpenClaw readiness path.
+- The user should see a `Live Worker Readiness` state before any live worker approval:
+  - profile/browser not ready,
+  - no authenticated current tab,
+  - login/password/passkey/2FA/captcha challenge,
+  - public payer marketing page requiring user navigation,
+  - ready member-portal page for read-only approval.
+- `GET /api/openclaw/official/status` must expose this as `liveReadiness` so UI, operator trace, and tests share one contract.
+- `Portal Ready` may enable live proof, current-tab, and multi-page preferences, but it must also check readiness and tell the user what still blocks execution.
+- OpenClaw is allowed to be versatile only after LangGraph approval: same-site read-only portal navigation, DOM/accessibility scrape, visual OCR confirmation, public/configured read-only lookups, manual-export fallback, and status/follow-up reporting.
+- Auth recovery remains user-controlled. OpenClaw must not bypass login, use password managers, enter credentials, handle passkeys/2FA/captcha, enter SSN, contact payers, send messages, submit forms, modify records, or give medical advice.
+
+Next implementation step:
+
+- Run the Phase 8K guided app flow with the dedicated OpenClaw profile already signed into a real member portal:
+  - check live worker readiness,
+  - run the Benefits MVP chat,
+  - approve read-only observation,
+  - verify multi-page source pointers, structured answer, worker status, and terminal outcome in chat,
+  - if the portal blocks automation, return a sourced blocker state such as `not_possible_insurance_portal_block` or `needs_user_manual_export`.

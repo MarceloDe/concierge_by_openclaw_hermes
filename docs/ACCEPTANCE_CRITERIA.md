@@ -464,6 +464,22 @@ Phase 8J multi-page read-only worker navigation is acceptable when:
 - Live multi-page proof remains gated by explicit flags and an already authenticated dedicated OpenClaw current tab.
 - Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
 
+Phase 8K user-friendly live worker readiness is acceptable when:
+
+- `/api/openclaw/official/status` returns the official OpenClaw readiness plus a `liveReadiness` contract.
+- The live readiness contract classifies:
+  - profile/browser not ready,
+  - auth required because no current tab exists,
+  - login/password/passkey/2FA/captcha challenge pages,
+  - public payer marketing pages that still require user navigation,
+  - member portal pages ready for read-only approval.
+- The chat UI exposes `Live Worker Readiness`, `Check Live Worker`, current-tab summary, next user action, approval state, allowed worker attempts, blocked actions, and fallback chain.
+- `Portal Ready` enables live proof/current-tab/multi-page preferences but also checks live readiness and tells the user whether the worker is ready or still blocked.
+- The allowed worker attempts include same-site portal navigation, DOM/accessibility scraping, visual OCR confirmation, configured read-only/public lookups, and manual-export fallback.
+- The blocked actions remain credential entry, password manager access, passkeys/2FA, SSN entry, payer contact, external messages, form submission, record changes, and medical advice.
+- Auth recovery remains user-controlled; the app must not imply that OpenClaw can bypass login, enter credentials, or solve authentication challenges.
+- Focused tests prove each readiness state and the UI contract.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

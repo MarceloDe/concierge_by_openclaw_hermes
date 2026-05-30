@@ -883,3 +883,22 @@ This tests OpenClaw’s adaptive value without giving it authority over healthca
 
 Cost of changing later:
 Medium. Future worker freedom can expand to APIs, web scrape paths, or more page goals, but the page-by-page verification and source-pointer fan-in contract should remain stable.
+
+## 2026-05-30 - Live Worker Recovery States Replace Auth Bypass
+
+Context:
+After the multi-page worker proof, the next MVP risk is user experience around live authentication. The worker should be versatile after approval, but insurance portals still depend on user-owned credentials, passkeys, 2FA, captcha, and session state. If the UI only exposes raw toggles, a user can think the system will bypass login or silently succeed from a public payer page.
+
+Options considered:
+- Let OpenClaw attempt OS/browser automation around login and challenge screens.
+- Keep only raw live worker toggles and rely on backend fail-closed behavior.
+- Add a first-class live-readiness contract that tells the user whether the dedicated OpenClaw profile, browser, current tab, and portal page are ready for approved read-only observation.
+
+Decision:
+Implement Phase 8K as a guided readiness and recovery layer. `/api/openclaw/official/status` now returns `liveReadiness`, and the chat UI renders the current status, next user action, allowed worker attempts, blocked actions, and fallback chain. `Portal Ready` checks this status before telling the user that a live run is ready.
+
+Reason:
+This preserves the desired worker versatility without crossing the authentication boundary. OpenClaw may adapt its read-only strategy after LangGraph approval, including same-site portal navigation, DOM scrape, OCR confirmation, configured read-only/public lookups, and manual-export fallback. It may not enter credentials, use password managers, solve 2FA/captcha, contact payers, submit forms, change records, or give medical advice.
+
+Cost of changing later:
+Low. The readiness classifier can gain portal-specific page rules and richer tab selection, but the contract should remain: user controls authentication, LangGraph approves and verifies observation, and OpenClaw reports blockers instead of bypassing them.

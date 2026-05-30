@@ -15,10 +15,15 @@ test("chat MVP surface exposes guided auth, portal readiness, and runtime timeli
   assert.match(indexHtml, /id="answerPanel"/);
   assert.match(indexHtml, /id="runtimeTimeline"/);
   assert.match(indexHtml, /id="loadRuntimeEvents"/);
+  assert.match(indexHtml, /id="liveWorkerGuide"/);
+  assert.match(indexHtml, /id="checkLiveWorker"/);
+  assert.match(indexHtml, /id="liveWorkerStatus"/);
+  assert.match(indexHtml, /id="workerVersatility"/);
   assert.match(indexHtml, /Runtime Timeline/);
   assert.match(indexHtml, /Use official OpenClaw worker/);
   assert.match(indexHtml, /Use current OpenClaw tab/);
   assert.match(indexHtml, /Multi-page read-only worker/);
+  assert.match(indexHtml, /Live Worker Readiness/);
   assert.match(indexHtml, /Replay Benefits MVP/);
 });
 
@@ -36,6 +41,15 @@ test("chat MVP JavaScript requires sign-in and renders runtime graph events", ()
   assert.match(appJs, /friendlyWorkerBlocker/);
   assert.match(appJs, /structuredBenefitSummary/);
   assert.match(appJs, /Evidence channels/);
+  assert.match(appJs, /renderLiveWorkerGuide/);
+  assert.match(appJs, /liveReadiness/);
+  assert.match(appJs, /ready_for_read_only_approval/);
+  assert.match(appJs, /auth_required/);
+  assert.match(appJs, /auth_or_challenge_required/);
+  assert.match(appJs, /portal_page_required/);
+  assert.match(appJs, /Worker may try after approval/);
+  assert.match(appJs, /Always blocked/);
+  assert.match(appJs, /Fallback chain/);
 });
 
 test("chat MVP exposes repeatable benefits replay and final answer surface", () => {

@@ -30,6 +30,10 @@ const loadRuntimeEventsButton = document.querySelector("#loadRuntimeEvents");
 const answerPanel = document.querySelector("#answerPanel");
 const resetMvpJourneyButton = document.querySelector("#resetMvpJourney");
 const replayMvpBenefitsButton = document.querySelector("#replayMvpBenefits");
+const liveWorkerGuide = document.querySelector("#liveWorkerGuide");
+const liveWorkerStatus = document.querySelector("#liveWorkerStatus");
+const workerVersatility = document.querySelector("#workerVersatility");
+const checkLiveWorkerButton = document.querySelector("#checkLiveWorker");
 
 let latestChatRun = null;
 let latestUserMessage = "";
@@ -990,11 +994,70 @@ function renderSkillProposal(payload) {
   `;
 }
 
+function liveWorkerStatusClass(status) {
+  if (status === "ready_for_read_only_approval") return "ready";
+  if (status === "auth_required" || status === "auth_or_challenge_required" || status === "portal_page_required") return "waiting";
+  return "blocked";
+}
+
+function compactList(items = [], limit = 8) {
+  return items
+    .slice(0, limit)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function renderLiveWorkerGuide(payload = null) {
+  if (!liveWorkerStatus || !workerVersatility) return;
+  const live = payload?.liveReadiness ?? payload;
+  if (!live?.status) {
+    liveWorkerGuide.className = "live-worker-guide waiting";
+    liveWorkerStatus.innerHTML = "Check the dedicated project OpenClaw profile before approving a live read-only run.";
+    workerVersatility.innerHTML = "";
+    return;
+  }
+  const currentTab = live.currentTab ?? payload?.tabs?.currentTab ?? null;
+  const statusClass = liveWorkerStatusClass(live.status);
+  liveWorkerGuide.className = `live-worker-guide ${statusClass}`;
+  liveWorkerStatus.innerHTML = `
+    <div class="live-worker-state">
+      <strong>${escapeHtml(live.status)}</strong>
+      <span>${escapeHtml(live.nextAction ?? "Check the current OpenClaw browser tab.")}</span>
+    </div>
+    <dl>
+      <dt>Current tab</dt>
+      <dd>${escapeHtml(currentTab ? `${currentTab.title ?? "untitled"} · ${currentTab.url ?? "no url"}` : "none detected")}</dd>
+      <dt>Approval</dt>
+      <dd>${escapeHtml(live.approvalScope ?? "read_only_observation")} · ${escapeHtml(
+        live.readyForReadOnlyObservation ? "ready to request" : "waiting for user action"
+      )}</dd>
+      <dt>Boundary</dt>
+      <dd>${escapeHtml(live.safetyBoundary ?? "OpenClaw is approval-gated and read-only for this MVP.")}</dd>
+    </dl>
+  `;
+  workerVersatility.innerHTML = `
+    <div>
+      <h4>Worker may try after approval</h4>
+      <ul>${compactList(live.workerVersatility ?? [])}</ul>
+    </div>
+    <div>
+      <h4>Always blocked</h4>
+      <ul>${compactList(live.blockedActions ?? [])}</ul>
+    </div>
+    <div>
+      <h4>Fallback chain</h4>
+      <ol>${compactList(live.fallbackChain ?? [], 10)}</ol>
+    </div>
+  `;
+}
+
 function renderOfficialOpenClawStatus(payload) {
   const checks = payload.checks ?? {};
   const config = payload.config ?? {};
   const currentTab = payload.tabs?.currentTab ?? null;
+  const live = payload.liveReadiness ?? {};
   skillStatus.textContent = `${payload.status ?? "unknown"} · ${payload.ready ? "ready" : "attention"}`;
+  renderLiveWorkerGuide(payload);
   skills.innerHTML = `
     <article class="skill-card proposal-card">
       <div>
@@ -1020,6 +1083,8 @@ function renderOfficialOpenClawStatus(payload) {
         <dd>${escapeHtml((config.allowedActions ?? []).join(", ") || "none")}</dd>
         <dt>Blocked actions</dt>
         <dd>${escapeHtml((config.blockedActions ?? []).join(", ") || "none")}</dd>
+        <dt>Live readiness</dt>
+        <dd>${escapeHtml(live.status ?? "not classified")} · ${escapeHtml(live.nextAction ?? "not checked")}</dd>
         <dt>Checks</dt>
         <dd>${escapeHtml(
           Object.entries(checks)
@@ -1322,6 +1387,7 @@ async function loadOfficialOpenClawStatus() {
   const result = await api("/api/openclaw/official/status");
   renderOfficialOpenClawStatus(result);
   trace.textContent = JSON.stringify(result, null, 2);
+  return result;
 }
 
 async function runPhase4Proof() {
@@ -1372,15 +1438,36 @@ async function runPhase4Proof() {
   trace.textContent = JSON.stringify(payload, null, 2);
 }
 
-function markPortalReady() {
+async function markPortalReady() {
   if (!requireSignedInBeforeWorkflow()) return;
   requireLivePortalProof.checked = true;
   useOfficialOpenClawWorker.checked = true;
   officialOpenClawCurrentTab.checked = true;
   officialOpenClawMultiPage.checked = true;
+  let officialStatus = null;
+  try {
+    officialStatus = await loadOfficialOpenClawStatus();
+  } catch (error) {
+    renderLiveWorkerGuide({
+      status: "official_openclaw_profile_not_ready",
+      readyForReadOnlyObservation: false,
+      nextAction: error.message,
+      workerVersatility: [],
+      blockedActions: [],
+      fallbackChain: []
+    });
+    addMessage("assistant", `I could not check the dedicated OpenClaw profile yet: ${error.message}`);
+  }
+  const live = officialStatus?.liveReadiness ?? null;
+  const readinessMessage =
+    live?.status === "ready_for_read_only_approval"
+      ? "Live worker is ready for a read-only approval request. I can use the current dedicated OpenClaw tab, same-site navigation, DOM evidence, and OCR confirmation after you approve the task."
+      : live?.nextAction
+        ? `Live worker is not ready yet: ${live.nextAction}`
+        : "Portal readiness preferences are enabled. Check the live worker status before approval if this is a real portal run.";
   addMessage(
     "assistant",
-    "Portal readiness noted. I will use the current dedicated OpenClaw tab and multi-page read-only worker after approval. You handle all login, passwords, passkeys, SSN, and 2FA in the portal."
+    `${readinessMessage} You handle all login, passwords, passkeys, SSN, and 2FA in the portal.`
   );
   renderJourneyState(latestChatRun);
   renderAnswerPanel(latestChatRun);
@@ -1404,6 +1491,7 @@ function resetMvpJourneySurface(options = {}) {
   useOfficialOpenClawWorker.checked = false;
   officialOpenClawCurrentTab.checked = false;
   officialOpenClawMultiPage.checked = false;
+  renderLiveWorkerGuide();
   productAuthStatus.textContent = "Not signed in";
   sessionStatus.textContent = "No active session";
   reviewStatus.textContent = "No extraction yet";
@@ -1875,6 +1963,26 @@ document.querySelector("#loadOfficialOpenClawStatus").addEventListener("click", 
   }
 });
 
+checkLiveWorkerButton.addEventListener("click", async () => {
+  const restore = setBusy(checkLiveWorkerButton, "Checking...");
+  try {
+    await loadOfficialOpenClawStatus();
+  } catch (error) {
+    renderLiveWorkerGuide({
+      status: "official_openclaw_profile_not_ready",
+      readyForReadOnlyObservation: false,
+      nextAction: error.message,
+      workerVersatility: [],
+      blockedActions: [],
+      fallbackChain: []
+    });
+    skillStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 document.querySelector("#runPhase4Proof").addEventListener("click", async () => {
   const restore = setBusy(document.querySelector("#runPhase4Proof"), "Running...");
   try {
@@ -1918,8 +2026,16 @@ replayMvpBenefitsButton.addEventListener("click", async () => {
   }
 });
 
-portalReady.addEventListener("click", () => {
-  markPortalReady();
+portalReady.addEventListener("click", async () => {
+  const restore = setBusy(portalReady, "Checking...");
+  try {
+    await markPortalReady();
+  } catch (error) {
+    addMessage("assistant", `Portal readiness error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
 });
 
 loadRuntimeEventsButton.addEventListener("click", async () => {
@@ -2089,6 +2205,7 @@ sessions.addEventListener("click", async (event) => {
 renderJourneyState();
 renderAnswerPanel();
 renderRuntimeTimeline();
+renderLiveWorkerGuide();
 addMessage(
   "assistant",
   "Sign in, choose a workflow, or type a benefits question. I will route it through the real LangGraph harness and show workflow proof here in chat. OpenClaw remains approval-gated."

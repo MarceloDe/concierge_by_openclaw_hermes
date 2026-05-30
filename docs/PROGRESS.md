@@ -3281,3 +3281,62 @@ Next step:
 - If it passes, use the app UI to run:
   - Sign In -> Benefits/Replay -> Leave As Async Follow-Up -> Portal Ready -> Approve + Run Official Read-Only,
   - verify the Worker Result shows multi-page navigation, per-page verification, source pointers, and no external actions.
+
+## Phase 8K: User-Friendly Live Worker Readiness And Recovery - 2026-05-30
+
+Request:
+- Prepare the user-friendly MVP path for testing the deterministic LangGraph harness, the versatile OpenClaw worker, real scraping/navigation, and safe recovery when auth or workflow blockers appear.
+
+Implementation:
+- Added `src/concierge/openclawLiveReadiness.mjs`:
+  - classifies official OpenClaw readiness into profile/browser not ready, auth required, auth/challenge required, public portal page requiring user navigation, and ready-for-read-only-approval states,
+  - exposes allowed worker attempts after approval: dedicated current-tab reuse, same-site portal navigation, DOM/accessibility scrape, visual OCR confirmation, configured read-only/public lookup, and manual-export fallback,
+  - keeps blocked actions explicit: credential entry, password manager access, passkeys/2FA, SSN entry, payer contact, external messages, form submission, record modification, and medical advice,
+  - returns terminal outcomes for sourced success, missing user data, portal block, manual export, and long-running follow-up.
+- Updated `GET /api/openclaw/official/status`:
+  - returns the existing official OpenClaw profile readiness plus `liveReadiness`,
+  - keeps the same dedicated project OpenClaw profile and does not use the user's personal OpenClaw profile.
+- Updated the auth-plus-chat UI:
+  - added `Live Worker Readiness`, `Check Live Worker`, current-tab summary, next action, approval state, worker versatility, blocked actions, and fallback chain,
+  - `Portal Ready` now checks live readiness before telling the user whether the worker is ready,
+  - live proof/current-tab/multi-page preferences are still approval-gated and read-only.
+- Updated `brainstyworkers_ai_concierge_prompt.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/ACCEPTANCE_CRITERIA.md`, and `docs/DECISIONS.md`:
+  - records that OpenClaw can be versatile after LangGraph approval,
+  - records that auth recovery remains user-controlled and cannot be bypassed by OpenClaw.
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/openclawLiveReadiness.mjs`
+  - `node --check src/server/server.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/openclaw-live-readiness.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/openclaw-live-readiness.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/openclaw-official-runtime.test.mjs`
+  - 17 tests total.
+  - 15 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 109 tests total.
+  - 107 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed after restarting the local server:
+  - page title: `Brainstyworkers AI Concierge`,
+  - `Live Worker Readiness`, `Check Live Worker`, `Portal Ready`, `Use current OpenClaw tab`, `Multi-page read-only worker`, and runtime timeline were present,
+  - `Check Live Worker` returned `liveReadiness.status=auth_required`,
+  - the UI told the user to open the member portal in the dedicated OpenClaw browser profile and sign in manually,
+  - the UI rendered worker versatility, blocked actions, and fallback chain,
+  - browser console had 0 errors.
+- In-app screenshot capture was attempted for the proof, but the browser CDP screenshot command timed out. DOM/API/browser-console proof passed.
+
+Next step:
+- Phase 8L should run the guided live flow from the app with the dedicated OpenClaw profile already authenticated:
+  - `Check Live Worker` should report `ready_for_read_only_approval`,
+  - run Benefits MVP chat,
+  - approve read-only observation,
+  - verify multi-page source pointers, structured answer, worker status, and terminal outcome in chat,
+  - if the portal blocks automation, return `not_possible_insurance_portal_block` or `needs_user_manual_export` rather than silently failing.

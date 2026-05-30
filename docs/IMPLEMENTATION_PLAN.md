@@ -476,15 +476,25 @@ Phase 8J is implemented as the multi-page read-only worker navigation slice:
   - the evidence observation includes page counts, verified/blocked page counts, navigation plan, page blockers, source pointers, structured benefits, and worker actions,
   - the chat answer panel and Worker Result proof surface the multi-page worker outcome.
 
-Phase 8K is the next implementation:
+Phase 8K is implemented as the user-friendly live worker readiness and recovery slice:
 
-- Run and harden the live authenticated multi-page OpenClaw proof:
-  - user manually signs into the dedicated project OpenClaw profile,
-  - run `npm run test:live:openclaw-multipage`,
-  - verify source pointers and structured answer from multi-page pages,
-  - inspect page blockers and adjust page-kind rules only from verified evidence,
-  - add a UI-guided live run path if the CLI proof passes,
-  - keep LangGraph as the verifier and final-response owner.
+- Turns the raw OpenClaw toggles into a guided live-worker readiness path:
+  - classifies the dedicated official OpenClaw profile, browser, current tab, login/challenge pages, public marketing pages, and ready member-portal pages,
+  - shows the user what must happen next before approving a live read-only run,
+  - exposes the worker versatility that is allowed after LangGraph approval: same-site portal navigation, DOM/accessibility scrape, visual OCR confirmation, configured read-only API/public lookups, and manual-export fallback,
+  - keeps blocked actions explicit: credential entry, password manager access, passkeys/2FA, SSN entry, payer contact, external messaging, form submission, record changes, and medical advice,
+  - integrates `/api/openclaw/official/status` with `liveReadiness` so the UI and operator trace use the same contract,
+  - keeps auth recovery user-controlled instead of attempting to bypass login or session challenges.
+
+Phase 8L is the next implementation:
+
+- Use the Phase 8K guided readiness path to run a live authenticated multi-page OpenClaw proof from the user-facing app:
+  - user signs into the dedicated project OpenClaw profile manually,
+  - `Check Live Worker` must report `ready_for_read_only_approval`,
+  - run the existing Benefits MVP path,
+  - approve the read-only worker task,
+  - verify multi-page source pointers, structured answer, runtime events, and terminal worker status in chat,
+  - if the portal blocks automation, return a clear `not_possible_insurance_portal_block` or `needs_user_manual_export` result.
 
 ## Full Working Test Recommendation
 

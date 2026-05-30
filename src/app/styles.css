@@ -203,6 +203,109 @@ textarea {
   padding: 8px 10px;
 }
 
+.live-worker-guide {
+  border: 1px solid #d9e4dd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.live-worker-guide.ready {
+  border-color: #6a9a7a;
+  background: #f4fbf6;
+}
+
+.live-worker-guide.waiting {
+  border-color: #c8b15a;
+  background: #fffaf0;
+}
+
+.live-worker-guide.blocked {
+  border-color: #b45f5f;
+  background: #fff6f5;
+}
+
+.live-worker-header,
+.live-worker-state {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.live-worker-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.live-worker-header button {
+  padding: 8px 10px;
+}
+
+.live-worker-state strong {
+  color: #123b32;
+  font-size: 14px;
+}
+
+.live-worker-state span {
+  color: #44534b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.live-worker-status dl {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 10px 0 0;
+}
+
+.live-worker-status dt,
+.live-worker-status dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.live-worker-status dt {
+  font-weight: 700;
+}
+
+.live-worker-status dd {
+  color: #44534b;
+  overflow-wrap: anywhere;
+}
+
+.worker-versatility {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.worker-versatility div {
+  border: 1px solid #d9e4dd;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+  min-width: 0;
+}
+
+.worker-versatility h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #123b32;
+}
+
+.worker-versatility ul,
+.worker-versatility ol {
+  margin: 0;
+  padding-left: 18px;
+  color: #44534b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .answer-panel {
   border: 1px solid #bfd8cb;
   border-radius: 8px;
@@ -756,6 +859,7 @@ pre {
 
   .journey-grid,
   .answer-meta,
+  .worker-versatility,
   .runtime-event {
     grid-template-columns: 1fr;
   }
@@ -797,7 +901,16 @@ pre {
   }
 
   .member-panel,
-  .composer {
+  .composer,
+  .live-worker-header,
+  .live-worker-state,
+  .live-worker-status dl {
     grid-template-columns: 1fr;
+  }
+
+  .live-worker-header,
+  .live-worker-state {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

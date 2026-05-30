@@ -18,6 +18,7 @@ import { closeManagedSession, getManagedSessionState, listManagedSessions } from
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisode } from "../concierge/productMemory.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
+import { classifyOfficialOpenClawLiveReadiness } from "../concierge/openclawLiveReadiness.mjs";
 import {
   createRuntimeHookSubscription,
   listRuntimeEvents,
@@ -389,7 +390,11 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/openclaw/official/status") {
-    sendJson(res, 200, await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }));
+    const readiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() });
+    sendJson(res, 200, {
+      ...readiness,
+      liveReadiness: classifyOfficialOpenClawLiveReadiness(readiness)
+    });
     return;
   }
 
