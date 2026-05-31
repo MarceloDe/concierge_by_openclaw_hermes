@@ -1,4 +1,5 @@
 import { classifyUntrustedTextRisk } from "./policy.mjs";
+import { OPENCLAW_DATA_COLLECTION_FIELDS, OPENCLAW_PORTAL_SECTION_HINTS } from "./openclawWorkerContract.mjs";
 
 export const PROMPT_CONTRACT_VERSION = "2026-05-17.prompt-contract.v1";
 
@@ -22,6 +23,10 @@ const OPENCLAW_ALLOWED_TASKS = [
   "read_visible_authenticated_browser_state",
   "navigate_within_approved_payer_portal_scope",
   "read_public_web_sources_and_configured_read_only_apis",
+  "use_portal_search_when_available",
+  "inspect_likely_portal_sections",
+  "read_needed_read_only_document_or_pdf",
+  "extract_structured_insurance_data",
   "extract_observations_with_source_pointers",
   "update_openclaw_worker_heartbeat_memory",
   "report_pending_tasks_and_due_jobs",
@@ -279,6 +284,27 @@ export function buildOpenClawArmPromptContract(contextPacket) {
       ].join("\n")
     ),
     section(
+      "Insurance Site Tooling Strategy",
+      [
+        "Restate the assigned insurance question before acting, then choose the best read-only approach inside the LangGraph-approved task.",
+        "Browser navigation: reuse an authenticated project browser tab or open the approved portal URL. If login, password, passkey, 2FA, captcha, or a session challenge appears, ask the user to complete login, passkey, 2FA, captcha, or session challenge and wait for the authenticated portal.",
+        "Browser automation: inspect tabs, links, buttons, forms, accessible names, rendered page state, and fresh snapshots; recover from stale refs with a new snapshot.",
+        "DOM/accessibility extraction: inspect visible text, tables, cards, plan summaries, benefit sections, claims, deductibles, out-of-pocket maximums, copays, coinsurance, networks, pharmacy benefits, document lists, and safe identifiers.",
+        "Safe JavaScript evaluation is allowed only for read-only visible page text and structure. Do not extract cookies, localStorage, sessionStorage, auth tokens, or secrets.",
+        "Visual OCR: use local screenshots and OCR for visual tables, cards, modals, canvas, images, PDF viewers, and inaccessible rendered content; cross-check OCR with DOM/accessibility when possible.",
+        "Documents/PDFs: when exact benefits require it, read a needed read-only document or PDF such as a Summary of Benefits and Coverage, plan document, ID card, EOB, claims PDF, or benefits summary; return source pointers and confidence rather than raw dumps.",
+        `Portal sections to try before failure: ${OPENCLAW_PORTAL_SECTION_HINTS.join(", ")}.`,
+        "Reasoning and validation: reconcile conflicting evidence by preferring official/current portal sources, include exact dates when dates matter, report uncertainty, and cite page title, section, document, screenshot, PDF, or source pointer for important claims."
+      ].join("\n")
+    ),
+    section(
+      "Insurance Data Collection Targets",
+      [
+        "Collect only fields relevant to the assigned task and return missing or uncertain values as null/empty arrays instead of inventing facts.",
+        OPENCLAW_DATA_COLLECTION_FIELDS.map((field) => `- ${field}`).join("\n")
+      ].join("\n")
+    ),
+    section(
       "Progress And Heartbeat",
       [
         "A task-scoped status subagent must update LangGraph at least every 30 seconds while work is active.",
@@ -295,6 +321,10 @@ export function buildOpenClawArmPromptContract(contextPacket) {
       [
         "Return JSON-compatible observations:",
         "- status",
+        "- authenticated",
+        "- data_collected with member_id_last4_or_safe_identifier and only task-relevant insurance fields",
+        "- answer",
+        "- evidence",
         "- source_pointers",
         "- status_updates",
         "- subtasks",
@@ -302,6 +332,8 @@ export function buildOpenClawArmPromptContract(contextPacket) {
         "- actions_taken",
         "- approvals_required",
         "- risks_or_blockers",
+        "- uncertainties",
+        "- recommended_next_steps",
         "- final_status: completed_with_sourced_result | not_possible_missing_user_data | not_possible_insurance_or_portal_block | not_possible_policy_or_approval_block | needs_long_running_followup | partial_result_with_blockers"
       ].join("\n")
     )

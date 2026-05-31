@@ -1004,9 +1004,24 @@ Phase 8L guided live app proof:
 - The Current Answer must say the approved multi-page read-only observation executed and cite stored source pointers; it must not fall back to proposal-only "not executed in this slice" wording after approval.
 - `partial_result_with_blockers` is a completed terminal continuation when verified source pointers exist; no-evidence paths remain blocked.
 
+Phase 8M OpenClaw insurance skill playbook:
+
+- The `insurance-portal-browser` skill is the explicit, editable OpenClaw worker playbook for read-only insurance-site work.
+- The worker should restate the assigned insurance question, then try multiple appropriate read-only approaches before failure:
+  - authenticated current-tab or approved portal navigation after user-controlled auth,
+  - browser snapshots, DOM/accessibility extraction, stable selectors, links, buttons, forms, tabs, tables, and safe read-only page text,
+  - local screenshot OCR for visual tables, cards, modals, images, canvas, and PDF viewers,
+  - portal search and likely sections such as Benefits, Coverage, Plan details, Deductible, Claims, ID card, Documents, Summary of Benefits and Coverage, Pharmacy, Find care, Network, Costs, and Member profile,
+  - needed official portal documents/PDFs such as SBCs, plan documents, ID cards, EOBs, claims PDFs, and benefit summaries, in read-only mode only,
+  - reconciliation of conflicting evidence by preferring official/current portal sources.
+- The worker return payload should include status, blocker, task understanding, insurance site, authenticated state, structured `data_collected`, answer, evidence, source pointers, status updates, subtasks, worker-memory updates, actions taken, approvals required, blockers, uncertainties, and recommended next steps.
+- Structured insurance fields include plan name, safe member identifier, effective dates, plan type, network, deductible, out-of-pocket max, copays, coinsurance, pharmacy benefits, claims summary, documents found, and other relevant details.
+- The repo skill artifact, dedicated project workspace skill copy, worker job contract, and prompt contract must stay aligned.
+- Boundaries remain non-negotiable: user completes login/password/passkey/2FA/captcha/session challenges; OpenClaw does not bypass authentication, use password managers, enter SSNs, contact payers, send messages, submit forms, modify records, or give medical advice.
+
 Next implementation step:
 
-- Phase 8M should harden the user-facing MVP result loop:
+- Phase 8N should use the enriched skill playbook to harden the user-facing MVP result loop:
   - visually separate Current Answer from older pre-approval conversation history,
   - add Graphiti retain retry/repair and clearer memory status when retain fails or times out,
   - improve structured extraction for benefits/claims pages without exposing raw portal text,

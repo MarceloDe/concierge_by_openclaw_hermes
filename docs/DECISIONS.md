@@ -940,3 +940,22 @@ This matches the worker contract: a partial sourced result is useful evidence wi
 
 Cost of changing later:
 Low. Future result quality scoring can refine when partial evidence is sufficient for an answer, but terminal continuation state should continue to distinguish sourced partial success from no-evidence failure.
+
+## 2026-05-30 - Put The Rich Insurance Worker Playbook In The Skill Contract
+
+Context:
+The user asked whether the OpenClaw worker prompt matched a richer insurance-site playbook: try hard, use browser automation, DOM/accessibility extraction, OCR, portal search, PDFs/documents, and structured insurance reasoning, while still asking the user to complete login/2FA/captcha and staying read-only. The repo already allowed adaptive worker behavior, but the richer portal strategy was not fully expressed as a skill artifact, worker job contract, prompt contract, and testable schema.
+
+Options considered:
+- Leave the richer playbook only as conversation guidance.
+- Put it only in the OpenClaw prompt text.
+- Promote it into the repo-scoped skill artifact, dedicated project workspace skill copy, LangGraph worker job contract, prompt contract, artifact validator, and tests.
+
+Decision:
+Promote the richer insurance-site playbook into the project `insurance-portal-browser` skill and all related contracts. The worker may use portal search, DOM/accessibility extraction, local OCR, official read-only portal documents/PDFs, multiple same-site read-only approaches, structured insurance extraction, uncertainty reporting, and source pointers inside the approved LangGraph task. The dedicated project workspace copy is refreshed from the repo artifact. Auth recovery remains user-controlled; the worker still must not use password managers, enter credentials, handle passkeys/2FA/captcha, enter SSNs, contact payers, send messages, submit forms, modify records, or provide medical advice.
+
+Reason:
+OpenClaw's value is adaptive execution, but healthcare workflow safety needs a stable contract. Encoding the playbook in the skill plus the LangGraph job/prompt contracts lets the worker be versatile without letting it choose workflows or bypass approval/auth boundaries.
+
+Cost of changing later:
+Low to medium. The exact portal sections and data fields can expand as live portal testing reveals more structure. The higher-level contract should remain stable: LangGraph owns workflow, approval, verification, source-pointer fan-in, product memory, and final response; OpenClaw owns adaptive read-only execution inside the assigned task.

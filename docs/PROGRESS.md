@@ -3404,3 +3404,74 @@ Next step:
   - add a retry/repair path for Graphiti retain failures,
   - improve structured extraction for Claims/Benefits pages without exposing raw portal text,
   - keep the proof dashboard available but make the auth-plus-chat path the primary MVP test surface.
+
+## Phase 8M: OpenClaw Insurance Skill Playbook And Contract Hardening - 2026-05-30
+
+Request:
+- Continue to the next phase and include the richer OpenClaw skill behavior requested by the user.
+- Align the project worker prompt with the desired insurance-site playbook: autonomous read-only navigation after user-controlled auth, DOM/accessibility extraction, OCR, portal search, PDFs/documents, structured insurance data, status updates, uncertainty, and source pointers.
+
+Implementation:
+- Updated `openclaw/skills/insurance-portal-browser/SKILL.md`:
+  - added the Insurance Site Tooling Strategy,
+  - added browser navigation, user-auth handoff, DOM/accessibility extraction, local OCR, portal search, document/PDF handling, reasoning/validation, structured return payload, and quality bar,
+  - kept credential/password/passkey/2FA/captcha/SSN handling user-only.
+- Updated `openclaw/skills/insurance-portal-browser/skill.json`:
+  - added `portal_search`, `read_only_document_download`, and `pdf_extraction_analysis`,
+  - added portal section strategy, structured answer schema, document policy, and quality bar.
+- Refreshed the dedicated project OpenClaw workspace copy:
+  - `~/.openclaw-brainstyworkers/workspace-brainstyworkers/skills/insurance-portal-browser/SKILL.md`
+  - `~/.openclaw-brainstyworkers/workspace-brainstyworkers/skills/insurance-portal-browser/skill.json`
+  - SHA-256 hashes match the repo artifact.
+- Updated `src/concierge/openclawSkillArtifacts.mjs`:
+  - validates the richer skill playbook, portal sections, structured schema, document/PDF policy, and quality bar.
+- Updated `src/concierge/openclawWorkerContract.mjs`:
+  - transmits portal section hints, data collection fields, document policy, quality bar, and auth boundary,
+  - allows portal search, official read-only documents, PDF analysis, and structured insurance extraction inside the assigned task,
+  - blocks password-manager/auth-challenge handling and all irreversible/external actions.
+- Updated `src/concierge/promptContracts.mjs`:
+  - adds an editable Insurance Site Tooling Strategy and Insurance Data Collection Targets to the OpenClaw arm prompt contract,
+  - requires JSON-compatible fields for `authenticated`, `data_collected`, `answer`, `evidence`, `uncertainties`, and `recommended_next_steps`.
+- Updated tests:
+  - `src/tests/openclaw-skill-artifacts.test.mjs`
+  - `src/tests/openclaw-worker-contract.test.mjs`
+  - `src/tests/prompt-contracts.test.mjs`
+- Updated docs and governing prompt:
+  - `brainstyworkers_ai_concierge_prompt.md`
+  - `docs/IMPLEMENTATION_PLAN.md`
+  - `docs/ACCEPTANCE_CRITERIA.md`
+  - `docs/DECISIONS.md`
+
+Proof:
+- Static checks passed:
+  - `node --check src/concierge/openclawSkillArtifacts.mjs`
+  - `node --check src/concierge/openclawWorkerContract.mjs`
+  - `node --check src/concierge/promptContracts.mjs`
+  - `node --check src/tests/openclaw-skill-artifacts.test.mjs`
+  - `node --check src/tests/openclaw-worker-contract.test.mjs`
+  - `node --check src/tests/prompt-contracts.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/openclaw-skill-artifacts.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/prompt-contracts.test.mjs src/tests/chat-ui-contract.test.mjs`
+  - 15 tests total.
+  - 15 passed.
+  - 0 failed.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 112 tests total.
+  - 110 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+
+Known risks:
+- This slice hardens contracts and the installed project skill copy; it does not run a fresh live OpenClaw browser proof.
+- The next live proof should verify the enriched playbook against the authenticated portal and check whether portal search/document/PDF branches are reachable.
+- Graphiti retain retry/repair and clearer user-facing memory state are still pending from the prior Phase 8M plan and should move into Phase 8N.
+
+Next step:
+- Phase 8N should use the enriched skill in the user-facing MVP result loop:
+  - separate Current Answer from older pre-approval history,
+  - add Graphiti retain retry/repair and clearer memory status,
+  - improve structured extraction for benefits/claims pages while preserving source-pointer-only responses,
+  - keep auth-plus-chat as the primary MVP test surface and the proof dashboard as operator/debug support.

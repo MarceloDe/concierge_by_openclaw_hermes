@@ -10,6 +10,58 @@ export const DEFAULT_OPENCLAW_RUNTIME_TARGET = {
   commandPrefix: "openclaw --profile brainstyworkers"
 };
 
+export const OPENCLAW_PORTAL_SECTION_HINTS = [
+  "Benefits",
+  "Coverage",
+  "Plan details",
+  "Deductible",
+  "Claims",
+  "ID card",
+  "Documents",
+  "Summary of Benefits and Coverage",
+  "Pharmacy",
+  "Find care",
+  "Network",
+  "Costs",
+  "Member profile"
+];
+
+export const OPENCLAW_DATA_COLLECTION_FIELDS = [
+  "plan_name",
+  "member_name",
+  "member_id_last4_or_safe_identifier",
+  "effective_dates",
+  "plan_type",
+  "network",
+  "deductible",
+  "out_of_pocket_max",
+  "copays",
+  "coinsurance",
+  "pharmacy_benefits",
+  "claims_summary",
+  "documents_found",
+  "other_relevant_details"
+];
+
+function emptyDataCollected() {
+  return {
+    plan_name: null,
+    member_name: null,
+    member_id_last4_or_safe_identifier: null,
+    effective_dates: null,
+    plan_type: null,
+    network: null,
+    deductible: null,
+    out_of_pocket_max: null,
+    copays: [],
+    coinsurance: [],
+    pharmacy_benefits: null,
+    claims_summary: [],
+    documents_found: [],
+    other_relevant_details: []
+  };
+}
+
 function stableId(prefix, values) {
   const digest = createHash("sha256")
     .update(JSON.stringify(values))
@@ -98,12 +150,55 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       workerMayChooseToolPathWithinAssignedTask: true,
       workerMayOpenAdditionalBrowserInstances: true,
       workerMayTryReadOnlyApisAndScrapers: true,
+      workerMayUsePortalSearch: true,
+      workerMayReadOfficialDocumentsWhenNeeded: true,
+      workerMayAnalyzePdfDocumentsWhenNeeded: true,
+      workerMayExtractStructuredInsuranceData: true,
       workerMayUseLocalOsAutomationWithinTaskScope: true,
+      workerMayUsePasswordManagerOrHandleAuthChallenges: false,
       workerMayContactPayer: false,
       workerMaySendExternalMessage: false,
       workerMaySubmitForms: false,
       workerMayEnterCredentials: false,
       workerMayProvideMedicalAdvice: false
+    },
+    insuranceSitePlaybook: {
+      taskUnderstandingRequired: true,
+      portalSectionHints: OPENCLAW_PORTAL_SECTION_HINTS,
+      dataCollectionFields: OPENCLAW_DATA_COLLECTION_FIELDS,
+      evidenceFields: ["source", "details", "confidence"],
+      authBoundary: "user_completes_login_passkey_2fa_captcha_then_worker_resumes",
+      documentPolicy: {
+        readOnlyDocumentsAllowedWhenNeeded: true,
+        documentTypes: [
+          "summary_of_benefits_and_coverage",
+          "plan_documents",
+          "id_cards",
+          "eob_pdfs",
+          "claims_pdfs",
+          "benefits_summaries"
+        ],
+        preferOfficialCurrentPortalDocuments: true,
+        rawDocumentDumpAllowed: false
+      },
+      toolingStrategy: [
+        "reuse authenticated project browser tab or open the approved portal URL",
+        "ask the user to complete login, passkey, 2FA, captcha, or session challenges themselves",
+        "inspect rendered DOM, accessibility tree, links, buttons, forms, tabs, and safe read-only JavaScript text",
+        "capture screenshot OCR for visual tables, cards, modals, canvas, images, and PDF viewers",
+        "use portal search and likely sections before reporting missing data",
+        "read needed SBCs, plan documents, ID cards, EOBs, claims PDFs, and benefits summaries only in read-only mode",
+        "prefer official current portal documents over marketing pages",
+        "reconcile conflicting evidence and report uncertainty"
+      ],
+      qualityBar: [
+        "try multiple read-only approaches before reporting failure",
+        "do not stop after one failed click, one missing selector, or one empty page",
+        "if browser automation fails, try fresh DOM or accessibility inspection",
+        "if DOM or accessibility is insufficient, try screenshot OCR",
+        "if OCR is insufficient and exact benefits are required, look for official PDFs or documents",
+        "if the portal blocks access, report exactly where and why with the next safest user-controlled step"
+      ]
     },
     allowedWork: {
       objective:
@@ -115,13 +210,19 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
         "open_additional_browser_instances_when_useful",
         "scrape_or_read_public_web_sources",
         "try_read_only_api_access_when_configured",
+        "use_portal_search_when_available",
+        "inspect_likely_portal_sections",
+        "read_needed_plan_documents_or_pdfs",
         "create_task_scoped_helper_skill_or_script",
         "use_local_os_automation_within_task_scope",
         "observe_authenticated_pages",
         "select_safe_same_site_read_only_navigation_targets",
         "capture_per_page_dom_and_ocr_evidence",
+        "extract_structured_plan_claims_and_benefit_data",
         "extract_visible_facts",
+        "reconcile_conflicting_sources",
         "return_source_pointers",
+        "return_uncertainties_and_next_steps",
         "report_blockers",
         "update_worker_heartbeat_memory"
       ],
@@ -169,15 +270,22 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
         "jobId",
         "correlationId",
         "status",
+        "authenticated",
+        "dataCollected",
+        "answer",
         "sourcePointers",
+        "evidence",
         "readOnlyNavigationPlan",
         "pageObservations",
+        "structuredExtraction",
         "statusUpdates",
         "subtasks",
         "workerMemoryUpdates",
         "actionsTaken",
         "approvalsRequired",
-        "risksOrBlockers"
+        "risksOrBlockers",
+        "uncertainties",
+        "recommendedNextSteps"
       ],
       actionsTakenMustBeEmptyUntilExecution: true
     },
@@ -200,7 +308,11 @@ export function buildOpenClawWorkerResultTemplate(job) {
     correlationId: job?.correlationId ?? null,
     workerAgentId: job?.worker?.agentId ?? null,
     status: "not_executed_pending_approval",
+    authenticated: "unknown",
+    dataCollected: emptyDataCollected(),
+    answer: null,
     sourcePointers: [],
+    evidence: [],
     readOnlyNavigationPlan: null,
     pageObservations: [],
     structuredExtraction: null,
@@ -213,6 +325,8 @@ export function buildOpenClawWorkerResultTemplate(job) {
       ...(job?.risksOrBlockers ?? []),
       "official_openclaw_worker_not_dispatched"
     ],
+    uncertainties: [],
+    recommendedNextSteps: [],
     auditEventIds: []
   };
 }
@@ -276,6 +390,23 @@ export function validateOpenClawWorkerPlan(plan) {
     if (job.deterministicControls?.workerMayCreateSubtasks !== true) issues.push("Worker must be allowed to create subtasks inside its assigned task.");
     if (job.deterministicControls?.workerMayRunTaskScopedSubagents !== true) issues.push("Worker must run a task-scoped status subagent.");
     if (job.deterministicControls?.workerMayChooseToolPathWithinAssignedTask !== true) issues.push("Worker must be allowed to choose the best tool path inside its assigned task.");
+    if (job.deterministicControls?.workerMayUsePortalSearch !== true) issues.push("Worker must be allowed to use portal search inside its assigned task.");
+    if (job.deterministicControls?.workerMayReadOfficialDocumentsWhenNeeded !== true) issues.push("Worker must be allowed to read needed official documents in read-only mode.");
+    if (job.deterministicControls?.workerMayAnalyzePdfDocumentsWhenNeeded !== true) issues.push("Worker must be allowed to analyze needed PDFs in read-only mode.");
+    if (job.deterministicControls?.workerMayExtractStructuredInsuranceData !== true) issues.push("Worker must be allowed to extract structured insurance data.");
+    if (job.deterministicControls?.workerMayUsePasswordManagerOrHandleAuthChallenges !== false) issues.push("Worker must not use password managers or handle auth challenges.");
+    if (!job.allowedWork?.allowedActions?.includes("read_needed_plan_documents_or_pdfs")) issues.push("Worker allowed work must include read-only document/PDF handling.");
+    if (!job.allowedWork?.allowedActions?.includes("use_portal_search_when_available")) issues.push("Worker allowed work must include portal search.");
+    if (!job.allowedWork?.allowedActions?.includes("extract_structured_plan_claims_and_benefit_data")) issues.push("Worker allowed work must include structured insurance extraction.");
+    if (!job.insuranceSitePlaybook?.portalSectionHints?.includes("Summary of Benefits and Coverage")) {
+      issues.push("Worker insurance-site playbook must include Summary of Benefits and Coverage.");
+    }
+    if (!job.insuranceSitePlaybook?.dataCollectionFields?.includes("out_of_pocket_max")) {
+      issues.push("Worker insurance-site playbook must include out_of_pocket_max.");
+    }
+    if (job.insuranceSitePlaybook?.documentPolicy?.rawDocumentDumpAllowed !== false) {
+      issues.push("Worker document policy must reject raw document dumps.");
+    }
     if (job.progressProtocol?.reportEverySeconds !== 30 || job.progressProtocol?.silentFailureAllowed !== false) {
       issues.push("Worker progress protocol must require non-silent 30-second reports.");
     }

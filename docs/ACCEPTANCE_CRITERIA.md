@@ -494,6 +494,18 @@ Phase 8L guided live app multi-page proof is acceptable when:
 - Focused tests, build, live multi-page OpenClaw proof, and browser UI proof pass.
 - Credentials, passkeys, 2FA, SSNs, payer contact, external messages, form submission, record changes, and medical advice remain out of scope.
 
+Phase 8M OpenClaw insurance skill playbook hardening is acceptable when:
+
+- The repo-scoped `insurance-portal-browser` skill and the dedicated project workspace copy contain the same current `SKILL.md` and `skill.json`.
+- The skill describes browser navigation, user-controlled auth handoff, remote/browser automation, DOM/accessibility extraction, visual OCR, portal search, read-only document/PDF handling, and reasoning/validation strategy.
+- The manifest declares `portal_search`, `read_only_document_download`, and `pdf_extraction_analysis` as allowed tools.
+- The portal section strategy includes Benefits, Coverage, Claims, Documents, Pharmacy, and Summary of Benefits and Coverage.
+- The structured answer schema includes plan, safe member identifier, effective dates, deductible, out-of-pocket max, copays, coinsurance, pharmacy benefits, claims summary, documents found, evidence, uncertainty, and recommended next steps.
+- The worker job contract transmits the same playbook, data fields, quality bar, and document policy.
+- The OpenClaw prompt contract instructs the worker to use multiple read-only approaches before failure and to return JSON-compatible sourced evidence rather than raw portal dumps.
+- The validator and tests fail if the richer skill playbook, portal section strategy, document/PDF policy, or structured insurance data fields are removed.
+- Credential entry, password-manager use, passkeys, 2FA, captcha solving, SSN entry, payer contact, external messages, form submission, record changes, and medical advice remain blocked or user-only.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

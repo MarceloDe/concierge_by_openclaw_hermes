@@ -50,6 +50,14 @@ test("prompt bundle separates orchestrator identity from OpenClaw execution arm"
   assert.match(bundle.openclawArm.prompt, /Never click submit/);
   assert.match(bundle.openclawArm.prompt, /decompose the assigned task into subtasks/i);
   assert.match(bundle.openclawArm.prompt, /every 30 seconds/i);
+  assert.match(bundle.openclawArm.prompt, /Insurance Site Tooling Strategy/);
+  assert.match(bundle.openclawArm.prompt, /Summary of Benefits and Coverage/);
+  assert.match(bundle.openclawArm.prompt, /read-only document or PDF/);
+  assert.match(bundle.openclawArm.prompt, /member_id_last4_or_safe_identifier/);
+  assert.match(bundle.openclawArm.prompt, /auth tokens/);
+  assert.match(bundle.openclawArm.prompt, /data_collected/);
+  assert.match(bundle.openclawArm.prompt, /recommended_next_steps/);
+  assert.match(bundle.openclawArm.prompt, /ask the user to complete login, passkey, 2FA, captcha, or session challenge/);
   assert.match(bundle.openclawArm.prompt, /status_updates/);
   assert.match(bundle.openclawArm.prompt, /openclaw_instance_id=openclaw_1/);
 });

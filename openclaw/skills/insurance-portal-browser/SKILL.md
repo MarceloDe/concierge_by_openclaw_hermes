@@ -45,6 +45,42 @@ The `insurance-portal-browser` contract governs what the browser worker may do. 
 
 Stop immediately if the next step requires credential entry, SSN entry, passkey/2FA handling, or an irreversible portal action.
 
+## Insurance Site Tooling Strategy
+
+Use every appropriate read-only OpenClaw/browser capability before giving up:
+
+1. Browser navigation:
+   - open the insurer/member portal or reuse the existing authenticated project browser tab,
+   - if the page requires login, password, passkey, 2FA, captcha, or a session challenge, ask the user to complete it and wait for the authenticated portal,
+   - continue only after the browser shows an authenticated member portal or the user confirms the portal is ready.
+2. Browser automation:
+   - inspect tabs, links, buttons, forms, accessible names, and rendered page state,
+   - prefer stable selectors and accessible names,
+   - recover from stale refs by taking a fresh snapshot,
+   - use additional tabs only when helpful,
+   - wait for SPA/JavaScript-rendered content before extracting evidence.
+3. DOM and accessibility extraction:
+   - inspect visible DOM text and accessibility-tree text,
+   - extract tables, cards, plan summaries, benefits, coverage details, claims, deductibles, out-of-pocket maximums, copays, coinsurance, provider network facts, member-safe identifiers, plan names, effective dates, pharmacy benefits, and document lists when relevant,
+   - use safe read-only JavaScript evaluation to collect structured page text when available,
+   - never extract cookies, localStorage, sessionStorage, auth tokens, or secrets.
+4. Visual OCR:
+   - capture screenshots and run local OCR when content is in images, canvas, PDF viewers, tables, modals, or visually rendered cards,
+   - cross-check OCR against DOM/accessibility evidence when possible.
+5. Documents and PDFs:
+   - if the portal exposes SBCs, plan documents, ID cards, EOBs, claims PDFs, or benefits summaries, read or download them only when needed for the assigned task and only in read-only mode,
+   - prefer official/current portal documents over marketing pages for benefit details,
+   - return document source pointers and confidence, not raw document dumps.
+6. Portal search and navigation:
+   - use portal search when available,
+   - try likely sections before reporting failure: Benefits, Coverage, Plan details, Deductible, Claims, ID card, Documents, Summary of Benefits and Coverage, Pharmacy, Find care, Network, Costs, and Member profile.
+7. Reasoning and validation:
+   - do not dump raw text,
+   - reconcile conflicting facts by preferring the most official and current source,
+   - include exact dates when dates matter,
+   - report uncertainty when data is missing or ambiguous,
+   - include page title, section name, document name, screenshot artifact, PDF artifact, or database source pointer for every important claim.
+
 ## Task Contract
 
 Required input fields:
@@ -72,6 +108,12 @@ Required output fields:
 - `actions_taken`
 - `approvals_required`
 - `risks_or_blockers`
+- `authenticated`
+- `data_collected`
+- `answer`
+- `evidence`
+- `uncertainties`
+- `recommended_next_steps`
 
 Optional output fields:
 
@@ -94,6 +136,63 @@ Optional output fields:
 9. Always collect two read-only views before returning evidence: a DOM/accessibility snapshot and a visual screenshot OCR pass. If OCR is unavailable or the screenshot is still only a loading screen, return a blocker instead of creating source evidence.
 10. Update worker heartbeat memory with useful task lessons, prior user preferences discovered from the task packet, blockers, and next-attempt hints. Final product-memory writes must be returned to LangGraph for ingest.
 11. Return structured observations, status updates, subtasks, memory updates, and blockers. If blocked, return the exact blocker and the safest next user-controlled step.
+
+## Structured Return Payload
+
+Return JSON-compatible data plus a short human-readable answer for LangGraph. Use this shape unless the orchestrator provides a stricter schema:
+
+```json
+{
+  "status": "completed_with_sourced_result | partial_result_with_blockers | not_possible_missing_user_data | not_possible_insurance_or_portal_block | not_possible_policy_or_approval_block | needs_long_running_followup",
+  "blocker": null,
+  "task_understood": "brief restatement of the assigned insurance question",
+  "insurance_site": "site/domain if known",
+  "authenticated": true,
+  "data_collected": {
+    "plan_name": null,
+    "member_name": null,
+    "member_id_last4_or_safe_identifier": null,
+    "effective_dates": null,
+    "plan_type": null,
+    "network": null,
+    "deductible": null,
+    "out_of_pocket_max": null,
+    "copays": [],
+    "coinsurance": [],
+    "pharmacy_benefits": null,
+    "claims_summary": [],
+    "documents_found": [],
+    "other_relevant_details": []
+  },
+  "answer": "best reasoned answer to the orchestrator's question",
+  "evidence": [
+    {
+      "source": "portal page, section, document, screenshot, PDF, or source pointer",
+      "details": "what was observed",
+      "confidence": "high | medium | low"
+    }
+  ],
+  "source_pointers": [],
+  "status_updates": [],
+  "subtasks": [],
+  "worker_memory_updates": [],
+  "actions_taken": [],
+  "approvals_required": [],
+  "risks_or_blockers": [],
+  "uncertainties": [],
+  "recommended_next_steps": []
+}
+```
+
+## Quality Bar
+
+- Try multiple read-only approaches before reporting failure.
+- Do not stop after one failed click, one missing selector, or one empty page.
+- If browser automation fails, try fresh DOM/accessibility inspection.
+- If DOM/accessibility is insufficient, try screenshot OCR.
+- If screenshot OCR is insufficient and the task requires exact benefits, look for official PDFs or documents.
+- If the portal blocks access, report exactly where and why, and name the next safest user-controlled step.
+- The final answer must be useful to LangGraph without requiring raw browser inspection.
 
 ## Progress Protocol
 

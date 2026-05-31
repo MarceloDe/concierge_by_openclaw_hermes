@@ -27,7 +27,17 @@ export function validateOpenClawSkillArtifact(artifact) {
     issues.push("Skill status must make real adapter execution gated.");
   }
   if (manifest.risk_level !== "high") issues.push("Insurance portal browser skill must be high risk.");
-  if (!hasEvery(manifest.allowed_tools, ["browser_remote_debugger", "chrome_extension_bridge", "mcp_browser_adapter", "payer_portal_reader"])) {
+  if (
+    !hasEvery(manifest.allowed_tools, [
+      "browser_remote_debugger",
+      "chrome_extension_bridge",
+      "mcp_browser_adapter",
+      "payer_portal_reader",
+      "portal_search",
+      "read_only_document_download",
+      "pdf_extraction_analysis"
+    ])
+  ) {
     issues.push("Skill allowed_tools must include all browser fallback and extraction tools.");
   }
   if (!hasEvery(manifest.required_companion_skills, ["browser-automation", "ocr-local"])) {
@@ -44,6 +54,18 @@ export function validateOpenClawSkillArtifact(artifact) {
   }
   if (manifest.progress_protocol?.report_every_seconds !== 30 || manifest.progress_protocol?.silent_failure_allowed !== false) {
     issues.push("Skill progress_protocol must require non-silent 30-second reports.");
+  }
+  if (!manifest.tooling_strategy?.document_handling?.some((item) => includesText(item, "SBCs"))) {
+    issues.push("Skill tooling_strategy must include read-only insurance document/PDF handling.");
+  }
+  if (!manifest.portal_section_strategy?.likely_sections?.includes("Summary of Benefits and Coverage")) {
+    issues.push("Skill portal_section_strategy must include the Summary of Benefits and Coverage section.");
+  }
+  if (!manifest.structured_answer_schema?.data_collected_fields?.includes("out_of_pocket_max")) {
+    issues.push("Skill structured_answer_schema must include insurance plan data fields.");
+  }
+  if (!manifest.quality_bar?.some((item) => includesText(item, "multiple read-only approaches"))) {
+    issues.push("Skill quality_bar must require multiple read-only approaches before failure.");
   }
   if (!hasEvery(manifest.allowed_workflows, ["eligibility_benefits_navigation", "claim_status_navigation", "prior_authorization_navigation", "payer_portal_read_only_extraction"])) {
     issues.push("Skill allowed_workflows must cover eligibility, claims, prior auth, and portal extraction.");
@@ -75,6 +97,15 @@ export function validateOpenClawSkillArtifact(artifact) {
   if (!includesText(skillMd, "Report to LangGraph every 30 seconds")) {
     issues.push("SKILL.md must state the 30-second worker progress protocol.");
   }
+  if (!includesText(skillMd, "Insurance Site Tooling Strategy")) {
+    issues.push("SKILL.md must include the insurance-site tooling strategy.");
+  }
+  if (!includesText(skillMd, "Structured Return Payload")) {
+    issues.push("SKILL.md must include the structured return payload.");
+  }
+  if (!includesText(skillMd, "Summary of Benefits and Coverage")) {
+    issues.push("SKILL.md must include portal section strategy for SBC documents.");
+  }
   if (!includesText(skillMd, "not_possible_missing_user_data")) {
     issues.push("SKILL.md must define terminal outcome statuses.");
   }
@@ -98,6 +129,8 @@ export function validateOpenClawSkillArtifact(artifact) {
       browserAutomationRequired: manifest.browser_control_policy?.required_skill === "browser-automation",
       ocrLocalRequired: manifest.visual_evidence_policy?.ocr_engine === "ocr-local",
       adaptiveWorkerAllowed: manifest.adaptive_worker_policy?.worker_may_decompose_assigned_task === true,
+      structuredAnswerSchema: Boolean(manifest.structured_answer_schema?.data_collected_fields?.length),
+      portalSectionStrategy: Boolean(manifest.portal_section_strategy?.likely_sections?.length),
       progressProtocolSeconds: manifest.progress_protocol?.report_every_seconds ?? null
     }
   };

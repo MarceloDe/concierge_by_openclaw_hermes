@@ -7,6 +7,8 @@ import {
   buildOpenClawWorkerJob,
   buildOpenClawWorkerResultTemplate,
   DEFAULT_OPENCLAW_RUNTIME_TARGET,
+  OPENCLAW_DATA_COLLECTION_FIELDS,
+  OPENCLAW_PORTAL_SECTION_HINTS,
   validateOpenClawWorkerPlan
 } from "../concierge/openclawWorkerContract.mjs";
 
@@ -59,8 +61,23 @@ test("OpenClaw worker job keeps LangGraph as workflow master while empowering ta
   assert.equal(job.deterministicControls.workerMayChooseToolPathWithinAssignedTask, true);
   assert.equal(job.deterministicControls.workerMayOpenAdditionalBrowserInstances, true);
   assert.equal(job.deterministicControls.workerMayTryReadOnlyApisAndScrapers, true);
+  assert.equal(job.deterministicControls.workerMayUsePortalSearch, true);
+  assert.equal(job.deterministicControls.workerMayReadOfficialDocumentsWhenNeeded, true);
+  assert.equal(job.deterministicControls.workerMayAnalyzePdfDocumentsWhenNeeded, true);
+  assert.equal(job.deterministicControls.workerMayExtractStructuredInsuranceData, true);
+  assert.equal(job.deterministicControls.workerMayUsePasswordManagerOrHandleAuthChallenges, false);
   assert.ok(job.allowedWork.allowedActions.includes("select_safe_same_site_read_only_navigation_targets"));
   assert.ok(job.allowedWork.allowedActions.includes("capture_per_page_dom_and_ocr_evidence"));
+  assert.ok(job.allowedWork.allowedActions.includes("use_portal_search_when_available"));
+  assert.ok(job.allowedWork.allowedActions.includes("read_needed_plan_documents_or_pdfs"));
+  assert.ok(job.allowedWork.allowedActions.includes("extract_structured_plan_claims_and_benefit_data"));
+  assert.ok(job.insuranceSitePlaybook.taskUnderstandingRequired);
+  assert.deepEqual(job.insuranceSitePlaybook.portalSectionHints, OPENCLAW_PORTAL_SECTION_HINTS);
+  assert.deepEqual(job.insuranceSitePlaybook.dataCollectionFields, OPENCLAW_DATA_COLLECTION_FIELDS);
+  assert.ok(job.insuranceSitePlaybook.portalSectionHints.includes("Summary of Benefits and Coverage"));
+  assert.ok(job.insuranceSitePlaybook.dataCollectionFields.includes("out_of_pocket_max"));
+  assert.equal(job.insuranceSitePlaybook.documentPolicy.readOnlyDocumentsAllowedWhenNeeded, true);
+  assert.equal(job.insuranceSitePlaybook.documentPolicy.rawDocumentDumpAllowed, false);
   assert.equal(job.progressProtocol.reportEverySeconds, 30);
   assert.equal(job.progressProtocol.silentFailureAllowed, false);
   assert.equal(job.workerMemoryPolicy.receiveGraphitiMemoryContext, true);
@@ -95,6 +112,13 @@ test("OpenClaw worker result template requires no actions before execution", asy
   assert.equal(result.status, "not_executed_pending_approval");
   assert.equal(result.jobId, job.jobId);
   assert.equal(result.correlationId, job.correlationId);
+  assert.equal(result.authenticated, "unknown");
+  assert.equal(result.dataCollected.out_of_pocket_max, null);
+  assert.deepEqual(result.dataCollected.copays, []);
+  assert.deepEqual(result.evidence, []);
+  assert.equal(result.answer, null);
+  assert.deepEqual(result.uncertainties, []);
+  assert.deepEqual(result.recommendedNextSteps, []);
   assert.deepEqual(result.statusUpdates, []);
   assert.deepEqual(result.subtasks, []);
   assert.deepEqual(result.workerMemoryUpdates, []);

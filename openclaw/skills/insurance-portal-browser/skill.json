@@ -24,6 +24,9 @@
     "public_web_search",
     "website_scraper",
     "configured_read_only_api_client",
+    "portal_search",
+    "read_only_document_download",
+    "pdf_extraction_analysis",
     "task_scoped_helper_skill",
     "local_os_automation"
   ],
@@ -78,6 +81,63 @@
     "silent_failure_allowed": false,
     "long_task_escalation": "Ask LangGraph whether to continue synchronously or convert to an async follow-up when the worker judges the task long or complex."
   },
+  "tooling_strategy": {
+    "browser_navigation": [
+      "open the insurer/member portal or reuse the authenticated project browser tab",
+      "ask the user to complete login, passkey, 2FA, captcha, or session challenges themselves",
+      "continue only after authenticated member portal readiness is confirmed"
+    ],
+    "browser_automation": [
+      "inspect tabs, links, buttons, forms, accessible names, and rendered page state",
+      "prefer stable selectors and accessible names",
+      "recover from stale refs by taking a fresh snapshot",
+      "use additional tabs only when helpful",
+      "wait for SPA or JavaScript-rendered content before extracting evidence"
+    ],
+    "dom_extraction": [
+      "inspect visible DOM text and accessibility-tree text",
+      "extract tables, cards, plan summaries, benefit sections, coverage details, claims, deductibles, out-of-pocket maximums, copays, coinsurance, networks, safe identifiers, plan names, effective dates, pharmacy benefits, and document lists",
+      "use safe read-only JavaScript evaluation for structured page text",
+      "never extract cookies, localStorage, sessionStorage, auth tokens, or secrets"
+    ],
+    "visual_ocr": [
+      "capture screenshots and run local OCR for images, canvas, PDF viewers, tables, modals, or visual benefit cards",
+      "cross-check OCR against DOM and accessibility evidence where possible"
+    ],
+    "document_handling": [
+      "read or download SBCs, plan documents, ID cards, EOBs, claims PDFs, and benefits summaries only when needed for the assigned task",
+      "prefer official and current portal documents over marketing pages",
+      "return document source pointers and confidence instead of raw dumps"
+    ],
+    "portal_search": [
+      "use portal search when available",
+      "try likely sections before reporting failure"
+    ],
+    "reasoning_validation": [
+      "do not dump raw text",
+      "reconcile conflicts by preferring the most official and current source",
+      "include exact dates when dates matter",
+      "report uncertainty when data is missing or ambiguous",
+      "cite page title, section, document, screenshot, PDF, or database source pointer for important claims"
+    ]
+  },
+  "portal_section_strategy": {
+    "likely_sections": [
+      "Benefits",
+      "Coverage",
+      "Plan details",
+      "Deductible",
+      "Claims",
+      "ID card",
+      "Documents",
+      "Summary of Benefits and Coverage",
+      "Pharmacy",
+      "Find care",
+      "Network",
+      "Costs",
+      "Member profile"
+    ]
+  },
   "fallback_strategy": {
     "order": [
       "browser_remote_debugger",
@@ -111,7 +171,13 @@
       "worker_memory_updates",
       "actions_taken",
       "approvals_required",
-      "risks_or_blockers"
+      "risks_or_blockers",
+      "authenticated",
+      "data_collected",
+      "answer",
+      "evidence",
+      "uncertainties",
+      "recommended_next_steps"
     ],
     "optional": [
       "portal_page_snapshots",
@@ -121,6 +187,45 @@
       "audit_event_ids"
     ]
   },
+  "structured_answer_schema": {
+    "status_values": [
+      "completed_with_sourced_result",
+      "partial_result_with_blockers",
+      "not_possible_missing_user_data",
+      "not_possible_insurance_or_portal_block",
+      "not_possible_policy_or_approval_block",
+      "needs_long_running_followup"
+    ],
+    "data_collected_fields": [
+      "plan_name",
+      "member_name",
+      "member_id_last4_or_safe_identifier",
+      "effective_dates",
+      "plan_type",
+      "network",
+      "deductible",
+      "out_of_pocket_max",
+      "copays",
+      "coinsurance",
+      "pharmacy_benefits",
+      "claims_summary",
+      "documents_found",
+      "other_relevant_details"
+    ],
+    "evidence_fields": [
+      "source",
+      "details",
+      "confidence"
+    ]
+  },
+  "quality_bar": [
+    "try multiple read-only approaches before reporting failure",
+    "do not stop after one failed click, one missing selector, or one empty page",
+    "if browser automation fails, try fresh DOM or accessibility inspection",
+    "if DOM or accessibility is insufficient, try screenshot OCR",
+    "if OCR is insufficient and exact benefits are required, look for official PDFs or documents",
+    "if the portal blocks access, report exactly where and why with the next safest user-controlled step"
+  ],
   "visual_evidence_policy": {
     "required": true,
     "dom_or_accessibility_snapshot_required": true,
