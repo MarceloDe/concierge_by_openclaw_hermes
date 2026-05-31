@@ -997,3 +997,22 @@ This keeps the MVP narrow and testable. The user can see whether the enriched wo
 
 Cost of changing later:
 Low. A later phase can promote read-only PDF/document ingestion from candidate discovery to actual extraction with a separate approval/scope if needed. The discovery report should remain as a pre-ingestion proof and blocker diagnostic.
+
+## 2026-05-30 - After Live Discovery, Improve Section Extraction Before PDF Ingestion
+
+Context:
+The Phase 8P authenticated live OpenClaw proof passed. The worker verified 4/4 portal pages, created 8 source pointers, found portal search affordances, and found document candidates for document center, ID card, plan document, and EOB surfaces. It did not surface direct SBC/PDF candidates from the observed pages, and it correctly blocked one mixed document/form candidate.
+
+Options considered:
+- Implement PDF/document ingestion immediately.
+- Keep the result as operator-only proof.
+- First expose discovery metadata to the user and improve structured extraction for the reachable portal sections.
+
+Decision:
+Phase 8Q should improve the user-facing MVP loop and section-specific structured extraction before adding general PDF ingestion. The next implementation should show Discovery/Next Evidence metadata in chat, extract more structured facts from the live-reachable benefits, spending, claims, prior authorization, documents, ID card, pharmacy, and network surfaces, and add a narrower read-only document approval path before any future PDF/document download or analysis.
+
+Reason:
+The live proof shows the worker can reach useful authenticated portal surfaces today. The fastest MVP value is to turn those surfaces into clearer sourced answers and next-evidence prompts. PDF ingestion should be scoped to a visible document candidate and approved separately instead of becoming a broad capability by default.
+
+Cost of changing later:
+Low to medium. Once page-specific extraction and document-candidate approval are visible in chat, PDF/document ingestion can be added as a smaller, safer slice.

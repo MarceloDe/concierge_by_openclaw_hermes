@@ -3653,9 +3653,49 @@ Proof so far:
   - `npm run build`
 
 Current blocker:
-- The live proof is waiting for user-controlled login/2FA/captcha/session challenge completion in the dedicated OpenClaw browser. OpenClaw and Codex must not enter credentials, use password managers, handle passkeys/2FA, or bypass authentication.
+- Resolved after the user manually logged in to the dedicated OpenClaw browser.
+
+Live proof:
+- `npm run test:live:openclaw-discovery`
+  - 1 test total.
+  - 1 passed.
+  - 0 failed.
+  - duration about 81 seconds.
+- Readiness before the run:
+  - `ready_for_read_only_approval`
+  - current tab `Home - Aetna`
+  - runtime `2026-05-30.official-openclaw-runtime.v3`
+- Live discovery result:
+  - terminal outcome `completed_with_sourced_result`,
+  - 4 pages observed,
+  - 4 pages verified,
+  - 0 pages blocked,
+  - 8 source pointers created,
+  - portal search status `portal_search_available_not_submitted`,
+  - portal search affordances found: 6 inputs, 6 buttons, 7 links,
+  - document discovery status `document_candidates_recorded`,
+  - 5 document candidates found,
+  - 4 read-only document candidates,
+  - 1 blocked/mixed document-form candidate,
+  - 0 SBC/PDF candidates surfaced from the observed pages,
+  - document candidate types included document center, ID card, plan document, and EOB,
+  - sections tried: benefits, spending, claims,
+  - sections reachable: benefits, spending, claims, prior authorizations, documents, pharmacy, ID card, and network.
+- Actions included:
+  - current-tab reuse,
+  - accessibility snapshots,
+  - CDP screenshots,
+  - local OCR,
+  - same-site internal navigation,
+  - portal search affordance scan,
+  - document candidate discovery,
+  - authenticated portal verification,
+  - source-pointer recording,
+  - eligibility snapshot persistence,
+  - multi-page read-only navigation verification.
 
 Next step:
-- After the user confirms the dedicated OpenClaw browser is authenticated and on a member portal page, run:
-  - `npm run test:live:openclaw-discovery`
-- Then inspect the discovery report in the test output/app proof and decide whether Phase 8Q should implement read-only document/PDF ingestion or page-specific extraction improvements first.
+- Phase 8Q should use the live proof to improve the MVP value path:
+  - add a user-visible Discovery/Next Evidence panel that names search availability and document candidates from source-pointer-safe metadata,
+  - add page-specific structured extraction for benefits, spending, claims, prior authorization, ID card, pharmacy, network, and documents surfaces,
+  - defer actual PDF/document ingestion until the UI can ask for a narrower read-only document approval and because the observed pages did not expose SBC/PDF candidates directly.

@@ -563,6 +563,23 @@ Phase 8P live discovery proof harness is prepared:
   - worker status events carry discovery metadata and SBC/PDF counts.
 - The actual live proof still requires the user to manually sign in to the dedicated OpenClaw browser and leave the authenticated member portal tab open.
 
+Phase 8P live discovery proof passed:
+
+- `npm run test:live:openclaw-discovery` passed with the dedicated OpenClaw browser authenticated.
+- The worker used the current member-portal tab, navigated same-site read-only pages, captured DOM/accessibility evidence, CDP screenshots, and local OCR, verified 4/4 pages, and created 8 source pointers.
+- The discovery report found portal search affordances but did not submit a query.
+- The discovery report found document candidates for document center, ID card, plan document, and EOB surfaces.
+- One mixed document/form candidate was blocked for user-confirmation safety.
+- No SBC/PDF candidates were surfaced from the observed pages.
+
+Next implementation:
+
+- Phase 8Q should convert the live discovery proof into a better user-facing MVP loop:
+  - show Discovery/Next Evidence metadata in chat without raw portal text,
+  - enrich page-specific structured extraction for the sections actually reachable from the live portal,
+  - add a narrower read-only document approval path before any future PDF/document ingestion,
+  - keep direct PDF ingestion deferred until a visible document candidate requires it and has its own approval scope.
+
 ## Full Working Test Recommendation
 
 - Phase 4 is the right phase to test the real authenticated portal evidence loop: approval -> read-only observation -> verified source pointer -> sourced answer.

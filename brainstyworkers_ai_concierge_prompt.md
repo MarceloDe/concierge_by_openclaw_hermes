@@ -1051,7 +1051,15 @@ Phase 8P live discovery proof harness:
 - `npm run test:live:openclaw-discovery` runs the authenticated current-tab, multi-page official OpenClaw proof with live portal proof enabled.
 - The proof requires the user to manually complete login/password/passkey/2FA/captcha/session challenges in the dedicated OpenClaw browser and leave the authenticated member portal tab open.
 - The live test asserts source pointers, DOM/accessibility evidence, visual OCR evidence, discovery report presence, no portal-search submission, no document/PDF download, no raw document dump, discovery actions, and worker status discovery metadata.
+- The Phase 8P live proof passed after user-controlled authentication:
+  - 4/4 observed pages were verified,
+  - 8 source pointers were created,
+  - portal search affordances were found but no search was submitted,
+  - 5 document candidates were found,
+  - 4 document candidates were read-only,
+  - 1 mixed document/form candidate was blocked,
+  - no SBC/PDF candidates surfaced from the observed pages.
 
 Next implementation step:
 
-- Complete the Phase 8P live run after user-controlled authentication. Then decide whether Phase 8Q should add read-only PDF/document ingestion or first improve page-specific structured extraction for the discovered portal sections.
+- Phase 8Q should improve the user-facing MVP loop from the live discovery proof: show Discovery/Next Evidence metadata in chat, improve section-specific structured extraction for reachable portal pages, and defer PDF/document ingestion until a narrower read-only document approval path exists.
