@@ -537,6 +537,21 @@ Phase 8P live discovery proof is acceptable when:
 - The result documents whether portal search, official documents, SBCs, or PDFs are reachable from the authenticated portal.
 - If auth/challenge/login blocks the run, the result is recorded as a user-action blocker rather than a failed product claim.
 
+Phase 8Q user-friendly MVP sequencing app is acceptable when:
+
+- The existing `/` proof dashboard remains available.
+- `/mvp` loads as a separate auth-plus-chat app.
+- The app starts a real local planned-user session through `POST /api/orchestrator/auth-start`.
+- Chat and workflow shortcut buttons route through `POST /api/chat` and do not use mocked workflow results.
+- The sequence view shows Auth, GPT/Intent, Approval, OpenClaw, Evidence, Memory, and Answer states from real graph state.
+- The approval panel shows the pending OpenClaw proposal task and can call the existing read-only approval endpoint.
+- Official OpenClaw dispatch uses a worker continuation id when selected.
+- The app checks live worker readiness through `GET /api/openclaw/official/status`.
+- The Discovery/Next Evidence panel renders portal search status, document candidates, SBC/PDF candidates, sections tried/reachable, and fallback chain from evidence state.
+- Runtime events stream through `/api/runtime/events/stream`.
+- User-facing answer proof remains source-pointer based and does not expose raw portal text.
+- Build, UI contract test, and browser smoke proof pass.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

@@ -3699,3 +3699,65 @@ Next step:
   - add a user-visible Discovery/Next Evidence panel that names search availability and document candidates from source-pointer-safe metadata,
   - add page-specific structured extraction for benefits, spending, claims, prior authorization, ID card, pharmacy, network, and documents surfaces,
   - defer actual PDF/document ingestion until the UI can ask for a narrower read-only document approval and because the observed pages did not expose SBC/PDF candidates directly.
+
+## Phase 8Q: User-Friendly MVP Sequencing App - 2026-05-30
+
+Request:
+- Build a user-friendly UI for the system without giving up the already running proof dashboard.
+- Keep the phase aligned with the implementation flow and test the sequencing of the whole system.
+
+Implementation:
+- Added a separate `/mvp` route served by the existing Node/static app:
+  - `src/app/mvp.html`,
+  - `src/app/mvp.css`,
+  - `src/app/mvp.js`.
+- Kept `/` as the existing operator/debug proof dashboard and added an `Open MVP App` link from the dashboard top bar.
+- Wired the new MVP app to the real APIs only:
+  - local planned-user auth through `/api/orchestrator/auth-start`,
+  - LangGraph chat through `/api/chat`,
+  - live OpenClaw readiness through `/api/openclaw/official/status`,
+  - read-only approval through `/api/orchestrator/approve`,
+  - official worker continuation through `/api/worker-continuations`,
+  - runtime proof through `/api/runtime/events` and `/api/runtime/events/stream`.
+- Added a user-facing sequence view for:
+  - Auth,
+  - GPT / Intent,
+  - Approval,
+  - OpenClaw,
+  - Evidence,
+  - Memory,
+  - Answer.
+- Added workflow buttons that submit real chat messages instead of bypassing LangGraph.
+- Added a Current Answer panel and Discovery/Next Evidence panel that render source-pointer-safe graph state.
+- Added approval controls that can run read-only observation through the existing approval token and, for official OpenClaw, a worker continuation id.
+- Added static contract coverage in `src/tests/chat-ui-contract.test.mjs`.
+
+Proof so far:
+- `node --check src/app/mvp.js` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed:
+  - 8 tests total,
+  - 8 passed,
+  - 0 failed.
+- `npm run build` passed.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - route title loaded as `Brainstyworkers Concierge MVP`,
+  - `Start Session` created a real local session `session_b191be2f-14e4-447c-b60a-866191cadf1b`,
+  - `Benefits` submitted a real chat message through LangGraph,
+  - Current Answer showed workflow `eligibility_benefits_navigation`,
+  - Approval Gate showed a pending proposal task `task_c8fa9828-7d5b-4120-a863-1808732dcf4d`,
+  - sequence state showed Auth done, GPT/Intent done, Approval pending, Answer ready,
+  - Discovery/Next Evidence correctly stayed empty before approved worker execution,
+  - browser console had 0 errors.
+- Full local suite passed:
+  - `npm run test:local`,
+  - 115 tests total,
+  - 113 passed,
+  - 0 failed,
+  - 2 skipped live-gated official OpenClaw tests.
+
+Remaining proof:
+- Live approved OpenClaw execution from `/mvp` remains gated by the user's authenticated dedicated OpenClaw browser and a read-only approval click.
+
+Next step:
+- Continue Phase 8Q by validating the MVP route in the browser, then move to section-specific structured extraction for the live-reachable portal surfaces before any PDF/document ingestion.

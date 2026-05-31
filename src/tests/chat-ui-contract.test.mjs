@@ -4,6 +4,9 @@ import { test } from "node:test";
 
 const indexHtml = await readFile(new URL("../app/index.html", import.meta.url), "utf8");
 const appJs = await readFile(new URL("../app/app.js", import.meta.url), "utf8");
+const mvpHtml = await readFile(new URL("../app/mvp.html", import.meta.url), "utf8");
+const mvpJs = await readFile(new URL("../app/mvp.js", import.meta.url), "utf8");
+const mvpCss = await readFile(new URL("../app/mvp.css", import.meta.url), "utf8");
 
 test("chat MVP surface exposes guided auth, portal readiness, and runtime timeline", () => {
   assert.match(indexHtml, /id="chatJourney"/);
@@ -127,4 +130,35 @@ test("chat MVP exposes multi-page worker proof fields", () => {
   assert.match(appJs, /pageCount/);
   assert.match(appJs, /captured_official_openclaw_multi_page_read_only_observation/);
   assert.match(appJs, /evidenceChannelSummary/);
+});
+
+test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {
+  assert.match(indexHtml, /href="\/mvp"/);
+  assert.match(mvpHtml, /Brainstyworkers Concierge MVP/);
+  assert.match(mvpHtml, /id="startSession"/);
+  assert.match(mvpHtml, /id="chatForm"/);
+  assert.match(mvpHtml, /id="currentAnswer"/);
+  assert.match(mvpHtml, /id="approvalPanel"/);
+  assert.match(mvpHtml, /id="discoveryPanel"/);
+  assert.match(mvpHtml, /id="sequence"/);
+  assert.match(mvpHtml, /Proof Dashboard/);
+  assert.match(mvpHtml, /Use official OpenClaw/);
+  assert.match(mvpHtml, /Multi-page read-only run/);
+  assert.match(mvpHtml, /Live GPT decisioning/);
+  assert.match(mvpJs, /\/api\/orchestrator\/auth-start/);
+  assert.match(mvpJs, /\/api\/chat/);
+  assert.match(mvpJs, /\/api\/orchestrator\/approve/);
+  assert.match(mvpJs, /\/api\/worker-continuations/);
+  assert.match(mvpJs, /\/api\/openclaw\/official\/status/);
+  assert.match(mvpJs, /\/api\/runtime\/events\/stream/);
+  assert.match(mvpJs, /EventSource/);
+  assert.match(mvpJs, /executeEvidenceObservation: false/);
+  assert.match(mvpJs, /executeEvidenceObservation: true/);
+  assert.match(mvpJs, /READ_ONLY_SCOPE/);
+  assert.match(mvpJs, /approvalToken/);
+  assert.match(mvpJs, /workerContinuationId/);
+  assert.match(mvpJs, /discoveryReport/);
+  assert.match(mvpJs, /sourcePointers/);
+  assert.match(mvpJs, /product_memory_retain/);
+  assert.match(mvpCss, /grid-template-columns: minmax\(260px, 300px\) minmax\(420px, 1fr\) minmax\(280px, 360px\)/);
 });

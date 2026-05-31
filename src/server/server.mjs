@@ -67,7 +67,7 @@ function sendSse(res, event) {
 
 async function serveStatic(req, res) {
   const path = new URL(req.url, "http://localhost").pathname;
-  const fileName = path === "/" ? "index.html" : path.slice(1);
+  const fileName = path === "/" ? "index.html" : path === "/mvp" ? "mvp.html" : path.slice(1);
   const filePath = join(APP_DIR, fileName);
   try {
     const content = await readFile(filePath);

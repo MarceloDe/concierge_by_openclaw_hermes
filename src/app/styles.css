@@ -53,6 +53,27 @@ button:hover {
   gap: 16px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.secondary-link {
+  border: 1px solid #123b32;
+  border-radius: 6px;
+  color: #123b32;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  text-decoration: none;
+}
+
+.secondary-link:hover {
+  background: #e8f0ec;
+}
+
 .eyebrow {
   margin: 0 0 4px;
   font-size: 12px;

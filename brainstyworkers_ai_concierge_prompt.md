@@ -1063,3 +1063,32 @@ Phase 8P live discovery proof harness:
 Next implementation step:
 
 - Phase 8Q should improve the user-facing MVP loop from the live discovery proof: show Discovery/Next Evidence metadata in chat, improve section-specific structured extraction for reachable portal pages, and defer PDF/document ingestion until a narrower read-only document approval path exists.
+
+Phase 8Q user-friendly MVP sequencing app:
+
+- Add a separate user-facing app route at `/mvp` while retaining the existing `/` proof dashboard for operator/debug verification.
+- The `/mvp` app must be auth plus chat first:
+  - start a local planned-user session through `POST /api/orchestrator/auth-start`,
+  - send workflow questions through `POST /api/chat`,
+  - keep workflow shortcut buttons as chat inputs rather than separate mock demos,
+  - show the latest LangGraph answer, workflow, GPT/intent decision, approval state, worker outcome, source pointers, product-memory state, and trace id.
+- The app must show a visible sequence of the real system:
+  - Auth,
+  - GPT / Intent,
+  - Approval,
+  - OpenClaw,
+  - Evidence,
+  - Memory,
+  - Answer.
+- The app must expose the live OpenClaw readiness path through `GET /api/openclaw/official/status` and use the same read-only approval gate as the proof dashboard:
+  - `POST /api/orchestrator/approve`,
+  - `POST /api/worker-continuations` when official OpenClaw dispatch is selected,
+  - `POST /api/chat` with the approval token, task id, and optional worker continuation id for the approved resume.
+- The app must render Discovery/Next Evidence metadata from source-pointer-safe evidence state:
+  - portal search status,
+  - document candidate counts,
+  - SBC/PDF candidate counts,
+  - sections tried/reachable,
+  - fallback chain.
+- This is a UI sequencing phase, not a runtime fork. No Next.js migration is required until the product needs deployment features that the current Node/static app cannot provide.
+- The existing dashboard remains the deep proof surface. The new `/mvp` route is the user-friendly harness for testing whether a non-engineer can follow the real LangGraph/OpenClaw/Zep sequence.

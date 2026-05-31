@@ -1016,3 +1016,22 @@ The live proof shows the worker can reach useful authenticated portal surfaces t
 
 Cost of changing later:
 Low to medium. Once page-specific extraction and document-candidate approval are visible in chat, PDF/document ingestion can be added as a smaller, safer slice.
+
+## 2026-05-30 - Add A Sibling MVP App Instead Of Replacing The Proof Dashboard
+
+Context:
+The existing app works well as a testing/proof dashboard, but the MVP must also be understandable as a user-facing auth-plus-chat product. The user asked for a friendlier UI that can test the sequencing of the whole system without giving up the already running proof surface.
+
+Options considered:
+- Replace the current dashboard with a redesigned single app.
+- Start a new Next.js application immediately.
+- Add a separate static `/mvp` route served by the existing Node app and wired to the same APIs.
+
+Decision:
+Add a separate `/mvp` route and keep `/` as the operator/debug dashboard. The new route is a user-friendly sequencing app: local auth, chat, workflow buttons, live worker readiness, read-only approval, worker continuation, source-pointer evidence, product-memory state, runtime events, and Discovery/Next Evidence metadata. It uses the existing API/runtime path and does not create a new mocked frontend runtime.
+
+Reason:
+The implementation risk is lowest if the UI phase does not change the orchestration architecture. The current priority is proving that a user can follow the real LangGraph/OpenClaw/Zep sequence. A Next.js migration can happen later when deployment, routing, auth provider, or component-system needs justify it.
+
+Cost of changing later:
+Low. The `/mvp` route can be ported to Next.js later because it already talks to stable API contracts. The dashboard can remain as an internal proof surface even after a production frontend is introduced.

@@ -580,6 +580,34 @@ Next implementation:
   - add a narrower read-only document approval path before any future PDF/document ingestion,
   - keep direct PDF ingestion deferred until a visible document candidate requires it and has its own approval scope.
 
+## Phase 8Q - User-Friendly MVP Sequencing App
+
+Goal:
+- Add a sibling user-facing `/mvp` app that tests the full system sequence without replacing the current proof dashboard.
+
+Implementation plan:
+- Keep `/` as the operator/debug proof dashboard.
+- Add `/mvp` as the user-friendly auth-plus-chat app served by the existing Node/static server.
+- Wire `/mvp` only to real existing APIs:
+  - `POST /api/orchestrator/auth-start`,
+  - `POST /api/chat`,
+  - `GET /api/openclaw/official/status`,
+  - `POST /api/orchestrator/approve`,
+  - `POST /api/worker-continuations`,
+  - `GET /api/runtime/events`,
+  - `GET /api/runtime/events/stream`.
+- Show the real sequence states: Auth, GPT/Intent, Approval, OpenClaw, Evidence, Memory, Answer.
+- Let workflow buttons fill and submit chat messages, not bypass LangGraph.
+- Let the user approve only read-only observation, with official OpenClaw dispatch using the existing worker continuation requirement.
+- Render Current Answer and Discovery/Next Evidence using source-pointer-safe state only.
+- Defer Next.js migration; the current UI need is sequencing proof, not a new deployment architecture.
+
+Acceptance proof:
+- Static checks for `src/app/mvp.js` and `src/server/server.mjs`.
+- UI contract test proves `/mvp` uses real endpoints and exposes sequence, approval, worker, discovery, and source-pointer fields.
+- `npm run build` passes.
+- Browser verification loads `http://127.0.0.1:4173/mvp` and proves Start Session can create a real local session.
+
 ## Full Working Test Recommendation
 
 - Phase 4 is the right phase to test the real authenticated portal evidence loop: approval -> read-only observation -> verified source pointer -> sourced answer.

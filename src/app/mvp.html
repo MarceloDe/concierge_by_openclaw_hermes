@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brainstyworkers Concierge MVP</title>
+    <link rel="stylesheet" href="/mvp.css" />
+  </head>
+  <body>
+    <main class="mvp-shell">
+      <header class="mvp-topbar">
+        <div>
+          <p class="eyebrow">Phase 8Q</p>
+          <h1>Brainstyworkers Concierge</h1>
+        </div>
+        <nav aria-label="App views">
+          <a href="/">Proof Dashboard</a>
+          <button id="resetApp" type="button">Reset View</button>
+        </nav>
+      </header>
+
+      <section class="mvp-layout" aria-label="MVP application">
+        <aside class="control-rail" aria-label="Session controls">
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Local Auth</p>
+              <h2>Session</h2>
+            </div>
+            <label>
+              Name
+              <input id="name" value="Marcelo Felix" autocomplete="name" />
+            </label>
+            <label>
+              Email
+              <input id="email" value="mocfelix@gmail.com" autocomplete="email" />
+            </label>
+            <label>
+              Payer
+              <input id="payer" value="Aetna" />
+            </label>
+            <label>
+              Portal URL
+              <input id="portalUrl" value="https://www.aetna.com/" />
+            </label>
+            <label>
+              Session ID
+              <input id="sessionId" placeholder="new session" />
+            </label>
+            <label class="check-row">
+              <input id="resumeLatestSession" type="checkbox" />
+              <span>Resume latest</span>
+            </label>
+            <label class="check-row">
+              <input id="useLiveModel" type="checkbox" checked />
+              <span>Live GPT decisioning</span>
+            </label>
+            <button id="startSession" type="button">Start Session</button>
+            <p id="authStatus" class="status-text">Not signed in</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Workflow</p>
+              <h2>Journeys</h2>
+            </div>
+            <button class="workflow-button" type="button" data-message="Do I still owe anything before insurance starts paying?">Benefits</button>
+            <button class="workflow-button" type="button" data-message="Why didn't insurance pay my last visit?">Claim Status</button>
+            <button class="workflow-button" type="button" data-message="My doctor wants approval for an MRI next month.">Prior Auth</button>
+            <button class="workflow-button" type="button" data-message="They said no and I want to fight it.">Appeal</button>
+            <button class="workflow-button" type="button" data-message="Use my authenticated member portal in read-only mode and return source pointers.">Portal Evidence</button>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">OpenClaw</p>
+              <h2>Worker Scope</h2>
+            </div>
+            <label class="check-row">
+              <input id="requireLivePortalProof" type="checkbox" />
+              <span>Require live portal proof</span>
+            </label>
+            <label class="check-row">
+              <input id="useOfficialOpenClawWorker" type="checkbox" />
+              <span>Use official OpenClaw</span>
+            </label>
+            <label class="check-row">
+              <input id="officialOpenClawCurrentTab" type="checkbox" />
+              <span>Use current OpenClaw tab</span>
+            </label>
+            <label class="check-row">
+              <input id="officialOpenClawMultiPage" type="checkbox" />
+              <span>Multi-page read-only run</span>
+            </label>
+            <div class="split-actions">
+              <button id="portalReady" type="button">Portal Ready</button>
+              <button id="checkWorker" type="button">Check Worker</button>
+            </div>
+            <p id="workerStatus" class="status-text">Worker not checked</p>
+          </section>
+        </aside>
+
+        <section class="chat-column" aria-label="Concierge chat">
+          <section id="currentAnswer" class="answer-surface" aria-live="polite">
+            <p class="eyebrow">Current Answer</p>
+            <h2>Start a session to test the full sequence.</h2>
+            <p>The existing proof dashboard stays available. This view uses the same local LangGraph, approval, OpenClaw, audit, and memory APIs.</p>
+          </section>
+
+          <section class="chat-window" aria-label="Conversation">
+            <div id="messages" class="messages" aria-live="polite"></div>
+            <form id="chatForm" class="composer">
+              <textarea id="message" rows="3">Do I still owe anything before insurance starts paying?</textarea>
+              <button id="sendMessage" type="submit">Send</button>
+            </form>
+          </section>
+        </section>
+
+        <aside class="proof-rail" aria-label="Runtime proof">
+          <section class="panel sequence-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Sequence</p>
+              <h2>Run State</h2>
+            </div>
+            <ol id="sequence" class="sequence-list">
+              <li data-step="auth"><span>Auth</span><b>waiting</b></li>
+              <li data-step="route"><span>GPT / Intent</span><b>waiting</b></li>
+              <li data-step="approval"><span>Approval</span><b>waiting</b></li>
+              <li data-step="worker"><span>OpenClaw</span><b>waiting</b></li>
+              <li data-step="evidence"><span>Evidence</span><b>waiting</b></li>
+              <li data-step="memory"><span>Memory</span><b>waiting</b></li>
+              <li data-step="answer"><span>Answer</span><b>waiting</b></li>
+            </ol>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Approval</p>
+              <h2>Gate</h2>
+            </div>
+            <div id="approvalPanel" class="approval-panel">No pending worker proposal yet.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Discovery</p>
+              <h2>Next Evidence</h2>
+            </div>
+            <div id="discoveryPanel" class="key-value-list">No discovery report yet.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Events</p>
+              <h2>Runtime</h2>
+            </div>
+            <div id="timeline" class="timeline">No runtime events yet.</div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="/mvp.js"></script>
+  </body>
+</html>
