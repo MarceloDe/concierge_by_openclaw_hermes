@@ -13,6 +13,7 @@
     "test:openclaw:official": "BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 node --test src/tests/openclaw-official-runtime.test.mjs",
     "test:live:openclaw-auth": "BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1 BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1 BRAINSTY_PORTAL_LIVE=1 node --test --test-name-pattern \"authenticated current-tab\" src/tests/openclaw-official-runtime.test.mjs",
     "test:live:openclaw-multipage": "BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1 BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1 BRAINSTY_OPENCLAW_MULTI_PAGE=1 BRAINSTY_PORTAL_LIVE=1 node --test --test-name-pattern \"authenticated current-tab\" src/tests/openclaw-official-runtime.test.mjs",
+    "test:live:openclaw-discovery": "BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1 BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1 BRAINSTY_OPENCLAW_MULTI_PAGE=1 BRAINSTY_PORTAL_LIVE=1 node --test --test-name-pattern \"authenticated current-tab\" src/tests/openclaw-official-runtime.test.mjs",
     "test:memory:graphiti": "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_GRAPHITI_LIVE=1 GRAPHITI_BACKEND=falkordb FALKORDB_HOST=localhost FALKORDB_PORT=6380 GRAPHITI_GROUP_ID=brainstyworkers_test node --test src/tests/product-memory-graphiti.test.mjs",
     "test:orchestrator:live": "node --test src/tests/orchestrator-live.test.mjs",
     "graphiti:falkordb": "bash scripts/start-graphiti-falkordb.sh",

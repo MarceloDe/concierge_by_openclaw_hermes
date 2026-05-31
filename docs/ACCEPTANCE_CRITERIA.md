@@ -529,6 +529,14 @@ Phase 8O enriched OpenClaw discovery proof is acceptable when:
 - Tests cover the discovery-report builder, sourced output wording, UI contract, and continuation metadata.
 - Live authenticated OpenClaw proof remains gated by `BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1`, `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`, and `BRAINSTY_PORTAL_LIVE=1`.
 
+Phase 8P live discovery proof is acceptable when:
+
+- `npm run test:live:openclaw-discovery` runs only after the user manually signs in to the dedicated OpenClaw browser profile.
+- The live test uses the current dedicated tab and multi-page read-only observation.
+- The live test asserts source pointers, DOM/accessibility evidence, visual OCR evidence, discovery report presence, no portal search submission, no document/PDF download, no raw document dump, worker discovery actions, and worker status discovery metadata.
+- The result documents whether portal search, official documents, SBCs, or PDFs are reachable from the authenticated portal.
+- If auth/challenge/login blocks the run, the result is recorded as a user-action blocker rather than a failed product claim.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

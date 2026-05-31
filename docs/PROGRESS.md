@@ -3623,3 +3623,39 @@ Known risks:
 
 Next step:
 - Phase 8P should run the fresh live authenticated OpenClaw pass, inspect the discovery report in the app, and decide whether the next implementation should add read-only document/PDF ingestion or improve page-specific structured extraction first.
+
+## Phase 8P: Live OpenClaw Discovery Proof Harness - 2026-05-30
+
+Request:
+- Go to the next phase.
+
+Implementation:
+- Added `npm run test:live:openclaw-discovery`.
+- Expanded the live authenticated current-tab official OpenClaw test to assert:
+  - sourced final answer includes `OpenClaw discovery proof`,
+  - discovery report scanned portal search affordances without submitting a query,
+  - document/SBC/PDF discovery ran without download or PDF analysis,
+  - raw document dumps remain disallowed,
+  - discovery actions are present in `actionsTaken`,
+  - worker status events include discovery metadata and SBC/PDF counts.
+
+Proof so far:
+- Readiness checked through `GET /api/openclaw/official/status`:
+  - official runtime version `2026-05-30.official-openclaw-runtime.v3`,
+  - `ready=true`,
+  - allowed actions include `portal_search_affordance_scan` and `document_candidate_discovery`.
+- Opened the dedicated Brainstyworkers OpenClaw browser to `https://health.aetna.com/`.
+- Readiness changed from `auth_required` to `auth_or_challenge_required` on `Aetna Member Log-in`.
+- Static and local proof passed:
+  - `node --check src/tests/openclaw-official-runtime.test.mjs`
+  - `node --test src/tests/openclaw-official-runtime.test.mjs`
+    - 5 tests total, 3 passed, 2 skipped live-gated.
+  - `npm run build`
+
+Current blocker:
+- The live proof is waiting for user-controlled login/2FA/captcha/session challenge completion in the dedicated OpenClaw browser. OpenClaw and Codex must not enter credentials, use password managers, handle passkeys/2FA, or bypass authentication.
+
+Next step:
+- After the user confirms the dedicated OpenClaw browser is authenticated and on a member portal page, run:
+  - `npm run test:live:openclaw-discovery`
+- Then inspect the discovery report in the test output/app proof and decide whether Phase 8Q should implement read-only document/PDF ingestion or page-specific extraction improvements first.

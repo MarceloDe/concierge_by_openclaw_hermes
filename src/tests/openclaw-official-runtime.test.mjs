@@ -283,7 +283,20 @@ test("official OpenClaw authenticated current-tab continuation creates source po
   assert.ok(result.state.evidence_observation.evidenceChannels.some((channel) => channel.channel === "visual_ocr"));
   assert.match(result.state.final_response, /I captured approved read-only portal evidence/);
   assert.match(result.state.final_response, /Source pointers:/);
+  assert.match(result.state.final_response, /OpenClaw discovery proof:/);
   assert.doesNotMatch(result.state.final_response, /not executed in this slice/i);
+  const discovery = result.state.evidence_observation.discoveryReport;
+  assert.equal(discovery?.portalSearch?.affordanceScanAttempted, true);
+  assert.equal(discovery?.portalSearch?.querySubmitted, false);
+  assert.equal(discovery?.documentDiscovery?.attempted, true);
+  assert.equal(discovery?.documentDiscovery?.policy?.downloadAttempted, false);
+  assert.equal(discovery?.documentDiscovery?.policy?.pdfAnalysisAttempted, false);
+  assert.equal(discovery?.documentDiscovery?.policy?.rawDocumentDumpAllowed, false);
+  assert.ok(Array.isArray(discovery?.documentDiscovery?.candidates));
+  assert.ok(Array.isArray(discovery?.portalSections?.reachable));
+  assert.ok(discovery?.fallbackChain?.includes("manual_user_export"));
+  assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_portal_search_affordance_scan"));
+  assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_document_candidate_discovery"));
   if (process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1" && result.state.evidence_observation.pageCount > 1) {
     assert.ok(result.state.evidence_observation.evidenceChannels.some((channel) => channel.channel === "multi_page_navigation"));
     assert.ok(result.state.evidence_observation.actionsTaken.includes("openclaw_browser_open_internal_link"));
@@ -297,4 +310,12 @@ test("official OpenClaw authenticated current-tab continuation creates source po
   const events = await listRuntimeEvents(store, { sessionId: session.id, limit: 100 });
   assert.ok(events.some((event) => event.eventType === "worker.followup.dispatching"));
   assert.ok(events.some((event) => event.eventType === "worker.followup.completed"));
+  assert.ok(
+    events.some(
+      (event) =>
+        event.eventType === "worker.status.updated" &&
+        event.payload?.discoveryReport?.documentDiscovery?.attempted === true &&
+        typeof event.payload?.sbcPdfCandidateCount === "number"
+    )
+  );
 });

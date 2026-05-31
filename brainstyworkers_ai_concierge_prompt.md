@@ -1046,6 +1046,12 @@ Phase 8O OpenClaw search and document discovery proof:
 - User-facing answers remain source-pointer based and do not expose raw portal text.
 - This is a pre-ingestion proof. Actual PDF/document download or analysis remains a later, separately scoped phase.
 
+Phase 8P live discovery proof harness:
+
+- `npm run test:live:openclaw-discovery` runs the authenticated current-tab, multi-page official OpenClaw proof with live portal proof enabled.
+- The proof requires the user to manually complete login/password/passkey/2FA/captcha/session challenges in the dedicated OpenClaw browser and leave the authenticated member portal tab open.
+- The live test asserts source pointers, DOM/accessibility evidence, visual OCR evidence, discovery report presence, no portal-search submission, no document/PDF download, no raw document dump, discovery actions, and worker status discovery metadata.
+
 Next implementation step:
 
-- Phase 8P should run a fresh live authenticated worker pass using the dedicated OpenClaw current tab and inspect the discovery report against the real portal. Decide from that proof whether to add read-only PDF/document ingestion next or first improve page-specific structured extraction for discovered sections.
+- Complete the Phase 8P live run after user-controlled authentication. Then decide whether Phase 8Q should add read-only PDF/document ingestion or first improve page-specific structured extraction for the discovered portal sections.

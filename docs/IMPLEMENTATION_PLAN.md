@@ -551,6 +551,18 @@ Next implementation:
   - decide whether the next slice should add actual read-only PDF/document ingestion or first improve page-specific extraction for the discovered sections,
   - keep Graphiti retain status visible in chat.
 
+Phase 8P live discovery proof harness is prepared:
+
+- `npm run test:live:openclaw-discovery` now runs the authenticated current-tab multi-page official OpenClaw proof with live portal proof enabled.
+- The live proof now asserts:
+  - the sourced answer includes the OpenClaw discovery proof line,
+  - the discovery report scanned portal search affordances without submitting a query,
+  - document/SBC/PDF discovery ran without download or PDF analysis side effects,
+  - raw document dumps remain disallowed,
+  - worker actions include `openclaw_portal_search_affordance_scan` and `openclaw_document_candidate_discovery`,
+  - worker status events carry discovery metadata and SBC/PDF counts.
+- The actual live proof still requires the user to manually sign in to the dedicated OpenClaw browser and leave the authenticated member portal tab open.
+
 ## Full Working Test Recommendation
 
 - Phase 4 is the right phase to test the real authenticated portal evidence loop: approval -> read-only observation -> verified source pointer -> sourced answer.
