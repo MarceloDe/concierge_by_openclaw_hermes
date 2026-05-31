@@ -3761,3 +3761,57 @@ Remaining proof:
 
 Next step:
 - Continue Phase 8Q by validating the MVP route in the browser, then move to section-specific structured extraction for the live-reachable portal surfaces before any PDF/document ingestion.
+
+## Phase 8Q Restart Handoff - 2026-05-31
+
+What was built since the last restart:
+- A new user-friendly MVP app route exists at `http://127.0.0.1:4173/mvp`.
+- The existing proof dashboard remains at `http://127.0.0.1:4173/`.
+- The MVP route is not a mock and not a separate runtime. It calls the same local APIs used by the proof dashboard:
+  - `/api/orchestrator/auth-start`,
+  - `/api/chat`,
+  - `/api/openclaw/official/status`,
+  - `/api/orchestrator/approve`,
+  - `/api/worker-continuations`,
+  - `/api/runtime/events`,
+  - `/api/runtime/events/stream`.
+- The MVP route shows:
+  - local planned-user auth,
+  - workflow buttons as chat inputs,
+  - Current Answer,
+  - Auth -> GPT/Intent -> Approval -> OpenClaw -> Evidence -> Memory -> Answer sequence,
+  - Approval Gate,
+  - Discovery/Next Evidence,
+  - runtime event timeline,
+  - live OpenClaw readiness controls.
+
+What to expect from `/mvp` right now:
+- `Start Session` should create a real local session.
+- `Benefits` should route through LangGraph to `eligibility_benefits_navigation`.
+- Before approval, Current Answer should show a proposal/pending approval result and no source pointers.
+- Approval Gate should show the pending read-only proposal task.
+- Discovery/Next Evidence should remain empty until an approved worker run executes.
+- If the user enables official OpenClaw and approves read-only observation, the app should create a worker continuation and resume the graph with the approval token.
+- Source pointers should be created only if live portal proof is enabled and LangGraph verifies authenticated member portal evidence.
+
+Next phases:
+- Phase 8R: run the full live approved flow from `/mvp` with the dedicated OpenClaw browser authenticated and live portal proof enabled.
+- Phase 8S: improve section-specific structured extraction for live-reachable portal surfaces before adding document ingestion.
+- Phase 8T: add a narrow approval scope for one specific document candidate from Discovery.
+- Phase 8U: add read-only PDF/document ingestion only after candidate-specific approval.
+- Phase 8V: polish the user/operator split so `/mvp` is tester-friendly and `/` remains the proof dashboard.
+
+Current proof baseline:
+- Commit `05e0799 feat: add user-facing MVP sequencing app`.
+- `node --check src/app/mvp.js` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed.
+- `npm run build` passed.
+- Browser proof at `/mvp` passed with 0 console errors.
+- `npm run test:local` passed with 115 tests total, 113 passed, 0 failed, and 2 live-gated official OpenClaw tests skipped.
+
+Known blockers and guardrails:
+- Live approved OpenClaw evidence from `/mvp` still requires the user-authenticated dedicated OpenClaw browser/profile.
+- Official live evidence creation requires `BRAINSTY_PORTAL_LIVE=1` when live proof is required.
+- The worker must not enter credentials, handle passkeys/2FA/captcha, use password managers, enter SSNs, contact payers, send messages, submit forms, change records, or provide medical advice.
+- Cortex remains project memory only; Zep Graphiti remains the product-memory adapter path.

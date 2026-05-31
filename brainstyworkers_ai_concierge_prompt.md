@@ -1092,3 +1092,23 @@ Phase 8Q user-friendly MVP sequencing app:
   - fallback chain.
 - This is a UI sequencing phase, not a runtime fork. No Next.js migration is required until the product needs deployment features that the current Node/static app cannot provide.
 - The existing dashboard remains the deep proof surface. The new `/mvp` route is the user-friendly harness for testing whether a non-engineer can follow the real LangGraph/OpenClaw/Zep sequence.
+
+Phase 8Q restart state and next phases:
+
+- Commit `05e0799` added the `/mvp` user-facing sequencing app and kept `/` as the proof dashboard.
+- `/mvp` currently proves the user can start a local session, run Benefits through LangGraph, see the pending read-only OpenClaw approval task, and inspect the sequence without raw JSON.
+- The expected first live test from `/mvp` is:
+  - user manually authenticates the dedicated OpenClaw browser/profile,
+  - server allows live portal proof,
+  - `/mvp` `Portal Ready` reports readiness,
+  - user runs Benefits,
+  - user approves read-only observation,
+  - LangGraph resumes with approval token and worker continuation id,
+  - OpenClaw returns source pointers or a precise blocker,
+  - Current Answer and Discovery/Next Evidence update from the same trace.
+- Next phases must stay narrow:
+  - Phase 8R: live approved MVP run from `/mvp`.
+  - Phase 8S: section-specific structured extraction for benefits, spending, claims, prior authorization, documents, ID card, pharmacy, and network.
+  - Phase 8T: narrow approval for one document candidate from Discovery.
+  - Phase 8U: read-only PDF/document ingestion only after candidate-specific approval.
+  - Phase 8V: polish `/mvp` for user testing while `/` remains the operator proof dashboard.

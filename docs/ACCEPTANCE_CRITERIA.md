@@ -552,6 +552,46 @@ Phase 8Q user-friendly MVP sequencing app is acceptable when:
 - User-facing answer proof remains source-pointer based and does not expose raw portal text.
 - Build, UI contract test, and browser smoke proof pass.
 
+Phase 8R live approved MVP run from `/mvp` is acceptable when:
+
+- The dev server is running with live portal proof allowed.
+- The user manually authenticates the dedicated Brainstyworkers OpenClaw browser/profile and leaves the member portal tab open.
+- `/mvp` `Check Worker` or `Portal Ready` reports `ready_for_read_only_approval`.
+- The Benefits workflow first creates a pending read-only proposal with no worker action.
+- The MVP Approval Gate records read-only approval and, when official OpenClaw is selected, creates a worker continuation id.
+- The resumed graph run either creates verified source pointers or returns a clear blocker.
+- Current Answer, Sequence, Approval Gate, Discovery/Next Evidence, and Runtime Events agree about the same trace/session.
+- The `/` operator dashboard can inspect the same session/trace.
+
+Phase 8S section-specific structured extraction is acceptable when:
+
+- Benefits, spending, claims, prior authorization, documents, ID card, pharmacy, and network surfaces each have targeted extractor tests or fixture coverage as they become live-reachable.
+- Extracted facts are stored as structured rows/source pointers, not raw portal dumps.
+- `/mvp` shows safe summaries and source-pointer counts for extracted fields.
+- Final answers cite source pointers and do not expose raw portal text.
+- No PDF/document download or analysis is introduced in this phase.
+
+Phase 8T narrow document candidate approval is acceptable when:
+
+- Discovery document candidates can be presented as individual approval targets.
+- Approval binds to one candidate, session, user, workflow, scope, expiration, and allowed action.
+- Denied, expired, missing, or mismatched approvals create no worker action.
+- Mixed form, submission, offsite, and irreversible document paths remain blocked unless separately approved for a future action-specific scope.
+
+Phase 8U read-only PDF/document ingestion is acceptable when:
+
+- It only runs after a Phase 8T candidate-specific approval.
+- The system stores document title/type, URL or source location, timestamp, hashes, extraction provenance, and source pointers.
+- OCR/vision fallback is available for rendered or scanned pages.
+- User-facing answers cite document source pointers and do not dump raw document text.
+
+Phase 8V MVP polish and operator/user split is acceptable when:
+
+- `/mvp` can be used by a tester without reading raw JSON.
+- `/` remains available as the proof dashboard.
+- User-facing cards clearly distinguish proposal-only, pending approval, running worker, sourced result, partial result, and blocker states.
+- Retry/resume actions do not bypass LangGraph approval or OpenClaw readiness gates.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

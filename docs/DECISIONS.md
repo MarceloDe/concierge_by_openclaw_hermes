@@ -1035,3 +1035,22 @@ The implementation risk is lowest if the UI phase does not change the orchestrat
 
 Cost of changing later:
 Low. The `/mvp` route can be ported to Next.js later because it already talks to stable API contracts. The dashboard can remain as an internal proof surface even after a production frontend is introduced.
+
+## 2026-05-31 - Test The MVP From The User View Before Adding More Capability
+
+Context:
+Phase 8Q added the separate `/mvp` app and proved the proposal/pending-approval path from the user-facing route. The next risk is not whether the operator dashboard can inspect internals; it is whether the user-facing route can complete the live approved OpenClaw path and show a sourced answer or clear blocker without confusing the tester.
+
+Options considered:
+- Add PDF/document ingestion next.
+- Add more workflows or a Next.js migration next.
+- First run and harden the live approved Benefits path from `/mvp`, then improve extraction for reachable sections.
+
+Decision:
+The next implementation sequence is 8R live approved MVP run, 8S section-specific structured extraction, 8T candidate-specific document approval, 8U read-only document ingestion, and 8V MVP polish/operator split. Do not add broad PDF ingestion, new healthcare workflows, or a frontend framework migration until `/mvp` proves the current Benefits journey end to end.
+
+Reason:
+The live discovery proof already showed portal sections and document candidates. The new MVP route must now prove the value loop from a user's perspective: ask, approve, observe, verify, cite, remember, and explain blockers. This keeps the system from becoming more capable on paper while remaining hard to operate.
+
+Cost of changing later:
+Low. The phases are narrow and can be reordered only if a live `/mvp` blocker proves that a smaller prerequisite is missing.

@@ -1,13 +1,135 @@
 # Implementation Plan
 
-Status: MVP hardening Phases 1-8O are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation.
+Status: MVP hardening Phases 1-8Q are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation. Phase 8P proved the live discovery harness against an authenticated portal. Phase 8Q added a separate user-friendly `/mvp` auth-plus-chat sequencing app while preserving `/` as the operator proof dashboard.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
 - `AGENTS.md`
 - `brainstyworkers_ai_concierge_prompt.md`
 
-Last updated: 2026-05-27
+Last updated: 2026-05-31
+
+## Current Restart Point - Phase 8Q Complete
+
+The project currently has two local web surfaces on the same Node server:
+
+- `/` is the existing operator/debug proof dashboard. Keep it for deep state inspection, raw trace JSON, skill validation, proof panels, and regression debugging.
+- `/mvp` is the new user-facing MVP sequencing app. It is the primary surface to test whether a user can understand and operate the real system path.
+
+What `/mvp` is expected to do right now:
+
+- Start a local planned-user session through `POST /api/orchestrator/auth-start`.
+- Accept chat messages and workflow shortcut buttons, then route them through `POST /api/chat`.
+- Show the current LangGraph answer, workflow, GPT/intent decision state, approval state, OpenClaw worker outcome, source-pointer count, product-memory retain state, and trace id.
+- Show a sequence rail for Auth -> GPT/Intent -> Approval -> OpenClaw -> Evidence -> Memory -> Answer.
+- Check official OpenClaw readiness through `GET /api/openclaw/official/status`.
+- Create and consume read-only approvals through `POST /api/orchestrator/approve`.
+- Create a worker continuation through `POST /api/worker-continuations` when official OpenClaw dispatch is selected.
+- Render Discovery/Next Evidence from source-pointer-safe state: portal search status, document candidate counts, SBC/PDF counts, sections tried/reachable, and fallback chain.
+
+Expected current behavior in a non-live replay:
+
+- `Start Session` creates a real local session.
+- `Benefits` routes to `eligibility_benefits_navigation`.
+- The answer explains that the OpenClaw task envelope is prepared and pending approval.
+- The Approval Gate shows a pending read-only proposal task.
+- Discovery/Next Evidence remains empty until an approved worker run actually produces evidence.
+- No payer API, external message, credential entry, form submission, account change, or medical advice occurs.
+
+Expected current behavior in a live approved replay:
+
+- The dedicated Brainstyworkers OpenClaw browser/profile must already be authenticated by the user.
+- The server must allow live portal proof with `BRAINSTY_PORTAL_LIVE=1` before official OpenClaw evidence can create healthcare source pointers.
+- The user clicks `Portal Ready` or `Check Worker` and should see `ready_for_read_only_approval` when the authenticated member portal tab is usable.
+- The user runs the Benefits workflow and approves only read-only observation.
+- If official OpenClaw is selected, the UI creates a worker continuation id, records approval, resumes `/api/chat` with the approval token and continuation id, and displays the resulting source pointers or blockers.
+- If auth, portal verification, live flag, or page verification blocks the run, the system should report the blocker and create no false healthcare evidence.
+
+The local implementation proof for Phase 8Q is commit `05e0799 feat: add user-facing MVP sequencing app`. Focused static checks, `npm run build`, browser proof at `/mvp`, and `npm run test:local` passed.
+
+## Next Phases From Here
+
+### Phase 8R - Live Approved MVP Run From `/mvp`
+
+Goal:
+- Prove the full user-facing loop from the new MVP view, not only from tests or the operator dashboard.
+
+Tasks:
+- Start the dev server with the live portal proof environment enabled.
+- Ask the user to authenticate the dedicated OpenClaw browser profile and leave the member portal tab open.
+- Open `/mvp`, click `Portal Ready`, and confirm `ready_for_read_only_approval`.
+- Run Benefits from the workflow button.
+- Approve read-only observation from the MVP Approval Gate.
+- Confirm Current Answer, Sequence, Discovery/Next Evidence, runtime events, and Approval Gate all update from the same graph run.
+- Record screenshots/browser proof and update `docs/PROGRESS.md`.
+
+Acceptance:
+- `/mvp` shows a sourced answer or a clear blocker.
+- Source pointers are present only when LangGraph verifies authenticated portal evidence.
+- Discovery/Next Evidence shows portal-search/document/section metadata after worker execution.
+- The proof dashboard `/` still works and agrees with the MVP route's session/trace.
+
+### Phase 8S - Section-Specific Structured Extraction
+
+Goal:
+- Convert the live-reachable portal surfaces into better structured evidence before adding PDF ingestion.
+
+Tasks:
+- Improve extraction for benefits, spending, claims, prior authorizations, documents, ID card, pharmacy, and network surfaces.
+- Keep source-pointer-safe answer composition.
+- Add tests using stored/sanitized portal page fixtures for each section.
+- Show extracted structured facts in `/mvp` only as safe summaries and source pointers.
+
+Acceptance:
+- More fields are populated from real observed pages without raw portal dumps.
+- Current Answer can cite which section supplied which safe field.
+- No document/PDF download happens in this phase.
+
+### Phase 8T - Narrow Document Candidate Approval
+
+Goal:
+- Add a second, narrower approval scope for opening or downloading a specific read-only document candidate.
+
+Tasks:
+- Reuse Discovery document candidates as selectable proof items.
+- Add approval scope such as `read_only_document_observation`.
+- Bind approval to a specific candidate/source pointer, session, user, workflow, expiration, and allowed action.
+- Block mixed form/submission/offsite candidates unless the user gives a separate action-specific approval.
+
+Acceptance:
+- `/mvp` can ask for approval for one document candidate without granting broad PDF/document access.
+- Denied/expired approval takes no worker action.
+- Approved document observation records a source pointer or a precise blocker.
+
+### Phase 8U - Read-Only PDF/Document Ingestion
+
+Goal:
+- Only after Phase 8T, analyze an approved official document/PDF candidate.
+
+Tasks:
+- Extract text/structured facts from the approved document.
+- Add OCR/vision fallback for rendered or scanned pages.
+- Record document source pointers, hashes, document title/type, and extraction provenance.
+- Keep final answer source-pointer based.
+
+Acceptance:
+- The system can answer a benefits question from an approved official document and cite the document pointer.
+- No broad document crawl, raw document dump, external message, payer contact, or form submission occurs.
+
+### Phase 8V - MVP Polish And Operator/User Split
+
+Goal:
+- Make `/mvp` suitable for repeated user testing while `/` remains the operator console.
+
+Tasks:
+- Reduce confusing proposal-only wording in the user view when a newer approved result exists.
+- Add clearer blocker cards and retry/resume actions.
+- Add a compact session selector or resume latest flow.
+- Keep all proof available through links or expandable sections, not hidden.
+
+Acceptance:
+- A tester can run the benefits journey without reading raw JSON.
+- An engineer can still inspect trace, runtime events, approval, worker continuation, source pointers, and memory state.
 
 ## 2026-05-27 MVP Hardening Reset
 
