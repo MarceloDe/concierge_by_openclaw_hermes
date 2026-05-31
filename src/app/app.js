@@ -277,6 +277,7 @@ function renderAnswerPanel(result = null, options = {}) {
   const claims = result.trace?.claims ?? [];
   const priorAuthorizations = result.trace?.priorAuthorizations ?? [];
   const memoryRetain = state.product_memory_retain ?? result?.graphRun?.productMemory?.retain ?? {};
+  const discovery = evidence.discoveryReport ?? {};
   const approvalNeeded = pendingReadOnlyTaskId(result);
   const finalText = result.finalResponse ?? "The workflow completed without a final answer.";
   const answerStatus =
@@ -325,6 +326,10 @@ function renderAnswerPanel(result = null, options = {}) {
         <span>${escapeHtml(structuredClaimSummary(claims, priorAuthorizations))}</span>
       </div>
       <div>
+        <strong>Discovery</strong>
+        <span>${escapeHtml(discoverySummary(discovery))}</span>
+      </div>
+      <div>
         <strong>Memory</strong>
         <span>${escapeHtml(memoryRetainSummary(memoryRetain))} · ${escapeHtml(memoryNextAction(memoryRetain))}</span>
       </div>
@@ -369,7 +374,8 @@ function summarizeRuntimeEvent(event) {
     return `${payload.status ?? "unknown"} · ${payload.taskId ?? "no task"} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
   }
   if (event.eventType === "worker.status.updated") {
-    return `${payload.status ?? "unknown"}${payload.terminalOutcome ? ` · ${payload.terminalOutcome}` : ""} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
+    const discovery = payload.documentCandidateCount !== undefined ? ` · docs ${payload.documentCandidateCount} · SBC/PDF ${payload.sbcPdfCandidateCount ?? 0}` : "";
+    return `${payload.status ?? "unknown"}${payload.terminalOutcome ? ` · ${payload.terminalOutcome}` : ""}${discovery} · actions ${(payload.actionsTaken ?? []).join(", ") || "none"}`;
   }
   if (event.eventType === "worker.followup.scheduled") {
     return `${payload.status ?? "pending_async_followup"} · ${payload.terminalOutcome ?? "needs_long_running_followup"} · next ${payload.nextCheckAt ?? "not scheduled"}`;
@@ -508,6 +514,7 @@ function renderChatProof(result) {
   const productMemoryRetain = state.product_memory_retain ?? result.graphRun?.productMemory?.retain ?? {};
   const missing = missingInfoLines(state);
   const sourcePointers = uniqueSourcePointers(state);
+  const discovery = evidence.discoveryReport ?? {};
   const canRequestWorkerAction = proposalTask.id && !hasCapturedPortalEvidence(state);
   return renderOperatorProofDetails(
     "Workflow Proof",
@@ -529,6 +536,8 @@ function renderChatProof(result) {
         <dd>${escapeHtml(state.approval_resume?.status ?? "not consumed")}</dd>
         <dt>Evidence</dt>
         <dd>${escapeHtml(evidence.status ?? "not requested")} · actions ${escapeHtml((evidence.actionsTaken ?? []).join(", ") || "none")}</dd>
+        <dt>Discovery</dt>
+        <dd>${escapeHtml(discoverySummary(discovery))}</dd>
         <dt>Sources</dt>
         <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
         <dt>Product memory</dt>
@@ -616,6 +625,14 @@ function evidenceChannelSummary(channels = []) {
     .join(" | ");
 }
 
+function discoverySummary(report = {}) {
+  if (!report?.version) return "not reported";
+  const search = report.portalSearch?.available ? report.portalSearch.status : "no search affordance";
+  const docs = report.documentDiscovery ?? {};
+  const sections = report.portalSections?.tried?.length ? ` · sections ${report.portalSections.tried.join(", ")}` : "";
+  return `search ${search} · documents ${docs.candidateCount ?? 0} · SBC/PDF ${docs.sbcPdfCandidateCount ?? 0}${sections}`;
+}
+
 function renderWorkerContinuationCard(continuation) {
   const progress = continuation.lastProgressEvent?.payload ?? {};
   const isTerminal = ["cancelled", "completed", "blocked", "expired"].includes(continuation.status);
@@ -688,6 +705,7 @@ function renderWorkerOutcomeCard(result) {
   const balances = result.trace?.coverageBalances ?? [];
   const reason = friendlyWorkerBlocker(evidence);
   const navigationTargets = evidence.navigationPlan?.targets ?? [];
+  const discovery = evidence.discoveryReport ?? {};
   const terminalOutcome =
     sourcePointers.length > 0
       ? "completed_with_sourced_result"
@@ -712,6 +730,8 @@ function renderWorkerOutcomeCard(result) {
         <dd>${escapeHtml(structuredBenefitSummary(balances))}</dd>
         <dt>Structured claims</dt>
         <dd>${escapeHtml(structuredClaimSummary(result.trace?.claims ?? [], result.trace?.priorAuthorizations ?? []))}</dd>
+        <dt>Discovery</dt>
+        <dd>${escapeHtml(discoverySummary(discovery))}</dd>
         <dt>Pages</dt>
         <dd>${escapeHtml(`${evidence.verifiedPageCount ?? 0}/${evidence.pageCount ?? 0} verified${evidence.blockedPageCount ? ` · ${evidence.blockedPageCount} blocked` : ""}`)}</dd>
         <dt>Navigation plan</dt>

@@ -395,6 +395,10 @@ export async function finalizeWorkerContinuationDispatch(
     browserRunId = null,
     sourcePointerCount = 0,
     structuredBenefitCount = 0,
+    discoveryReport = null,
+    portalSearchStatus = null,
+    documentCandidateCount = 0,
+    sbcPdfCandidateCount = 0,
     actionsTaken = []
   } = {}
 ) {
@@ -415,6 +419,10 @@ export async function finalizeWorkerContinuationDispatch(
         browserRunId,
         sourcePointerCount,
         structuredBenefitCount,
+        discoveryReport,
+        portalSearchStatus,
+        documentCandidateCount,
+        sbcPdfCandidateCount,
         completedAt: now,
         runtime: "official_openclaw",
         actionsTaken
@@ -440,6 +448,10 @@ export async function finalizeWorkerContinuationDispatch(
     browserRunId,
     sourcePointerCount,
     structuredBenefitCount,
+    discoveryReport,
+    portalSearchStatus,
+    documentCandidateCount,
+    sbcPdfCandidateCount,
     actionsTaken
   });
   await audit(store, continuation.sessionId, `worker_async_followup_${finalStatus}`, {
@@ -452,6 +464,9 @@ export async function finalizeWorkerContinuationDispatch(
     browserRunId,
     sourcePointerCount,
     structuredBenefitCount,
+    portalSearchStatus,
+    documentCandidateCount,
+    sbcPdfCandidateCount,
     runtimeEventId: event.id,
     actionsTaken
   });

@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: MVP hardening Phases 1-8N are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction.
+Status: MVP hardening Phases 1-8O are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
@@ -531,13 +531,24 @@ Phase 8N user-facing MVP result loop hardening is implemented:
   - runtime events and UI proof expose retain attempts, repair status, next action, and whether the retry repaired the failure.
 - LangGraph source pointers now include structured `claim_items` and `prior_authorizations` rows when the portal evidence contains them, while user-facing answers remain source-pointer based and do not expose raw portal text.
 
+Phase 8O enriched live worker discovery proof is implemented:
+
+- The official OpenClaw runtime now creates a source-pointer-safe discovery report during the same approved read-only observation:
+  - portal search affordance scan from visible DOM controls, buttons, inputs, links, and text signals without submitting a query,
+  - official document/SBC/PDF candidate discovery from same-site links without downloading documents,
+  - read-only/mixed-form/offsite blocker classification for document candidates,
+  - portal sections tried and reachable from same-site navigation and visible page signals,
+  - fallback chain from same-site navigation to portal search, official documents/PDFs when needed, and manual user export.
+- LangGraph carries that discovery report into evidence observations, worker status events, continuation metadata, proof output, and sourced answer composition.
+- The auth-plus-chat UI now shows Discovery in Current Answer, Workflow Proof, Worker Result, and runtime event summaries.
+- User-facing answers still cite stored source pointers and do not expose raw portal text.
+
 Next implementation:
 
-- Phase 8O should run the enriched live worker playbook against the authenticated portal and verify whether portal-search/document/PDF branches are reachable:
-  - keep the same eligibility/benefits journey,
-  - use the dedicated OpenClaw current tab after user-controlled auth,
-  - exercise same-site navigation plus portal search where available,
-  - record whether official documents/SBC/PDFs are found or blocked,
+- Phase 8P should perform a fresh live authenticated run with the dedicated OpenClaw profile and inspect the discovery report against the real portal:
+  - confirm whether the current portal exposes usable search controls,
+  - confirm which official document/SBC/PDF candidates are visible, blocked, or need a separate read-only document approval,
+  - decide whether the next slice should add actual read-only PDF/document ingestion or first improve page-specific extraction for the discovered sections,
   - keep Graphiti retain status visible in chat.
 
 ## Full Working Test Recommendation

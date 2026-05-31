@@ -518,6 +518,17 @@ Phase 8N auth-plus-chat result loop hardening is acceptable when:
 - Final answers remain source-pointer based and do not include raw portal text.
 - Focused UI, product-memory, output-policy, and LangGraph tests pass, followed by build and local suite.
 
+Phase 8O enriched OpenClaw discovery proof is acceptable when:
+
+- The approved official OpenClaw read-only path records a discovery report after DOM/accessibility, CDP screenshot, OCR, and same-site navigation.
+- The discovery report includes portal search affordance scan status without submitting a search query.
+- The discovery report includes official document/SBC/PDF candidate counts, read-only candidate counts, blocked candidate counts, and blocker reasons for mixed form/submission/offsite areas.
+- The report includes portal sections tried or reachable and the fallback chain through same-site navigation, portal search, official documents/PDFs, and manual export.
+- LangGraph carries discovery proof into worker status events, continuation metadata, evidence observation state, output policy, and UI proof.
+- Current Answer, Workflow Proof, Worker Result, and runtime timeline show discovery status without raw portal text.
+- Tests cover the discovery-report builder, sourced output wording, UI contract, and continuation metadata.
+- Live authenticated OpenClaw proof remains gated by `BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1`, `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1`, and `BRAINSTY_PORTAL_LIVE=1`.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

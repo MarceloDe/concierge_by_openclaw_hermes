@@ -45,6 +45,17 @@ function sourcePointerLine(sourcePointers = []) {
   return `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`;
 }
 
+function discoveryLine(evidenceObservation = {}) {
+  const report = evidenceObservation.discoveryReport;
+  if (!report) return "OpenClaw discovery proof: portal search and document/SBC/PDF discovery were not reported for this run.";
+  const search = report.portalSearch?.status ?? "not_reported";
+  const documents = report.documentDiscovery ?? {};
+  const sections = report.portalSections?.tried?.length
+    ? ` Sections tried: ${report.portalSections.tried.join(", ")}.`
+    : "";
+  return `OpenClaw discovery proof: portal search ${search}; document candidates ${documents.candidateCount ?? 0}; SBC/PDF candidates ${documents.sbcPdfCandidateCount ?? 0}.${sections}`;
+}
+
 function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = [], evidenceObservation = {} }) {
   const structured = eligibility?.structured;
   const observationMode = (() => {
@@ -65,6 +76,7 @@ function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = 
     "I captured approved read-only portal evidence and prepared the benefits answer from stored source pointers.",
     structuredBenefitLine(structured),
     structuredClaimsLine(structured),
+    discoveryLine(evidenceObservation),
     sourcePointerLine(sourcePointers),
     pageTitle,
     observationMode,

@@ -976,6 +976,7 @@ async function evidenceObservationNode(state) {
       maxPages: Number(state.raw_message?.officialOpenClawMaxPages ?? process.env.BRAINSTY_OPENCLAW_MAX_PAGES ?? 4)
     });
     const actionsTaken = browserResult.actionsTaken ?? [];
+    const discoveryReport = browserResult.officialOpenClaw?.discoveryReport ?? null;
     const finalizeContinuation = (details) =>
       state.raw_message?.workerContinuationId
         ? finalizeWorkerContinuationDispatch(store, {
@@ -1005,6 +1006,10 @@ async function evidenceObservationNode(state) {
           workflow: state.workflow,
           runtime: "official_openclaw",
           browserRunId: browserResult.browserRunId ?? null,
+          discoveryReport,
+          portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
+          documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
+          sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
           actionsTaken
         }
       });
@@ -1086,6 +1091,7 @@ async function evidenceObservationNode(state) {
           actionsTaken,
           sourcePointers: [],
           verification,
+          discoveryReport,
           officialOpenClaw: browserResult.officialOpenClaw,
           workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
@@ -1137,6 +1143,10 @@ async function evidenceObservationNode(state) {
           workflow: state.workflow,
           runtime: "official_openclaw",
           browserRunId: browserResult.browserRunId ?? null,
+          discoveryReport,
+          portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
+          documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
+          sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
           actionsTaken: blocked.actionsTaken
         }
       });
@@ -1151,6 +1161,7 @@ async function evidenceObservationNode(state) {
           sourcePointers: [],
           verification: failed.verification,
           pageVerifications,
+          discoveryReport,
           officialOpenClaw: browserResult.officialOpenClaw,
           workerContinuation: finalizedContinuation?.continuation ?? workerContinuationDispatch?.continuation ?? null
         },
@@ -1217,6 +1228,10 @@ async function evidenceObservationNode(state) {
       structuredBenefitCount: structuredBenefits.length,
       structuredClaimCount: structuredClaims.length,
       structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
+      discoveryReport,
+      portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
+      documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
+      sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
       actionsTaken: completedActions
     });
     await publishGraphRuntimeEvent(store, state, {
@@ -1238,6 +1253,11 @@ async function evidenceObservationNode(state) {
         structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
         evidenceChannels,
         navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
+        discoveryReport,
+        portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
+        documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
+        sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
+        portalSectionsTried: discoveryReport?.portalSections?.tried ?? [],
         actionsTaken: completedActions
       }
     });
@@ -1260,6 +1280,7 @@ async function evidenceObservationNode(state) {
         verifiedPageCount: validPageVerifications.length,
         blockedPageCount: blockedPageVerifications.length,
         navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
+        discoveryReport,
         pageBlockers: [
           ...(browserResult.officialOpenClaw?.pageBlockers ?? []),
           ...blockedPageVerifications.map((item) => ({
@@ -1285,6 +1306,9 @@ async function evidenceObservationNode(state) {
         structuredBenefitCount: structuredBenefits.length,
         structuredClaimCount: structuredClaims.length,
         structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
+        portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
+        documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
+        sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
         actionsTaken: completedActions
       })
     };

@@ -978,3 +978,22 @@ The MVP must be user-friendly without losing auditability. Users need to see the
 
 Cost of changing later:
 Low. The UI wording and repair labels can evolve, but the contract should remain: latest answer is distinct from history; product memory status is visible; claims/benefits structured rows become source pointers before response composition.
+
+## 2026-05-30 - Make OpenClaw Discovery Observable Before PDF Ingestion
+
+Context:
+Phase 8M put portal search and document/PDF handling into the OpenClaw worker skill, but the live official worker path did not yet prove whether those branches were reachable from an authenticated portal. Jumping directly to PDF download/analysis would blur two questions: whether the portal exposes the right controls/documents, and whether the product should ingest them.
+
+Options considered:
+- Add real PDF/document download and extraction immediately.
+- Leave portal search/document handling as skill text only.
+- First add a source-pointer-safe discovery report to the approved read-only observation path.
+
+Decision:
+Add an OpenClaw discovery report to the official read-only worker path before implementing document ingestion. The report records portal-search affordance scan status without submitting a query, official document/SBC/PDF candidate counts without downloading documents, blocker reasons for mixed form/submission/offsite areas, portal sections tried/reachable, and the fallback chain. LangGraph carries this into worker events, continuation metadata, evidence observation state, output policy, and UI proof.
+
+Reason:
+This keeps the MVP narrow and testable. The user can see whether the enriched worker playbook reached the right surfaces before we add the higher-risk and more complex PDF/document ingestion path. It also preserves the architecture rule: OpenClaw explores adaptively inside the approved task, while LangGraph verifies, stores source pointers, owns product memory, and composes the answer.
+
+Cost of changing later:
+Low. A later phase can promote read-only PDF/document ingestion from candidate discovery to actual extraction with a separate approval/scope if needed. The discovery report should remain as a pre-ingestion proof and blocker diagnostic.

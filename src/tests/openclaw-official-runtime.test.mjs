@@ -8,6 +8,7 @@ import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import {
+  buildOfficialOpenClawDiscoveryReport,
   buildOfficialOpenClawReadOnlyNavigationPlan,
   checkOfficialOpenClawReadiness,
   getOfficialOpenClawConfig
@@ -49,6 +50,55 @@ test("official OpenClaw multi-page planner selects safe read-only targets from r
   assert.ok(plan.targets.some((target) => target.goal === "spending" && target.url.includes("/spending/medical")));
   assert.ok(plan.targets.every((target) => target.url.startsWith("https://health.aetna.com/")));
   assert.ok(plan.targets.every((target) => !/logout|digital-claims|documents-and-forms|preferences|messages/i.test(target.url)));
+});
+
+test("official OpenClaw discovery report records portal search and document/SBC/PDF readiness", () => {
+  const startUrl = "https://health.aetna.com/home";
+  const navigationPlan = buildOfficialOpenClawReadOnlyNavigationPlan({
+    startUrl,
+    links: [
+      { text: "Benefits & Plan Documents", href: "https://health.aetna.com/benefits/medical-plan-summary" },
+      { text: "Claims", href: "https://health.aetna.com/manage/claims" }
+    ],
+    maxPages: 3
+  });
+  const report = buildOfficialOpenClawDiscoveryReport({
+    startUrl,
+    navigationPlan,
+    observations: [
+      {
+        pageLabel: "start_page",
+        page: {
+          title: "Member Home",
+          url: startUrl,
+          text: "Benefits Coverage Documents Search Find care Claims Deductible",
+          links: [
+            { text: "Summary of Benefits and Coverage PDF", href: "https://health.aetna.com/documents/sbc.pdf", source: "test_link" },
+            { text: "Upload documents", href: "https://health.aetna.com/documents/upload", source: "test_link" },
+            { text: "Find care", href: "https://health.aetna.com/find-care", source: "test_link" }
+          ],
+          buttons: [{ text: "Search", disabled: false }],
+          inputs: [{ type: "search", role: "searchbox", placeholder: "Search", label: "Search", disabled: false }]
+        }
+      }
+    ],
+    pageBlockers: []
+  });
+
+  assert.equal(report.portalSearch.affordanceScanAttempted, true);
+  assert.equal(report.portalSearch.available, true);
+  assert.equal(report.portalSearch.querySubmitted, false);
+  assert.equal(report.documentDiscovery.attempted, true);
+  assert.equal(report.documentDiscovery.candidateCount, 2);
+  assert.equal(report.documentDiscovery.sbcPdfCandidateCount, 1);
+  assert.equal(report.documentDiscovery.policy.downloadAttempted, false);
+  assert.equal(report.documentDiscovery.policy.rawDocumentDumpAllowed, false);
+  assert.ok(report.documentDiscovery.candidates.some((candidate) => candidate.type === "summary_of_benefits_and_coverage"));
+  assert.ok(report.documentDiscovery.blockedCandidates.some((candidate) => candidate.blockedReason === "not_read_only_portal_area"));
+  assert.ok(report.portalSections.reachable.some((item) => item.section === "documents"));
+  assert.ok(report.fallbackChain.includes("manual_user_export"));
+  assert.ok(report.actionsTaken.includes("openclaw_portal_search_affordance_scan"));
+  assert.ok(report.actionsTaken.includes("openclaw_document_candidate_discovery"));
 });
 
 test("official OpenClaw readiness and read-only dispatch fail closed on public payer marketing content", {

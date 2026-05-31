@@ -10,7 +10,7 @@ import { recordOutboundPayloadObservation } from "./outboundPayloadObservability
 
 const execFileAsync = promisify(execFile);
 
-export const OFFICIAL_OPENCLAW_RUNTIME_VERSION = "2026-05-29.official-openclaw-runtime.v2";
+export const OFFICIAL_OPENCLAW_RUNTIME_VERSION = "2026-05-30.official-openclaw-runtime.v3";
 
 const DEFAULT_PROFILE = "brainstyworkers";
 const DEFAULT_AGENT_ID = "brainstyworkers-insurance-browser";
@@ -45,7 +45,9 @@ export function getOfficialOpenClawConfig(env = process.env) {
       "open_internal_read_only_link",
       "snapshot_accessibility_tree",
       "screenshot_capture",
-      "local_ocr"
+      "local_ocr",
+      "portal_search_affordance_scan",
+      "document_candidate_discovery"
     ],
     blockedActions: ["credential_entry", "payer_contact", "form_submission", "medical_advice", "external_message"]
   };
@@ -167,6 +169,231 @@ function targetGoalForLink(link = {}) {
     return { goal: "prior_authorizations", score: 76 };
   }
   return { goal: null, score: 0 };
+}
+
+const PORTAL_SECTION_PATTERNS = [
+  ["benefits", /\bbenefits?\b|coverage|medical-plan-summary/i],
+  ["spending", /\bspending\b|costs?|out[- ]of[- ]pocket|deductible/i],
+  ["claims", /\bclaims?\b|eob|explanation of benefits/i],
+  ["prior_authorizations", /prior authorization|precert|authorizations?/i],
+  ["documents", /\bdocuments?\b|forms?|summary of benefits|sbc|pdf/i],
+  ["pharmacy", /pharmacy|prescription|rx\b/i],
+  ["id_card", /id card|member card/i],
+  ["network", /network|find care|provider/i],
+  ["profile", /member profile|account profile/i]
+];
+
+const DOCUMENT_TYPE_PATTERNS = [
+  ["summary_of_benefits_and_coverage", /summary of benefits and coverage|\bsbc\b/i],
+  ["pdf", /\.pdf(?:$|[?#])|\bpdf\b/i],
+  ["plan_document", /plan documents?|benefit documents?|coverage documents?/i],
+  ["benefits_summary", /benefits? summary|coverage summary/i],
+  ["id_card", /id cards?|member cards?/i],
+  ["eob", /explanation of benefits|\beob\b/i],
+  ["claims_pdf", /claims?.{0,30}\bpdf\b|claim documents?/i],
+  ["document_center", /\bdocuments?\b|documents-and-forms/i]
+];
+
+function safeDiscoveryUrl(value, baseUrl) {
+  try {
+    const url = new URL(value, baseUrl);
+    url.hash = "";
+    url.search = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function safeDiscoveryLabel(type, text = "") {
+  const compactText = compact(text);
+  if (/summary of benefits and coverage|\bsbc\b/i.test(compactText)) return "Summary of Benefits and Coverage";
+  if (/id cards?/i.test(compactText)) return "ID card";
+  if (/explanation of benefits|\beob\b/i.test(compactText)) return "Explanation of Benefits";
+  if (/claims?/i.test(compactText) && /pdf|document/i.test(compactText)) return "Claims document";
+  if (/plan documents?/i.test(compactText)) return "Plan document";
+  if (/benefits? summary|coverage summary/i.test(compactText)) return "Benefits summary";
+  if (/\.pdf\b|pdf/i.test(compactText)) return "PDF document";
+  return String(type ?? "document").replaceAll("_", " ");
+}
+
+function sameSiteHttps(candidateUrl, startUrl) {
+  try {
+    const candidate = new URL(candidateUrl, startUrl);
+    const start = new URL(startUrl);
+    return candidate.protocol === "https:" && candidate.hostname.replace(/^www\./, "") === start.hostname.replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+}
+
+function unsafeDocumentPathReason(url = "") {
+  const text = String(url).toLowerCase();
+  if (/\/(?:upload|submit|send|messages?|payments?|preferences|profile)\b/.test(text)) return "not_read_only_portal_area";
+  if (/document-submission|digital-claims|appeals?|authorizations?\/new/.test(text)) return "submission_or_case_creation_area";
+  if (/documents-and-forms|\/forms?\b/.test(text)) return "mixed_document_and_form_area_needs_user_confirmation";
+  return null;
+}
+
+function classifyDocumentCandidate(link = {}, startUrl) {
+  const normalized = normalizeLink(link, startUrl);
+  if (!normalized) return null;
+  const combined = `${normalized.text ?? ""}\n${normalized.href ?? ""}`;
+  const matchedType = DOCUMENT_TYPE_PATTERNS.find(([, pattern]) => pattern.test(combined))?.[0] ?? null;
+  if (!matchedType) return null;
+  const safeUrl = safeDiscoveryUrl(normalized.href, startUrl);
+  const blockedReason = !sameSiteHttps(normalized.href, startUrl)
+    ? "offsite_document_candidate"
+    : unsafeDocumentPathReason(normalized.href);
+  return {
+    type: matchedType,
+    label: safeDiscoveryLabel(matchedType, normalized.text || normalized.href),
+    url: safeUrl,
+    source: normalized.source,
+    sameSite: sameSiteHttps(normalized.href, startUrl),
+    readOnlyOpenAllowed: !blockedReason,
+    blockedReason,
+    sbcOrPdf: matchedType === "summary_of_benefits_and_coverage" || matchedType === "pdf" || /\.pdf(?:$|[?#])/i.test(normalized.href)
+  };
+}
+
+function detectPortalSections({ text = "", links = [], navigationPlan = null } = {}) {
+  const sectionSignals = new Map();
+  for (const [section, pattern] of PORTAL_SECTION_PATTERNS) {
+    if (pattern.test(text)) sectionSignals.set(section, "observed_in_page_text");
+  }
+  for (const link of links) {
+    const combined = `${link.text ?? ""}\n${link.href ?? ""}`;
+    for (const [section, pattern] of PORTAL_SECTION_PATTERNS) {
+      if (pattern.test(combined) && !sectionSignals.has(section)) {
+        sectionSignals.set(section, "reachable_link_detected");
+      }
+    }
+  }
+  const tried = new Set((navigationPlan?.targets ?? []).map((target) => target.goal).filter(Boolean));
+  return {
+    tried: [...tried],
+    reachable: [...sectionSignals.entries()].map(([section, source]) => ({ section, source }))
+  };
+}
+
+function detectPortalSearchAffordances({ links = [], buttons = [], inputs = [], text = "" } = {}) {
+  const searchInputs = inputs
+    .filter((input) => {
+      const combined = `${input.type ?? ""} ${input.role ?? ""} ${input.placeholder ?? ""} ${input.label ?? ""}`.toLowerCase();
+      return /\bsearch\b|find|lookup|filter/.test(combined);
+    })
+    .slice(0, 6)
+    .map((input) => ({
+      type: input.type ?? null,
+      role: input.role ?? null,
+      label: safeDiscoveryLabel("search", input.label ?? input.placeholder ?? "Portal search"),
+      disabled: Boolean(input.disabled)
+    }));
+  const searchButtons = buttons
+    .filter((button) => /\bsearch\b|find|lookup|filter/i.test(button.text ?? ""))
+    .slice(0, 6)
+    .map((button) => ({
+      label: safeDiscoveryLabel("search", button.text ?? "Portal search"),
+      disabled: Boolean(button.disabled)
+    }));
+  const searchLinks = links
+    .filter((link) => /\bsearch\b|find care|find provider|lookup|filter/i.test(`${link.text ?? ""}\n${link.href ?? ""}`))
+    .slice(0, 8)
+    .map((link) => ({
+      label: safeDiscoveryLabel("search", link.text ?? "Portal search"),
+      url: safeDiscoveryUrl(link.href, link.href),
+      source: link.source ?? "dom_link"
+    }));
+  const textSignal = /\b(search|find care|find a provider|lookup|filter)\b/i.test(text);
+  const available = Boolean(searchInputs.length || searchButtons.length || searchLinks.length || textSignal);
+  return {
+    affordanceScanAttempted: true,
+    querySubmitted: false,
+    available,
+    status: available ? "portal_search_available_not_submitted" : "no_portal_search_affordance_found",
+    searchInputs,
+    searchButtons,
+    searchLinks,
+    textSignal
+  };
+}
+
+export function buildOfficialOpenClawDiscoveryReport({ startUrl, observations = [], navigationPlan = null, pageBlockers = [] } = {}) {
+  const flattenedLinks = observations.flatMap((observation) => observation.page?.links ?? []);
+  const flattenedButtons = observations.flatMap((observation) => observation.page?.buttons ?? observation.buttons ?? observation.screenshot?.buttons ?? []);
+  const flattenedInputs = observations.flatMap((observation) => observation.page?.inputs ?? observation.inputs ?? observation.screenshot?.inputs ?? []);
+  const aggregateText = observations.map((observation) => observation.page?.text ?? "").join("\n");
+  const seenDocuments = new Set();
+  const documentCandidates = flattenedLinks
+    .map((link) => classifyDocumentCandidate(link, startUrl))
+    .filter(Boolean)
+    .filter((candidate) => {
+      const key = `${candidate.type}:${candidate.url}:${candidate.label}`;
+      if (seenDocuments.has(key)) return false;
+      seenDocuments.add(key);
+      return true;
+    })
+    .slice(0, 16);
+  const blockedCandidates = documentCandidates.filter((candidate) => !candidate.readOnlyOpenAllowed);
+  const readOnlyCandidates = documentCandidates.filter((candidate) => candidate.readOnlyOpenAllowed);
+  const portalSearch = detectPortalSearchAffordances({
+    links: flattenedLinks,
+    buttons: flattenedButtons,
+    inputs: flattenedInputs,
+    text: aggregateText
+  });
+  const portalSections = detectPortalSections({ text: aggregateText, links: flattenedLinks, navigationPlan });
+  const sbcPdfCandidateCount = documentCandidates.filter((candidate) => candidate.sbcOrPdf).length;
+  return {
+    version: "2026-05-30.phase8o.openclaw-discovery.v1",
+    status:
+      portalSearch.available || documentCandidates.length || portalSections.reachable.length
+        ? "discovery_signals_recorded"
+        : "no_search_or_document_signals_found",
+    portalSearch,
+    documentDiscovery: {
+      attempted: true,
+      status: documentCandidates.length ? "document_candidates_recorded" : "no_document_candidates_found",
+      candidateCount: documentCandidates.length,
+      readOnlyCandidateCount: readOnlyCandidates.length,
+      blockedCandidateCount: blockedCandidates.length,
+      sbcPdfCandidateCount,
+      candidates: documentCandidates.map((candidate) => ({
+        type: candidate.type,
+        label: candidate.label,
+        url: candidate.url,
+        readOnlyOpenAllowed: candidate.readOnlyOpenAllowed,
+        blockedReason: candidate.blockedReason,
+        sbcOrPdf: candidate.sbcOrPdf,
+        source: candidate.source
+      })),
+      blockedCandidates: blockedCandidates.map((candidate) => ({
+        type: candidate.type,
+        label: candidate.label,
+        url: candidate.url,
+        blockedReason: candidate.blockedReason
+      })),
+      policy: {
+        readOnlyDocumentsAllowedWhenNeeded: true,
+        rawDocumentDumpAllowed: false,
+        downloadAttempted: false,
+        pdfAnalysisAttempted: false,
+        requiresUserApprovalForMixedFormAreas: true
+      }
+    },
+    portalSections,
+    pageBlockers,
+    fallbackChain: ["same_site_navigation", "portal_search_if_available", "official_document_or_pdf_if_needed", "manual_user_export"],
+    actionsTaken: ["openclaw_portal_search_affordance_scan", "openclaw_document_candidate_discovery"],
+    readOnlyBoundary: {
+      credentialEntryAttempted: false,
+      formSubmissionAttempted: false,
+      payerContactAttempted: false,
+      passwordManagerUsed: false,
+      medicalAdviceAttempted: false
+    }
+  };
 }
 
 function normalizeLink(link = {}, baseUrl) {
@@ -349,11 +576,19 @@ async function readDomEvidenceViaCdp(client) {
           text: compact(button.innerText || button.textContent || button.getAttribute("aria-label") || ""),
           disabled: Boolean(button.disabled || button.getAttribute("aria-disabled") === "true")
         }));
+        const inputs = Array.from(document.querySelectorAll("input, [role='searchbox'], textarea, select")).slice(0, 120).map((input) => ({
+          type: compact(input.getAttribute("type") || input.tagName || ""),
+          role: compact(input.getAttribute("role") || ""),
+          placeholder: compact(input.getAttribute("placeholder") || ""),
+          label: compact(input.getAttribute("aria-label") || input.getAttribute("name") || input.getAttribute("id") || ""),
+          disabled: Boolean(input.disabled || input.getAttribute("aria-disabled") === "true")
+        }));
         return JSON.stringify({
           title: document.title,
           url: location.href,
           links,
-          buttons
+          buttons,
+          inputs
         });
       })()`
     });
@@ -364,7 +599,8 @@ async function readDomEvidenceViaCdp(client) {
       title: parsed.title ?? null,
       url: parsed.url ?? null,
       links: Array.isArray(parsed.links) ? parsed.links : [],
-      buttons: Array.isArray(parsed.buttons) ? parsed.buttons : []
+      buttons: Array.isArray(parsed.buttons) ? parsed.buttons : [],
+      inputs: Array.isArray(parsed.inputs) ? parsed.inputs : []
     };
   } catch (error) {
     return {
@@ -372,7 +608,8 @@ async function readDomEvidenceViaCdp(client) {
       status: "official_openclaw_cdp_dom_evidence_failed",
       error: error.message,
       links: [],
-      buttons: []
+      buttons: [],
+      inputs: []
     };
   }
 }
@@ -447,6 +684,7 @@ async function captureScreenshotViaCdp({ config, targetUrl = null, browserRunId,
       domEvidence,
       links: domEvidence.links,
       buttons: domEvidence.buttons,
+      inputs: domEvidence.inputs,
       bytes: Buffer.byteLength(result.data, "base64")
     };
   } finally {
@@ -704,7 +942,9 @@ async function captureOpenClawVisiblePage({ store, browserRunId, config, targetU
     title: pageTitle,
     url: pageUrl,
     text: [snapshot.stdout, "\n\n[Visual OCR]\n", visualOcr.text].join(""),
-    links: screenshot.links ?? []
+    links: screenshot.links ?? [],
+    buttons: screenshot.buttons ?? [],
+    inputs: screenshot.inputs ?? []
   };
   const extraction = {
     ...summarizeOpenClawSnapshot(page.text),
@@ -727,7 +967,9 @@ async function captureOpenClawVisiblePage({ store, browserRunId, config, targetU
       visualOcrText: extraction.visualOcrTextPreview,
       visualOcrConfidence: extraction.visualOcrConfidence,
       screenshotPath: extraction.screenshotPath,
-      links: page.links
+      links: page.links,
+      buttons: page.buttons,
+      inputs: page.inputs
     }),
     created_at: nowIso()
   };
@@ -1003,6 +1245,24 @@ export async function runOfficialOpenClawReadOnlyObservation({
     .map((observation) => `[${observation.pageLabel}] ${observation.page.title}\n${observation.page.url}\n${observation.page.text}`)
     .join("\n\n---\n\n");
   const page = pages[0];
+  const discoveryReport = buildOfficialOpenClawDiscoveryReport({
+    startUrl: openedUrl,
+    observations: pageObservations,
+    navigationPlan,
+    pageBlockers
+  });
+  for (const actionType of discoveryReport.actionsTaken) {
+    actionsTaken.push(actionType);
+    await insertAction(store, browserRun.id, {
+      actionType,
+      targetUrl: page.url,
+      description:
+        actionType === "openclaw_portal_search_affordance_scan"
+          ? "Scanned visible DOM controls and links for portal search affordances without submitting a query."
+          : "Scanned visible same-site portal links for official document, SBC, or PDF candidates without downloading documents.",
+      status: "completed"
+    });
+  }
   const extraction = {
     ...summarizeOpenClawSnapshot(aggregateText),
     ariaTextPreview: pageObservations.map((item) => `[${item.pageLabel}] ${item.extraction.ariaTextPreview}`).join("\n\n").slice(0, 4000),
@@ -1023,7 +1283,8 @@ export async function runOfficialOpenClawReadOnlyObservation({
       visualOcrConfidence: item.visualOcr.confidence,
       visualOcrWordCount: item.visualOcr.wordCount
     })),
-    navigationPlan
+    navigationPlan,
+    discoveryReport
   };
   await store.update(
     "browser_runs",
@@ -1042,6 +1303,7 @@ export async function runOfficialOpenClawReadOnlyObservation({
     pageCount: pageObservations.length,
     navigationPlan,
     pageBlockers,
+    discoveryReport,
     profile: config.profile,
     browserProfile: config.browserProfile,
     skillKey: config.skillKey,
@@ -1081,6 +1343,7 @@ export async function runOfficialOpenClawReadOnlyObservation({
       },
       navigationPlan,
       pageBlockers,
+      discoveryReport,
       pageObservations: pageObservations.map((item) => ({
         pageLabel: item.pageLabel,
         title: item.page.title,
@@ -1088,7 +1351,10 @@ export async function runOfficialOpenClawReadOnlyObservation({
         artifactId: item.artifact.id,
         screenshotPath: item.screenshot.filePath,
         visualOcrConfidence: item.visualOcr.confidence,
-        visualOcrWordCount: item.visualOcr.wordCount
+        visualOcrWordCount: item.visualOcr.wordCount,
+        linkCount: item.page.links.length,
+        buttonCount: item.page.buttons.length,
+        inputCount: item.page.inputs.length
       }))
     }
   };

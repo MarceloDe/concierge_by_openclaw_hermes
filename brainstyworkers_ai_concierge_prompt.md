@@ -1032,6 +1032,20 @@ Phase 8N user-facing MVP result loop:
 - LangGraph source-pointer fan-in now includes `claim_items` and `prior_authorizations` when those structured records are extracted.
 - User-facing answers remain source-pointer based and must not expose raw portal text.
 
+Phase 8O OpenClaw search and document discovery proof:
+
+- The official OpenClaw read-only worker path now records a discovery report from the same approved observation run.
+- The report includes:
+  - portal search affordance scan status without submitting a query,
+  - official document/SBC/PDF candidate counts without downloading documents,
+  - read-only candidate counts and blocker reasons for mixed form, submission, offsite, or other non-read-only areas,
+  - portal sections tried/reachable,
+  - fallback chain through same-site navigation, portal search, official documents/PDFs when needed, and manual user export.
+- LangGraph carries the discovery report into evidence observation state, worker status events, continuation metadata, output policy, and UI proof.
+- Current Answer, Workflow Proof, Worker Result, and the runtime timeline show discovery status.
+- User-facing answers remain source-pointer based and do not expose raw portal text.
+- This is a pre-ingestion proof. Actual PDF/document download or analysis remains a later, separately scoped phase.
+
 Next implementation step:
 
-- Phase 8O should use the enriched skill playbook in a live authenticated run focused on whether portal search, document discovery, SBC/PDF handling, and richer same-site navigation are reachable from the current member portal.
+- Phase 8P should run a fresh live authenticated worker pass using the dedicated OpenClaw current tab and inspect the discovery report against the real portal. Decide from that proof whether to add read-only PDF/document ingestion next or first improve page-specific structured extraction for discovered sections.

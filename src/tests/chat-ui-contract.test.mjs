@@ -42,6 +42,8 @@ test("chat MVP JavaScript requires sign-in and renders runtime graph events", ()
   assert.match(appJs, /structuredBenefitSummary/);
   assert.match(appJs, /structuredClaimSummary/);
   assert.match(appJs, /Structured claims/);
+  assert.match(appJs, /Discovery/);
+  assert.match(appJs, /discoverySummary/);
   assert.match(appJs, /Evidence channels/);
   assert.match(appJs, /renderLiveWorkerGuide/);
   assert.match(appJs, /liveReadiness/);
@@ -118,6 +120,9 @@ test("chat MVP exposes multi-page worker proof fields", () => {
   assert.match(appJs, /officialOpenClawMultiPage\.checked = true/);
   assert.match(appJs, /Navigation plan/);
   assert.match(appJs, /evidence\.navigationPlan/);
+  assert.match(appJs, /evidence\.discoveryReport/);
+  assert.match(appJs, /SBC\/PDF/);
+  assert.match(appJs, /documentCandidateCount/);
   assert.match(appJs, /verifiedPageCount/);
   assert.match(appJs, /pageCount/);
   assert.match(appJs, /captured_official_openclaw_multi_page_read_only_observation/);

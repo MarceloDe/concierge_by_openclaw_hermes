@@ -46,7 +46,13 @@ test("multi-page official OpenClaw evidence composes a sourced executed answer",
     evidenceObservation: {
       status: "captured_official_openclaw_multi_page_read_only_observation",
       pageCount: 2,
-      verifiedPageCount: 2
+      verifiedPageCount: 2,
+      discoveryReport: {
+        version: "2026-05-30.phase8o.openclaw-discovery.v1",
+        portalSearch: { status: "portal_search_available_not_submitted", available: true },
+        documentDiscovery: { candidateCount: 3, sbcPdfCandidateCount: 1 },
+        portalSections: { tried: ["benefits", "claims"] }
+      }
     }
   });
 
@@ -54,6 +60,7 @@ test("multi-page official OpenClaw evidence composes a sourced executed answer",
   assert.match(response, /approved multi-page read-only observation was executed/);
   assert.match(response, /2\/2 page\(s\) were verified/);
   assert.match(response, /Source pointers: eligibility_snapshots\/elig_123, extraction_artifacts\/artifact_123/);
+  assert.match(response, /OpenClaw discovery proof: portal search portal_search_available_not_submitted; document candidates 3; SBC\/PDF candidates 1/);
   assert.match(response, /Deductible: total \$600\.00, spent \$558\.72, remaining \$41\.28/);
   assert.match(response, /Structured claims\/prior authorization evidence: claims Office visit on May 1, 2026 with share \$42\.50/);
   assert.doesNotMatch(response, /not executed in this slice/i);

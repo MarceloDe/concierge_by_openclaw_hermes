@@ -3551,3 +3551,75 @@ Known risks:
 
 Next step:
 - Phase 8O should run a live authenticated worker pass that specifically tries portal search, document discovery, SBC/PDF handling, and richer same-site navigation, while preserving user-controlled auth and LangGraph approval.
+
+## Phase 8O: OpenClaw Search And Document Discovery Proof - 2026-05-30
+
+Request:
+- Go to the next phase after the enriched OpenClaw skill and user-facing result loop.
+
+Implementation:
+- Updated `src/concierge/openclawOfficialRuntime.mjs`:
+  - added `buildOfficialOpenClawDiscoveryReport`,
+  - scans DOM/accessibility/CDP evidence for portal search affordances without submitting a query,
+  - scans same-site links for official document, SBC, and PDF candidates without downloading documents,
+  - classifies document candidates as read-only-openable or blocked by mixed form, submission, offsite, or non-read-only areas,
+  - records portal sections tried/reachable and the fallback chain,
+  - records `openclaw_portal_search_affordance_scan` and `openclaw_document_candidate_discovery` browser actions.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - carries discovery proof into official OpenClaw evidence observations,
+  - publishes discovery counts in `worker.status.updated`,
+  - includes discovery metadata when finalizing worker continuations.
+- Updated `src/concierge/outputPolicy.mjs`:
+  - sourced answers now state portal search status, document candidate count, and SBC/PDF candidate count without exposing raw portal text.
+- Updated `src/app/app.js`:
+  - Current Answer, Workflow Proof, Worker Result, and runtime timeline now show discovery status.
+- Updated tests:
+  - `src/tests/openclaw-official-runtime.test.mjs`,
+  - `src/tests/output-policy.test.mjs`,
+  - `src/tests/chat-ui-contract.test.mjs`.
+
+Proof so far:
+- Static checks passed:
+  - `node --check src/concierge/openclawOfficialRuntime.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/concierge/outputPolicy.mjs`
+  - `node --check src/concierge/workerContinuations.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/openclaw-official-runtime.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/openclaw-official-runtime.test.mjs`
+    - 5 tests total, 3 passed, 2 skipped live-gated.
+  - `node --test src/tests/chat-ui-contract.test.mjs`
+    - 7 passed.
+  - `node --test src/tests/output-policy.test.mjs`
+    - 1 passed.
+  - `node --test src/tests/worker-continuations.test.mjs`
+    - 6 passed.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 114 tests total.
+  - 112 passed.
+  - 0 failed.
+  - 2 skipped live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - page title: `Brainstyworkers AI Concierge`,
+  - initial shell loaded Current Answer and Replay Benefits MVP with 0 console errors,
+  - Replay Benefits MVP completed through the local app path,
+  - Current Answer showed `Latest LangGraph result for this session`,
+  - Current Answer, Workflow Proof, and Worker Result showed the new Discovery field,
+  - Discovery rendered `not reported` for the replay-only non-live run, as expected before official worker execution.
+- Screenshot capture was attempted through the in-app browser but timed out on `Page.captureScreenshot`; DOM/UI/console proof passed.
+- OpenClaw status API proof passed after restarting the local server:
+  - `GET /api/openclaw/official/status` returned runtime version `2026-05-30.official-openclaw-runtime.v3`,
+  - readiness was `ready=true`,
+  - allowed actions included `portal_search_affordance_scan` and `document_candidate_discovery`,
+  - live readiness was `auth_required` because the dedicated OpenClaw browser currently had no authenticated current tab open.
+
+Known risks:
+- This slice proves discovery/reporting and does not yet download or analyze PDFs.
+- A fresh authenticated live run is still needed to inspect actual portal search/document/SBC/PDF availability from the user's current member portal.
+
+Next step:
+- Phase 8P should run the fresh live authenticated OpenClaw pass, inspect the discovery report in the app, and decide whether the next implementation should add read-only document/PDF ingestion or improve page-specific structured extraction first.
