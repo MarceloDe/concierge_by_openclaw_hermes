@@ -3475,3 +3475,79 @@ Next step:
   - add Graphiti retain retry/repair and clearer memory status,
   - improve structured extraction for benefits/claims pages while preserving source-pointer-only responses,
   - keep auth-plus-chat as the primary MVP test surface and the proof dashboard as operator/debug support.
+
+## Phase 8N: Auth-Plus-Chat Result Loop, Memory Repair, And Claims Pointers - 2026-05-30
+
+Request:
+- Go to the next phase after enriching the OpenClaw insurance worker skill.
+
+Implementation:
+- Updated the chat MVP surface in `src/app/app.js` and `src/app/styles.css`:
+  - Current Answer now states it is the latest LangGraph result for the active session,
+  - newest assistant graph-run messages are marked with a current-answer style,
+  - Current Answer now shows structured claims/prior authorization summaries and product-memory retain/repair status,
+  - Worker Result now shows structured claims alongside structured benefits,
+  - memory runtime events render retain attempts, repair status, next action, and repaired state.
+- Updated `src/concierge/productMemory.mjs`:
+  - added Graphiti retain repair classification,
+  - distinguishes retryable runtime failures from payload-policy failures,
+  - retries fast retryable retain failures once unless `BRAINSTY_PRODUCT_MEMORY_RETAIN_RETRY=0`,
+  - avoids automatic retry after timeouts and returns the next repair action,
+  - audits repaired or failed retain attempts with repair metadata.
+- Updated `src/concierge/langgraphRunner.mjs`:
+  - publishes product-memory repair metadata in `memory.retained` runtime events,
+  - adds `claim_items` and `prior_authorizations` to source-pointer fan-in when structured extraction finds them,
+  - carries structured claims/prior authorizations in evidence observations and worker status events.
+- Updated `src/concierge/outputPolicy.mjs`:
+  - includes a source-pointer-safe structured claims/prior-authorization line in sourced answers.
+- Updated tests:
+  - `src/tests/chat-ui-contract.test.mjs`
+  - `src/tests/product-memory-contract.test.mjs`
+  - `src/tests/output-policy.test.mjs`
+  - `src/tests/langgraph-runner.test.mjs`
+- Updated governing/planning docs:
+  - `brainstyworkers_ai_concierge_prompt.md`
+  - `docs/IMPLEMENTATION_PLAN.md`
+  - `docs/ACCEPTANCE_CRITERIA.md`
+  - `docs/DECISIONS.md`
+
+Proof so far:
+- Static checks passed:
+  - `node --check src/concierge/productMemory.mjs`
+  - `node --check src/concierge/langgraphRunner.mjs`
+  - `node --check src/concierge/outputPolicy.mjs`
+  - `node --check src/app/app.js`
+  - `node --check src/tests/product-memory-contract.test.mjs`
+  - `node --check src/tests/langgraph-runner.test.mjs`
+  - `node --check src/tests/output-policy.test.mjs`
+  - `node --check src/tests/chat-ui-contract.test.mjs`
+- Focused tests passed:
+  - `node --test src/tests/product-memory-contract.test.mjs src/tests/output-policy.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/langgraph-runner.test.mjs`
+  - 20 tests total.
+  - 20 passed.
+  - 0 failed.
+- Build passed:
+  - `npm run build`
+- Full local suite passed:
+  - `npm run test:local`
+  - 113 tests total.
+  - 111 passed.
+  - 0 failed.
+  - 2 skipped: live-gated official OpenClaw tests.
+- Browser proof at `http://127.0.0.1:4173/` passed after restarting the local server:
+  - page title: `Brainstyworkers AI Concierge`,
+  - initial app loaded with Current Answer, Replay Benefits MVP, Live Worker Readiness, and Zep Graphiti Runtime surfaces,
+  - Replay Benefits MVP completed through the real local auth-plus-chat path,
+  - Current Answer showed `Latest LangGraph result for this session`,
+  - Current Answer included Claims and Memory fields,
+  - Workflow Proof and Worker Result were present,
+  - the newest assistant graph-run message had the latest-answer marker,
+  - browser console had 0 errors.
+- Screenshot capture was attempted through the in-app browser but timed out on the CDP screenshot command. DOM/UI/console proof passed.
+
+Known risks:
+- Graphiti repair retry is implemented and unit-tested by classification, but a fresh live Graphiti repair failure was not forced in this slice.
+- The next live worker proof should check whether the enriched skill can find portal search or official document/PDF/SBC surfaces from the authenticated portal.
+
+Next step:
+- Phase 8O should run a live authenticated worker pass that specifically tries portal search, document discovery, SBC/PDF handling, and richer same-site navigation, while preserving user-controlled auth and LangGraph approval.

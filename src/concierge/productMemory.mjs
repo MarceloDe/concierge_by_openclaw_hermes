@@ -250,29 +250,62 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
   };
 }
 
+export function isRetryableGraphitiRetainError(errorOrMessage) {
+  const message = String(errorOrMessage?.message ?? errorOrMessage ?? "");
+  if (!message) return false;
+  if (/direct identifier|raw portal text|source pointer|policy|not allowed|unsafe/i.test(message)) return false;
+  return /timed out|timeout|ECONN|connection|refused|reset|failed with|invalid JSON|Falkor|Graphiti bridge failed|temporar/i.test(message);
+}
+
+export function buildProductMemoryRetainRepairPlan(errorOrMessage, { sourcePointerCount = 0, attempt = 1 } = {}) {
+  const error = String(errorOrMessage?.message ?? errorOrMessage ?? "Graphiti retain failed.");
+  const timeout = /timed out|timeout/i.test(error);
+  const retryable = isRetryableGraphitiRetainError(error);
+  const nextAction = (() => {
+    if (!sourcePointerCount) return "Run a sourced workflow first so Graphiti retain has source pointers.";
+    if (timeout) return "Check the Graphiti/FalkorDB runtime, then run the product memory probe or replay retain.";
+    if (retryable) return "Retry Graphiti retain after checking runtime status.";
+    return "Inspect the memory payload policy and Graphiti bridge error before retrying.";
+  })();
+  return {
+    status: retryable ? (timeout ? "retry_deferred_timeout" : "retryable_retain_failed") : "manual_repair_required",
+    retryable,
+    timeout,
+    attempt,
+    sourcePointerCount,
+    attemptedRetry: false,
+    repaired: false,
+    error,
+    nextAction
+  };
+}
+
 export async function retainProductMemoryFromGraphRun(store, { user, session, state, localMemoryItems = [] }) {
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   if (!config.enabled || !state?.should_remember) return { ...disabledResult("retain"), config };
   const episodeBody = buildSafeProductMemoryEpisode({ user, session, state, localMemoryItems });
-  try {
-    const result = await callGraphitiBridge({
-      action: "retain",
-      groupId: config.groupId,
-      name: `Brainsty ${state.workflow ?? "workflow"} ${session.id}`,
-      episodeBody,
-      source: "json",
-      sourceDescription: "Brainstyworkers product memory safe workflow summary",
-      referenceTime: nowIso()
-    }, {
+  const retainPayload = {
+    action: "retain",
+    groupId: config.groupId,
+    name: `Brainsty ${state.workflow ?? "workflow"} ${session.id}`,
+    episodeBody,
+    source: "json",
+    sourceDescription: "Brainstyworkers product memory safe workflow summary",
+    referenceTime: nowIso()
+  };
+  const retainOnce = (attempt) =>
+    callGraphitiBridge(retainPayload, {
       observability: {
         store,
         sessionId: session.id,
-        payloadType: "graphiti_retain",
+        payloadType: attempt === 1 ? "graphiti_retain" : "graphiti_retain_retry",
         user,
         policyMode: "product_memory_retain_observe_only"
       }
     });
+  try {
+    const result = await retainOnce(1);
     await audit(store, session.id, "product_memory_retained_graphiti", {
       provider: "zep_graphiti",
       contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
@@ -290,6 +323,8 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
       adapter: "graphiti",
       enabled: true,
       retained: true,
+      retainAttempts: 1,
+      repairPlan: null,
       episodeBodyPreview: {
         workflow: episodeBody.workflow,
         workflowOutcome: episodeBody.workflowOutcome,
@@ -298,10 +333,75 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
       }
     };
   } catch (error) {
+    const repairPlan = buildProductMemoryRetainRepairPlan(error, {
+      sourcePointerCount: episodeBody.sourcePointers.length,
+      attempt: 1
+    });
+    const shouldRetry = repairPlan.retryable && !repairPlan.timeout && process.env.BRAINSTY_PRODUCT_MEMORY_RETAIN_RETRY !== "0";
+    if (shouldRetry) {
+      repairPlan.attemptedRetry = true;
+      try {
+        const status = await callGraphitiBridge(
+          { action: "status", groupId: config.groupId },
+          {
+            timeoutMs: 30000,
+            observability: {
+              store,
+              sessionId: session.id,
+              payloadType: "graphiti_retain_repair_status",
+              user,
+              policyMode: "product_memory_retain_repair_observe_only"
+            }
+          }
+        );
+        repairPlan.statusProbe = {
+          ok: Boolean(status.ok),
+          schemaReady: Boolean(status.schemaReady),
+          backend: status.backend ?? null
+        };
+      } catch (statusError) {
+        repairPlan.statusProbe = {
+          ok: false,
+          error: statusError.message
+        };
+      }
+      try {
+        const retryResult = await retainOnce(2);
+        repairPlan.repaired = true;
+        await audit(store, session.id, "product_memory_retain_repaired_graphiti", {
+          provider: "zep_graphiti",
+          contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
+          firstError: error.message,
+          backend: retryResult.backend,
+          groupId: retryResult.groupId,
+          episodeUuid: retryResult.episodeUuid,
+          sourcePointerCount: episodeBody.sourcePointers.length,
+          repairPlan
+        });
+        return {
+          ...retryResult,
+          adapter: "graphiti",
+          enabled: true,
+          retained: true,
+          retainAttempts: 2,
+          firstError: error.message,
+          repairPlan,
+          episodeBodyPreview: {
+            workflow: episodeBody.workflow,
+            workflowOutcome: episodeBody.workflowOutcome,
+            sourcePointerCount: episodeBody.sourcePointers.length,
+            rawPortalTextStored: false
+          }
+        };
+      } catch (retryError) {
+        repairPlan.retryError = retryError.message;
+      }
+    }
     await audit(store, session.id, "product_memory_retain_failed_graphiti", {
       provider: "zep_graphiti",
       contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
-      error: error.message
+      error: error.message,
+      repairPlan
     });
     return {
       ok: false,
@@ -309,7 +409,10 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
       adapter: "graphiti",
       enabled: true,
       retained: false,
-      error: error.message
+      retainAttempts: repairPlan.attemptedRetry ? 2 : 1,
+      error: repairPlan.retryError ?? error.message,
+      firstError: error.message,
+      repairPlan
     };
   }
 }

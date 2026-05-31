@@ -40,6 +40,8 @@ test("chat MVP JavaScript requires sign-in and renders runtime graph events", ()
   assert.match(appJs, /renderWorkerOutcomeCard/);
   assert.match(appJs, /friendlyWorkerBlocker/);
   assert.match(appJs, /structuredBenefitSummary/);
+  assert.match(appJs, /structuredClaimSummary/);
+  assert.match(appJs, /Structured claims/);
   assert.match(appJs, /Evidence channels/);
   assert.match(appJs, /renderLiveWorkerGuide/);
   assert.match(appJs, /liveReadiness/);
@@ -60,6 +62,10 @@ test("chat MVP exposes repeatable benefits replay and final answer surface", () 
   assert.match(appJs, /runProductChat\(MVP_BENEFITS_MESSAGE\)/);
   assert.match(appJs, /renderAnswerPanel/);
   assert.match(appJs, /Current Answer/);
+  assert.match(appJs, /Latest LangGraph result for this session/);
+  assert.match(appJs, /latest-answer-message/);
+  assert.match(appJs, /memoryRetainSummary/);
+  assert.match(appJs, /memoryNextAction/);
   assert.match(appJs, /data-answer-approve-readonly/);
   assert.match(appJs, /data-answer-worker-followup/);
   assert.match(appJs, /\/api\/orchestrator\/auth-start/);

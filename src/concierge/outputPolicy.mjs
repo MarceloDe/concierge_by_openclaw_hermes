@@ -14,6 +14,32 @@ function structuredBenefitLine(structured) {
     .join("; ")}.`;
 }
 
+function structuredClaimsLine(structured) {
+  const claims = structured?.claims ?? [];
+  const priorAuthorizations = structured?.priorAuthorizations ?? [];
+  if (!claims.length && !priorAuthorizations.length) {
+    return "Structured claims/prior authorization evidence: no claim or prior authorization rows were extracted yet.";
+  }
+  const parts = [];
+  if (claims.length) {
+    parts.push(
+      `claims ${claims
+        .slice(0, 3)
+        .map((claim) => `${claim.description ?? "Claim"} on ${claim.service_date ?? "unknown date"} with share ${money(claim.share_amount)} (source ${claim.source})`)
+        .join("; ")}`
+    );
+  }
+  if (priorAuthorizations.length) {
+    parts.push(
+      `prior authorizations ${priorAuthorizations
+        .slice(0, 3)
+        .map((item) => `${item.provider_or_facility ?? "Prior authorization"} ${item.status ?? "visible"} on ${item.service_date ?? "unknown date"} (source ${item.source})`)
+        .join("; ")}`
+    );
+  }
+  return `Structured claims/prior authorization evidence: ${parts.join(" | ")}.`;
+}
+
 function sourcePointerLine(sourcePointers = []) {
   if (!sourcePointers.length) return "Source pointers: none stored yet.";
   return `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`;
@@ -38,6 +64,7 @@ function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = 
   return [
     "I captured approved read-only portal evidence and prepared the benefits answer from stored source pointers.",
     structuredBenefitLine(structured),
+    structuredClaimsLine(structured),
     sourcePointerLine(sourcePointers),
     pageTitle,
     observationMode,

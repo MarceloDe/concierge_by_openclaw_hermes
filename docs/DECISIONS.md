@@ -959,3 +959,22 @@ OpenClaw's value is adaptive execution, but healthcare workflow safety needs a s
 
 Cost of changing later:
 Low to medium. The exact portal sections and data fields can expand as live portal testing reveals more structure. The higher-level contract should remain stable: LangGraph owns workflow, approval, verification, source-pointer fan-in, product memory, and final response; OpenClaw owns adaptive read-only execution inside the assigned task.
+
+## 2026-05-30 - Make The Latest Answer And Memory Repair Visible In Chat
+
+Context:
+Phase 8L proved the live multi-page worker path, but the user-facing conversation could still contain older pre-approval text beside the newer sourced result. The live run also surfaced a product-memory gap: the sourced answer succeeded while Graphiti retain could report `retained false`, which made the MVP harder to trust and debug from the chat surface.
+
+Options considered:
+- Rely on the proof dashboard and leave chat history as-is.
+- Hide older messages after every approval.
+- Keep the chat history, but make Current Answer the explicit latest LangGraph result and surface memory repair/status there.
+
+Decision:
+Keep full chat history and operator proof, but make Current Answer the authoritative latest result for the active session. Add product-memory retain repair metadata and show retain attempts, repair status, next action, and repaired state in the answer panel, workflow proof, and runtime events. Add source-pointer rows for claims and prior authorizations so benefits/claims pages can feed structured proof without exposing raw portal text.
+
+Reason:
+The MVP must be user-friendly without losing auditability. Users need to see the current answer clearly, while engineers still need the proposal, approval, worker, source-pointer, payload, and memory proof. Memory failures should not silently disappear behind a sourced answer.
+
+Cost of changing later:
+Low. The UI wording and repair labels can evolve, but the contract should remain: latest answer is distinct from history; product memory status is visible; claims/benefits structured rows become source pointers before response composition.

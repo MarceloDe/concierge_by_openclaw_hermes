@@ -179,11 +179,37 @@ function coverageBalancePointersFromEligibility(eligibility) {
   }));
 }
 
+function claimPointersFromEligibility(eligibility) {
+  return (eligibility?.structured?.claims ?? []).map((claim) => ({
+    table: "claim_items",
+    id: claim.id,
+    sourceUrl: claim.source,
+    summary: `${claim.description ?? "Claim"}: service ${claim.service_date ?? "unknown date"}, share ${money(claim.share_amount)}`,
+    createdAt: claim.created_at,
+    serviceDate: claim.service_date,
+    shareAmount: claim.share_amount
+  }));
+}
+
+function priorAuthorizationPointersFromEligibility(eligibility) {
+  return (eligibility?.structured?.priorAuthorizations ?? []).map((priorAuth) => ({
+    table: "prior_authorizations",
+    id: priorAuth.id,
+    sourceUrl: priorAuth.source,
+    summary: `${priorAuth.provider_or_facility ?? "Prior authorization"}: ${priorAuth.status ?? "visible_in_portal"} on ${priorAuth.service_date ?? "unknown date"}`,
+    createdAt: priorAuth.created_at,
+    serviceDate: priorAuth.service_date,
+    status: priorAuth.status
+  }));
+}
+
 function sourcePointersFromObservation({ browserResult = null, eligibility = null, portalScan = null }) {
   const pointers = [];
   const eligibilityPointer = pointerFromEligibility(eligibility);
   if (eligibilityPointer) pointers.push(eligibilityPointer);
   pointers.push(...coverageBalancePointersFromEligibility(eligibility));
+  pointers.push(...claimPointersFromEligibility(eligibility));
+  pointers.push(...priorAuthorizationPointersFromEligibility(eligibility));
   for (const page of portalScan?.pageRows ?? []) {
     pointers.push({
       table: "portal_page_snapshots",
@@ -197,6 +223,8 @@ function sourcePointersFromObservation({ browserResult = null, eligibility = nul
     const pointer = pointerFromEligibility(result);
     if (pointer) pointers.push(pointer);
     pointers.push(...coverageBalancePointersFromEligibility(result));
+    pointers.push(...claimPointersFromEligibility(result));
+    pointers.push(...priorAuthorizationPointersFromEligibility(result));
   }
   if (browserResult?.browserRunId && browserResult?.page?.url && pointers.length === 0) {
     pointers.push({
@@ -262,6 +290,30 @@ function structuredBenefitRowsFromEligibility(eligibility) {
     currency: balance.currency,
     sourceUrl: balance.source,
     createdAt: balance.created_at
+  }));
+}
+
+function structuredClaimRowsFromEligibility(eligibility) {
+  return (eligibility?.structured?.claims ?? []).map((claim) => ({
+    table: "claim_items",
+    id: claim.id,
+    description: claim.description,
+    serviceDate: claim.service_date,
+    shareAmount: claim.share_amount,
+    sourceUrl: claim.source,
+    createdAt: claim.created_at
+  }));
+}
+
+function structuredPriorAuthorizationRowsFromEligibility(eligibility) {
+  return (eligibility?.structured?.priorAuthorizations ?? []).map((priorAuth) => ({
+    table: "prior_authorizations",
+    id: priorAuth.id,
+    providerOrFacility: priorAuth.provider_or_facility,
+    serviceDate: priorAuth.service_date,
+    status: priorAuth.status,
+    sourceUrl: priorAuth.source,
+    createdAt: priorAuth.created_at
   }));
 }
 
@@ -1129,6 +1181,8 @@ async function evidenceObservationNode(state) {
     const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
     const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
     const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
+    const structuredClaims = structuredClaimRowsFromEligibility(eligibility);
+    const structuredPriorAuthorizations = structuredPriorAuthorizationRowsFromEligibility(eligibility);
     const evidenceChannels = evidenceChannelsFromBrowserResult(browserResult);
     for (const item of verifiedArtifacts) {
       sourcePointers.push({
@@ -1161,6 +1215,8 @@ async function evidenceObservationNode(state) {
       browserRunId: browserResult.browserRunId ?? null,
       sourcePointerCount: sourcePointers.length,
       structuredBenefitCount: structuredBenefits.length,
+      structuredClaimCount: structuredClaims.length,
+      structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
       actionsTaken: completedActions
     });
     await publishGraphRuntimeEvent(store, state, {
@@ -1178,6 +1234,8 @@ async function evidenceObservationNode(state) {
         blockedPageCount: blockedPageVerifications.length,
         sourcePointerCount: sourcePointers.length,
         structuredBenefitCount: structuredBenefits.length,
+        structuredClaimCount: structuredClaims.length,
+        structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
         evidenceChannels,
         navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
         actionsTaken: completedActions
@@ -1193,6 +1251,8 @@ async function evidenceObservationNode(state) {
         livePortalProof: "verified",
         sourcePointers,
         structuredBenefits,
+        structuredClaims,
+        structuredPriorAuthorizations,
         evidenceChannels,
         verification: validPageVerifications[0]?.verification ?? null,
         pageVerifications,
@@ -1223,6 +1283,8 @@ async function evidenceObservationNode(state) {
         verifiedPageCount: validPageVerifications.length,
         sourcePointerCount: sourcePointers.length,
         structuredBenefitCount: structuredBenefits.length,
+        structuredClaimCount: structuredClaims.length,
+        structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
         actionsTaken: completedActions
       })
     };
@@ -1325,6 +1387,8 @@ async function evidenceObservationNode(state) {
       }
     }
     const structuredBenefits = portalScan.eligibilityResults.flatMap((result) => structuredBenefitRowsFromEligibility(result));
+    const structuredClaims = portalScan.eligibilityResults.flatMap((result) => structuredClaimRowsFromEligibility(result));
+    const structuredPriorAuthorizations = portalScan.eligibilityResults.flatMap((result) => structuredPriorAuthorizationRowsFromEligibility(result));
     await publishGraphRuntimeEvent(store, state, {
       eventType: "worker.status.updated",
       session,
@@ -1337,6 +1401,8 @@ async function evidenceObservationNode(state) {
         browserRunId: portalScan.browserRun.id,
         sourcePointerCount: sourcePointers.length,
         structuredBenefitCount: structuredBenefits.length,
+        structuredClaimCount: structuredClaims.length,
+        structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
         actionsTaken: ["read_only_portal_page_snapshot_persisted"]
       }
     });
@@ -1347,7 +1413,9 @@ async function evidenceObservationNode(state) {
         approval: approvalResume,
         livePortalProof: requireLivePortalProof(state) ? "verified" : "not_required",
         sourcePointers,
-        structuredBenefits
+        structuredBenefits,
+        structuredClaims,
+        structuredPriorAuthorizations
       },
       approval_resume: approvalResume,
       browser_result: {
@@ -1548,6 +1616,8 @@ async function evidenceObservationNode(state) {
   const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
   const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
   const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
+  const structuredClaims = structuredClaimRowsFromEligibility(eligibility);
+  const structuredPriorAuthorizations = structuredPriorAuthorizationRowsFromEligibility(eligibility);
   const evidenceChannels = evidenceChannelsFromBrowserResult(browserResult);
   if (verifiedSourcePointer) sourcePointers.push(verifiedSourcePointer);
   await publishGraphRuntimeEvent(store, state, {
@@ -1562,6 +1632,8 @@ async function evidenceObservationNode(state) {
       browserRunId: browserResult.browserRunId ?? null,
       sourcePointerCount: sourcePointers.length,
       structuredBenefitCount: structuredBenefits.length,
+      structuredClaimCount: structuredClaims.length,
+      structuredPriorAuthorizationCount: structuredPriorAuthorizations.length,
       evidenceChannels,
       actionsTaken: ["read_only_visible_text_extracted"]
     }
@@ -1574,6 +1646,8 @@ async function evidenceObservationNode(state) {
       livePortalProof: requireLivePortalProof(state) ? "verified" : "not_required",
       sourcePointers,
       structuredBenefits,
+      structuredClaims,
+      structuredPriorAuthorizations,
       evidenceChannels
     },
     approval_resume: approvalResume,
@@ -1583,7 +1657,9 @@ async function evidenceObservationNode(state) {
     proof: appendProof(state, "evidence_observation", {
       status: "captured_visible_page",
       sourcePointerCount: sourcePointers.length,
-      structuredBenefitCount: structuredBenefits.length
+      structuredBenefitCount: structuredBenefits.length,
+      structuredClaimCount: structuredClaims.length,
+      structuredPriorAuthorizationCount: structuredPriorAuthorizations.length
     })
   };
 }
@@ -1842,7 +1918,13 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
         productMemoryAdapter: productMemoryRetain?.adapter ?? "disabled",
         productMemoryEnabled: Boolean(productMemoryRetain?.enabled),
         productMemoryRetained: Boolean(productMemoryRetain?.retained),
-        episodeUuid: productMemoryRetain?.episodeUuid ?? null
+        episodeUuid: productMemoryRetain?.episodeUuid ?? null,
+        retainAttempts: productMemoryRetain?.retainAttempts ?? 0,
+        repairStatus: productMemoryRetain?.repairPlan?.status ?? null,
+        repairAttempted: Boolean(productMemoryRetain?.repairPlan?.attemptedRetry),
+        repairRepaired: Boolean(productMemoryRetain?.repairPlan?.repaired),
+        error: productMemoryRetain?.error ?? null,
+        nextAction: productMemoryRetain?.repairPlan?.nextAction ?? null
       }
     }
   ].filter(Boolean);

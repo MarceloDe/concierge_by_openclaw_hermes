@@ -506,6 +506,18 @@ Phase 8M OpenClaw insurance skill playbook hardening is acceptable when:
 - The validator and tests fail if the richer skill playbook, portal section strategy, document/PDF policy, or structured insurance data fields are removed.
 - Credential entry, password-manager use, passkeys, 2FA, captcha solving, SSN entry, payer contact, external messages, form submission, record changes, and medical advice remain blocked or user-only.
 
+Phase 8N auth-plus-chat result loop hardening is acceptable when:
+
+- Current Answer clearly represents the latest LangGraph result for the current session and is visually distinguishable from older chat history.
+- The chat keeps operator proof expandable while the Current Answer shows workflow, source pointers, worker outcome/actions, structured benefits, structured claims/prior authorizations, GPT routing, graph trace, and product-memory retain state.
+- Graphiti retain failures include repair metadata with retryability, timeout classification, attempts, next action, first error, and retry result when applicable.
+- Fast retryable Graphiti runtime failures attempt one repair retry unless `BRAINSTY_PRODUCT_MEMORY_RETAIN_RETRY=0`.
+- Timeout and payload-policy failures do not silently retry forever; they expose a next repair action.
+- Runtime `memory.retained` events expose product-memory attempts, repair status, repair outcome, error, and next action.
+- LangGraph source pointers include `claim_items` and `prior_authorizations` when structured portal evidence contains them.
+- Final answers remain source-pointer based and do not include raw portal text.
+- Focused UI, product-memory, output-policy, and LangGraph tests pass, followed by build and local suite.
+
 ## Workflow Architecture Criteria
 
 Workflow architecture is acceptable before live LangGraph/OpenClaw when:

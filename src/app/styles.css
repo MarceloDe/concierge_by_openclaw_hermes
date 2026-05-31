@@ -332,6 +332,13 @@ textarea {
   font-size: 16px;
 }
 
+.answer-subtitle {
+  margin: 4px 0 0;
+  color: #44534b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .answer-status {
   color: #44534b;
   font-size: 12px;
@@ -744,6 +751,11 @@ button:disabled {
 .message.assistant {
   background: #f7faf8;
   border: 1px solid #d9e4dd;
+}
+
+.message.assistant.latest-answer-message {
+  border-color: #9fcbb8;
+  background: #f4fbf7;
 }
 
 .chat-proof-card {

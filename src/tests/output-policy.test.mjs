@@ -28,7 +28,14 @@ test("multi-page official OpenClaw evidence composes a sourced executed answer",
             source: "coverage_balances/bal_123"
           }
         ],
-        claims: [],
+        claims: [
+          {
+            description: "Office visit",
+            service_date: "May 1, 2026",
+            share_amount: 42.5,
+            source: "claim_items/claim_123"
+          }
+        ],
         priorAuthorizations: []
       }
     },
@@ -48,6 +55,7 @@ test("multi-page official OpenClaw evidence composes a sourced executed answer",
   assert.match(response, /2\/2 page\(s\) were verified/);
   assert.match(response, /Source pointers: eligibility_snapshots\/elig_123, extraction_artifacts\/artifact_123/);
   assert.match(response, /Deductible: total \$600\.00, spent \$558\.72, remaining \$41\.28/);
+  assert.match(response, /Structured claims\/prior authorization evidence: claims Office visit on May 1, 2026 with share \$42\.50/);
   assert.doesNotMatch(response, /not executed in this slice/i);
   assert.doesNotMatch(response, /Enrollment complete/i);
 });

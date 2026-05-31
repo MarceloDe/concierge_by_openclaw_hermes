@@ -50,7 +50,7 @@ function value(id) {
 
 function addMessage(role, content, options = {}) {
   const node = document.createElement("div");
-  node.className = `message ${role}`;
+  node.className = `message ${role}${options.className ? ` ${options.className}` : ""}`;
   if (options.html) node.innerHTML = content;
   else node.textContent = content;
   messages.append(node);
@@ -202,7 +202,7 @@ function renderJourneyState(result = null) {
     },
     {
       label: "Memory",
-      detail: memoryRetain.adapter ? `${memoryRetain.adapter} retain=${Boolean(memoryRetain.retained)}` : "waiting",
+      detail: memoryRetainSummary(memoryRetain),
       className: journeyClass(Boolean(memoryRetain.retained), Boolean(result))
     }
   ];
@@ -220,6 +220,24 @@ function renderJourneyState(result = null) {
         .join("")}
     </div>
   `;
+}
+
+function memoryRetainSummary(memoryRetain = {}) {
+  if (!memoryRetain?.adapter) return "waiting";
+  if (!memoryRetain.enabled) return `${memoryRetain.adapter} disabled`;
+  if (memoryRetain.retained) {
+    const repaired = memoryRetain.repairPlan?.repaired ? " · repaired" : "";
+    const attempts = memoryRetain.retainAttempts ? ` · attempts ${memoryRetain.retainAttempts}` : "";
+    return `${memoryRetain.adapter} retained${repaired}${attempts}`;
+  }
+  const repair = memoryRetain.repairPlan ?? {};
+  const status = repair.status ?? "retain_failed";
+  return `${memoryRetain.adapter} ${status}${repair.attemptedRetry ? " · retry tried" : ""}`;
+}
+
+function memoryNextAction(memoryRetain = {}) {
+  if (memoryRetain?.retained) return "retained";
+  return memoryRetain?.repairPlan?.nextAction ?? memoryRetain?.message ?? memoryRetain?.error ?? "not retained yet";
 }
 
 function renderAnswerPanel(result = null, options = {}) {
@@ -256,6 +274,9 @@ function renderAnswerPanel(result = null, options = {}) {
   const evidence = state.evidence_observation ?? {};
   const pointers = uniqueSourcePointers(state);
   const balances = result.trace?.coverageBalances ?? [];
+  const claims = result.trace?.claims ?? [];
+  const priorAuthorizations = result.trace?.priorAuthorizations ?? [];
+  const memoryRetain = state.product_memory_retain ?? result?.graphRun?.productMemory?.retain ?? {};
   const approvalNeeded = pendingReadOnlyTaskId(result);
   const finalText = result.finalResponse ?? "The workflow completed without a final answer.";
   const answerStatus =
@@ -275,7 +296,10 @@ function renderAnswerPanel(result = null, options = {}) {
   answerPanel.className = "answer-panel";
   answerPanel.innerHTML = `
     <div class="answer-panel-header">
-      <h3>Current Answer</h3>
+      <div>
+        <h3>Current Answer</h3>
+        <p class="answer-subtitle">Latest LangGraph result for this session; older messages remain as history.</p>
+      </div>
       <span class="answer-status">${escapeHtml(answerStatus)}</span>
     </div>
     <p class="answer-body">${escapeHtml(finalText)}</p>
@@ -295,6 +319,14 @@ function renderAnswerPanel(result = null, options = {}) {
       <div>
         <strong>Benefits</strong>
         <span>${escapeHtml(structuredBenefitSummary(balances))}</span>
+      </div>
+      <div>
+        <strong>Claims</strong>
+        <span>${escapeHtml(structuredClaimSummary(claims, priorAuthorizations))}</span>
+      </div>
+      <div>
+        <strong>Memory</strong>
+        <span>${escapeHtml(memoryRetainSummary(memoryRetain))} · ${escapeHtml(memoryNextAction(memoryRetain))}</span>
       </div>
       <div>
         <strong>GPT Decision</strong>
@@ -367,7 +399,10 @@ function summarizeRuntimeEvent(event) {
     return `${payload.outcome ?? "unknown"} · sources ${payload.sourcePointerCount ?? 0}`;
   }
   if (event.eventType === "memory.retained") {
-    return `${payload.productMemoryAdapter ?? "disabled"} · retained ${payload.productMemoryRetained ?? false}`;
+    const repaired = payload.repairRepaired ? " · repaired" : "";
+    const attempts = payload.retainAttempts ? ` · attempts ${payload.retainAttempts}` : "";
+    const next = payload.nextAction ? ` · next ${payload.nextAction}` : "";
+    return `${payload.productMemoryAdapter ?? "disabled"} · retained ${payload.productMemoryRetained ?? false}${repaired}${attempts}${next}`;
   }
   return textPreview(JSON.stringify(payload), 220) || event.source || "event";
 }
@@ -497,7 +532,7 @@ function renderChatProof(result) {
         <dt>Sources</dt>
         <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
         <dt>Product memory</dt>
-        <dd>${escapeHtml(productMemoryRecall.adapter ?? "disabled")} recall ${escapeHtml(productMemoryRecall.facts?.length ?? 0)} · retain ${escapeHtml(productMemoryRetain.retained ?? false)}</dd>
+        <dd>${escapeHtml(productMemoryRecall.adapter ?? "disabled")} recall ${escapeHtml(productMemoryRecall.facts?.length ?? 0)} · ${escapeHtml(memoryRetainSummary(productMemoryRetain))} · ${escapeHtml(memoryNextAction(productMemoryRetain))}</dd>
         <dt>Payload audits</dt>
         <dd>${escapeHtml(outboundPayloadAuditSummary(result))}</dd>
         <dt>Trace</dt>
@@ -554,6 +589,18 @@ function structuredBenefitSummary(balances = []) {
         `${item.label}: total ${money(item.total_amount)}, spent ${money(item.spent_amount)}, remaining ${money(item.remaining_amount)}`
     )
     .join(" · ");
+}
+
+function structuredClaimSummary(claims = [], priorAuthorizations = []) {
+  const parts = [];
+  if (claims.length) {
+    const totalShare = claims.reduce((sum, item) => sum + (Number(item.share_amount) || 0), 0);
+    parts.push(`${claims.length} claim${claims.length === 1 ? "" : "s"} · visible share ${money(totalShare)}`);
+  }
+  if (priorAuthorizations.length) {
+    parts.push(`${priorAuthorizations.length} prior auth${priorAuthorizations.length === 1 ? "" : "s"}`);
+  }
+  return parts.join(" · ") || "none yet";
 }
 
 function evidenceChannelSummary(channels = []) {
@@ -663,6 +710,8 @@ function renderWorkerOutcomeCard(result) {
         <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
         <dt>Structured benefits</dt>
         <dd>${escapeHtml(structuredBenefitSummary(balances))}</dd>
+        <dt>Structured claims</dt>
+        <dd>${escapeHtml(structuredClaimSummary(result.trace?.claims ?? [], result.trace?.priorAuthorizations ?? []))}</dd>
         <dt>Pages</dt>
         <dd>${escapeHtml(`${evidence.verifiedPageCount ?? 0}/${evidence.pageCount ?? 0} verified${evidence.blockedPageCount ? ` · ${evidence.blockedPageCount} blocked` : ""}`)}</dd>
         <dt>Navigation plan</dt>
@@ -874,7 +923,7 @@ function renderProductMemory(payload) {
   const retained = payload.retained ?? {};
   const recalled = payload.recalled ?? {};
   const facts = status.facts ?? recalled.facts ?? [];
-  productMemoryStatus.textContent = `${status.adapter ?? "graphiti"} · ${status.schemaReady ? "schema ready" : status.status ?? "not ready"}`;
+  productMemoryStatus.textContent = `${status.adapter ?? "graphiti"} · ${status.schemaReady ? "schema ready" : status.status ?? "not ready"} · ${memoryRetainSummary(retained)}`;
   productMemory.innerHTML = `
     <article class="review-card">
       <h3>Graphiti Contract</h3>
@@ -902,6 +951,10 @@ function renderProductMemory(payload) {
         <dd>${escapeHtml(retained.nodeCount ?? status.nodeCount ?? "n/a")}</dd>
         <dt>Edges</dt>
         <dd>${escapeHtml(retained.edgeCount ?? status.edgeCount ?? "n/a")}</dd>
+        <dt>Status</dt>
+        <dd>${escapeHtml(memoryRetainSummary(retained))}</dd>
+        <dt>Repair</dt>
+        <dd>${escapeHtml(memoryNextAction(retained))}</dd>
       </dl>
     </article>
     <article class="review-card wide">
@@ -1584,7 +1637,7 @@ async function runProductChat(message, options = {}) {
   productAuthStatus.textContent = `Signed in · ${result.session.id}`;
   sessionStatus.textContent = `${result.session.current_step} · v${result.session.state_version}`;
   startRuntimeEventStream(result.session.id, result.user?.id);
-  addMessage("assistant", result.finalResponse);
+  addMessage("assistant", result.finalResponse, { className: "latest-answer-message" });
   addMessage("assistant", renderChatProof(result), { html: true });
   addMessage("assistant", renderWorkerOutcomeCard(result), { html: true });
   upsertWorkerContinuationCard(workerContinuationFromResult(result));

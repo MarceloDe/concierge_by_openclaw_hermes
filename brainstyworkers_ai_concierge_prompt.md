@@ -1019,10 +1019,19 @@ Phase 8M OpenClaw insurance skill playbook:
 - The repo skill artifact, dedicated project workspace skill copy, worker job contract, and prompt contract must stay aligned.
 - Boundaries remain non-negotiable: user completes login/password/passkey/2FA/captcha/session challenges; OpenClaw does not bypass authentication, use password managers, enter SSNs, contact payers, send messages, submit forms, modify records, or give medical advice.
 
+Phase 8N user-facing MVP result loop:
+
+- The auth-plus-chat MVP now treats the Current Answer panel as the latest LangGraph result for the active session. Older chat messages remain as history, including pre-approval proposal text, but the Current Answer is the result to evaluate.
+- The newest assistant graph-run message is visually marked, and operator proof remains expandable.
+- Current Answer and Worker Result include workflow, source pointers, worker outcome/actions, structured benefits, structured claims/prior authorizations, GPT routing, trace id, and Graphiti retain/repair status.
+- Graphiti retain failures now return repair metadata:
+  - retryable runtime failures are distinguished from payload-policy failures,
+  - fast retryable failures can retry once,
+  - timeouts do not double the wait with automatic retry,
+  - UI and runtime events show attempts, repair status, next action, first error, and repaired state.
+- LangGraph source-pointer fan-in now includes `claim_items` and `prior_authorizations` when those structured records are extracted.
+- User-facing answers remain source-pointer based and must not expose raw portal text.
+
 Next implementation step:
 
-- Phase 8N should use the enriched skill playbook to harden the user-facing MVP result loop:
-  - visually separate Current Answer from older pre-approval conversation history,
-  - add Graphiti retain retry/repair and clearer memory status when retain fails or times out,
-  - improve structured extraction for benefits/claims pages without exposing raw portal text,
-  - keep the proof dashboard available while making auth-plus-chat the primary MVP test surface.
+- Phase 8O should use the enriched skill playbook in a live authenticated run focused on whether portal search, document discovery, SBC/PDF handling, and richer same-site navigation are reachable from the current member portal.

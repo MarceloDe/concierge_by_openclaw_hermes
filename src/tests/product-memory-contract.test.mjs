@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSafeProductMemoryEpisode, getProductMemoryConfig } from "../concierge/productMemory.mjs";
+import {
+  buildProductMemoryRetainRepairPlan,
+  buildSafeProductMemoryEpisode,
+  getProductMemoryConfig,
+  isRetryableGraphitiRetainError
+} from "../concierge/productMemory.mjs";
 
 test("product memory contract builds safe source-pointer summaries without raw direct identifiers", () => {
   const episode = buildSafeProductMemoryEpisode({
@@ -63,4 +68,33 @@ test("product memory config defaults to disabled unless Graphiti is explicitly s
     if (previous === undefined) delete process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER;
     else process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER = previous;
   }
+});
+
+test("product memory retain repair plan distinguishes runtime failures from policy failures", () => {
+  const runtimePlan = buildProductMemoryRetainRepairPlan("Graphiti bridge failed with exit 1: connection refused", {
+    sourcePointerCount: 2,
+    attempt: 1
+  });
+
+  assert.equal(isRetryableGraphitiRetainError(runtimePlan.error), true);
+  assert.equal(runtimePlan.retryable, true);
+  assert.equal(runtimePlan.status, "retryable_retain_failed");
+  assert.match(runtimePlan.nextAction, /Retry Graphiti retain/);
+
+  const timeoutPlan = buildProductMemoryRetainRepairPlan("Graphiti bridge timed out after 120s", {
+    sourcePointerCount: 2,
+    attempt: 1
+  });
+  assert.equal(timeoutPlan.retryable, true);
+  assert.equal(timeoutPlan.timeout, true);
+  assert.equal(timeoutPlan.status, "retry_deferred_timeout");
+  assert.match(timeoutPlan.nextAction, /product memory probe/);
+
+  const policyPlan = buildProductMemoryRetainRepairPlan("raw portal text blocked by policy", {
+    sourcePointerCount: 2,
+    attempt: 1
+  });
+  assert.equal(policyPlan.retryable, false);
+  assert.equal(policyPlan.status, "manual_repair_required");
+  assert.match(policyPlan.nextAction, /payload policy/);
 });

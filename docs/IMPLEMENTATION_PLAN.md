@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: MVP hardening Phases 1-8M are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery.
+Status: MVP hardening Phases 1-8N are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
@@ -519,13 +519,26 @@ Phase 8M OpenClaw insurance skill playbook hardening is implemented:
 - The worker job contract and OpenClaw prompt contract now carry the same skill playbook so LangGraph delegation and OpenClaw execution receive one coherent contract.
 - Credential entry, password manager access, passkeys, 2FA, captcha solving, SSN entry, payer contact, external messages, form submission, record changes, and medical advice remain blocked or user-only.
 
+Phase 8N user-facing MVP result loop hardening is implemented:
+
+- The Current Answer panel now names itself as the latest LangGraph result for the active session, so older pre-approval chat history is not mistaken for the current sourced result.
+- Assistant messages from the newest graph run receive a current-answer style marker while operator proof remains expandable.
+- The Current Answer and Worker Result now show structured benefits, structured claims/prior-authorization summaries, worker outcome/actions, source pointers, GPT routing, trace id, and product-memory retain/repair status.
+- Graphiti product-memory retain now returns repair metadata:
+  - retryable runtime failures are classified separately from payload-policy failures,
+  - fast retryable failures attempt one repair retry unless disabled by `BRAINSTY_PRODUCT_MEMORY_RETAIN_RETRY=0`,
+  - timeout failures are not doubled by an automatic retry and instead show the next repair action,
+  - runtime events and UI proof expose retain attempts, repair status, next action, and whether the retry repaired the failure.
+- LangGraph source pointers now include structured `claim_items` and `prior_authorizations` rows when the portal evidence contains them, while user-facing answers remain source-pointer based and do not expose raw portal text.
+
 Next implementation:
 
-- Phase 8N should apply the enriched skill in the user-facing MVP result loop without adding healthcare workflow breadth:
-  - separate Current Answer from older pre-approval history so users do not confuse proposal-only text with the latest sourced result,
-  - add Graphiti retain retry/repair and clearer memory proof when retain fails or times out,
-  - improve structured extraction for claim/benefits pages while preserving source-pointer-only user responses,
-  - keep the proof dashboard for operators but make auth-plus-chat the primary test surface.
+- Phase 8O should run the enriched live worker playbook against the authenticated portal and verify whether portal-search/document/PDF branches are reachable:
+  - keep the same eligibility/benefits journey,
+  - use the dedicated OpenClaw current tab after user-controlled auth,
+  - exercise same-site navigation plus portal search where available,
+  - record whether official documents/SBC/PDFs are found or blocked,
+  - keep Graphiti retain status visible in chat.
 
 ## Full Working Test Recommendation
 
