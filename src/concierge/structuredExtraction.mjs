@@ -142,6 +142,269 @@ function cleanLines(text) {
     .filter(Boolean);
 }
 
+function normalizedText(text) {
+  return String(text ?? "").replace(/\s+/g, " ").trim();
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function matchedSignals(normalized, signalDefinitions) {
+  return signalDefinitions.filter((signal) => signal.pattern.test(normalized)).map((signal) => signal.label);
+}
+
+const PORTAL_SECTION_DEFINITIONS = [
+  {
+    section: "benefits",
+    label: "Benefits",
+    signals: [
+      { label: "benefits", pattern: /\bbenefits?\b/i },
+      { label: "coverage", pattern: /\bcoverage\b/i },
+      { label: "plan details", pattern: /\bplan details?\b/i }
+    ]
+  },
+  {
+    section: "spending",
+    label: "Spending",
+    signals: [
+      { label: "deductible", pattern: /\bdeductible\b/i },
+      { label: "out-of-pocket", pattern: /\bout[- ]of[- ]pocket\b/i },
+      { label: "plan spending", pattern: /\bplan spending\b/i },
+      { label: "remaining", pattern: /\bremaining\b/i }
+    ]
+  },
+  {
+    section: "claims",
+    label: "Claims",
+    signals: [
+      { label: "claims", pattern: /\bclaims?\b/i },
+      { label: "view all claims", pattern: /\bview all claims\b/i },
+      { label: "your share", pattern: /\byour share\b/i }
+    ]
+  },
+  {
+    section: "prior_authorizations",
+    label: "Prior Authorizations",
+    signals: [
+      { label: "prior authorization", pattern: /\bprior authorizations?\b/i },
+      { label: "authorization status", pattern: /\bauthorization status\b/i }
+    ]
+  },
+  {
+    section: "documents",
+    label: "Documents",
+    signals: [
+      { label: "documents", pattern: /\bdocuments?\b/i },
+      { label: "forms", pattern: /\bforms?\b/i },
+      { label: "summary of benefits", pattern: /\bsummary of benefits\b/i },
+      { label: "eob", pattern: /\b(?:eob|explanation of benefits)\b/i }
+    ]
+  },
+  {
+    section: "id_card",
+    label: "ID Card",
+    signals: [
+      { label: "id card", pattern: /\bid card\b/i },
+      { label: "member id", pattern: /\bmember id\b/i },
+      { label: "digital id", pattern: /\bdigital id\b/i }
+    ]
+  },
+  {
+    section: "pharmacy",
+    label: "Pharmacy",
+    signals: [
+      { label: "pharmacy", pattern: /\bpharmacy\b/i },
+      { label: "prescription", pattern: /\bprescriptions?\b/i },
+      { label: "rx", pattern: /\brx\b/i },
+      { label: "drug list", pattern: /\bdrug list\b/i },
+      { label: "formulary", pattern: /\bformulary\b/i }
+    ]
+  },
+  {
+    section: "network",
+    label: "Network",
+    signals: [
+      { label: "network", pattern: /\bnetwork\b/i },
+      { label: "find care", pattern: /\bfind care\b/i },
+      { label: "in network", pattern: /\bin network\b/i },
+      { label: "provider", pattern: /\bproviders?\b/i }
+    ]
+  }
+];
+
+const DOCUMENT_SIGNAL_DEFINITIONS = [
+  {
+    type: "summary_of_benefits_coverage",
+    label: "Summary of Benefits and Coverage",
+    signals: [
+      { label: "summary of benefits and coverage", pattern: /\bsummary of benefits and coverage\b/i },
+      { label: "sbc", pattern: /\bsbc\b/i }
+    ],
+    sbcOrPdf: true
+  },
+  {
+    type: "plan_document",
+    label: "Plan document",
+    signals: [
+      { label: "plan document", pattern: /\bplan documents?\b/i },
+      { label: "benefit summary", pattern: /\bbenefit summar(?:y|ies)\b/i }
+    ],
+    sbcOrPdf: false
+  },
+  {
+    type: "id_card",
+    label: "ID card",
+    signals: [
+      { label: "id card", pattern: /\bid card\b/i },
+      { label: "member card", pattern: /\bmember card\b/i }
+    ],
+    sbcOrPdf: false
+  },
+  {
+    type: "explanation_of_benefits",
+    label: "Explanation of Benefits",
+    signals: [
+      { label: "explanation of benefits", pattern: /\bexplanation of benefits\b/i },
+      { label: "eob", pattern: /\beob\b/i }
+    ],
+    sbcOrPdf: true
+  },
+  {
+    type: "pdf",
+    label: "PDF",
+    signals: [{ label: "pdf", pattern: /\bpdf\b/i }],
+    sbcOrPdf: true
+  }
+];
+
+export function parsePortalSectionEvidence(text) {
+  const normalized = normalizedText(text);
+  const sections = PORTAL_SECTION_DEFINITIONS.map((definition) => {
+    const signals = unique(matchedSignals(normalized, definition.signals));
+    if (!signals.length) return null;
+    return {
+      section: definition.section,
+      label: definition.label,
+      present: true,
+      confidence: Math.min(0.95, Number((0.58 + signals.length * 0.1).toFixed(2))),
+      signals
+    };
+  }).filter(Boolean);
+
+  return {
+    status: sections.length ? "section_signals_detected" : "no_section_signals_detected",
+    sections,
+    reachable: sections.map((section) => section.section),
+    missing: PORTAL_SECTION_DEFINITIONS.map((definition) => definition.section).filter(
+      (section) => !sections.some((item) => item.section === section)
+    )
+  };
+}
+
+export function parseDocumentSignals(text) {
+  const normalized = normalizedText(text);
+  const candidates = DOCUMENT_SIGNAL_DEFINITIONS.map((definition) => {
+    const signals = unique(matchedSignals(normalized, definition.signals));
+    if (!signals.length) return null;
+    return {
+      type: definition.type,
+      label: definition.label,
+      signals,
+      readOnlyOpenAllowed: true,
+      approvalRequired: true,
+      sbcOrPdf: definition.sbcOrPdf
+    };
+  }).filter(Boolean);
+
+  return {
+    status: candidates.length ? "document_candidates_detected" : "no_document_candidates_detected",
+    candidateCount: candidates.length,
+    readOnlyCandidateCount: candidates.length,
+    blockedCandidateCount: 0,
+    sbcPdfCandidateCount: candidates.filter((candidate) => candidate.sbcOrPdf).length,
+    candidates,
+    policy: {
+      documentDownloadAttempted: false,
+      rawDocumentDumpAllowed: false,
+      requiresCandidateSpecificApproval: true
+    }
+  };
+}
+
+export function parseIdCardSignals(text) {
+  const normalized = normalizedText(text);
+  const signals = unique(
+    matchedSignals(normalized, [
+      { label: "id card", pattern: /\bid card\b/i },
+      { label: "member id label", pattern: /\bmember id\b/i },
+      { label: "digital id", pattern: /\bdigital id\b/i },
+      { label: "safe last-four marker", pattern: /\b(?:last four|last 4|ending in|ends in)\b/i }
+    ])
+  );
+  return {
+    present: signals.length > 0,
+    signals,
+    safeIdentifierOnly: signals.some((signal) => signal === "safe last-four marker"),
+    directIdentifierExtracted: false
+  };
+}
+
+export function parsePharmacySignals(text) {
+  const normalized = normalizedText(text);
+  const signals = unique(
+    matchedSignals(normalized, [
+      { label: "pharmacy", pattern: /\bpharmacy\b/i },
+      { label: "prescription coverage", pattern: /\bprescription coverage\b/i },
+      { label: "rx", pattern: /\brx\b/i },
+      { label: "drug list", pattern: /\bdrug list\b/i },
+      { label: "formulary", pattern: /\bformulary\b/i },
+      { label: "mail order", pattern: /\bmail order\b/i }
+    ])
+  );
+  return {
+    present: signals.length > 0,
+    signals
+  };
+}
+
+export function parseNetworkSignals(text) {
+  const normalized = normalizedText(text);
+  const signals = unique(
+    matchedSignals(normalized, [
+      { label: "network", pattern: /\bnetwork\b/i },
+      { label: "in network", pattern: /\bin network\b/i },
+      { label: "out of network", pattern: /\bout of network\b/i },
+      { label: "find care", pattern: /\bfind care\b/i },
+      { label: "provider search", pattern: /\b(?:provider|doctor|facility) search\b/i }
+    ])
+  );
+  return {
+    present: signals.length > 0,
+    signals
+  };
+}
+
+export function parsePlanSignals(text) {
+  const normalized = normalizedText(text);
+  const effectiveDateMatch = normalized.match(
+    /\b(?:effective date|coverage starts|coverage effective)\b.{0,40}?([A-Z][a-z]+ \d{1,2}, \d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i
+  );
+  const signals = unique(
+    matchedSignals(normalized, [
+      { label: "plan details", pattern: /\bplan details?\b/i },
+      { label: "plan name", pattern: /\bplan name\b/i },
+      { label: "plan type", pattern: /\b(?:ppo|hmo|epo|pos)\b/i },
+      { label: "effective date", pattern: /\b(?:effective date|coverage starts|coverage effective)\b/i }
+    ])
+  );
+  return {
+    present: signals.length > 0,
+    signals,
+    effectiveDate: effectiveDateMatch?.[1] ?? null
+  };
+}
+
 export function parseClaimItems(text) {
   const lines = cleanLines(text);
   const start = lines.findIndex((line, index) => line === "Claims" && lines[index + 1] === "View All Claims");
@@ -267,7 +530,13 @@ export function extractStructuredInsuranceData(text) {
   return {
     coverageBalances: parseCoverageBalances(text),
     claims: parseClaimItems(text),
-    priorAuthorizations: parsePriorAuthorizations(text)
+    priorAuthorizations: parsePriorAuthorizations(text),
+    sectionEvidence: parsePortalSectionEvidence(text),
+    documentSignals: parseDocumentSignals(text),
+    idCardSignals: parseIdCardSignals(text),
+    pharmacySignals: parsePharmacySignals(text),
+    networkSignals: parseNetworkSignals(text),
+    planSignals: parsePlanSignals(text)
   };
 }
 
@@ -313,7 +582,17 @@ export async function persistStructuredExtraction(store, { snapshot, source }) {
     priorAuthorizations.push(row);
   }
 
-  const reviewPayload = { coverageBalances, claims, priorAuthorizations };
+  const reviewPayload = {
+    coverageBalances,
+    claims,
+    priorAuthorizations,
+    sectionEvidence: structured.sectionEvidence,
+    documentSignals: structured.documentSignals,
+    idCardSignals: structured.idCardSignals,
+    pharmacySignals: structured.pharmacySignals,
+    networkSignals: structured.networkSignals,
+    planSignals: structured.planSignals
+  };
   const review = {
     id: createId("review"),
     snapshot_id: snapshot.id,

@@ -1,15 +1,15 @@
 # Implementation Plan
 
-Status: MVP hardening Phases 1-8Q are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation. Phase 8P proved the live discovery harness against an authenticated portal. Phase 8Q added a separate user-friendly `/mvp` auth-plus-chat sequencing app while preserving `/` as the operator proof dashboard.
+Status: MVP hardening Phases 1-8S are implemented locally. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation. Phase 8P proved the live discovery harness against an authenticated portal. Phase 8Q added a separate user-friendly `/mvp` auth-plus-chat sequencing app while preserving `/` as the operator proof dashboard. Phase 8R proved the live approved Benefits path from `/mvp` through user auth, LangGraph proposal, approval consumption, official OpenClaw multi-page read-only observation, source-pointer persistence, final answer, and Graphiti retain. Phase 8S added section-specific structured extraction and replaced mutable local real-Aetna DB assumptions with sanitized captured-format fixtures.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
 - `AGENTS.md`
 - `brainstyworkers_ai_concierge_prompt.md`
 
-Last updated: 2026-05-31
+Last updated: 2026-06-01
 
-## Current Restart Point - Phase 8Q Complete
+## Current Restart Point - Phase 8S Complete
 
 The project currently has two local web surfaces on the same Node server:
 
@@ -47,9 +47,26 @@ Expected current behavior in a live approved replay:
 
 The local implementation proof for Phase 8Q is commit `05e0799 feat: add user-facing MVP sequencing app`. Focused static checks, `npm run build`, browser proof at `/mvp`, and `npm run test:local` passed.
 
+Phase 8R live proof passed on 2026-05-31 local / 2026-06-01 UTC:
+
+- `/api/openclaw/official/status` reported `ready_for_read_only_approval` on an authenticated dedicated Aetna member portal tab.
+- `/mvp` ran Benefits, requested approval, consumed the approval, dispatched the official OpenClaw worker, captured 8 source pointers from 4 verified pages, retained product memory through Graphiti, and displayed the final sourced answer.
+- The live run remained read-only and did not perform payer contact, credential entry, password manager use, form submission, account modification, external messaging, or medical advice.
+- The proof UI was tightened so completed approvals, reachable sections, and product-memory retain are displayed clearly.
+
+Phase 8S is now complete:
+
+- `structuredExtraction.mjs` extracts safe section/document/ID/pharmacy/network/plan signals in addition to coverage balances, claims, and prior authorizations.
+- `outputPolicy.mjs` can include a source-pointer-safe section evidence line in the final answer.
+- Sanitized captured-format Aetna fixtures now cover home/benefits and claims pages without depending on mutable local DB rows or exposing raw real portal text in test fixtures.
+- The previous local-data fragility in `real-aetna-structured.test.mjs` and `portal-scan-real.test.mjs` has been removed from `npm run test:local`.
+- `npm run test:local` passed with 116 tests total, 114 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+
+The next implementation phase is Phase 8T: narrow document candidate approval. Do not move into document/PDF ingestion until one specific document candidate can be approved, denied, expired, and audited safely.
+
 ## Next Phases From Here
 
-### Phase 8R - Live Approved MVP Run From `/mvp`
+### Phase 8R - Live Approved MVP Run From `/mvp` - Complete
 
 Goal:
 - Prove the full user-facing loop from the new MVP view, not only from tests or the operator dashboard.
@@ -69,7 +86,11 @@ Acceptance:
 - Discovery/Next Evidence shows portal-search/document/section metadata after worker execution.
 - The proof dashboard `/` still works and agrees with the MVP route's session/trace.
 
-### Phase 8S - Section-Specific Structured Extraction
+Proof:
+- Passed in browser with the dedicated project OpenClaw profile and user-authenticated Aetna member portal.
+- See `docs/PROGRESS.md` Phase 8R entry for exact commands, events, and residual risks.
+
+### Phase 8S - Section-Specific Structured Extraction - Complete
 
 Goal:
 - Convert the live-reachable portal surfaces into better structured evidence before adding PDF ingestion.
@@ -84,6 +105,14 @@ Acceptance:
 - More fields are populated from real observed pages without raw portal dumps.
 - Current Answer can cite which section supplied which safe field.
 - No document/PDF download happens in this phase.
+
+Proof:
+- `node --check src/concierge/structuredExtraction.mjs` passed.
+- `node --check src/concierge/outputPolicy.mjs` passed.
+- Focused extraction/portal-scan tests passed.
+- `npm run build` passed.
+- `npm run test:local` passed with 116 tests total, 114 passed, 0 failed, and 2 expected live-gated skips.
+- `/mvp` browser smoke loaded with title `Brainstyworkers Concierge MVP`, visible sequence controls, and 0 console errors.
 
 ### Phase 8T - Narrow Document Candidate Approval
 

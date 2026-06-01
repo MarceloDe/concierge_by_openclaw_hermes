@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { extractStructuredInsuranceData } from "../concierge/structuredExtraction.mjs";
+
+async function fixture(name) {
+  return readFile(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+}
 
 test("structured extraction reconciles DOM and OCR-style benefits balance text", () => {
   const structured = extractStructuredInsuranceData(`
@@ -81,4 +86,22 @@ test("structured extraction handles OpenClaw accessibility snapshot labels", () 
   assert.equal(structured.claims[0].description, "Lamotrigine Tab 25mg");
   assert.equal(structured.claims[0].share_amount, 3.81);
   assert.equal(structured.priorAuthorizations[0].provider_or_facility, "SOUTH MIAMI HOSPITAL INC");
+});
+
+test("structured extraction identifies section-specific captured portal evidence", async () => {
+  const structured = extractStructuredInsuranceData(await fixture("aetna-captured-home-sanitized.txt"));
+
+  assert.deepEqual(
+    structured.sectionEvidence.reachable,
+    ["benefits", "spending", "claims", "prior_authorizations", "documents", "id_card", "pharmacy", "network"]
+  );
+  assert.equal(structured.documentSignals.candidateCount, 5);
+  assert.equal(structured.documentSignals.sbcPdfCandidateCount, 3);
+  assert.equal(structured.idCardSignals.present, true);
+  assert.equal(structured.idCardSignals.safeIdentifierOnly, true);
+  assert.equal(structured.idCardSignals.directIdentifierExtracted, false);
+  assert.equal(structured.pharmacySignals.present, true);
+  assert.ok(structured.pharmacySignals.signals.includes("formulary"));
+  assert.equal(structured.networkSignals.present, true);
+  assert.equal(structured.planSignals.effectiveDate, "Jan 1, 2026");
 });

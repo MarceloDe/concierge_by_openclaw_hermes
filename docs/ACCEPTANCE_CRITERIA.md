@@ -571,6 +571,15 @@ Phase 8S section-specific structured extraction is acceptable when:
 - Final answers cite source pointers and do not expose raw portal text.
 - No PDF/document download or analysis is introduced in this phase.
 
+Phase 8S proof status:
+
+- Complete locally as of 2026-06-01.
+- Coverage balances, claims, and prior authorizations still persist as structured rows.
+- Section/document/ID/pharmacy/network/plan signals are stored in extraction review payloads as source-pointer-safe structured evidence.
+- Sanitized captured-format fixtures cover the home/benefits and claims page shapes without depending on mutable local DB state.
+- `npm run build` and `npm run test:local` passed.
+- Document/PDF ingestion remains deferred to Phase 8U after Phase 8T candidate-specific approval.
+
 Phase 8T narrow document candidate approval is acceptable when:
 
 - Discovery document candidates can be presented as individual approval targets.

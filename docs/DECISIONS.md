@@ -1054,3 +1054,22 @@ The live discovery proof already showed portal sections and document candidates.
 
 Cost of changing later:
 Low. The phases are narrow and can be reordered only if a live `/mvp` blocker proves that a smaller prerequisite is missing.
+
+## 2026-06-01 - Use Sanitized Captured-Format Fixtures For Regression, Keep Live OpenClaw As The Non-Mocked Proof
+
+Context:
+The Phase 8R live proof passed, but the aggregate local test run exposed a known reproducibility gap: two tests expected specific real Aetna rows to exist in `data/brainstyworkers.sqlite`. That local database is mutable and user-specific, so the tests could fail even when the runtime is healthy.
+
+Options considered:
+- Keep asserting against the current local real Aetna database.
+- Skip those tests entirely.
+- Convert them into sanitized captured-format regression fixtures while keeping authenticated OpenClaw live tests as the non-mocked evidence proof.
+
+Decision:
+Use sanitized captured-format portal fixtures for deterministic parser and portal-scan regression tests. Keep live OpenClaw browser tests behind explicit live flags for non-mocked authenticated evidence proof. Add section-specific extractors for benefits, spending, claims, prior authorizations, documents, ID card, pharmacy, network, and plan/effective-date signals before adding document/PDF ingestion.
+
+Reason:
+The MVP needs both kinds of proof: deterministic regression tests that run cleanly in a fresh checkout, and real live OpenClaw tests that prove the worker can observe authenticated portal evidence. Depending on a personal local SQLite history gives neither reliable CI-style proof nor a clean live boundary.
+
+Cost of changing later:
+Low. The fixtures can be extended as new live captures reveal new page shapes, while live tests remain the authority for real portal behavior.

@@ -1,15 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
+import { readFile, mkdtemp } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { SqliteStore } from "../concierge/database.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
 
-test("portal page scan persists real stored Aetna page text", async () => {
-  const store = await new SqliteStore(DEFAULT_DB_PATH).initialize();
-  const sourceSnapshot = await store.get(
-    "SELECT * FROM eligibility_snapshots WHERE source_url = 'https://health.aetna.com/' AND raw_text LIKE '%Welcome, Marcelo%' ORDER BY created_at DESC LIMIT 1;"
-  );
+async function createStore() {
+  const dir = await mkdtemp(join(tmpdir(), "brainsty-portal-scan-"));
+  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+}
 
-  assert.ok(sourceSnapshot, "Run the already-open logged Aetna Chrome test before this real-data test.");
+async function fixture(name) {
+  return readFile(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+}
+
+test("portal page scan persists sanitized captured Aetna home page text", async () => {
+  const store = await createStore();
+  const homeText = await fixture("aetna-captured-home-sanitized.txt");
 
   const result = await runConciergeSlice(store, {
     message:
@@ -18,10 +26,14 @@ test("portal page scan persists real stored Aetna page text", async () => {
       {
         pageKind: "home",
         title: "Home - Aetna",
-        url: sourceSnapshot.source_url,
-        text: sourceSnapshot.raw_text,
-        links: [],
-        extractedAt: sourceSnapshot.created_at
+        url: "https://health.aetna.com/",
+        text: homeText,
+        links: [
+          { text: "Benefits", href: "https://health.aetna.com/benefits" },
+          { text: "Claims", href: "https://health.aetna.com/claims" },
+          { text: "Documents", href: "https://health.aetna.com/documents" }
+        ],
+        extractedAt: "2026-06-01T00:00:00.000Z"
       }
     ]
   });
@@ -30,64 +42,68 @@ test("portal page scan persists real stored Aetna page text", async () => {
   assert.equal(result.browserResult.status, "multi_page_scan");
   assert.equal(trace.portalPageSnapshots.length, 1);
   assert.equal(trace.portalPageSnapshots[0].page_kind, "home");
-  assert.match(trace.portalPageSnapshots[0].visible_text, /Welcome, Marcelo/);
-  assert.ok(trace.coverageBalances.length >= 2);
-  assert.ok(trace.claims.length >= 5);
+  assert.match(trace.portalPageSnapshots[0].visible_text, /Welcome, Fixture Member/);
+  assert.equal(trace.coverageBalances.length, 2);
+  assert.equal(trace.claims.length, 5);
 });
 
-test("portal page scan structures corrected real Aetna home page text", async () => {
-  const store = await new SqliteStore(DEFAULT_DB_PATH).initialize();
-  const sourcePage = await store.get(
-    "SELECT * FROM portal_page_snapshots WHERE page_kind = 'home_corrected' AND visible_text LIKE '%Deductible%' AND visible_text LIKE '%Lamotrigine%' ORDER BY created_at DESC LIMIT 1;"
-  );
-
-  assert.ok(sourcePage, "Run the corrected live Aetna scan before this real-data test.");
+test("portal page scan review payload includes section-specific captured evidence", async () => {
+  const store = await createStore();
+  const homeText = await fixture("aetna-captured-home-sanitized.txt");
 
   const result = await runConciergeSlice(store, {
-    message: "Structure the corrected Aetna home page capture.",
+    message: "Structure the sanitized captured Aetna home page.",
     portalPageSnapshots: [
       {
         pageKind: "home_corrected",
-        title: sourcePage.title,
-        url: sourcePage.url,
-        text: sourcePage.visible_text,
-        links: JSON.parse(sourcePage.links_json),
-        extractedAt: sourcePage.extracted_at
+        title: "Home - Aetna",
+        url: "https://health.aetna.com/",
+        text: homeText,
+        links: [],
+        extractedAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]
+  });
+  const trace = await traceForSession(store, result.session.id);
+  const reviewPayload = JSON.parse(trace.extractionReviews[0].review_payload);
+
+  assert.equal(result.browserResult.status, "multi_page_scan");
+  assert.deepEqual(reviewPayload.sectionEvidence.reachable, [
+    "benefits",
+    "spending",
+    "claims",
+    "prior_authorizations",
+    "documents",
+    "id_card",
+    "pharmacy",
+    "network"
+  ]);
+  assert.equal(reviewPayload.documentSignals.candidateCount, 5);
+  assert.equal(reviewPayload.documentSignals.policy.documentDownloadAttempted, false);
+  assert.equal(reviewPayload.idCardSignals.directIdentifierExtracted, false);
+});
+
+test("sanitized captured Aetna claims page parses full claims rows", async () => {
+  const store = await createStore();
+  const claimsText = await fixture("aetna-captured-claims-sanitized.txt");
+
+  const result = await runConciergeSlice(store, {
+    message: "Structure the sanitized captured Aetna claims page.",
+    portalPageSnapshots: [
+      {
+        pageKind: "claims_corrected",
+        title: "Claims - Aetna",
+        url: "https://health.aetna.com/manage/claims#page1",
+        text: claimsText,
+        links: [],
+        extractedAt: "2026-06-01T00:01:00.000Z"
       }
     ]
   });
   const trace = await traceForSession(store, result.session.id);
 
   assert.equal(result.browserResult.status, "multi_page_scan");
-  assert.ok(trace.coverageBalances.length >= 2);
-  assert.ok(trace.claims.length >= 5);
-  assert.equal(trace.claims[0].description, "Lamotrigine Tab 25mg");
-});
-
-test("real corrected Aetna claims page parses full claims rows", async () => {
-  const store = await new SqliteStore(DEFAULT_DB_PATH).initialize();
-  const sourcePage = await store.get(
-    "SELECT * FROM portal_page_snapshots WHERE page_kind = 'claims_corrected' AND visible_text LIKE '%1–20 of 69 Claims%' ORDER BY created_at DESC LIMIT 1;"
-  );
-
-  assert.ok(sourcePage, "Run the corrected live Aetna scan before this real-data test.");
-
-  const result = await runConciergeSlice(store, {
-    message: "Structure the corrected Aetna claims page capture.",
-    portalPageSnapshots: [
-      {
-        pageKind: "claims_corrected",
-        title: sourcePage.title,
-        url: sourcePage.url,
-        text: sourcePage.visible_text,
-        links: JSON.parse(sourcePage.links_json),
-        extractedAt: sourcePage.extracted_at
-      }
-    ]
-  });
-  const trace = await traceForSession(store, result.session.id);
-
-  assert.ok(trace.claims.length >= 20);
-  assert.ok(trace.claims.some((claim) => claim.description === "Divalproex Tab 500mg Er" && claim.share_amount === 25));
-  assert.ok(trace.claims.some((claim) => claim.description === "Horacio Groisman" && claim.member_name === "Marcelo (Self)"));
+  assert.equal(trace.claims.length, 6);
+  assert.ok(trace.claims.some((claim) => claim.description === "Generic Pharmacy Fill" && claim.share_amount === 8.92));
+  assert.ok(trace.claims.some((claim) => claim.description === "Generic Preventive Visit" && claim.share_amount === 0));
 });

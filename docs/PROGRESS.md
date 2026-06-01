@@ -10,6 +10,182 @@ For every slice, record:
 - What the user can try locally
 - Known risks or gaps
 
+## Phase 8S Section-Specific Structured Extraction And Fixture Hardening - 2026-06-01
+
+Slice name:
+- Section-specific structured extraction for live-reachable insurance portal surfaces.
+
+Files changed:
+- `src/concierge/structuredExtraction.mjs`
+- `src/concierge/outputPolicy.mjs`
+- `src/tests/fixtures/aetna-captured-home-sanitized.txt`
+- `src/tests/fixtures/aetna-captured-claims-sanitized.txt`
+- `src/tests/structured-extraction.test.mjs`
+- `src/tests/real-aetna-structured.test.mjs`
+- `src/tests/portal-scan-real.test.mjs`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/PROGRESS.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DECISIONS.md`
+
+Implemented:
+- Added safe structured extraction for live-reachable portal surfaces:
+  - benefits,
+  - spending,
+  - claims,
+  - prior authorizations,
+  - documents,
+  - ID card,
+  - pharmacy,
+  - network,
+  - plan/effective-date signals.
+- Kept existing persisted structured rows for coverage balances, claims, and prior authorizations.
+- Added section/document/ID/pharmacy/network/plan signal payloads to the extraction review payload so the graph can reason over safe structured evidence without exposing raw portal text in the answer.
+- Added a source-pointer-safe section evidence line to answer composition.
+- Replaced mutable local DB-dependent Aetna assertions with sanitized captured-format fixtures:
+  - home/benefits fixture,
+  - claims fixture.
+- Converted the prior local-real-data tests into deterministic captured-format regression tests while preserving live proof as the non-mocked OpenClaw evidence path.
+- Moved `portal-scan-real.test.mjs` to temporary SQLite stores so it no longer pollutes or depends on `data/brainstyworkers.sqlite`.
+
+Verification commands:
+- `node --check src/concierge/structuredExtraction.mjs`
+- `node --check src/concierge/outputPolicy.mjs`
+- `node --check src/tests/structured-extraction.test.mjs`
+- `node --check src/tests/portal-scan-real.test.mjs`
+- `node --test src/tests/structured-extraction.test.mjs src/tests/real-aetna-structured.test.mjs src/tests/portal-scan-real.test.mjs src/tests/output-policy.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser smoke at `http://127.0.0.1:4173/mvp`
+
+Verification result:
+- Syntax checks passed.
+- Focused extraction/portal-scan/output-policy tests passed:
+  - 8 tests total,
+  - 8 passed,
+  - 0 failed.
+- `npm run build` passed.
+- `npm run test:local` passed:
+  - 116 tests total,
+  - 114 passed,
+  - 0 failed,
+  - 2 skipped expected live-gated official OpenClaw tests.
+- Browser smoke passed:
+  - title: `Brainstyworkers Concierge MVP`,
+  - visible sequence controls present,
+  - 0 console errors.
+
+What the user can try locally:
+- Open `http://127.0.0.1:4173/mvp`.
+- Run the normal Benefits path.
+- When an approved live OpenClaw run creates evidence, the answer path can now include a compact structured section evidence line instead of only balances/claims/prior authorizations.
+- The operator/debug dashboard remains available at `http://127.0.0.1:4173/`.
+
+Known risks or gaps:
+- Phase 8S does not download, open, or analyze PDFs/documents.
+- Section/document/ID/pharmacy/network/plan extraction is signal-level evidence, not yet a full typed domain model for every portal page.
+- Live OpenClaw remains the non-mocked evidence path. The sanitized fixtures are regression fixtures that preserve captured page shape without requiring a mutable local Aetna DB state.
+- The next phase is Phase 8T: add candidate-specific approval for one read-only document candidate before any document/PDF ingestion.
+
+## Phase 8R Live Approved MVP Run - 2026-05-31 local / 2026-06-01 UTC
+
+Slice name:
+- User-facing `/mvp` live approved Benefits run with official OpenClaw.
+
+Files changed:
+- `.gitignore`
+- `src/app/mvp.js`
+- `src/app/mvp.css`
+
+Implemented:
+- Added `.gitignore` coverage for an accidental nested local clone/copy directory: `concierge_by_openclaw_hermes/`.
+- Tightened `/mvp` proof rendering after a completed approved worker run:
+  - object-valued reachable portal sections now render as section labels instead of `[object Object]`,
+  - `approved_consumed` now marks the approval step complete in the sequence rail,
+  - successful Graphiti/product-memory retain now displays as `retained`,
+  - the approval panel no longer invites another approval when the latest run already captured source pointers.
+
+Live proof performed:
+- Started local app with live portal/OpenClaw flags:
+  - `BRAINSTY_PORTAL_LIVE=1`
+  - `BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1`
+  - `BRAINSTY_OPENCLAW_MULTI_PAGE=1`
+- Started the dedicated project OpenClaw gateway:
+  - `openclaw --profile brainstyworkers gateway --port 19789 --allow-unconfigured run`
+- Verified dedicated OpenClaw browser profile/CDP:
+  - profile: `brainstyworkers`
+  - gateway: `127.0.0.1:19789`
+  - CDP: `127.0.0.1:19800`
+- User manually completed Aetna login in the dedicated OpenClaw browser.
+- `/api/openclaw/official/status` reported:
+  - `official_openclaw_profile_ready`
+  - `ready_for_read_only_approval`
+  - current tab title: `Home - Aetna`
+- Browser-tested `/mvp`:
+  - started local planned-user session,
+  - checked `Portal Ready`,
+  - ran the Benefits journey,
+  - confirmed LangGraph stopped at `missing_approval_token`,
+  - clicked `Approve + Run Read-Only`,
+  - observed approval consumption and official OpenClaw dispatch,
+  - observed completed official multi-page read-only evidence capture.
+
+Result:
+- Phase 8R live loop passed.
+- `/mvp` displayed a final sourced answer after approval.
+- Runtime events showed:
+  - `approval.recorded`,
+  - `approval.consumed`,
+  - `worker.followup.dispatching`,
+  - `worker.status.updated` with `dispatching_official_openclaw_read_only_worker`,
+  - `worker.followup.completed`,
+  - `worker.status.updated` with `completed_with_sourced_result`,
+  - `evidence.status` with `captured_official_openclaw_multi_page_read_only_observation`,
+  - `final.answer.created`,
+  - `memory.retained`.
+- Source pointer count: 8.
+- Verified pages: 4 of 4.
+- Discovery proof recorded:
+  - portal search was available but not submitted,
+  - 3 read-only document candidates,
+  - 0 SBC/PDF candidates,
+  - sections tried: benefits, spending, claims,
+  - reachable sections included benefits, spending, claims, prior authorizations, documents, pharmacy, ID card, and network.
+- Actions stayed read-only: browser start/current tab, same-site internal link opening, accessibility snapshots, CDP screenshots, local OCR, portal search affordance scan, document candidate discovery, portal verification, source pointer persistence, and multi-page verification.
+- No payer contact, external message, credential entry, password manager use, form submission, account modification, or medical advice was performed by the system.
+
+Verification commands:
+- `node --check src/app/mvp.js`
+- `npm run build`
+- `node --test --test-name-pattern "user-friendly MVP app" src/tests/chat-ui-contract.test.mjs`
+- Browser proof at `http://127.0.0.1:4173/mvp`
+
+Verification result:
+- `node --check src/app/mvp.js`: pass.
+- `npm run build`: pass.
+- Focused `/mvp` contract test: pass.
+- Browser live proof: pass.
+- Accidental aggregate test run result: 111 passed, 2 skipped, 2 failed.
+  - Failed tests:
+    - `src/tests/portal-scan-real.test.mjs`: expected at least 5 parsed claims from the current stored real Aetna page text.
+    - `src/tests/real-aetna-structured.test.mjs`: expected at least 5 parsed claims from a real logged Aetna snapshot.
+  - Assessment: these failures are the known real-data reproducibility gap described in the MVP hardening playbook. They are not caused by the `/mvp` proof-rendering patch. The next hardening pass should convert those real-data tests to explicit live-gated tests or stable sanitized fixtures.
+  - Resolved by Phase 8S above with sanitized captured-format fixtures and temporary test databases.
+
+What the user can try locally:
+- Keep the local server and dedicated OpenClaw gateway running.
+- Open `http://127.0.0.1:4173/mvp`.
+- Click `Portal Ready`.
+- Run `Benefits`.
+- Approve `Approve + Run Read-Only` only after the dedicated OpenClaw browser is logged into the member portal.
+- Confirm Current Answer, sequence rail, approval panel, discovery panel, runtime events, and source pointers update from the same LangGraph/OpenClaw run.
+
+Known risks or gaps:
+- `/mvp` is now usable for the approved Benefits path, but it still shows a compact engineering proof rather than a polished end-user chat experience.
+- Real Aetna data tests were coupled to mutable local DB state at the end of Phase 8R; Phase 8S resolved this for the local regression suite.
+- The current live flow can take long enough that the UI appears idle while the final graph resume completes; event streaming helps, but the next UI phase should add a clear long-running spinner/progress card.
+- Phase 8S should improve section-specific structured extraction before adding document/PDF ingestion.
+
 ## MVP Hardening Reset - 2026-05-27
 
 User instruction:

@@ -353,6 +353,11 @@ textarea {
   font-size: 12px;
 }
 
+.success-line {
+  color: #166534;
+  font-size: 12px;
+}
+
 .key-value-list {
   display: grid;
   gap: 8px;

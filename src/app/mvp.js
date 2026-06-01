@@ -49,9 +49,22 @@ function escapeHtml(value) {
 
 function compact(value, fallback = "not reported") {
   if (value === undefined || value === null || value === "") return fallback;
-  if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
+  if (Array.isArray(value)) return value.length ? value.map(formatListValue).join(", ") : fallback;
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function formatListValue(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "object") return String(value);
+  return (
+    value.section ??
+    value.label ??
+    value.type ??
+    value.status ??
+    value.url ??
+    JSON.stringify(value)
+  );
 }
 
 function memberPayload() {
@@ -162,6 +175,15 @@ function productMemoryRetain(result = state.latestRun) {
   return graphState(result).product_memory_retain ?? {};
 }
 
+function memoryStatus(result = state.latestRun) {
+  const memory = productMemoryRetain(result);
+  if (memory.status) return memory.status;
+  if (memory.productMemoryRetained) return "retained";
+  if (memory.repairStatus) return memory.repairStatus;
+  if (memory.enabled === false || memory.productMemoryEnabled === false) return "disabled";
+  return "not reported";
+}
+
 function proposalStatus(result = state.latestRun) {
   const proposal = graphState(result).openclaw_skill_proposal;
   return proposal?.task?.status ?? proposal?.status ?? "not prepared";
@@ -171,9 +193,19 @@ function approvalStatus(result = state.latestRun) {
   const evidence = evidenceObservation(result);
   if (evidence.status?.includes("waiting_for_approval")) return "needed";
   if (evidence.approval?.status) return evidence.approval.status;
-  if (sourcePointers(result).length) return "consumed";
+  if (sourcePointers(result).length) return "approved_consumed";
   if (proposalStatus(result) === "pending_approval") return "pending";
   return "waiting";
+}
+
+function approvalConsumed(result = state.latestRun) {
+  const approval = approvalStatus(result);
+  return approval === "consumed" || approval.includes("consumed") || sourcePointers(result).length > 0;
+}
+
+function approvalTaskId(result = state.latestRun) {
+  const evidence = evidenceObservation(result);
+  return evidence.workerContinuation?.taskId ?? graphState(result).openclaw_skill_proposal?.task?.id ?? null;
 }
 
 function workerOutcome(result = state.latestRun) {
@@ -214,7 +246,7 @@ function renderAnswer(result = null) {
       ${metric("Approval", approvalStatus(result))}
       ${metric("Worker", workerOutcome(result))}
       ${metric("Source pointers", pointers.length)}
-      ${metric("Memory", memory.status ?? (memory.enabled === false ? "disabled" : "not reported"))}
+      ${metric("Memory", memoryStatus(result))}
     </div>
     <div class="key-value-list">
       <dl>
@@ -243,13 +275,14 @@ function renderApproval(result = state.latestRun) {
     elements.approvalPanel.textContent = "No pending worker proposal yet.";
     return;
   }
-  const taskId = graphState(result).openclaw_skill_proposal?.task?.id;
+  const taskId = approvalTaskId(result);
   const status = proposalStatus(result);
   const approval = approvalStatus(result);
   if (!taskId) {
     elements.approvalPanel.innerHTML = `<p>No OpenClaw worker proposal for the latest run.</p>`;
     return;
   }
+  const canApprove = status === "pending_approval" && !approvalConsumed(result);
   elements.approvalPanel.innerHTML = `
     <div class="key-value-list">
       <dl>
@@ -261,10 +294,14 @@ function renderApproval(result = state.latestRun) {
         <dd>${escapeHtml(approval)}</dd>
       </dl>
     </div>
-    <div class="approval-actions">
-      <button type="button" data-approve-run="${escapeHtml(taskId)}">Approve + Run Read-Only</button>
-      <button class="secondary-button" type="button" data-save-followup="${escapeHtml(taskId)}">Save As Follow-Up</button>
-    </div>
+    ${
+      canApprove
+        ? `<div class="approval-actions">
+            <button type="button" data-approve-run="${escapeHtml(taskId)}">Approve + Run Read-Only</button>
+            <button class="secondary-button" type="button" data-save-followup="${escapeHtml(taskId)}">Save As Follow-Up</button>
+          </div>`
+        : `<p class="success-line">Read-only approval has already been consumed or evidence has already been captured for this run.</p>`
+    }
     <p class="danger-line">Read-only observation only. Login, passkey, 2FA, captcha, password manager, SSN entry, payer contact, form submission, and account changes stay outside this approval.</p>
   `;
 }
@@ -302,13 +339,14 @@ function renderDiscovery(result = state.latestRun) {
 }
 
 function renderSequence(result = state.latestRun) {
+  const approval = approvalStatus(result);
   const sequence = {
     auth: state.session?.id ? ["done", "signed in"] : ["active", "waiting"],
     route: graphState(result).structured_intent ? ["done", graphState(result).workflow ?? "routed"] : ["active", "waiting"],
-    approval: approvalStatus(result) === "consumed" ? ["done", "consumed"] : approvalStatus(result) === "needed" || approvalStatus(result) === "pending" ? ["active", approvalStatus(result)] : ["", "waiting"],
+    approval: approvalConsumed(result) ? ["done", approval] : approval === "needed" || approval === "pending" ? ["active", approval] : ["", "waiting"],
     worker: sourcePointers(result).length ? ["done", workerOutcome(result)] : workerOutcome(result) !== "not run" && workerOutcome(result) !== "not requested" ? ["active", workerOutcome(result)] : ["", "waiting"],
     evidence: sourcePointers(result).length ? ["done", `${sourcePointers(result).length} pointers`] : ["", evidenceObservation(result).status ?? "waiting"],
-    memory: productMemoryRetain(result).status ? ["done", productMemoryRetain(result).status] : ["", "waiting"],
+    memory: memoryStatus(result) !== "not reported" ? ["done", memoryStatus(result)] : ["", "waiting"],
     answer: result?.finalResponse ? ["done", "ready"] : ["", "waiting"]
   };
 
