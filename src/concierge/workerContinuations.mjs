@@ -1,9 +1,17 @@
 import { audit } from "./audit.mjs";
 import { createId, nowIso } from "./database.mjs";
+import {
+  DOCUMENT_CANDIDATE_TASK_TYPE,
+  READ_ONLY_DOCUMENT_ALLOWED_ACTION,
+  READ_ONLY_DOCUMENT_APPROVAL_SCOPE,
+  approvalMetadataForDocumentCandidateTask
+} from "./documentCandidateApproval.mjs";
+import { OPENCLAW_PROPOSAL_TASK_TYPE } from "./openclawSkillInvocation.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 
 export const WORKER_CONTINUATIONS_VERSION = "2026-05-29.worker-continuations.v1";
 export const READ_ONLY_CONTINUATION_SCOPE = "read_only_observation";
+export const READ_ONLY_DOCUMENT_CONTINUATION_SCOPE = READ_ONLY_DOCUMENT_APPROVAL_SCOPE;
 const ACTIVE_CONTINUATION_STATUSES = new Set(["pending_async_followup", "continue_requested"]);
 const TERMINAL_CONTINUATION_STATUSES = new Set(["completed", "blocked", "cancelled", "expired"]);
 const COMPLETED_TERMINAL_OUTCOMES = new Set(["completed_with_sourced_result", "partial_result_with_blockers"]);
@@ -91,6 +99,36 @@ async function emitContinuationEvent(store, eventType, continuation, payload = {
   });
 }
 
+function continuationScopeAllowedForTask(task, approvalScope, allowedAction) {
+  if (
+    task?.task_type === OPENCLAW_PROPOSAL_TASK_TYPE &&
+    approvalScope === READ_ONLY_CONTINUATION_SCOPE &&
+    allowedAction === READ_ONLY_CONTINUATION_SCOPE
+  ) {
+    return { ok: true, scopeKind: "portal_read_only_observation", candidate: null };
+  }
+  if (
+    task?.task_type === DOCUMENT_CANDIDATE_TASK_TYPE &&
+    approvalScope === READ_ONLY_DOCUMENT_APPROVAL_SCOPE &&
+    allowedAction === READ_ONLY_DOCUMENT_ALLOWED_ACTION
+  ) {
+    const { candidate } = approvalMetadataForDocumentCandidateTask(task);
+    if (candidate?.candidateId && candidate?.url) {
+      return { ok: true, scopeKind: "document_candidate_observation", candidate };
+    }
+    return {
+      ok: false,
+      status: "document_candidate_binding_missing",
+      error: "Document-candidate continuation requires a bound candidate in task metadata."
+    };
+  }
+  return {
+    ok: false,
+    status: "unsupported_action_scope",
+    error: "This MVP can continue only approved read-only portal observation or one approved read-only document candidate."
+  };
+}
+
 export async function createWorkerContinuation(
   store,
   {
@@ -118,11 +156,12 @@ export async function createWorkerContinuation(
   if (task.user_id && resolvedUserId !== task.user_id) {
     return { ok: false, status: "user_binding_mismatch", error: "Continuation user does not match the task.", actionsTaken: [] };
   }
-  if (approvalScope !== READ_ONLY_CONTINUATION_SCOPE || allowedAction !== READ_ONLY_CONTINUATION_SCOPE) {
+  const scopeCheck = continuationScopeAllowedForTask(task, approvalScope, allowedAction);
+  if (!scopeCheck.ok) {
     return {
       ok: false,
-      status: "unsupported_action_scope",
-      error: "This MVP can continue only read-only observation worker tasks asynchronously.",
+      status: scopeCheck.status,
+      error: scopeCheck.error,
       actionsTaken: []
     };
   }
@@ -171,6 +210,8 @@ export async function createWorkerContinuation(
       approvalScope,
       allowedAction,
       reason,
+      scopeKind: scopeCheck.scopeKind,
+      candidate: scopeCheck.candidate,
       actionsTaken: []
     }),
     created_at: now,
@@ -196,6 +237,8 @@ export async function createWorkerContinuation(
       reason,
       reportEverySeconds: Number(reportEverySeconds),
       source: "phase_8e_async_followup",
+      scopeKind: scopeCheck.scopeKind,
+      candidate: scopeCheck.candidate,
       ...metadata,
       actionsTaken: []
     }),
@@ -301,7 +344,13 @@ export async function validateWorkerContinuationForDispatch(
   if (workflow && continuation.workflow !== workflow) {
     return { ok: false, status: "workflow_binding_mismatch", error: "Continuation workflow does not match the graph route.", continuation, actionsTaken: [] };
   }
-  if (continuation.approvalScope !== READ_ONLY_CONTINUATION_SCOPE || continuation.allowedAction !== READ_ONLY_CONTINUATION_SCOPE) {
+  const portalScope =
+    continuation.approvalScope === READ_ONLY_CONTINUATION_SCOPE && continuation.allowedAction === READ_ONLY_CONTINUATION_SCOPE;
+  const documentScope =
+    continuation.approvalScope === READ_ONLY_DOCUMENT_APPROVAL_SCOPE &&
+    continuation.allowedAction === READ_ONLY_DOCUMENT_ALLOWED_ACTION &&
+    continuation.metadata?.scopeKind === "document_candidate_observation";
+  if (!portalScope && !documentScope) {
     return {
       ok: false,
       status: "unsupported_action_scope",

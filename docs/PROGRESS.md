@@ -10,6 +10,99 @@ For every slice, record:
 - What the user can try locally
 - Known risks or gaps
 
+## Phase 8T/8U Candidate-Specific Document Approval And Observation - 2026-06-01
+
+Slice name:
+- Candidate-specific document approval plus approved single-candidate read-only OpenClaw observation.
+
+Files changed:
+- `src/concierge/documentCandidateApproval.mjs`
+- `src/concierge/approvalResume.mjs`
+- `src/concierge/workerContinuations.mjs`
+- `src/concierge/langgraphRunner.mjs`
+- `src/concierge/openclawOfficialRuntime.mjs`
+- `src/concierge/outputPolicy.mjs`
+- `src/server/server.mjs`
+- `src/app/mvp.js`
+- `src/app/app.js`
+- `src/app/styles.css`
+- `src/tests/document-candidate-approval.test.mjs`
+- `src/tests/output-policy.test.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `package.json`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/PROGRESS.md`
+- `docs/DECISIONS.md`
+
+Implemented:
+- Added stable document candidate IDs derived from candidate URL/type/label/source.
+- Added `openclaw_document_candidate_proposal` tasks using existing `agent_tasks.metadata_json`; no schema migration or new table was needed.
+- Added `read_only_document_observation` approval scope and gate details that bind task, session, user, workflow, candidate ID, candidate URL, allowed action, expiration, and single-use token.
+- Blocked missing URL, offsite, mixed-form, submission, and irreversible candidates before proposal/approval.
+- Added API proof endpoints:
+  - `GET /api/document-candidates`
+  - `POST /api/document-candidates/propose`
+- Extended worker continuations so one approved document candidate can be scheduled and dispatched without widening the portal read-only scope.
+- Extended LangGraph evidence observation so approved document-candidate runs consume the candidate-specific approval token before dispatch and call official OpenClaw with exactly the approved candidate URL, single page, no current-tab substitution, and no broad crawl.
+- Extended official OpenClaw runtime metadata/actions for approved document candidate observation while keeping DOM/accessibility, screenshot, local OCR, hashes, source pointers, and no raw document dump.
+- Added `captured_official_openclaw_document_read_only_observation` to source-pointer-backed response composition.
+- Added `/mvp` candidate cards with `Prepare Approval` and `Approve + Observe` controls.
+- Added `/` operator proof candidate cards and candidate approval/observe controls.
+
+Verification commands:
+- `node --check src/concierge/documentCandidateApproval.mjs`
+- `node --check src/concierge/approvalResume.mjs`
+- `node --check src/concierge/workerContinuations.mjs`
+- `node --check src/concierge/langgraphRunner.mjs`
+- `node --check src/concierge/openclawOfficialRuntime.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/app/mvp.js`
+- `node --check src/app/app.js`
+- `node --test src/tests/document-candidate-approval.test.mjs`
+- `node --test src/tests/output-policy.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `node --test src/tests/approval-resume.test.mjs src/tests/worker-continuations.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser smoke at `http://127.0.0.1:4173/mvp` and `http://127.0.0.1:4173/`
+
+Verification result:
+- Static checks passed.
+- Focused document candidate tests passed:
+  - 5 tests total,
+  - 5 passed,
+  - 0 failed.
+- Output policy and UI contract tests passed:
+  - 10 tests total,
+  - 10 passed,
+  - 0 failed.
+- Existing approval/continuation regression tests passed:
+  - 8 tests total,
+  - 8 passed,
+  - 0 failed.
+- `npm run build` passed.
+- `npm run test:local` passed:
+  - 123 tests total,
+  - 121 passed,
+  - 0 failed,
+  - 2 skipped expected live-gated official OpenClaw tests.
+- Browser smoke passed:
+  - `/mvp` title: `Brainstyworkers Concierge MVP`,
+  - `/` title: `Brainstyworkers AI Concierge`,
+  - required auth/chat/approval/discovery/runtime/proof elements present,
+  - 0 console errors on both pages.
+
+What the user can try locally:
+- Open `http://127.0.0.1:4173/mvp`.
+- Run the normal live Benefits path after authenticating the dedicated OpenClaw profile.
+- After Discovery records document candidates, use a candidate card to prepare approval, then approve and observe exactly one candidate.
+- Use `http://127.0.0.1:4173/` to inspect the matching task, approval gate, continuation, runtime events, source pointers, and worker result.
+
+Known risks or gaps:
+- This is approved candidate observation, not full PDF/document extraction. The worker opens/observes one approved candidate URL and stores source pointers; it does not yet parse full PDF text into a document-specific structured domain model.
+- Live browser proof for the new candidate flow still needs to be run with the user-authenticated dedicated OpenClaw profile.
+- The FastAPI/Wefella backend architecture pivot remains deferred until the original Node/LangGraph/OpenClaw MVP gate passes.
+
 ## Phase 8S Section-Specific Structured Extraction And Fixture Hardening - 2026-06-01
 
 Slice name:
@@ -3991,3 +4084,195 @@ Known blockers and guardrails:
 - Official live evidence creation requires `BRAINSTY_PORTAL_LIVE=1` when live proof is required.
 - The worker must not enter credentials, handle passkeys/2FA/captcha, use password managers, enter SSNs, contact payers, send messages, submit forms, change records, or provide medical advice.
 - Cortex remains project memory only; Zep Graphiti remains the product-memory adapter path.
+
+## Phase 8W External Portal Blocker Proof - 2026-06-01
+
+What happened:
+- Phase 8W was started from the current `/mvp` user-facing route and `/` operator dashboard.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- `/mvp` created real session `session_b11af8e4-24f0-434e-a057-ccd812af080d`.
+- The Benefits question routed through LangGraph with live GPT decisioning.
+- A read-only OpenClaw proposal task was created: `task_d520ef97-cbde-4580-89cf-cdf151fc2112`.
+- `/` loaded the same session and showed the same trace/proposal state.
+
+Live blocker:
+- The Aetna website/member portal was unavailable during the live proof window.
+- `/api/openclaw/official/status` returned `auth_required` / no current authenticated OpenClaw tab.
+- The approved official OpenClaw continuation was allowed to fail closed as a real no-mock proof.
+
+Fail-closed proof:
+- Approval token `approval_ade458e2-3145-4382-8247-71f037ddb635` was consumed for the pending read-only task.
+- Worker continuation `cont_ad27cb6c-2e6a-49b1-a579-9b78bbf26176` finalized as `blocked`.
+- Terminal outcome was `not_possible_insurance_or_portal_block`.
+- Evidence observation status was `blocked_no_authenticated_evidence`.
+- Browser run `browser_74c70314-d1c8-4b96-b856-e524a18080f2` recorded the missing current OpenClaw tab/authenticated portal state.
+- Source pointer count remained 0.
+- Document candidate count remained 0.
+- No eligibility snapshot, payer contact, external message, credential entry, medical advice, form submission, or account mutation was created.
+
+Hardening added:
+- `compose_response` now treats `blocked_no_authenticated_evidence` as a first-class user-facing result.
+- The blocked answer says the live insurance portal evidence step is blocked, lists the scoped worker actions attempted, states that no source pointers or document candidates were created, and tells the tester to rerun after manually signing in through the dedicated OpenClaw browser profile.
+- A regression test was added for approved-but-unavailable portal evidence.
+
+Verification after hardening:
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --test src/tests/langgraph-runner.test.mjs` passed with 10 tests total, 10 passed, 0 failed.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+
+Next step:
+- The user accepted this external-blocker outcome as OK to proceed.
+- Start the complementary Wefella/FastAPI alignment as a facade over the existing runtime, not as a rewrite.
+- Retry the full live Aetna path when the portal is available again:
+  - sign in manually in the dedicated OpenClaw browser profile,
+  - rerun Benefits from `/mvp`,
+  - approve read-only portal observation,
+  - confirm source pointers and discovery candidates,
+  - approve one document candidate,
+  - verify `/mvp` and `/` agree on trace, audit, source pointers, worker continuation, and Graphiti retain.
+
+## Phase 9A FastAPI Facade - 2026-06-01
+
+What was built:
+- Added a complementary FastAPI backend facade under `project/api/`.
+- The facade does not replace Node/LangGraph/OpenClaw/Zep Graphiti. It calls the existing Node `/api/chat` runtime internally.
+- Added local development JWT handling:
+  - `Authorization: Bearer <token>` is required for chat and status endpoints,
+  - JWT subject must match `user_id`,
+  - `GET /api/health` remains public.
+- Added async task handling:
+  - `POST /api/chat` returns `session_id`, `task_id`, and `queued`,
+  - `GET /api/chat/status/{task_id}` returns queued/running/completed/failed task state,
+  - `GET /api/chat/stream/{task_id}` emits SSE-style task events and terminal result.
+- Added scripts:
+  - `npm run facade:dev`,
+  - `npm run test:facade`.
+- Added environment examples:
+  - `WEFELLA_NODE_RUNTIME_URL`,
+  - `WEFELLA_JWT_SECRET`,
+  - `WEFELLA_ALLOWED_ORIGINS`.
+- Extended `npm run build` so the facade files are part of the file-presence gate.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with the explicit live delegation test skipped by default.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed against the running Node runtime at `http://127.0.0.1:4173`.
+- `npm run build` passed after adding facade files to the build check.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+
+Important implementation note:
+- The production FastAPI path uses background task execution so the client gets a task id and can poll or stream status.
+- The test app can run the task inline only for the live in-process TestClient proof, because TestClient does not keep server background tasks alive like uvicorn does.
+- The live proof still delegates to the real Node runtime and does not use a mocked agent result.
+
+Next step:
+- Phase 9B should add an optional facade-backed mode to `/mvp`, so the same user-facing workflow can be exercised through FastAPI and compared against the direct Node path.
+- Keep `/` as the operator proof dashboard and Node/LangGraph/OpenClaw as the source of truth until facade parity is proven.
+
+## Phase 9B MVP Facade Route - 2026-06-01
+
+What was built:
+- `/mvp` now has a Backend/API Route panel with:
+  - direct Node/LangGraph runtime,
+  - Wefella FastAPI facade,
+  - FastAPI URL,
+  - facade health check,
+  - facade route activation.
+- FastAPI added `POST /api/auth/local-session` for local MVP auth:
+  - it delegates planned-user auth-start to the existing Node runtime,
+  - it returns the enrollment plus a local bearer token whose subject is the Node user id.
+- FastAPI task registry now stores task owner user ids.
+- FastAPI status and stream endpoints now reject task access from a different JWT subject.
+- FastAPI chat requests now pass through current MVP graph options:
+  - approval token/task id,
+  - worker continuation id,
+  - read-only evidence execution flag,
+  - live portal proof flag,
+  - official OpenClaw worker/current-tab/multi-page flags,
+  - document candidate approval scope and candidate id.
+- `/mvp` can submit chat through FastAPI:
+  - `POST /api/chat`,
+  - `GET /api/chat/stream/{task_id}` using bearer auth over fetch streaming,
+  - fallback to `GET /api/chat/status/{task_id}` polling.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with 7 tests, 6 passed and 1 expected live-gated skip.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 7 tests.
+- `node --check src/app/mvp.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed through the FastAPI facade:
+  - selected Wefella FastAPI facade,
+  - checked FastAPI health,
+  - started local MVP auth through the facade,
+  - submitted Benefits,
+  - FastAPI accepted task `task_759cb89f-3289-4082-85c8-092edaffdc1d`,
+  - task stream completed,
+  - Current Answer rendered `eligibility_benefits_navigation`,
+  - Approval Gate rendered pending task `task_94b6a654-0dae-4c95-8b51-6c26d4ff84b6`,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase9b_facade_mvp.png`.
+
+Current limitation:
+- `/mvp` chat can route through FastAPI now, but approval, worker continuation, document candidate, OpenClaw readiness, and runtime event endpoints still call Node directly.
+- This is intentional for Phase 9B. Phase 9C should proxy those surfaces through FastAPI before making FastAPI the only frontend entrypoint.
+
+Next step:
+- Phase 9C: add FastAPI proxies for MVP non-chat actions:
+  - local approval,
+  - worker continuations,
+  - document candidate listing/proposal,
+  - official OpenClaw readiness,
+  - runtime events/status snapshot.
+- After Phase 9C, run a side-by-side Node-direct versus FastAPI facade parity proof from `/mvp`.
+
+## Phase 9C FastAPI MVP Action Proxies - 2026-06-01
+
+What was built:
+- FastAPI now proxies the remaining `/mvp` user-facing action endpoints:
+  - `POST /api/orchestrator/approve`,
+  - `GET /api/worker-continuations`,
+  - `POST /api/worker-continuations`,
+  - `POST /api/worker-continuations/{id}/cancel`,
+  - `POST /api/worker-continuations/{id}/continue`,
+  - `GET /api/document-candidates`,
+  - `POST /api/document-candidates/propose`,
+  - `GET /api/openclaw/official/status`,
+  - `GET /api/runtime/events`,
+  - `GET /api/runtime/events/stream`.
+- FastAPI proxy requests are JWT-subject bound:
+  - mismatched query/body user ids return 403,
+  - omitted user ids are injected from the bearer-token subject.
+- `/mvp` now uses FastAPI for runtime event stream/snapshot, OpenClaw readiness, approval, worker continuations, and document candidates when Wefella mode is selected.
+- Direct Node mode remains available in `/mvp` for parity checks.
+- `/` remains the Node-backed operator dashboard during this phase.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with 9 tests, 8 passed and 1 expected live-gated skip.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 9 tests.
+- `node --check src/app/mvp.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed through the FastAPI facade:
+  - selected Wefella FastAPI route,
+  - started local MVP auth through the facade,
+  - facade runtime event stream opened,
+  - checked official OpenClaw readiness through the facade and got `auth_required`,
+  - submitted Benefits through the facade,
+  - FastAPI accepted task `task_e62c8873-bbe8-4d1c-a14d-177af3d2348d`,
+  - task stream completed,
+  - document candidate load went through the facade,
+  - runtime event snapshot went through the facade,
+  - Current Answer rendered `eligibility_benefits_navigation`,
+  - Approval Gate rendered pending task `task_022350c2-e3ac-41a8-819e-050a7a13378c`,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase9c_facade_mvp.png`.
+
+Next step:
+- Phase 9D should make `/mvp` FastAPI-first by default, add an explicit Node-direct versus FastAPI parity comparison for the same Benefits prompt/session family, and keep direct Node as an operator escape hatch until the parity proof is stable.

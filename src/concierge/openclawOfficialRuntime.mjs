@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { audit } from "./audit.mjs";
 import { createId, nowIso } from "./database.mjs";
+import { READ_ONLY_DOCUMENT_ALLOWED_ACTION, candidateIdFor } from "./documentCandidateApproval.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -360,6 +361,7 @@ export function buildOfficialOpenClawDiscoveryReport({ startUrl, observations = 
       blockedCandidateCount: blockedCandidates.length,
       sbcPdfCandidateCount,
       candidates: documentCandidates.map((candidate) => ({
+        candidateId: candidateIdFor(candidate),
         type: candidate.type,
         label: candidate.label,
         url: candidate.url,
@@ -369,6 +371,7 @@ export function buildOfficialOpenClawDiscoveryReport({ startUrl, observations = 
         source: candidate.source
       })),
       blockedCandidates: blockedCandidates.map((candidate) => ({
+        candidateId: candidateIdFor(candidate),
         type: candidate.type,
         label: candidate.label,
         url: candidate.url,
@@ -994,11 +997,25 @@ export async function runOfficialOpenClawReadOnlyObservation({
   targetUrl = null,
   config = getOfficialOpenClawConfig(),
   approval = null,
+  approvedDocumentCandidate = null,
   useCurrentTab = false,
   multiPage = false,
   maxPages = 4
 }) {
-  const requestedUrl = targetUrl ?? portal.portal_url;
+  const requestedUrl = targetUrl ?? approvedDocumentCandidate?.url ?? portal.portal_url;
+  const documentObservation = Boolean(approvedDocumentCandidate);
+  if (documentObservation && canonicalUrl(requestedUrl) !== canonicalUrl(approvedDocumentCandidate.url)) {
+    return {
+      browserRunId: null,
+      connected: false,
+      status: "official_openclaw_document_candidate_scope_mismatch",
+      message: "Approved document observation can open only the exact candidate URL bound to the approval.",
+      page: null,
+      extraction: null,
+      actionsTaken: [],
+      officialOpenClaw: { config, approvedDocumentCandidate }
+    };
+  }
   const startedAt = nowIso();
   const browserRun = {
     id: createId("browser"),
@@ -1014,6 +1031,15 @@ export async function runOfficialOpenClawReadOnlyObservation({
   };
   const actionsTaken = [];
   await store.insert("browser_runs", browserRun);
+  if (documentObservation) {
+    actionsTaken.push("openclaw_approved_document_candidate_scope_bound");
+    await insertAction(store, browserRun.id, {
+      actionType: "openclaw_approved_document_candidate_scope_bound",
+      targetUrl: requestedUrl,
+      description: `Bound official OpenClaw observation to one approved read-only document candidate: ${approvedDocumentCandidate.label}.`,
+      status: "completed"
+    });
+  }
   await recordOutboundPayloadObservation(store, {
     sessionId: session.id,
     payload: {
@@ -1027,7 +1053,16 @@ export async function runOfficialOpenClawReadOnlyObservation({
       useCurrentTab,
       multiPage,
       maxPages,
-      allowedAction: "read_only_observation",
+      allowedAction: documentObservation ? READ_ONLY_DOCUMENT_ALLOWED_ACTION : "read_only_observation",
+      approvedDocumentCandidate: approvedDocumentCandidate
+        ? {
+            candidateId: approvedDocumentCandidate.candidateId,
+            type: approvedDocumentCandidate.type,
+            label: approvedDocumentCandidate.label,
+            url: approvedDocumentCandidate.url,
+            source: approvedDocumentCandidate.source
+          }
+        : null,
       approvalGateId: approval?.approvalGateId ?? null
     },
     payloadType: "official_openclaw_read_only_worker_dispatch",
@@ -1045,6 +1080,15 @@ export async function runOfficialOpenClawReadOnlyObservation({
     browserProfile: config.browserProfile,
     skillKey: config.skillKey,
     targetUrl: requestedUrl,
+    approvedDocumentCandidate: approvedDocumentCandidate
+      ? {
+          candidateId: approvedDocumentCandidate.candidateId,
+          type: approvedDocumentCandidate.type,
+          label: approvedDocumentCandidate.label,
+          url: approvedDocumentCandidate.url,
+          source: approvedDocumentCandidate.source
+        }
+      : null,
     multiPage,
     maxPages,
     approvalGateId: approval?.approvalGateId ?? null,
@@ -1251,6 +1295,28 @@ export async function runOfficialOpenClawReadOnlyObservation({
     navigationPlan,
     pageBlockers
   });
+  if (documentObservation) {
+    discoveryReport.approvedDocumentCandidate = {
+      candidateId: approvedDocumentCandidate.candidateId,
+      type: approvedDocumentCandidate.type,
+      label: approvedDocumentCandidate.label,
+      url: approvedDocumentCandidate.url,
+      source: approvedDocumentCandidate.source
+    };
+    discoveryReport.documentObservationPolicy = {
+      status: "approved_single_candidate_observation",
+      broadDocumentCrawlAttempted: false,
+      rawDocumentDumpAllowed: false,
+      approvedCandidateOnly: true
+    };
+    actionsTaken.push("openclaw_approved_document_candidate_observation");
+    await insertAction(store, browserRun.id, {
+      actionType: "openclaw_approved_document_candidate_observation",
+      targetUrl: page.url,
+      description: "Observed exactly one approved read-only document candidate; no broad document crawl or raw document dump was performed.",
+      status: "completed"
+    });
+  }
   for (const actionType of discoveryReport.actionsTaken) {
     actionsTaken.push(actionType);
     await insertAction(store, browserRun.id, {
@@ -1304,6 +1370,15 @@ export async function runOfficialOpenClawReadOnlyObservation({
     navigationPlan,
     pageBlockers,
     discoveryReport,
+    approvedDocumentCandidate: approvedDocumentCandidate
+      ? {
+          candidateId: approvedDocumentCandidate.candidateId,
+          type: approvedDocumentCandidate.type,
+          label: approvedDocumentCandidate.label,
+          url: approvedDocumentCandidate.url,
+          source: approvedDocumentCandidate.source
+        }
+      : null,
     profile: config.profile,
     browserProfile: config.browserProfile,
     skillKey: config.skillKey,
@@ -1344,6 +1419,15 @@ export async function runOfficialOpenClawReadOnlyObservation({
       navigationPlan,
       pageBlockers,
       discoveryReport,
+      approvedDocumentCandidate: approvedDocumentCandidate
+        ? {
+            candidateId: approvedDocumentCandidate.candidateId,
+            type: approvedDocumentCandidate.type,
+            label: approvedDocumentCandidate.label,
+            url: approvedDocumentCandidate.url,
+            source: approvedDocumentCandidate.source
+          }
+        : null,
       pageObservations: pageObservations.map((item) => ({
         pageLabel: item.pageLabel,
         title: item.page.title,

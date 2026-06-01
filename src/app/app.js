@@ -43,6 +43,7 @@ let runtimeStreamSessionId = null;
 let productSignedIn = false;
 
 const MVP_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
+const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
 
 function value(id) {
   return document.querySelector(`#${id}`).value.trim();
@@ -538,6 +539,8 @@ function renderChatProof(result) {
         <dd>${escapeHtml(evidence.status ?? "not requested")} · actions ${escapeHtml((evidence.actionsTaken ?? []).join(", ") || "none")}</dd>
         <dt>Discovery</dt>
         <dd>${escapeHtml(discoverySummary(discovery))}</dd>
+        <dt>Document candidates</dt>
+        <dd>${escapeHtml((discovery.documentDiscovery?.candidates ?? []).length)} selectable/blocked item(s)</dd>
         <dt>Sources</dt>
         <dd>${escapeHtml(sourcePointers.map(sourcePointerLabel).join(" · ") || "none")}</dd>
         <dt>Product memory</dt>
@@ -555,6 +558,7 @@ function renderChatProof(result) {
             </div>`
           : ""
       }
+      ${renderDocumentCandidateProof(result)}
     `,
     { open: !hasCapturedPortalEvidence(state) }
   );
@@ -631,6 +635,50 @@ function discoverySummary(report = {}) {
   const docs = report.documentDiscovery ?? {};
   const sections = report.portalSections?.tried?.length ? ` · sections ${report.portalSections.tried.join(", ")}` : "";
   return `search ${search} · documents ${docs.candidateCount ?? 0} · SBC/PDF ${docs.sbcPdfCandidateCount ?? 0}${sections}`;
+}
+
+function documentCandidatesFromResult(result = latestChatRun) {
+  const report = result?.graphRun?.state?.evidence_observation?.discoveryReport ?? {};
+  return report.documentDiscovery?.candidates ?? [];
+}
+
+function renderDocumentCandidateProof(result = latestChatRun) {
+  const candidates = documentCandidatesFromResult(result);
+  if (!candidates.length) return '<p class="eyebrow">No selectable document candidates in this run.</p>';
+  return `
+    <div class="candidate-grid">
+      ${candidates
+        .map((candidate) => {
+          const id = candidate.candidateId ?? "";
+          const blocked = !candidate.readOnlyOpenAllowed;
+          return `
+            <article class="candidate-card ${blocked ? "blocked" : ""}">
+              <div>
+                <strong>${escapeHtml(candidate.label ?? candidate.type ?? "Document candidate")}</strong>
+                <span>${escapeHtml(blocked ? `blocked: ${candidate.blockedReason ?? "policy"}` : "read-only candidate")}</span>
+              </div>
+              <small>${escapeHtml(candidate.url ?? "no URL")}</small>
+              <dl>
+                <dt>Candidate</dt>
+                <dd>${escapeHtml(id || "not assigned")}</dd>
+                <dt>Type</dt>
+                <dd>${escapeHtml(candidate.type ?? "document")}</dd>
+                <dt>SBC/PDF</dt>
+                <dd>${escapeHtml(candidate.sbcOrPdf ? "yes" : "no")}</dd>
+              </dl>
+              ${
+                blocked
+                  ? '<p class="danger-line">Blocked from approval in this MVP.</p>'
+                  : `<div class="button-row">
+                      <button type="button" data-document-candidate-propose="${escapeHtml(id)}">Prepare Candidate Approval</button>
+                    </div>`
+              }
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function renderWorkerContinuationCard(continuation) {
@@ -732,6 +780,8 @@ function renderWorkerOutcomeCard(result) {
         <dd>${escapeHtml(structuredClaimSummary(result.trace?.claims ?? [], result.trace?.priorAuthorizations ?? []))}</dd>
         <dt>Discovery</dt>
         <dd>${escapeHtml(discoverySummary(discovery))}</dd>
+        <dt>Approved candidate</dt>
+        <dd>${escapeHtml(evidence.approvedDocumentCandidate?.label ?? "none")}</dd>
         <dt>Pages</dt>
         <dd>${escapeHtml(`${evidence.verifiedPageCount ?? 0}/${evidence.pageCount ?? 0} verified${evidence.blockedPageCount ? ` · ${evidence.blockedPageCount} blocked` : ""}`)}</dd>
         <dt>Navigation plan</dt>
@@ -741,6 +791,7 @@ function renderWorkerOutcomeCard(result) {
         <dt>Blocker</dt>
         <dd>${escapeHtml(sourcePointers.length ? "none" : reason)}</dd>
       </dl>
+      ${renderDocumentCandidateProof(result)}
     `,
     { open: sourcePointers.length === 0 }
   );
@@ -1645,7 +1696,10 @@ async function runProductChat(message, options = {}) {
     useLiveModel: document.querySelector("#useLiveModel").checked,
     approvalToken: options.approvalToken,
     approvalTaskId: options.approvalTaskId,
-    workerContinuationId: options.workerContinuationId
+    workerContinuationId: options.workerContinuationId,
+    approvalScope: options.approvalScope,
+    allowedAction: options.allowedAction,
+    approvedDocumentCandidateId: options.approvedDocumentCandidateId
   };
   const result = await api("/api/chat", {
     method: "POST",
@@ -1739,6 +1793,115 @@ async function createAsyncWorkerFollowup(taskId) {
   if (payload.trace) renderReview(payload.trace);
   trace.textContent = JSON.stringify(payload, null, 2);
   return payload;
+}
+
+async function proposeDocumentCandidate(candidateId) {
+  if (!latestChatRun) throw new Error("Run a workflow with Discovery first.");
+  const payload = await api("/api/document-candidates/propose", {
+    method: "POST",
+    body: JSON.stringify({
+      userId: latestChatRun.user.id,
+      sessionId: latestChatRun.session.id,
+      workflow: latestChatRun.graphRun?.state?.workflow ?? "eligibility_benefits_navigation",
+      candidateId,
+      portalUrl: value("portalUrl"),
+      expiresInMinutes: 15
+    })
+  });
+  addMessage(
+    "assistant",
+    `
+      <article class="chat-proof-card">
+        <h3>Document Candidate Approval Prepared</h3>
+        <dl>
+          <dt>Task</dt>
+          <dd>${escapeHtml(payload.task.id)}</dd>
+          <dt>Candidate</dt>
+          <dd>${escapeHtml(payload.candidate.label)} · ${escapeHtml(payload.candidate.candidateId)}</dd>
+          <dt>Scope</dt>
+          <dd>${escapeHtml(payload.proposal.approvalScope)} · ${escapeHtml(payload.proposal.allowedAction)}</dd>
+          <dt>Actions taken</dt>
+          <dd>none</dd>
+        </dl>
+        <div class="button-row">
+          <button type="button" data-document-candidate-observe="${escapeHtml(payload.task.id)}" data-document-candidate-id="${escapeHtml(candidateId)}">Approve + Observe Candidate</button>
+        </div>
+      </article>
+    `,
+    { html: true }
+  );
+  await loadRuntimeEventsForSession(latestChatRun.session.id);
+  if (payload.trace) renderReview(payload.trace);
+  trace.textContent = JSON.stringify(payload, null, 2);
+  return payload;
+}
+
+async function approveAndObserveDocumentCandidate(taskId, candidateId) {
+  if (!latestChatRun) throw new Error("Run a workflow first.");
+  useOfficialOpenClawWorker.checked = true;
+  const continuation = await api("/api/worker-continuations", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId,
+      sessionId: latestChatRun.session.id,
+      userId: latestChatRun.user.id,
+      correlationId: latestChatRun.graphRun?.state?.graph_trace_id ?? latestChatRun.session.langgraph_thread_id,
+      approvalScope: READ_ONLY_DOCUMENT_SCOPE,
+      allowedAction: READ_ONLY_DOCUMENT_SCOPE,
+      reason: "Observe exactly one approved read-only document candidate.",
+      reportEverySeconds: 30,
+      metadata: {
+        source: "operator_document_candidate_button",
+        candidateId,
+        workflow: latestChatRun.graphRun?.state?.workflow ?? null
+      }
+    })
+  });
+  const approval = await api("/api/orchestrator/approve", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId,
+      sessionId: latestChatRun.session.id,
+      userId: latestChatRun.user.id,
+      approvalScope: READ_ONLY_DOCUMENT_SCOPE,
+      allowedAction: READ_ONLY_DOCUMENT_SCOPE,
+      expiresInMinutes: 15
+    })
+  });
+  addMessage(
+    "assistant",
+    `
+      <article class="chat-proof-card">
+        <h3>Document Candidate Approval Recorded</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(approval.status)}</dd>
+          <dt>Task</dt>
+          <dd>${escapeHtml(taskId)}</dd>
+          <dt>Continuation</dt>
+          <dd>${escapeHtml(continuation.continuation?.id ?? "not scheduled")}</dd>
+          <dt>Allowed action</dt>
+          <dd>${escapeHtml(approval.approval?.allowedAction ?? READ_ONLY_DOCUMENT_SCOPE)}</dd>
+          <dt>Actions taken</dt>
+          <dd>${escapeHtml((approval.approval?.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+      </article>
+    `,
+    { html: true }
+  );
+  return runProductChat(latestUserMessage || value("message") || MVP_BENEFITS_MESSAGE, {
+    approvalToken: approval.approvalToken,
+    approvalTaskId: taskId,
+    workerContinuationId: continuation.continuation?.id,
+    approvalScope: READ_ONLY_DOCUMENT_SCOPE,
+    allowedAction: READ_ONLY_DOCUMENT_SCOPE,
+    approvedDocumentCandidateId: candidateId,
+    executeEvidenceObservation: true,
+    requireLivePortalProof: true,
+    useOfficialOpenClawWorker: true,
+    officialOpenClawUseCurrentTab: false,
+    officialOpenClawMultiPage: false
+  });
 }
 
 async function continueAsyncWorkerFollowup(continuationId) {
@@ -2172,6 +2335,35 @@ messages.addEventListener("click", async (event) => {
     await createAsyncWorkerFollowup(taskId);
   } catch (error) {
     addMessage("assistant", `Async follow-up error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const candidateId = event.target?.dataset?.documentCandidatePropose;
+  if (!candidateId) return;
+  const restore = setBusy(event.target, "Preparing...");
+  try {
+    await proposeDocumentCandidate(candidateId);
+  } catch (error) {
+    addMessage("assistant", `Document candidate proposal error: ${error.message}`);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+messages.addEventListener("click", async (event) => {
+  const taskId = event.target?.dataset?.documentCandidateObserve;
+  const candidateId = event.target?.dataset?.documentCandidateId;
+  if (!taskId || !candidateId) return;
+  const restore = setBusy(event.target, "Observing...");
+  try {
+    await approveAndObserveDocumentCandidate(taskId, candidateId);
+  } catch (error) {
+    addMessage("assistant", `Document observation error: ${error.message}`);
     trace.textContent = error.stack ?? error.message;
   } finally {
     restore();

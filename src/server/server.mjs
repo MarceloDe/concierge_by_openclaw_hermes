@@ -20,6 +20,13 @@ import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisod
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import { classifyOfficialOpenClawLiveReadiness } from "../concierge/openclawLiveReadiness.mjs";
 import {
+  READ_ONLY_DOCUMENT_ALLOWED_ACTION,
+  READ_ONLY_DOCUMENT_APPROVAL_SCOPE,
+  createDocumentCandidateProposal,
+  latestDocumentDiscovery,
+  listDocumentCandidateProposals
+} from "../concierge/documentCandidateApproval.mjs";
+import {
   createRuntimeHookSubscription,
   listRuntimeEvents,
   listRuntimeHookSubscriptions,
@@ -146,6 +153,73 @@ async function handleApi(req, res, url) {
         status: url.searchParams.get("status") ?? null,
         limit: Number(url.searchParams.get("limit") ?? 20)
       })
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/document-candidates") {
+    const sessionId = url.searchParams.get("sessionId") ?? null;
+    const userId = url.searchParams.get("userId") ?? null;
+    const portalUrl = url.searchParams.get("portalUrl") ?? null;
+    if (!sessionId) {
+      sendJson(res, 400, { ok: false, error: "sessionId is required." });
+      return;
+    }
+    const [discovery, proposals] = await Promise.all([
+      latestDocumentDiscovery(store, { sessionId, portalUrl }),
+      listDocumentCandidateProposals(store, { sessionId, userId, limit: 50 })
+    ]);
+    const proposalsByCandidate = new Map(
+      proposals
+        .filter((item) => item.candidate?.candidateId)
+        .map((item) => [item.candidate.candidateId, item])
+    );
+    sendJson(res, 200, {
+      ...discovery,
+      proposals,
+      candidates: discovery.candidates.map((candidate) => ({
+        ...candidate,
+        proposal: proposalsByCandidate.get(candidate.candidateId) ?? null
+      }))
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/document-candidates/propose") {
+    const body = await readJson(req);
+    const proposal = await createDocumentCandidateProposal(store, {
+      userId: body.userId,
+      sessionId: body.sessionId,
+      workflow: body.workflow,
+      candidateId: body.candidateId,
+      portalUrl: body.portalUrl,
+      expiresInMinutes: Number(body.expiresInMinutes ?? 15)
+    });
+    if (!proposal.ok) {
+      sendJson(res, 400, proposal);
+      return;
+    }
+    await publishRuntimeEvent(store, {
+      userId: body.userId,
+      sessionId: body.sessionId,
+      source: "document_candidate_approval",
+      eventType: "approval.requested",
+      correlationId: proposal.task.id,
+      payload: {
+        status: proposal.status,
+        taskId: proposal.task.id,
+        workflow: proposal.task.workflow_key,
+        approvalScope: READ_ONLY_DOCUMENT_APPROVAL_SCOPE,
+        allowedAction: READ_ONLY_DOCUMENT_ALLOWED_ACTION,
+        candidateId: proposal.candidate.candidateId,
+        candidateUrl: proposal.candidate.url,
+        candidateLabel: proposal.candidate.label,
+        actionsTaken: []
+      }
+    });
+    sendJson(res, 200, {
+      ...proposal,
+      trace: await traceForSession(store, body.sessionId)
     });
     return;
   }

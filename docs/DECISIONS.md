@@ -1073,3 +1073,98 @@ The MVP needs both kinds of proof: deterministic regression tests that run clean
 
 Cost of changing later:
 Low. The fixtures can be extended as new live captures reveal new page shapes, while live tests remain the authority for real portal behavior.
+
+## 2026-06-01 - Gate Document Access By One Candidate Before Any Broad Document Extraction
+
+Context:
+The live OpenClaw discovery path can now find official document, ID card, plan document, EOB, SBC/PDF, and mixed document/form candidates from authenticated portal pages. The user asked to finish the original MVP before a backend architecture pivot and specifically requested a candidate-specific approval gate before approved document observation.
+
+Options considered:
+- Allow the existing read-only portal approval to cover all document/PDF surfaces discovered by the worker.
+- Add a new document table and document-ingestion subsystem immediately.
+- Reuse existing `agent_tasks.metadata_json` and `approval_gates.details` to bind one discovered candidate to one approval and one official OpenClaw observation.
+
+Decision:
+Use a narrower `read_only_document_observation` scope and a new task type, `openclaw_document_candidate_proposal`, stored in existing task/audit storage. A candidate must be discovered first, receive a stable ID derived from URL/type/label/source, pass read-only/offsite/mixed-form/submission blocking checks, and then be approved as a single candidate before LangGraph dispatches official OpenClaw to that candidate URL.
+
+Reason:
+The MVP needs to prove user value without granting broad document access or starting a large document-ingestion subsystem too early. This preserves the architecture rule: LangGraph owns workflow, approval, verification, source pointers, memory, and final answer; OpenClaw observes the exact approved candidate as the adaptive worker.
+
+Cost of changing later:
+Low to medium. A later phase can add full PDF text extraction and document-specific structured parsing behind the same candidate approval contract. If production requires richer document state, a dedicated document table can be added with a migration from the existing task metadata/source pointers.
+
+## 2026-06-01 - Treat Live Portal Unavailability As A First-Class MVP Outcome
+
+Context:
+Phase 8W reached the live proof gate, but Aetna was unavailable and the dedicated project OpenClaw profile had no authenticated member portal tab. The current implementation failed closed correctly, but the default response wording still sounded like a proposal-only run rather than an approved worker attempt that was blocked by external portal/auth state.
+
+Options considered:
+- Wait for Aetna and leave the current response wording unchanged.
+- Treat the blocked run as a failure and move immediately to the Wefella/FastAPI backend pivot.
+- Keep the original MVP order, record the external blocker, and harden the user-facing blocked result before retrying live evidence.
+
+Decision:
+Keep the original MVP order. `blocked_no_authenticated_evidence` is now a first-class user-facing result: it explains that LangGraph routed the workflow, the approved read-only evidence step could not access authenticated portal evidence, the worker stayed inside the approved scope, and no source pointers or document candidates were created.
+
+Reason:
+An unavailable payer portal is a normal real-world outcome. The MVP must show the user and operator exactly what happened without fabricating evidence or hiding behind generic proposal language. This also supports the later FastAPI facade because task status and SSE streams need clear terminal states such as sourced result, partial result, and external portal block.
+
+Cost of changing later:
+Low. The blocked-result wording can later be surfaced through a FastAPI/SSE task status contract, but the current Node/LangGraph runtime remains the source of truth until the original MVP proof completes.
+
+## 2026-06-01 - Add FastAPI As A Facade, Not A Runtime Rewrite
+
+Context:
+The Wefella support document defines a future FastAPI public backend with JWT, CORS, task status, SSE, source grounding, and audit. The original MVP runtime already has working Node/LangGraph/OpenClaw/Zep Graphiti behavior and has passed local gates plus fail-closed live portal blocker proof. The user accepted the external portal blocker and asked to proceed to the next phase.
+
+Options considered:
+- Rewrite the product runtime in FastAPI immediately.
+- Defer all Wefella alignment until the original live Aetna flow is available again.
+- Add FastAPI as a public facade that delegates to the existing Node/LangGraph/OpenClaw service.
+
+Decision:
+Phase 9A adds a small FastAPI facade under `project/api/`. It exposes health, protected chat submission, task status, and SSE-style task streaming, but it delegates the actual healthcare orchestration to the existing Node `/api/chat` runtime. Node/LangGraph/OpenClaw/Zep Graphiti remains the source of truth until parity tests justify deeper migration.
+
+Reason:
+This captures the Wefella API shape without destroying the proven runtime. It also gives the next MVP phase a production-facing contract for auth, CORS, async status, and streaming while preserving the real approval-gated OpenClaw path and local proof dashboards.
+
+Cost of changing later:
+Medium. The facade can later gain persistent task storage, provider-backed JWT, deployed hosting, and write-once audit. A Python orchestration migration should only happen after facade-vs-Node parity tests prove equivalent behavior.
+
+## 2026-06-01 - Prove FastAPI From The MVP UI Before Making It The Only Entrypoint
+
+Context:
+The Wefella guide says FastAPI should become the only public frontend entrypoint, but the current product runtime still has many Node-only proof surfaces: local auth-start, approval, worker continuations, OpenClaw readiness, document candidates, runtime events, and the operator dashboard. Moving every endpoint at once would create a broad migration risk.
+
+Options considered:
+- Switch `/mvp` completely to FastAPI in one step.
+- Keep FastAPI as a backend-only experiment with no user-facing proof.
+- Add a visible `/mvp` backend route selector and route chat through FastAPI first.
+
+Decision:
+Phase 9B routes the user-facing chat loop through FastAPI when selected, including local MVP token minting, `POST /api/chat`, task streaming, and status fallback. The direct Node route remains selectable. Approval and worker surfaces stay on Node until Phase 9C adds FastAPI proxies for them.
+
+Reason:
+The guide's most important production correction is the task-id plus stream/status loop. Proving that loop from the actual MVP screen gives value immediately and reduces the risk of a hidden second runtime. Keeping the route selector preserves direct parity testing while the facade grows.
+
+Cost of changing later:
+Low. Once the remaining Node-only MVP endpoints are proxied through FastAPI, the selector can default to FastAPI or the Node option can become operator-only.
+
+## 2026-06-01 - Proxy MVP Actions Through FastAPI Before Defaulting To It
+
+Context:
+Phase 9B proved chat-through-FastAPI from `/mvp`, but approval, worker continuations, document candidates, OpenClaw readiness, and runtime event proof still reached Node directly. The Wefella guide requires FastAPI to become the only public frontend entrypoint, but the direct Node route is still valuable for parity and debugging.
+
+Options considered:
+- Immediately remove Node-direct calls from `/mvp`.
+- Leave non-chat MVP actions on Node and call the facade "complete enough."
+- Add protected FastAPI proxies for every remaining `/mvp` action, with user binding, while keeping Node-direct as a selectable parity path.
+
+Decision:
+Phase 9C adds protected FastAPI proxies for approval, worker continuation, document candidate, OpenClaw readiness, and runtime event endpoints. `/mvp` uses those proxies when Wefella mode is selected. The facade injects the JWT subject as `userId` and rejects mismatched user ids. The direct Node route remains selectable.
+
+Reason:
+This is the safest bridge to the Wefella architecture: the frontend can now behave like FastAPI is the public API, but the mature Node/LangGraph/OpenClaw runtime still performs the real orchestration. Keeping the Node route lets future phases do side-by-side parity checks before defaulting to FastAPI.
+
+Cost of changing later:
+Low. Phase 9D can switch the default route to FastAPI and add formal parity comparison without changing the underlying orchestration contracts.

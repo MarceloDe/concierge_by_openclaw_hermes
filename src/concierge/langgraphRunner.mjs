@@ -5,6 +5,11 @@ import { consumeReadOnlyObservationApproval } from "./approvalResume.mjs";
 import { persistClaimedChromeSnapshot, runPortalExtraction } from "./browserAutomation.mjs";
 import { classifyIntent } from "./classifier.mjs";
 import { createId, nowIso } from "./database.mjs";
+import {
+  READ_ONLY_DOCUMENT_ALLOWED_ACTION,
+  READ_ONLY_DOCUMENT_APPROVAL_SCOPE,
+  approvalMetadataForDocumentCandidateTask
+} from "./documentCandidateApproval.mjs";
 import { buildContextPacket, retainMemoryFromSession } from "./memoryHarness.mjs";
 import { composeResponse } from "./outputPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
@@ -323,10 +328,19 @@ function shouldObserveEvidence(state) {
       raw.executeEvidenceObservation === true ||
       raw.useOfficialOpenClawWorker === true ||
       raw.workerContinuationId ||
+      raw.documentCandidateId ||
+      raw.approvedDocumentCandidateId ||
       raw.browserSnapshot ||
       raw.remoteDebuggerUrl ||
       raw.portalPageSnapshots?.length
   );
+}
+
+async function documentCandidateFromApprovalTask(store, taskId) {
+  if (!store || !taskId) return null;
+  const task = await store.findOne("agent_tasks", { id: taskId });
+  if (!task) return null;
+  return approvalMetadataForDocumentCandidateTask(task).candidate ?? null;
 }
 
 function requireLivePortalProof(state) {
@@ -749,9 +763,63 @@ async function evidenceObservationNode(state) {
     };
   }
 
+  const approvalTaskId = state.raw_message?.approvalTaskId ?? state.raw_message?.taskId;
+  const requestedDocumentCandidateId = state.raw_message?.approvedDocumentCandidateId ?? state.raw_message?.documentCandidateId ?? null;
+  const approvedDocumentCandidate = requestedDocumentCandidateId ? await documentCandidateFromApprovalTask(store, approvalTaskId) : null;
+  const documentObservationRequested = Boolean(requestedDocumentCandidateId || approvedDocumentCandidate);
+  const approvalScope = documentObservationRequested ? READ_ONLY_DOCUMENT_APPROVAL_SCOPE : "read_only_observation";
+  const allowedAction = documentObservationRequested ? READ_ONLY_DOCUMENT_ALLOWED_ACTION : "read_only_observation";
+  if (requestedDocumentCandidateId && approvedDocumentCandidate?.candidateId !== requestedDocumentCandidateId) {
+    const reason = "Approved document candidate does not match the approval task binding.";
+    await audit(store, session.id, "document_candidate_observation_blocked", {
+      status: "document_candidate_binding_mismatch",
+      reason,
+      taskId: approvalTaskId,
+      requestedDocumentCandidateId,
+      boundDocumentCandidateId: approvedDocumentCandidate?.candidateId ?? null,
+      actionsTaken: []
+    });
+    return {
+      evidence_observation: {
+        status: "document_candidate_binding_mismatch",
+        reason,
+        actionsTaken: [],
+        sourcePointers: []
+      },
+      source_pointers: [],
+      proof: appendProof(state, "evidence_observation", {
+        status: "document_candidate_binding_mismatch",
+        actionsTaken: []
+      })
+    };
+  }
+  if (documentObservationRequested && state.raw_message?.useOfficialOpenClawWorker !== true) {
+    const reason = "Approved document candidate observation requires the dedicated official OpenClaw worker.";
+    await audit(store, session.id, "document_candidate_observation_blocked", {
+      status: "document_candidate_requires_official_openclaw",
+      reason,
+      taskId: approvalTaskId,
+      requestedDocumentCandidateId,
+      actionsTaken: []
+    });
+    return {
+      evidence_observation: {
+        status: "document_candidate_requires_official_openclaw",
+        reason,
+        actionsTaken: [],
+        sourcePointers: []
+      },
+      source_pointers: [],
+      proof: appendProof(state, "evidence_observation", {
+        status: "document_candidate_requires_official_openclaw",
+        actionsTaken: []
+      })
+    };
+  }
+
   let workerContinuationValidation = null;
   if (state.raw_message?.workerContinuationId) {
-    const taskId = state.raw_message?.approvalTaskId ?? state.raw_message?.taskId;
+    const taskId = approvalTaskId;
     if (state.raw_message?.useOfficialOpenClawWorker !== true) {
       const reason = "Worker continuation dispatch requires the dedicated official OpenClaw read-only worker.";
       await publishGraphRuntimeEvent(store, state, {
@@ -841,10 +909,14 @@ async function evidenceObservationNode(state) {
 
   const approvalResume = await consumeReadOnlyObservationApproval(store, {
     approvalToken: state.raw_message?.approvalToken,
-    taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId,
+    taskId: approvalTaskId,
     sessionId: state.session_id,
     userId: state.user_id,
-    workflow: state.workflow
+    workflow: state.workflow,
+    approvalScope,
+    allowedAction,
+    candidateId: approvedDocumentCandidate?.candidateId ?? null,
+    candidateUrl: approvedDocumentCandidate?.url ?? null
   });
   if (!approvalResume.ok) {
     await publishGraphRuntimeEvent(store, state, {
@@ -890,8 +962,12 @@ async function evidenceObservationNode(state) {
     payload: {
       status: approvalResume.status,
       workflow: state.workflow,
-      taskId: state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+      taskId: approvalTaskId ?? null,
       approvalGateId: approvalResume.approvalGateId ?? null,
+      approvalScope,
+      allowedAction,
+      candidateId: approvedDocumentCandidate?.candidateId ?? null,
+      candidateUrl: approvedDocumentCandidate?.url ?? null,
       actionsTaken: approvalResume.actionsTaken ?? []
     }
   });
@@ -969,11 +1045,16 @@ async function evidenceObservationNode(state) {
       store,
       session,
       portal,
-      targetUrl: state.raw_message?.officialOpenClawTargetUrl ?? state.raw_message?.portalUrl ?? portal.portal_url,
+      targetUrl: approvedDocumentCandidate?.url ?? state.raw_message?.officialOpenClawTargetUrl ?? state.raw_message?.portalUrl ?? portal.portal_url,
       approval: approvalResume,
-      useCurrentTab: Boolean(state.raw_message?.officialOpenClawUseCurrentTab || process.env.BRAINSTY_OPENCLAW_USE_CURRENT_TAB === "1"),
-      multiPage: Boolean(state.raw_message?.officialOpenClawMultiPage || process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1"),
-      maxPages: Number(state.raw_message?.officialOpenClawMaxPages ?? process.env.BRAINSTY_OPENCLAW_MAX_PAGES ?? 4)
+      approvedDocumentCandidate,
+      useCurrentTab: documentObservationRequested
+        ? false
+        : Boolean(state.raw_message?.officialOpenClawUseCurrentTab || process.env.BRAINSTY_OPENCLAW_USE_CURRENT_TAB === "1"),
+      multiPage: documentObservationRequested
+        ? false
+        : Boolean(state.raw_message?.officialOpenClawMultiPage || process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1"),
+      maxPages: documentObservationRequested ? 1 : Number(state.raw_message?.officialOpenClawMaxPages ?? process.env.BRAINSTY_OPENCLAW_MAX_PAGES ?? 4)
     });
     const actionsTaken = browserResult.actionsTaken ?? [];
     const discoveryReport = browserResult.officialOpenClaw?.discoveryReport ?? null;
@@ -1189,7 +1270,7 @@ async function evidenceObservationNode(state) {
         })
       });
     }
-    const eligibility = await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
+    const eligibility = documentObservationRequested ? null : await persistEligibilitySnapshot(store, { user, session, portal, browserResult });
     const sourcePointers = sourcePointersFromObservation({ browserResult, eligibility });
     const structuredBenefits = structuredBenefitRowsFromEligibility(eligibility);
     const structuredClaims = structuredClaimRowsFromEligibility(eligibility);
@@ -1211,13 +1292,14 @@ async function evidenceObservationNode(state) {
     const completedActions = [
       ...actionsTaken,
       "verify_authenticated_member_portal",
-      "record_verified_source_pointer",
-      "persist_eligibility_snapshot",
+      documentObservationRequested ? "record_verified_document_source_pointer" : "record_verified_source_pointer",
+      ...(documentObservationRequested ? [] : ["persist_eligibility_snapshot"]),
       ...(browserResult.pages?.length > 1 ? ["verify_multi_page_read_only_navigation"] : [])
     ];
     const terminalOutcome = blockedPageVerifications.length ? "partial_result_with_blockers" : "completed_with_sourced_result";
-    const observationStatus =
-      browserResult.pages?.length > 1
+    const observationStatus = documentObservationRequested
+      ? "captured_official_openclaw_document_read_only_observation"
+      : browserResult.pages?.length > 1
         ? "captured_official_openclaw_multi_page_read_only_observation"
         : "captured_official_openclaw_read_only_observation";
     const finalizedContinuation = await finalizeContinuation({
@@ -1257,6 +1339,7 @@ async function evidenceObservationNode(state) {
         portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
         documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
         sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
+        approvedDocumentCandidate,
         portalSectionsTried: discoveryReport?.portalSections?.tried ?? [],
         actionsTaken: completedActions
       }
@@ -1281,6 +1364,7 @@ async function evidenceObservationNode(state) {
         blockedPageCount: blockedPageVerifications.length,
         navigationPlan: browserResult.officialOpenClaw?.navigationPlan ?? null,
         discoveryReport,
+        approvedDocumentCandidate,
         pageBlockers: [
           ...(browserResult.officialOpenClaw?.pageBlockers ?? []),
           ...blockedPageVerifications.map((item) => ({
@@ -1309,6 +1393,7 @@ async function evidenceObservationNode(state) {
         portalSearchStatus: discoveryReport?.portalSearch?.status ?? null,
         documentCandidateCount: discoveryReport?.documentDiscovery?.candidateCount ?? 0,
         sbcPdfCandidateCount: discoveryReport?.documentDiscovery?.sbcPdfCandidateCount ?? 0,
+        approvedDocumentCandidate,
         actionsTaken: completedActions
       })
     };
@@ -1691,8 +1776,29 @@ async function evidenceObservationNode(state) {
 export const SOURCE_POINTER_RESPONSE_STATUSES = new Set([
   "captured_visible_page",
   "captured_official_openclaw_read_only_observation",
-  "captured_official_openclaw_multi_page_read_only_observation"
+  "captured_official_openclaw_multi_page_read_only_observation",
+  "captured_official_openclaw_document_read_only_observation"
 ]);
+
+function composeBlockedEvidenceResponse(state, routeSummary) {
+  const reason = state.evidence_observation?.reason ?? "The approved read-only worker could not access authenticated portal evidence.";
+  const actionsTaken = state.evidence_observation?.actionsTaken ?? [];
+  const actionLine = actionsTaken.length
+    ? `Worker actions attempted inside the approved read-only scope: ${actionsTaken.join(", ")}.`
+    : "Worker actions attempted inside the approved read-only scope: none.";
+  const approvalLine = state.approval_resume?.status
+    ? `Approval state: ${state.approval_resume.status}.`
+    : "Approval state: no approval was consumed.";
+  return [
+    `LangGraph routed this request to ${state.workflow}, but the live insurance portal evidence step is blocked right now.`,
+    `Routing evidence: ${routeSummary}`,
+    `Blocker: ${reason}`,
+    approvalLine,
+    actionLine,
+    "No source pointers, eligibility snapshots, document candidates, payer contact, external messages, credential entry, medical advice, form submissions, or account changes were created.",
+    "Next step: when the insurer portal is available again, sign in manually in the dedicated OpenClaw browser profile and rerun the same read-only approval."
+  ].join("\n\n");
+}
 
 async function composeResponseNode(state) {
   if (state.final_response) {
@@ -1702,6 +1808,22 @@ async function composeResponseNode(state) {
   }
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
+  const routeSummary = summarizeRoute(state.workflow_route);
+  if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
+    const finalResponse = composeBlockedEvidenceResponse(state, routeSummary);
+    return {
+      final_response: finalResponse,
+      should_remember: false,
+      memory_summary: `LangGraph blocked ${state.workflow} for session ${state.session_id}: ${state.evidence_observation.reason}`,
+      memory_type: "workflow_blocker_event",
+      workflow_outcome: "portal_evidence_blocked",
+      proof: appendProof(state, "response_policy", {
+        finalResponsePrepared: true,
+        blockedReason: state.evidence_observation.reason,
+        sourcePointerCount: 0
+      })
+    };
+  }
   if (
     SOURCE_POINTER_RESPONSE_STATUSES.has(state.evidence_observation?.status) &&
     user &&
@@ -1750,7 +1872,6 @@ async function composeResponseNode(state) {
       })
     };
   }
-  const routeSummary = summarizeRoute(state.workflow_route);
   const evidenceLine =
     state.evidence_observation?.status === "blocked_no_authenticated_evidence"
       ? `Evidence observation stayed inside LangGraph but did not create healthcare evidence: ${state.evidence_observation.reason}`

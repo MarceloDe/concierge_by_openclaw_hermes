@@ -587,12 +587,29 @@ Phase 8T narrow document candidate approval is acceptable when:
 - Denied, expired, missing, or mismatched approvals create no worker action.
 - Mixed form, submission, offsite, and irreversible document paths remain blocked unless separately approved for a future action-specific scope.
 
-Phase 8U read-only PDF/document ingestion is acceptable when:
+Phase 8T proof status:
+
+- Complete locally as of 2026-06-01.
+- Discovery candidates have stable `candidateId` values.
+- Candidate proposals are stored in `agent_tasks` with `task_type=openclaw_document_candidate_proposal`.
+- `read_only_document_observation` approval gates bind task, session, user, workflow, candidate ID, candidate URL, allowed action, and expiration.
+- Blocked/offsite/mixed-form/submission candidates are rejected before approval.
+- Focused candidate approval and continuation tests pass.
+
+Phase 8U approved read-only document observation is acceptable when:
 
 - It only runs after a Phase 8T candidate-specific approval.
-- The system stores document title/type, URL or source location, timestamp, hashes, extraction provenance, and source pointers.
-- OCR/vision fallback is available for rendered or scanned pages.
+- OpenClaw receives an envelope restricted to the approved candidate URL/source.
+- The system stores document title/type, URL or source location, timestamp, hashes, extraction provenance, screenshot/OCR proof, and source pointers.
+- DOM/accessibility plus OCR/vision fallback are available for rendered or scanned pages.
 - User-facing answers cite document source pointers and do not dump raw document text.
+- No broad document crawl, payer contact, external message, form submission, credential entry, medical advice, or account mutation occurs.
+
+Phase 8U proof status:
+
+- Implemented locally as of 2026-06-01 for one approved candidate URL through the official OpenClaw read-only observation path.
+- The graph status `captured_official_openclaw_document_read_only_observation` is treated as source-pointer-backed evidence.
+- Full PDF text extraction and document-specific structured parsing are deferred until live candidate proof identifies the needed official document shape.
 
 Phase 8V MVP polish and operator/user split is acceptable when:
 
@@ -600,6 +617,85 @@ Phase 8V MVP polish and operator/user split is acceptable when:
 - `/` remains available as the proof dashboard.
 - User-facing cards clearly distinguish proposal-only, pending approval, running worker, sourced result, partial result, and blocker states.
 - Retry/resume actions do not bypass LangGraph approval or OpenClaw readiness gates.
+
+Phase 8W full original MVP gate is acceptable when:
+
+- `npm run build` passes.
+- `npm run test:local` passes.
+- `/mvp` and `/` can show the same session, graph trace, proposal task, approval state, worker continuation, source pointers, audit events, and memory status.
+- Benefits question -> approval -> official OpenClaw read-only observation -> source pointers -> Discovery candidates -> one candidate approval -> one approved document observation -> sourced answer -> Graphiti retain completes when the authenticated portal is available.
+- If the insurer portal is unavailable, the run fails closed with `blocked_no_authenticated_evidence` or an equivalent external portal blocker.
+- Portal-unavailable runs must consume only the scoped approval, record the blocker, create no source pointers, create no document candidates, retain no sourced product-memory evidence, and perform no payer contact, credential entry, medical advice, form submission, external message, or account mutation.
+- The user-facing final answer must say the live portal evidence step is blocked and must not say the worker was merely proposal-only or that evidence was captured.
+
+Phase 8W proof status:
+
+- Accepted as an external-blocker proof as of 2026-06-01 after user approval to proceed.
+- Local build/test gate is green.
+- `/mvp` and `/` same-session proof is green.
+- Live Aetna proof is externally blocked because the portal was unavailable/no authenticated OpenClaw tab was present.
+- The external blocker path was exercised with an approved official OpenClaw continuation and finalized safely with zero source pointers.
+
+Phase 9A Wefella FastAPI facade is acceptable when:
+
+- The facade is additive and does not replace the Node/LangGraph/OpenClaw runtime.
+- Public `GET /api/health` reports facade status and Node runtime reachability.
+- Protected `POST /api/chat` requires a bearer token and rejects user/JWT subject mismatches.
+- Accepted chat requests produce a task id and can be checked through `GET /api/chat/status/{task_id}`.
+- `GET /api/chat/stream/{task_id}` emits task events and a terminal result for consumers that want SSE-style updates.
+- The facade delegates to the real Node `/api/chat` runtime, not a mock, when live proof is enabled.
+- The facade has documented environment variables for Node URL, JWT secret, and allowed CORS origins.
+- `npm run build`, `python3 -m compileall -q project`, `npm run test:facade`, and `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` pass with the Node runtime running.
+
+Phase 9A proof status:
+
+- Implemented locally as of 2026-06-01.
+- Live delegation to the current Node runtime passed through the facade test gate.
+- Production-grade auth provider, persisted async task storage, and deployed FastAPI hosting remain future phases.
+
+Phase 9B MVP facade route is acceptable when:
+
+- `/mvp` offers a visible backend route selector for direct Node or Wefella FastAPI facade.
+- The FastAPI local MVP auth endpoint delegates to Node local auth and returns a bearer token bound to the resulting user id.
+- `/mvp` can submit a Benefits question through FastAPI `POST /api/chat`.
+- `/mvp` can consume `GET /api/chat/stream/{task_id}` with bearer auth and fall back to status polling.
+- The facade task result renders in the existing Current Answer, Approval Gate, Sequence, and Runtime proof panels.
+- Task status and stream reads reject a JWT subject that did not create the task.
+- Approval tokens, worker continuation ids, official OpenClaw flags, live portal proof flags, and approved document candidate ids can pass through the facade chat contract.
+- The direct Node path remains available for parity checks.
+
+Phase 9B proof status:
+
+- Implemented locally as of 2026-06-01.
+- Browser proof at `/mvp` passed through the FastAPI facade with no console errors:
+  - local facade auth created session `session_d0d7cb87-0d19-4856-8b27-3e142bc09f2d`,
+  - FastAPI accepted task `task_759cb89f-3289-4082-85c8-092edaffdc1d`,
+  - the stream completed,
+  - the UI rendered the same LangGraph `eligibility_benefits_navigation` proposal and pending approval task.
+- Phase 9C should proxy approval, worker continuation, document candidates, OpenClaw readiness, and runtime event surfaces through FastAPI so the frontend can become FastAPI-only.
+
+Phase 9C FastAPI MVP action proxies are acceptable when:
+
+- FastAPI exposes protected proxy endpoints for local approval, worker continuations, document candidates, OpenClaw official readiness, runtime event snapshots, and runtime event stream.
+- The facade rejects query/body `userId` values that do not match the JWT subject.
+- The facade injects the JWT subject as `userId` when a proxied MVP request omits it.
+- `/mvp` uses FastAPI for those non-chat actions when Wefella mode is selected.
+- `/mvp` still supports the direct Node route for parity checks.
+- Browser proof in Wefella mode shows readiness, runtime events, Benefits task stream, document candidate load, and pending approval with no console errors.
+- `npm run build`, `npm run test:facade`, `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade`, and `npm run test:local` pass.
+
+Phase 9C proof status:
+
+- Implemented locally as of 2026-06-01.
+- Browser proof at `/mvp` passed through the FastAPI facade:
+  - local auth created session `session_42876149-bcee-4045-b8d6-9091f5c6d0c5`,
+  - OpenClaw readiness went through FastAPI and returned `auth_required`,
+  - runtime events stream/snapshot went through FastAPI,
+  - FastAPI accepted chat task `task_e62c8873-bbe8-4d1c-a14d-177af3d2348d`,
+  - document candidate loading went through FastAPI,
+  - UI rendered pending approval task `task_022350c2-e3ac-41a8-819e-050a7a13378c`,
+  - browser console had 0 errors.
+- Screenshot proof: `/tmp/workerprototype_phase9c_facade_mvp.png`.
 
 ## Workflow Architecture Criteria
 

@@ -84,6 +84,11 @@ function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = 
     if (evidenceObservation.status === "captured_official_openclaw_read_only_observation") {
       return "The approved read-only observation was executed by the dedicated official OpenClaw profile with DOM/accessibility and visual OCR checks before LangGraph retained evidence.";
     }
+    if (evidenceObservation.status === "captured_official_openclaw_document_read_only_observation") {
+      const candidate = evidenceObservation.approvedDocumentCandidate;
+      const label = candidate?.label ? ` Approved candidate: ${candidate.label}.` : "";
+      return `The approved read-only document observation was executed by the dedicated official OpenClaw profile against exactly one candidate with DOM/accessibility and visual OCR checks before LangGraph retained the source pointer.${label}`;
+    }
     return "The approved read-only portal observation was verified by LangGraph before evidence was retained.";
   })();
   const pageTitle = browserResult?.page?.title ? `Observed page: ${browserResult.page.title}.` : null;

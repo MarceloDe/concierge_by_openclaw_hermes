@@ -32,6 +32,16 @@ button:hover {
   background: #1f5a4e;
 }
 
+.secondary-button {
+  border-color: #bfd8cb;
+  background: #fff;
+  color: #123b32;
+}
+
+.secondary-button:hover {
+  background: #e8f0ec;
+}
+
 .shell {
   min-height: 100vh;
   display: grid;
@@ -325,6 +335,69 @@ textarea {
   color: #44534b;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.candidate-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.candidate-card {
+  border: 1px solid #d9e4dd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.candidate-card.blocked {
+  border-color: #e0c2bf;
+  background: #fff7f6;
+}
+
+.candidate-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+}
+
+.candidate-card strong,
+.candidate-card span,
+.candidate-card small,
+.candidate-card dd {
+  overflow-wrap: anywhere;
+}
+
+.candidate-card strong {
+  color: #123b32;
+  font-size: 13px;
+}
+
+.candidate-card span,
+.candidate-card small {
+  color: #44534b;
+  font-size: 12px;
+}
+
+.candidate-card dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.candidate-card dt,
+.candidate-card dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.candidate-card dt {
+  font-weight: 700;
+  color: #123b32;
 }
 
 .answer-panel {

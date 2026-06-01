@@ -177,6 +177,46 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
   assert.equal(messages.length, 4);
 });
 
+test("LangGraph runner composes a user-facing blocker when live portal evidence is unavailable", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store);
+  const proposalRun = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Do I still owe anything before insurance starts paying?",
+    rawMessage: { source: "blocked_live_portal_test", useLiveModel: false, executeEvidenceObservation: false }
+  });
+  const approval = await createReadOnlyObservationApproval(store, {
+    taskId: proposalRun.state.openclaw_skill_proposal.task.id,
+    sessionId: session.id,
+    userId: user.id,
+    decision: "approved",
+    expiresInMinutes: 15
+  });
+
+  const result = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Do I still owe anything before insurance starts paying?",
+    rawMessage: {
+      source: "blocked_live_portal_test",
+      useLiveModel: false,
+      approvalToken: approval.approvalToken,
+      approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
+      remoteDebuggerUrl: "http://127.0.0.1:1"
+    }
+  });
+
+  assert.equal(result.state.evidence_observation.status, "blocked_no_authenticated_evidence");
+  assert.deepEqual(result.state.source_pointers, []);
+  assert.equal(result.state.should_remember, false);
+  assert.match(result.state.final_response, /live insurance portal evidence step is blocked right now/);
+  assert.match(result.state.final_response, /No source pointers, eligibility snapshots, document candidates/);
+  assert.doesNotMatch(result.state.final_response, /not executed in this slice/i);
+});
+
 test("LangGraph verified portal proof returns structured benefit rows and source pointers", async () => {
   const previous = process.env.BRAINSTY_PORTAL_LIVE;
   process.env.BRAINSTY_PORTAL_LIVE = "1";
