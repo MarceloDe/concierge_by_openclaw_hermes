@@ -66,3 +66,40 @@ test("multi-page official OpenClaw evidence composes a sourced executed answer",
   assert.doesNotMatch(response, /not executed in this slice/i);
   assert.doesNotMatch(response, /Enrollment complete/i);
 });
+
+test("approved document candidate observation composes a sourced single-candidate answer", () => {
+  assert.equal(SOURCE_POINTER_RESPONSE_STATUSES.has("captured_official_openclaw_document_read_only_observation"), true);
+
+  const response = composeResponse({
+    user: { name: "Pointer User", email: "pointer@example.com" },
+    portal: { portal_url: "https://health.aetna.com/" },
+    policyResult: { checks: [] },
+    intent: "check_benefits",
+    browserResult: {
+      page: {
+        title: "Plan document",
+        url: "https://health.aetna.com/member/documents/plan"
+      }
+    },
+    eligibility: null,
+    sourcePointers: [{ table: "extraction_artifacts", id: "artifact_doc_123" }],
+    evidenceObservation: {
+      status: "captured_official_openclaw_document_read_only_observation",
+      approvedDocumentCandidate: {
+        label: "Plan document",
+        url: "https://health.aetna.com/member/documents/plan"
+      },
+      discoveryReport: {
+        version: "2026-05-30.phase8o.openclaw-discovery.v1",
+        portalSearch: { status: "portal_search_available_not_submitted", available: true },
+        documentDiscovery: { candidateCount: 1, sbcPdfCandidateCount: 0 }
+      }
+    }
+  });
+
+  assert.match(response, /approved read-only document observation was executed/);
+  assert.match(response, /exactly one candidate/);
+  assert.match(response, /Approved candidate: Plan document/);
+  assert.match(response, /Source pointers: extraction_artifacts\/artifact_doc_123/);
+  assert.doesNotMatch(response, /raw document/i);
+});

@@ -15,6 +15,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -153,6 +154,7 @@ label {
 }
 
 input,
+select,
 textarea {
   background: #fff;
   border: 1px solid #c6d2dc;
@@ -350,6 +352,11 @@ textarea {
 
 .danger-line {
   color: #805200;
+  font-size: 12px;
+}
+
+.success-line {
+  color: #166534;
   font-size: 12px;
 }
 

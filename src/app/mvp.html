@@ -10,7 +10,7 @@
     <main class="mvp-shell">
       <header class="mvp-topbar">
         <div>
-          <p class="eyebrow">Phase 8Q</p>
+              <p class="eyebrow">Phase 9B</p>
           <h1>Brainstyworkers Concierge</h1>
         </div>
         <nav aria-label="App views">
@@ -56,6 +56,29 @@
             </label>
             <button id="startSession" type="button">Start Session</button>
             <p id="authStatus" class="status-text">Not signed in</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Backend</p>
+              <h2>API Route</h2>
+            </div>
+            <label>
+              Route
+              <select id="backendRoute">
+                <option value="node">Node / LangGraph runtime</option>
+                <option value="wefella">Wefella FastAPI facade</option>
+              </select>
+            </label>
+            <label>
+              FastAPI URL
+              <input id="facadeUrl" value="http://127.0.0.1:8000" />
+            </label>
+            <div class="split-actions">
+              <button id="checkFacade" type="button">Check Facade</button>
+              <button id="useFacade" type="button">Use Facade</button>
+            </div>
+            <p id="facadeStatus" class="status-text">Direct Node route active.</p>
           </section>
 
           <section class="panel">

@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wefella Backend — MVP Engineering Prompt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<style>
+:root,[data-theme="light"]{
+  --color-bg:#f7f6f2;--color-surface:#f9f8f5;--color-surface-2:#fbfbf9;
+  --color-surface-offset:#edeae5;--color-divider:#dcd9d5;--color-border:#d4d1ca;
+  --color-text:#28251d;--color-text-muted:#7a7974;--color-text-faint:#bab9b4;
+  --color-primary:#01696f;--color-primary-hover:#0c4e54;--color-primary-highlight:#cedcd8;
+  --color-accent:#437a22;--color-warn:#964219;--color-error:#a12c7b;
+  --color-code-bg:#edeae5;--color-tag-bg:#cedcd8;--color-tag-text:#0c4e54;
+  --shadow-sm:0 1px 3px oklch(0.2 0.01 80/0.08);--shadow-md:0 4px 16px oklch(0.2 0.01 80/0.10);
+  --radius-sm:0.375rem;--radius-md:0.5rem;--radius-lg:0.75rem;--radius-xl:1rem;
+  --font-body:'Inter',sans-serif;--font-mono:'IBM Plex Mono',monospace;
+  --text-xs:clamp(0.75rem,0.7rem+0.25vw,0.875rem);--text-sm:clamp(0.875rem,0.8rem+0.35vw,1rem);
+  --text-base:clamp(1rem,0.95rem+0.25vw,1.125rem);--text-lg:clamp(1.125rem,1rem+0.75vw,1.5rem);
+  --text-xl:clamp(1.5rem,1.2rem+1.25vw,2.25rem);--text-2xl:clamp(2rem,1.2rem+2.5vw,3.5rem);
+  --space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;--space-5:1.25rem;
+  --space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;--space-12:3rem;--space-16:4rem;
+  --transition:180ms cubic-bezier(0.16,1,0.3,1);
+}
+[data-theme="dark"]{
+  --color-bg:#0e0d0c;--color-surface:#141310;--color-surface-2:#1a1916;
+  --color-surface-offset:#1f1e1b;--color-divider:#262523;--color-border:#353330;
+  --color-text:#cdccca;--color-text-muted:#797876;--color-text-faint:#5a5957;
+  --color-primary:#4f98a3;--color-primary-hover:#227f8b;--color-primary-highlight:#1e3132;
+  --color-accent:#6daa45;--color-warn:#bb653b;--color-error:#d163a7;
+  --color-code-bg:#1f1e1b;--color-tag-bg:#1e3132;--color-tag-text:#4f98a3;
+  --shadow-sm:0 1px 3px oklch(0 0 0/0.25);--shadow-md:0 4px 16px oklch(0 0 0/0.35);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth;scroll-padding-top:80px}
+body{font-family:var(--font-body);font-size:var(--text-base);color:var(--color-text);background:var(--color-bg);line-height:1.65;min-height:100dvh}
+a{color:var(--color-primary);text-decoration:none}a:hover{text-decoration:underline}
+img,svg{display:block}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit;transition:color var(--transition),background var(--transition)}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:260px 1fr;min-height:100dvh}
+.sidebar{position:sticky;top:0;height:100dvh;overflow-y:auto;background:var(--color-surface);border-right:1px solid var(--color-border);padding:var(--space-6) 0;display:flex;flex-direction:column}
+.main{max-width:860px;padding:var(--space-10) var(--space-8)}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 var(--space-5) var(--space-5);border-bottom:1px solid var(--color-divider);margin-bottom:var(--space-5)}
+.topbar-logo{display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-sm);font-weight:600;color:var(--color-text)}
+.topbar-logo svg{color:var(--color-primary)}
+
+/* NAV */
+.nav-section{padding:0 var(--space-3) var(--space-2)}
+.nav-label{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-text-faint);padding:var(--space-2) var(--space-3);margin-top:var(--space-3)}
+.nav-item{display:block;padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--color-text-muted);transition:color var(--transition),background var(--transition);cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:var(--space-2)}
+.nav-item:hover{color:var(--color-text);background:var(--color-surface-offset)}
+.nav-item.active{color:var(--color-primary);background:var(--color-primary-highlight);font-weight:500}
+.nav-item .step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:var(--color-surface-offset);color:var(--color-text-muted);flex-shrink:0}
+.nav-item.active .step-num{background:var(--color-primary);color:#fff}
+
+/* CONTENT */
+.section{padding:var(--space-10) 0;border-bottom:1px solid var(--color-divider)}
+.section:last-child{border-bottom:none}
+.section-header{display:flex;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-6)}
+.step-badge{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-weight:700;font-size:var(--text-sm);flex-shrink:0;margin-top:2px}
+.step-badge.phase-0{background:var(--color-primary-highlight);color:var(--color-primary)}
+.step-badge.phase-a{background:#1e3b20;color:#6daa45}
+.step-badge.phase-b{background:#2c1e10;color:#bb653b}
+.step-badge.phase-c{background:#1c1e2c;color:#5591c7}
+.step-badge.phase-d{background:#2a1a2c;color:#a86fdf}
+.step-badge.phase-e{background:#2c1c10;color:#da7101}
+h1{font-size:var(--text-2xl);line-height:1.2;font-weight:700;margin-bottom:var(--space-2)}
+h2{font-size:var(--text-xl);line-height:1.25;font-weight:700}
+h3{font-size:var(--text-lg);font-weight:600;margin-bottom:var(--space-4)}
+h4{font-size:var(--text-base);font-weight:600;margin-bottom:var(--space-3)}
+p{color:var(--color-text-muted);margin-bottom:var(--space-3);max-width:70ch}
+.lead{font-size:var(--text-lg);color:var(--color-text-muted);font-weight:400;max-width:60ch}
+
+/* HERO */
+.hero{padding:var(--space-12) 0 var(--space-8)}
+.hero-badges{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-bottom:var(--space-5)}
+.badge{display:inline-flex;align-items:center;gap:var(--space-1);padding:var(--space-1) var(--space-3);border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:500;border:1px solid var(--color-border);color:var(--color-text-muted);background:var(--color-surface)}
+.badge.primary{background:var(--color-tag-bg);color:var(--color-tag-text);border-color:transparent}
+.hero-meta{display:flex;align-items:center;gap:var(--space-4);margin-top:var(--space-5);font-size:var(--text-xs);color:var(--color-text-faint)}
+.hero-meta span{display:flex;align-items:center;gap:var(--space-1)}
+
+/* CONSENSUS PANEL */
+.consensus{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-xl);padding:var(--space-6);margin-bottom:var(--space-8);position:relative;overflow:hidden}
+.consensus::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--color-primary),var(--color-accent))}
+.consensus-title{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-primary);margin-bottom:var(--space-3)}
+.model-row{display:flex;gap:var(--space-3);margin-bottom:var(--space-2);align-items:flex-start;font-size:var(--text-sm)}
+.model-tag{flex-shrink:0;padding:2px var(--space-2);border-radius:var(--radius-sm);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;min-width:70px;text-align:center}
+.tag-gpt{background:#1a2c1a;color:#6daa45}
+.tag-claude{background:#1c1e2c;color:#5591c7}
+.tag-gemini{background:#2a1a2c;color:#a86fdf}
+
+/* CODE BLOCKS */
+pre{background:var(--color-code-bg);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-5);overflow-x:auto;font-family:var(--font-mono);font-size:13px;line-height:1.7;margin:var(--space-4) 0}
+code{font-family:var(--font-mono);font-size:0.875em;background:var(--color-code-bg);padding:2px 6px;border-radius:var(--radius-sm);color:var(--color-primary)}
+pre code{background:none;padding:0;font-size:inherit;color:var(--color-text)}
+.code-label{font-size:var(--text-xs);color:var(--color-text-faint);font-family:var(--font-mono);margin-bottom:var(--space-1)}
+
+/* CARDS */
+.card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-5);margin-bottom:var(--space-3)}
+.card-title{font-size:var(--text-sm);font-weight:600;margin-bottom:var(--space-2);display:flex;align-items:center;gap:var(--space-2)}
+.card-body{font-size:var(--text-sm);color:var(--color-text-muted)}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin:var(--space-4) 0}
+@media(max-width:640px){.card-grid{grid-template-columns:1fr}}
+
+/* CHECKLIST */
+.checklist{list-style:none;margin:var(--space-3) 0}
+.checklist li{display:flex;align-items:flex-start;gap:var(--space-3);padding:var(--space-3) 0;border-bottom:1px solid var(--color-divider);font-size:var(--text-sm);color:var(--color-text-muted)}
+.checklist li:last-child{border-bottom:none}
+.check-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.check-icon.must{background:#1e3b20;color:#6daa45}
+.check-icon.should{background:#1c1e2c;color:#5591c7}
+.check-icon.later{background:var(--color-surface-offset);color:var(--color-text-faint)}
+.check-label{font-weight:600;color:var(--color-text)}
+
+/* PROMPT BOX */
+.prompt-box{background:var(--color-surface-offset);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:var(--space-5);font-family:var(--font-mono);font-size:13px;line-height:1.8;color:var(--color-text-muted);white-space:pre-wrap;position:relative;margin:var(--space-4) 0}
+.prompt-box .comment{color:var(--color-text-faint)}
+.prompt-box .keyword{color:var(--color-primary);font-weight:600}
+.prompt-box .string{color:var(--color-accent)}
+.prompt-box .warn{color:var(--color-warn)}
+.copy-btn{position:absolute;top:var(--space-3);right:var(--space-3);padding:var(--space-1) var(--space-3);border-radius:var(--radius-md);font-size:var(--text-xs);font-weight:600;background:var(--color-surface);border:1px solid var(--color-border);color:var(--color-text-muted);transition:all var(--transition)}
+.copy-btn:hover{color:var(--color-primary);border-color:var(--color-primary)}
+
+/* PHASE HEADER */
+.phase-header{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-5)}
+.phase-line{flex:1;height:1px;background:var(--color-divider)}
+
+/* ARCH DIAGRAM */
+.arch{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:var(--space-2);margin:var(--space-6) 0;font-size:var(--text-xs);text-align:center}
+.arch-box{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-3) var(--space-4)}
+.arch-box.primary-box{background:var(--color-primary-highlight);border-color:var(--color-primary);color:var(--color-primary);font-weight:600}
+.arch-box.worker-box{background:#1e3b20;border-color:#437a22;color:#6daa45}
+.arch-arrow{color:var(--color-text-faint);font-size:var(--text-base)}
+.arch-label{font-size:10px;color:var(--color-text-faint);margin-top:var(--space-1)}
+
+/* PRIORITY TABLE */
+.ptable{width:100%;border-collapse:collapse;margin:var(--space-4) 0;font-size:var(--text-sm)}
+.ptable th{text-align:left;padding:var(--space-2) var(--space-3);font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--color-text-faint);border-bottom:1px solid var(--color-border)}
+.ptable td{padding:var(--space-3);border-bottom:1px solid var(--color-divider);color:var(--color-text-muted);vertical-align:top}
+.ptable tr:last-child td{border-bottom:none}
+.ptable td:first-child{color:var(--color-text);font-weight:500}
+.pil{display:inline-flex;padding:2px var(--space-2);border-radius:var(--radius-full);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.pil.p0{background:#2c1e10;color:#da7101}
+.pil.p1{background:#1e3b20;color:#6daa45}
+.pil.p2{background:#1c1e2c;color:#5591c7}
+.pil.later{background:var(--color-surface-offset);color:var(--color-text-faint)}
+
+/* TOGGLE */
+.theme-toggle{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:var(--radius-md);border:1px solid var(--color-border);color:var(--color-text-muted);transition:all var(--transition)}
+.theme-toggle:hover{color:var(--color-primary);border-color:var(--color-primary)}
+
+/* MOBILE */
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .main{padding:var(--space-6) var(--space-4)}
+}
+
+/* SCROLL PROGRESS */
+.progress-bar{position:fixed;top:0;left:0;height:2px;background:var(--color-primary);z-index:100;transition:width 0.1s linear}
+
+/* HIGHLIGHT */
+.hl-green{color:#6daa45;font-weight:600}
+.hl-blue{color:#5591c7;font-weight:600}
+.hl-orange{color:#da7101;font-weight:600}
+.hl-red{color:#d163a7;font-weight:600}
+
+/* PROMPT MASTER */
+.master-prompt{background:linear-gradient(135deg,#0d1a0d,#0a0f1a,#1a0d1a);border:1px solid var(--color-primary);border-radius:var(--radius-xl);padding:var(--space-8);position:relative;overflow:hidden;margin:var(--space-6) 0}
+.master-prompt::before{content:'MASTER PROMPT';position:absolute;top:var(--space-4);right:var(--space-4);font-size:10px;font-weight:700;letter-spacing:0.1em;color:var(--color-primary);opacity:0.5}
+.master-prompt pre{background:transparent;border:none;padding:0;color:var(--color-text);font-size:12.5px;line-height:1.9}
+</style>
+</head>
+<body>
+<div class="progress-bar" id="progress"></div>
+
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="topbar">
+    <div class="topbar-logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Wefella MVP
+    </div>
+    <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Overview</div>
+    <a href="#diagnosis" class="nav-item active"><span class="step-num">0</span>Diagnosis</a>
+    <a href="#architecture" class="nav-item"><span class="step-num">A</span>Architecture</a>
+    <div class="nav-label">Implementation Steps</div>
+    <a href="#step1" class="nav-item"><span class="step-num">1</span>FastAPI Layer</a>
+    <a href="#step2" class="nav-item"><span class="step-num">2</span>LangGraph Core</a>
+    <a href="#step3" class="nav-item"><span class="step-num">3</span>RAG + Insurance DB</a>
+    <a href="#step4" class="nav-item"><span class="step-num">4</span>Persistence</a>
+    <a href="#step5" class="nav-item"><span class="step-num">5</span>Worker Adapter</a>
+    <a href="#step6" class="nav-item"><span class="step-num">6</span>Streaming + API</a>
+    <a href="#step7" class="nav-item"><span class="step-num">7</span>Security + HIPAA</a>
+    <div class="nav-label">Prompt</div>
+    <a href="#masterprompt" class="nav-item"><span class="step-num">★</span>Master Prompt</a>
+    <a href="#priority" class="nav-item"><span class="step-num">✓</span>Priority Matrix</a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+<!-- HERO -->
+<div class="hero" id="top">
+  <div class="hero-badges">
+    <span class="badge primary">Wefella AI Concierge</span>
+    <span class="badge">Backend MVP</span>
+    <span class="badge">LangGraph + FastAPI</span>
+    <span class="badge">OpenClaw/Hermes Worker</span>
+  </div>
+  <h1>Backend MVP<br>Engineering Contract</h1>
+  <p class="lead">A step-by-step implementation guide derived from multi-model consensus — GPT-5.5 Thinking, Claude Opus 4.8 Thinking, and Gemini 3.1 Pro Thinking — to transform the <code>concierge_by_openclaw_hermes</code> repo into a production-ready AI concierge backend for Wefella.</p>
+  <div class="hero-meta">
+    <span>📅 May 2026</span>
+    <span>·</span>
+    <span>7 Implementation Steps</span>
+    <span>·</span>
+    <span>1 Master Prompt</span>
+  </div>
+</div>
+
+<!-- DIAGNOSIS -->
+<section class="section" id="diagnosis">
+  <div class="section-header">
+    <div class="step-badge phase-0">0</div>
+    <div>
+      <h2>Diagnosis — Current State</h2>
+      <p>What the multi-model review found in the repo and where the critical gaps are.</p>
+    </div>
+  </div>
+
+  <div class="consensus">
+    <div class="consensus-title">3-Model Consensus — Critical Findings</div>
+    <div class="model-row"><span class="model-tag tag-gpt">GPT-5.5</span><span>OpenClaw/Hermes are agent harnesses (chat-channel-first runtimes), <strong>not API-first web backends</strong>. Exposing them directly to the frontend is the #1 architectural risk — they lack request/response guarantees, error contracts, and auth layers needed for a web API.</span></div>
+    <div class="model-row"><span class="model-tag tag-claude">Claude</span><span>The repo is missing async task handling. Long LLM calls under load will hit load-balancer timeouts (30–60s). Without task IDs + background processing, the frontend will get dropped connections in production.</span></div>
+    <div class="model-row"><span class="model-tag tag-gemini">Gemini</span><span>There's no RAG pipeline yet. For insurance use cases, the LLM answering from pretraining will hallucinate policy specifics, coverage rules, and claim procedures. A retrieval layer over your curated DB is required even for MVP.</span></div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title"><span style="color:#6daa45">✓</span> What's Working</div>
+      <div class="card-body">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>• LangChain + LangGraph base dependency selected correctly</li>
+          <li>• OpenClaw worker concept is architecturally sound</li>
+          <li>• Skill-building loop (OpenClaw improving from tasks) is the right long-term pattern</li>
+          <li>• Separation of orchestrator (harness) + worker (OpenClaw) intent is correct</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span style="color:#d163a7">✗</span> What's Missing</div>
+      <div class="card-body">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>• No FastAPI service layer (the actual backend entrypoint)</li>
+          <li>• No SSE/WebSocket streaming to frontend</li>
+          <li>• No session persistence / checkpointing</li>
+          <li>• No RAG retrieval over insurance DB</li>
+          <li>• No HIPAA-safe guardrails or PHI handling</li>
+          <li>• OpenClaw/Hermes not yet behind an adapter interface</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="section" id="architecture">
+  <div class="section-header">
+    <div class="step-badge phase-0">A</div>
+    <div>
+      <h2>Target Architecture</h2>
+      <p>The agreed MVP topology — frontend never touches OpenClaw directly.</p>
+    </div>
+  </div>
+
+  <div class="arch">
+    <div>
+      <div class="arch-box">Frontend<br>(React/Vercel)</div>
+      <div class="arch-label">Generative UI</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div>
+      <div class="arch-box primary-box">FastAPI<br>Backend</div>
+      <div class="arch-label">Public API Contract<br>Auth + Rate limit</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div>
+      <div class="arch-box">LangGraph<br>Orchestrator</div>
+      <div class="arch-label">State machine<br>Nodes + routing</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-2);margin-bottom:var(--space-6);font-size:var(--text-xs);text-align:center">
+    <div><div class="arch-box" style="margin-bottom:4px">RAG Retriever</div><div style="color:var(--color-text-faint)">Insurance DB<br>Claims + Solutions</div></div>
+    <div><div class="arch-box" style="margin-bottom:4px">Session Store<br>(Redis/SQLite)</div><div style="color:var(--color-text-faint)">Persistence<br>Checkpointing</div></div>
+    <div><div class="arch-box worker-box" style="margin-bottom:4px">Worker Adapter<br>→ OpenClaw/Hermes</div><div style="color:var(--color-text-faint)">Optional workers<br>Behind feature flag</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Architecture Laws (all 3 models agree — non-negotiable)</div>
+    <div class="card-body">
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2)">
+        <li>1. <strong>FastAPI is the ONLY frontend entrypoint.</strong> No frontend ever calls OpenClaw or Hermes directly.</li>
+        <li>2. <strong>LangGraph owns state.</strong> All conversation flow, node routing, and memory injection happen in LangGraph nodes — not in OpenClaw's internal planner.</li>
+        <li>3. <strong>OpenClaw/Hermes are workers, not orchestrators.</strong> They receive a tightly-scoped task envelope and return a structured result. They cannot initiate, branch, or call the frontend.</li>
+        <li>4. <strong>Self-improving skills are Phase 2.</strong> For MVP, OpenClaw skill-building is logged but not auto-applied. Human review required before any skill changes production behavior.</li>
+        <li>5. <strong>All LLM answers must be grounded.</strong> The retrieval node runs before the LLM node. No insurance-domain answer can be generated without a retrieval context.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 1: FASTAPI -->
+<section class="section" id="step1">
+  <div class="phase-header">
+    <div class="step-badge phase-a">1</div>
+    <h3 style="margin:0">FastAPI Service Layer</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <p>Create the web API that the frontend will call. This is the public surface — define it clearly and stabilize it before building anything else.</p>
+
+  <div class="code-label">project/api/main.py — minimal MVP entrypoint</div>
+<pre><code>from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from typing import Optional
+import asyncio, uuid
+
+app = FastAPI(title="Wefella Concierge API", version="0.1.0")
+
+app.add_middleware(CORSMiddleware,
+    allow_origins=["https://wefella.vercel.app"],  # production domain
+    allow_origins_dev=["http://localhost:3000"],    # dev only
+    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+# --- Request/Response contracts (stabilize these early) ---
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None   # None → new session
+    user_id: str                        # required for HIPAA audit log
+
+class ChatResponse(BaseModel):
+    session_id: str
+    task_id: str
+    status: str                         # "streaming" | "queued" | "done"
+
+class TaskStatus(BaseModel):
+    task_id: str
+    status: str                         # "running" | "done" | "error"
+    result: Optional[str] = None
+
+# --- Endpoints ---
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest, bg: BackgroundTasks):
+    session_id = req.session_id or str(uuid.uuid4())
+    task_id = str(uuid.uuid4())
+    bg.add_task(run_graph_task, task_id, session_id, req.message, req.user_id)
+    return ChatResponse(session_id=session_id, task_id=task_id, status="queued")
+
+@app.get("/api/chat/stream/{task_id}")
+async def stream(task_id: str):
+    return StreamingResponse(token_stream(task_id), media_type="text/event-stream")
+
+@app.get("/api/chat/status/{task_id}", response_model=TaskStatus)
+async def task_status(task_id: str):
+    # fetch from Redis/in-memory task registry
+    ...
+
+@app.get("/api/health")
+async def health(): return {"status": "ok", "version": "0.1.0"}
+</code></pre>
+
+  <div class="card">
+    <div class="card-title">Why this pattern?</div>
+    <div class="card-body">
+      <p style="margin-bottom:var(--space-2)">Claude Opus 4.8 strongly recommended the <strong>POST → task_id → SSE stream</strong> pattern rather than a single blocking SSE endpoint. Reason: LLM runs frequently exceed 30–60s, which kills most load balancers. The task_id pattern lets the frontend:</p>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-1)">
+        <li>• Reconnect to the stream if the connection drops without losing the run</li>
+        <li>• Poll status as a fallback if SSE fails</li>
+        <li>• Display "thinking…" UI state while the background task runs</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 2: LANGGRAPH -->
+<section class="section" id="step2">
+  <div class="phase-header">
+    <div class="step-badge phase-a">2</div>
+    <h3 style="margin:0">LangGraph Orchestrator — Node Design</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <p>Define the explicit state machine. Every conversation flows through named nodes. No "magic" routing — all decisions are logged and auditable.</p>
+
+  <div class="code-label">project/graph/concierge_graph.py</div>
+<pre><code>from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
+from typing import TypedDict, Annotated, List
+import operator
+
+# --- State schema ---
+class ConciergeState(TypedDict):
+    messages: Annotated[List[dict], operator.add]  # conversation history
+    session_id: str
+    user_id: str
+    intent: str                # classified intent from intake node
+    retrieved_context: str     # RAG chunks injected before LLM call
+    citations: List[str]       # source refs for grounding
+    worker_task: dict          # optional task envelope for OpenClaw
+    worker_result: dict        # optional result from OpenClaw
+    final_response: str
+
+# --- Nodes (each is a pure async function) ---
+async def intake_guard(state: ConciergeState) -> ConciergeState:
+    """PHI scrub + topic boundary check. Rejects out-of-scope requests."""
+    ...
+
+async def classify_intent(state: ConciergeState) -> ConciergeState:
+    """Classify: plan_inquiry | claim_status | procedure_prep | 
+       prescription | escalate | off_topic"""
+    ...
+
+async def retrieve_context(state: ConciergeState) -> ConciergeState:
+    """RAG over insurance DB. REQUIRED before any LLM generation."""
+    ...
+
+async def generate_response(state: ConciergeState) -> ConciergeState:
+    """LLM synthesis — ONLY from retrieved_context. Never from pretraining alone."""
+    ...
+
+async def worker_delegate(state: ConciergeState) -> ConciergeState:
+    """Optional: delegate to OpenClaw/Hermes worker via adapter.
+    Only triggers if intent requires tool execution."""
+    ...
+
+async def format_and_cite(state: ConciergeState) -> ConciergeState:
+    """Attach citations, format for frontend, write audit log entry."""
+    ...
+
+# --- Routing ---
+def route_after_classify(state: ConciergeState) -> str:
+    if state["intent"] == "off_topic": return "intake_guard"    # redirect
+    if state["intent"] == "escalate":  return END               # human handoff
+    return "retrieve_context"
+
+def route_after_retrieve(state: ConciergeState) -> str:
+    if state.get("worker_task"): return "worker_delegate"
+    return "generate_response"
+
+# --- Build graph ---
+def build_graph(checkpointer):
+    g = StateGraph(ConciergeState)
+    g.add_node("intake_guard", intake_guard)
+    g.add_node("classify_intent", classify_intent)
+    g.add_node("retrieve_context", retrieve_context)
+    g.add_node("generate_response", generate_response)
+    g.add_node("worker_delegate", worker_delegate)
+    g.add_node("format_and_cite", format_and_cite)
+
+    g.set_entry_point("intake_guard")
+    g.add_edge("intake_guard", "classify_intent")
+    g.add_conditional_edges("classify_intent", route_after_classify)
+    g.add_conditional_edges("retrieve_context", route_after_retrieve)
+    g.add_edge("generate_response", "format_and_cite")
+    g.add_edge("worker_delegate", "generate_response")
+    g.add_edge("format_and_cite", END)
+
+    return g.compile(checkpointer=checkpointer)
+</code></pre>
+</section>
+
+<!-- STEP 3: RAG -->
+<section class="section" id="step3">
+  <div class="phase-header">
+    <div class="step-badge phase-b">3</div>
+    <h3 style="margin:0">RAG Pipeline — Insurance Knowledge Base</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <p>This is the intelligence layer. The curated insurance use cases, claims, and solutions database is what makes Wefella authoritative. The LLM must only synthesize from retrieved evidence — never from pretraining alone for domain-specific facts.</p>
+
+  <div class="code-label">project/rag/retriever.py</div>
+<pre><code>from langchain.vectorstores import Chroma  # or pgvector for production
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from typing import List, Tuple
+
+class InsuranceRetriever:
+    """RAG over curated insurance DB. Mandatory before any LLM generation."""
+
+    def __init__(self, persist_dir: str = "./data/vectorstore"):
+        self.embeddings = OpenAIEmbeddings()
+        self.vectorstore = Chroma(
+            persist_directory=persist_dir,
+            embedding_function=self.embeddings
+        )
+        self.retriever = self.vectorstore.as_retriever(
+            search_type="mmr",          # max marginal relevance
+            search_kwargs={"k": 5, "fetch_k": 20}
+        )
+
+    async def retrieve(self, query: str, intent: str) -> Tuple[str, List[str]]:
+        """Return (context_str, citations). Citations MUST appear in final answer."""
+        docs = await self.retriever.aget_relevant_documents(query)
+
+        context_parts = []
+        citations = []
+        for i, doc in enumerate(docs):
+            source = doc.metadata.get("source", f"doc_{i}")
+            context_parts.append(f"[{i+1}] Source: {source}
+{doc.page_content}")
+            citations.append(source)
+
+        context = "
+
+---
+
+".join(context_parts)
+        return context, citations
+
+    def ingest(self, documents: List[dict]):
+        """Ingest curated insurance use cases into vectorstore."""
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=800,
+            chunk_overlap=150,          # important for insurance tables/clauses
+            separators=["
+
+", "
+", ".", " "]
+        )
+        # ... split and embed
+</code></pre>
+
+  <div class="card">
+    <div class="card-title">⚠️ Insurance RAG — Critical Rules (GPT + Claude + Gemini all agree)</div>
+    <div class="card-body">
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2)">
+        <li>• Every claim-specific answer <strong>must include a citation</strong> to source document. If the retriever returns nothing, the LLM must say "I don't have verified information on that" — not hallucinate.</li>
+        <li>• Use <strong>MMR retrieval</strong> (max marginal relevance), not cosine similarity alone — insurance answers often require multiple non-redundant chunks.</li>
+        <li>• Insurance docs have tables and formatted clauses. Use <strong>chunk_overlap=150+</strong> to avoid splitting mid-clause.</li>
+        <li>• Add a <strong>confidence threshold</strong>: if top retrieved doc score &lt; 0.7, trigger escalation rather than a low-confidence answer.</li>
+        <li>• For MVP: Chroma (local). For production: pgvector (Postgres) with your existing infra.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 4: PERSISTENCE -->
+<section class="section" id="step4">
+  <div class="phase-header">
+    <div class="step-badge phase-b">4</div>
+    <h3 style="margin:0">Persistence — Sessions, Checkpoints, Audit Log</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <p>Persistence is the difference between a chatbot and a concierge. Sessions must survive restarts. Audit logs are required for HIPAA compliance and insurance regulatory review (NAIC AI governance).</p>
+
+  <div class="code-label">project/persistence/store.py</div>
+<pre><code>from langgraph.checkpoint.sqlite import SqliteSaver
+# Production: use langgraph.checkpoint.postgres import PostgresSaver
+import sqlite3, json, datetime
+
+# --- LangGraph session checkpointing ---
+def get_checkpointer(db_path: str = "./data/sessions.db"):
+    """Returns a checkpointer. Swap for PostgresSaver in production."""
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    return SqliteSaver(conn)
+
+# --- Audit log (HIPAA + NAIC compliance) ---
+class AuditLogger:
+    """Write-once audit trail. Every LLM call logged with: 
+       user_id, session_id, intent, retrieved_sources, 
+       llm_response_hash, timestamp, worker_used."""
+
+    def __init__(self, db_path: str = "./data/audit.db"):
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._init_schema()
+
+    def _init_schema(self):
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                intent TEXT,
+                message_hash TEXT,       -- SHA-256 of user message (NOT raw PHI)
+                retrieved_sources TEXT,  -- JSON array of citation refs
+                response_hash TEXT,      -- SHA-256 of LLM response
+                worker_used TEXT,        -- "none" | "openclaw" | "hermes"
+                confidence_score REAL,
+                escalated INTEGER DEFAULT 0
+            )
+        """)
+
+    def log(self, **kwargs):
+        kwargs["timestamp"] = datetime.datetime.utcnow().isoformat()
+        cols = ", ".join(kwargs.keys())
+        vals = tuple(
+            json.dumps(v) if isinstance(v, list) else v 
+            for v in kwargs.values()
+        )
+        self.conn.execute(f"INSERT INTO audit_log ({cols}) VALUES ({','.join('?'*len(vals))})", vals)
+        self.conn.commit()
+</code></pre>
+</section>
+
+<!-- STEP 5: WORKER ADAPTER -->
+<section class="section" id="step5">
+  <div class="phase-header">
+    <div class="step-badge phase-c">5</div>
+    <h3 style="margin:0">Worker Adapter — OpenClaw / Hermes Interface</h3>
+    <div class="phase-line"></div>
+    <span class="pil p1">P1</span>
+  </div>
+
+  <p>The adapter pattern lets you start with a <code>MockWorker</code> (returns deterministic test responses), then swap in OpenClaw or Hermes behind a feature flag — without changing the LangGraph graph nodes.</p>
+
+  <div class="code-label">project/workers/adapter.py</div>
+<pre><code>from abc import ABC, abstractmethod
+from typing import Optional
+import os
+
+# --- Abstract contract ---
+class WorkerAdapter(ABC):
+    @abstractmethod
+    async def execute(self, task: dict) -> dict:
+        """
+        task envelope:
+          {
+            "task_id": str,
+            "intent": str,           # e.g. "claim_status_lookup"
+            "payload": dict,         # intent-specific data
+            "context": str,          # RAG context already retrieved
+            "session_id": str,
+          }
+        returns:
+          {
+            "success": bool,
+            "result": str,           # worker's answer
+            "skill_used": str,       # which OpenClaw skill was invoked
+            "confidence": float,
+            "error": Optional[str]
+          }
+        """
+        ...
+
+# --- Phase 1 MVP: Mock worker (always available, deterministic for testing) ---
+class MockWorker(WorkerAdapter):
+    async def execute(self, task: dict) -> dict:
+        return {"success": True, "result": f"[MOCK] Processed: {task['intent']}",
+                "skill_used": "mock", "confidence": 1.0, "error": None}
+
+# --- Phase 2: OpenClaw worker ---
+class OpenClawWorker(WorkerAdapter):
+    def __init__(self, openclaw_url: str, api_key: str):
+        self.url = openclaw_url
+        self.api_key = api_key
+
+    async def execute(self, task: dict) -> dict:
+        # POST task to OpenClaw's MCP/channel endpoint
+        # OpenClaw returns structured result
+        ...
+
+# --- Factory: controlled by environment variable / feature flag ---
+def get_worker() -> WorkerAdapter:
+    worker_type = os.getenv("WORKER_BACKEND", "mock")  # "mock" | "openclaw" | "hermes"
+    if worker_type == "openclaw":
+        return OpenClawWorker(os.getenv("OPENCLAW_URL"), os.getenv("OPENCLAW_KEY"))
+    return MockWorker()
+</code></pre>
+</section>
+
+<!-- STEP 6: STREAMING -->
+<section class="section" id="step6">
+  <div class="phase-header">
+    <div class="step-badge phase-c">6</div>
+    <h3 style="margin:0">Streaming + Frontend API Contract</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <div class="code-label">project/api/streaming.py — SSE token stream generator</div>
+<pre><code>import asyncio, json
+from typing import AsyncGenerator
+
+# In-memory task registry (swap for Redis in production)
+task_registry = {}
+
+async def run_graph_task(task_id: str, session_id: str, message: str, user_id: str):
+    """Background task: runs LangGraph, writes tokens to registry."""
+    task_registry[task_id] = {"status": "running", "tokens": [], "done": False}
+    try:
+        graph = build_graph(get_checkpointer())
+        config = {"configurable": {"thread_id": session_id}}
+
+        async for event in graph.astream_events(
+            {"messages": [{"role": "user", "content": message}],
+             "session_id": session_id, "user_id": user_id},
+            config=config, version="v2"
+        ):
+            if event["event"] == "on_chat_model_stream":
+                token = event["data"]["chunk"].content
+                task_registry[task_id]["tokens"].append(token)
+
+        task_registry[task_id]["status"] = "done"
+        task_registry[task_id]["done"] = True
+    except Exception as e:
+        task_registry[task_id]["status"] = "error"
+        task_registry[task_id]["error"] = str(e)
+
+async def token_stream(task_id: str) -> AsyncGenerator[str, None]:
+    """SSE generator. Frontend connects here to read tokens."""
+    cursor = 0
+    while True:
+        reg = task_registry.get(task_id)
+        if not reg:
+            yield f"data: {json.dumps({'error': 'task_not_found'})}
+
+"
+            return
+
+        tokens = reg["tokens"][cursor:]
+        for token in tokens:
+            yield f"data: {json.dumps({'token': token})}
+
+"
+        cursor += len(tokens)
+
+        if reg["done"]:
+            yield f"data: {json.dumps({'done': True, 'status': reg['status']})}
+
+"
+            return
+
+        await asyncio.sleep(0.05)  # 50ms poll interval
+</code></pre>
+
+  <div class="card">
+    <div class="card-title">Frontend Integration (React / Vercel) — EventSource pattern</div>
+    <div class="card-body">
+<pre style="background:var(--color-code-bg);border-radius:var(--radius-md);padding:var(--space-4);font-size:12px;overflow-x:auto;margin:0"><code>// 1. POST to start the run
+const { task_id, session_id } = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message, session_id: savedSessionId, user_id })
+}).then(r => r.json());
+
+// 2. Open SSE stream for tokens
+const es = new EventSource(`/api/chat/stream/${task_id}`);
+es.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  if (data.token) setResponse(prev => prev + data.token);
+  if (data.done) { es.close(); setLoading(false); }
+};
+es.onerror = () => { es.close(); pollFallback(task_id); };
+
+// 3. Fallback: poll /api/chat/status/{task_id} if SSE drops</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- STEP 7: SECURITY -->
+<section class="section" id="step7">
+  <div class="phase-header">
+    <div class="step-badge phase-d">7</div>
+    <h3 style="margin:0">Security, HIPAA & Compliance Guardrails</h3>
+    <div class="phase-line"></div>
+    <span class="pil p0">P0</span>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">HIPAA Requirements</div>
+      <div class="card-body">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2);font-size:var(--text-sm)">
+          <li>• BAA required with OpenAI/Anthropic API (API tier, not consumer products)</li>
+          <li>• Never store raw PHI in conversation logs — hash user messages in audit log</li>
+          <li>• Encrypt data at rest (SQLite/Postgres with encryption)</li>
+          <li>• Role-based access: user vs admin endpoints</li>
+          <li>• Session tokens expire (&lt;24h for healthcare data)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">FastAPI Security Checklist</div>
+      <div class="card-body">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:var(--space-2);font-size:var(--text-sm)">
+          <li>• JWT auth on all non-health endpoints (OAuth2 + JWT)</li>
+          <li>• Rate limiting: slowapi or Redis-backed (max 20 req/min/user)</li>
+          <li>• CORS: production domain only in <code>allow_origins</code></li>
+          <li>• Input validation: Pydantic models on all request bodies</li>
+          <li>• HTTPS-only in production (terminate at load balancer)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="code-label">project/api/auth.py — JWT + rate limiting skeleton</div>
+<pre><code>from fastapi import Security, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+import jwt, os
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+limiter = Limiter(key_func=get_remote_address)
+
+async def get_current_user(token: str = Security(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, os.getenv("JWT_SECRET"), algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Apply rate limit to chat endpoint:
+# @app.post("/api/chat")
+# @limiter.limit("20/minute")
+# async def chat(request: Request, ...):
+</code></pre>
+</section>
+
+<!-- MASTER PROMPT -->
+<section class="section" id="masterprompt">
+  <div class="section-header">
+    <div class="step-badge phase-e">★</div>
+    <div>
+      <h2>Master Prompt</h2>
+      <p>Paste this directly into Claude Code, Codex, or OpenClaw to drive the full implementation. It encodes all 3-model consensus findings.</p>
+    </div>
+  </div>
+
+  <div class="master-prompt">
+    <button class="copy-btn" onclick="copyPrompt()">Copy</button>
+    <pre id="master-prompt-text">
+# WEFELLA CONCIERGE BACKEND — MVP IMPLEMENTATION CONTRACT
+# Derived from: GPT-5.5 Thinking + Claude Opus 4.8 + Gemini 3.1 Pro consensus
+# Project: concierge_by_openclaw_hermes → production backend for Wefella
+# Date: May 2026
+
+## CONTEXT
+You are implementing the backend for Wefella, a guided AI concierge for healthcare 
+plan selection, plan use, prescriptions, and procedure preparation. The backend 
+MUST BE API-first (FastAPI), with LangGraph as the orchestrator and OpenClaw/Hermes 
+as optional bounded workers behind an adapter interface.
+
+## ARCHITECTURE LAWS — NEVER VIOLATE THESE
+1. FastAPI is the ONLY public entrypoint. The frontend NEVER calls OpenClaw or Hermes directly.
+2. LangGraph StateGraph owns ALL conversation flow, state, and memory injection.
+3. OpenClaw/Hermes are workers: they receive a typed task envelope, return a structured result.
+   They cannot orchestrate, branch, or initiate calls to any external surface.
+4. ALL LLM responses for insurance/claims questions MUST be grounded in retrieved context.
+   If retrieval returns no relevant doc, respond: "I don't have verified info on that."
+   Never answer from LLM pretraining alone for domain-specific facts.
+5. Write a write-once audit log for every LLM call: timestamp, user_id, intent, 
+   retrieved_sources, response_hash. Required for HIPAA + NAIC AI governance.
+6. Self-improving skills (OpenClaw skill-building from conversations) = Phase 2 ONLY.
+   For MVP: log skill proposals to a file. Do NOT auto-apply to production behavior.
+
+## STEP-BY-STEP IMPLEMENTATION CONTRACT
+
+### STEP 1 — FastAPI Service Layer [P0, start here]
+File: project/api/main.py
+- POST /api/chat → { session_id, task_id, status }
+- GET  /api/chat/stream/{task_id} → SSE token stream
+- GET  /api/chat/status/{task_id} → { status, result }
+- GET  /api/health → { status, version }
+Use BackgroundTasks for LangGraph runs. All endpoints except /health require JWT auth.
+CORS: only allow production frontend domain + localhost:3000 for dev.
+
+### STEP 2 — LangGraph State Machine [P0]
+File: project/graph/concierge_graph.py
+Nodes in order:
+  intake_guard → classify_intent → retrieve_context → [worker_delegate?] → generate_response → format_and_cite
+State schema (TypedDict): messages, session_id, user_id, intent, retrieved_context, 
+  citations, worker_task, worker_result, final_response
+Routing:
+  - after classify_intent: if off_topic → intake_guard, if escalate → END, else → retrieve_context
+  - after retrieve_context: if worker_task populated → worker_delegate, else → generate_response
+Checkpointer: SqliteSaver for MVP, PostgresSaver for production.
+Config key: thread_id = session_id (enables per-session memory continuity).
+
+### STEP 3 — RAG Retriever [P0]
+File: project/rag/retriever.py
+- Use langchain Chroma (MVP) or pgvector (production) 
+- Embeddings: OpenAI text-embedding-3-small (cost-efficient)
+- Retrieval: MMR (search_type="mmr", k=5, fetch_k=20)
+- Chunk size: 800 tokens, overlap: 150 (important for insurance clauses/tables)
+- MANDATORY: retrieve() returns (context_str, citations_list)
+  Citations must be passed through to final_response via format_and_cite node.
+- Confidence threshold: if max_score < 0.70, set intent = "escalate" in state.
+- Ingest script: project/rag/ingest.py — reads your curated insurance JSON/MD files.
+
+### STEP 4 — Persistence [P0]
+File: project/persistence/store.py
+- LangGraph checkpointer: SQLite (dev) — stores full graph state per session_id
+- Audit log table (audit.db): id, timestamp, user_id, session_id, intent, 
+  message_hash (SHA-256), retrieved_sources (JSON), response_hash, worker_used, 
+  confidence_score, escalated
+- NEVER store raw user messages in audit log — only SHA-256 hash (HIPAA)
+- Task registry: dict (dev) → Redis pub/sub (production) for SSE token delivery
+
+### STEP 5 — Worker Adapter [P1]
+File: project/workers/adapter.py
+Abstract base: WorkerAdapter.execute(task: dict) -> dict
+Task envelope: { task_id, intent, payload, context, session_id }
+Result envelope: { success, result, skill_used, confidence, error }
+Implementations:
+  - MockWorker: always returns success. DEFAULT for MVP.
+  - OpenClawWorker: POST to OpenClaw MCP endpoint (add when infra is ready)
+  - HermesWorker: POST to Hermes task channel (alternative to OpenClaw)
+Factory: get_worker() reads WORKER_BACKEND env var ("mock" | "openclaw" | "hermes")
+Feature flag: worker_delegate node only activates if ENABLE_WORKER=true in env.
+
+### STEP 6 — Streaming [P0]
+File: project/api/streaming.py
+Pattern: background task writes tokens to task_registry[task_id]["tokens"]
+SSE generator polls registry every 50ms, yields tokens as "data: {json}
+
+"
+Include "done" event when graph completes.
+Include "error" event with safe message if graph raises.
+Frontend EventSource connects to /api/chat/stream/{task_id}, 
+  falls back to polling /api/chat/status/{task_id} on connection error.
+
+### STEP 7 — Security & HIPAA [P0]
+File: project/api/auth.py + project/api/middleware.py
+- JWT auth (HS256, expiry 24h): protect all endpoints except /health
+- Rate limiting: 20 req/min/user via slowapi
+- CORS: allow_origins from environment variable, NOT hardcoded
+- Pydantic validation on all request models
+- Input sanitization: strip any detected PHI patterns from being logged
+- BAA requirement: document in README that OpenAI/Anthropic API must have signed BAA
+  before handling real user data. Consumer products (chat.openai.com) are NOT compliant.
+
+## PROJECT STRUCTURE
+project/
+├── api/
+│   ├── main.py          ← FastAPI app, routers
+│   ├── auth.py          ← JWT + rate limiting
+│   ├── streaming.py     ← SSE generator + task registry
+│   └── middleware.py    ← CORS, logging, error handling
+├── graph/
+│   ├── concierge_graph.py  ← StateGraph definition
+│   └── nodes/
+│       ├── intake.py    ← intake_guard + classify_intent
+│       ├── retrieval.py ← retrieve_context
+│       ├── generation.py ← generate_response + format_and_cite
+│       └── worker.py    ← worker_delegate
+├── rag/
+│   ├── retriever.py     ← InsuranceRetriever class
+│   └── ingest.py        ← CLI ingest script
+├── workers/
+│   └── adapter.py       ← WorkerAdapter + MockWorker + OpenClawWorker
+├── persistence/
+│   └── store.py         ← checkpointer factory + AuditLogger
+├── data/
+│   ├── vectorstore/     ← Chroma persisted DB
+│   ├── sessions.db      ← LangGraph checkpoints
+│   └── audit.db         ← audit log
+├── .env.example         ← JWT_SECRET, OPENAI_KEY, WORKER_BACKEND, ENABLE_WORKER
+├── requirements.txt
+└── README.md            ← BAA requirement, deployment notes
+
+## IMPLEMENTATION ORDER (follow exactly)
+1. Create project structure + requirements.txt
+2. Implement persistence/store.py (checkpointer + audit log)
+3. Implement rag/retriever.py (InsuranceRetriever class, ingest later)
+4. Implement graph/concierge_graph.py (state schema + graph, stub all nodes)
+5. Implement workers/adapter.py (MockWorker only)
+6. Implement api/streaming.py (task registry + SSE generator)
+7. Implement api/auth.py (JWT + rate limiter)
+8. Implement api/main.py (endpoints wired up)
+9. Smoke test: POST /api/chat → get task_id → SSE stream returns mock tokens
+10. Implement node bodies (intake_guard, classify_intent, retrieve_context,
+    generate_response, format_and_cite) one at a time, test each
+11. Wire rag/ingest.py, ingest first 50 insurance docs, verify retrieval quality
+12. Deploy: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    Add WORKER_BACKEND=mock ENABLE_WORKER=false in env for first deploy
+
+## SUCCESS CRITERIA FOR MVP
+✓ POST /api/chat returns task_id in < 200ms
+✓ GET /api/chat/stream/{task_id} delivers first token in < 3s
+✓ Every insurance-domain answer includes at least 1 citation
+✓ Session continuity: same session_id resumes conversation history
+✓ Audit log writes 1 row per LLM call with correct fields
+✓ /api/health returns 200 always (for Vercel/Railway health check)
+✓ Frontend can connect via EventSource, receives token stream, renders citations
+
+## PHASE 2 (do NOT implement in MVP)
+- OpenClaw/Hermes live workers (swap MockWorker)
+- Skill proposal pipeline from conversation logs
+- pgvector production vectorstore
+- Redis task registry for multi-instance deployment
+- Human-in-the-loop interrupt nodes (LangGraph HIL)
+- Fine-tuning / domain-specific model via curated insurance DB
+    </pre>
+  </div>
+</section>
+
+<!-- PRIORITY MATRIX -->
+<section class="section" id="priority">
+  <div class="section-header">
+    <div class="step-badge phase-0">✓</div>
+    <div>
+      <h2>Priority Matrix</h2>
+      <p>What to build when, across all 3 models' recommendations.</p>
+    </div>
+  </div>
+
+  <table class="ptable">
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Priority</th>
+        <th>Rationale</th>
+        <th>Model(s)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>FastAPI endpoint contract</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>Unblocks frontend integration immediately; nothing else ships without it</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>LangGraph state machine (stubbed nodes)</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>All other features hang off this skeleton; stub first, implement later</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>SSE streaming + task_id pattern</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>Without async pattern, backend will timeout under real LLM latency</td>
+        <td><span class="model-tag tag-claude" style="font-size:9px">CLD</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>RAG retriever (Chroma + citations)</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>Insurance hallucination risk is highest-severity failure mode</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>Session persistence (SQLite checkpointer)</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>Without checkpointing, every restart loses all conversations</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span></td>
+      </tr>
+      <tr>
+        <td>Audit log (HIPAA)</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>HIPAA violation risk; required before any real user data touches the system</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>JWT auth + rate limiting</td>
+        <td><span class="pil p0">P0</span></td>
+        <td>Required before exposing any endpoint to public internet</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span></td>
+      </tr>
+      <tr>
+        <td>Worker adapter (MockWorker)</td>
+        <td><span class="pil p1">P1</span></td>
+        <td>Build the interface now; use Mock so you can test the graph before OpenClaw is wired</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>OpenClaw live worker integration</td>
+        <td><span class="pil p2">P2</span></td>
+        <td>Once MockWorker + graph are validated; swap via WORKER_BACKEND env var</td>
+        <td><span class="model-tag tag-gemini" style="font-size:9px">GEM</span></td>
+      </tr>
+      <tr>
+        <td>Self-improving skills pipeline</td>
+        <td><span class="pil later">Phase 2</span></td>
+        <td>Only after MVP is stable + human-review gate is implemented</td>
+        <td><span class="model-tag tag-gpt" style="font-size:9px">GPT</span> <span class="model-tag tag-claude" style="font-size:9px">CLD</span></td>
+      </tr>
+      <tr>
+        <td>pgvector + Redis (production scale)</td>
+        <td><span class="pil later">Phase 2</span></td>
+        <td>SQLite/Chroma are fine for MVP and early users; swap when traffic warrants</td>
+        <td><span class="model-tag tag-claude" style="font-size:9px">CLD</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+</div>
+
+<script>
+// Theme toggle
+(function(){
+  const t=document.querySelector('[data-theme-toggle]'),r=document.documentElement;
+  t&&t.addEventListener('click',()=>{
+    const d=r.getAttribute('data-theme')==='dark'?'light':'dark';
+    r.setAttribute('data-theme',d);
+  });
+})();
+
+// Scroll progress
+window.addEventListener('scroll',()=>{
+  const doc=document.documentElement;
+  const prog=(doc.scrollTop||document.body.scrollTop)/(doc.scrollHeight-doc.clientHeight)*100;
+  document.getElementById('progress').style.width=prog+'%';
+});
+
+// Active nav
+const sections=document.querySelectorAll('section[id]');
+const navItems=document.querySelectorAll('.nav-item[href]');
+const obs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      navItems.forEach(n=>n.classList.remove('active'));
+      const active=document.querySelector('.nav-item[href="#'+e.target.id+'"]');
+      if(active)active.classList.add('active');
+    }
+  });
+},{threshold:0.3});
+sections.forEach(s=>obs.observe(s));
+
+// Copy prompt
+function copyPrompt(){
+  const text=document.getElementById('master-prompt-text').textContent;
+  navigator.clipboard.writeText(text.trim()).then(()=>{
+    const btn=document.querySelector('.copy-btn');
+    btn.textContent='Copied!';
+    btn.style.color='var(--color-accent)';
+    setTimeout(()=>{btn.textContent='Copy';btn.style.color='';},2000);
+  });
+}
+</script>
+</body>
+</html>

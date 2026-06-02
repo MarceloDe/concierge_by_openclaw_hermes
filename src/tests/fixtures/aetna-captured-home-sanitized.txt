@@ -1,0 +1,70 @@
+Home - Aetna
+Authenticated member portal
+Welcome, Fixture Member
+
+Plan details
+Plan name Fixture Choice PPO
+Plan type PPO
+Coverage starts Jan 1, 2026
+Network
+Find care
+Provider network
+
+Benefits
+Coverage
+Plan spending
+Deductible
+Total $600
+Spent $558.72
+Remaining $41.28
+
+Out-of-Pocket Max
+Total $9,000
+Spent $1,476.98
+Remaining $7,523.02
+
+Claims
+View All Claims
+Generic Office Visit
+For Fixture Member - May 12, 2026
+Your share
+$3.81
+Generic Pharmacy Fill
+For Fixture Member - Apr 15, 2026
+Your share
+$8.92
+Generic Lab Service
+For Dependent One - Apr 4, 2026
+Your share
+$18.25
+Generic Specialist Visit
+For Fixture Member - Mar 22, 2026
+Your share
+$42.50
+Generic Imaging Review
+For Dependent One - Mar 7, 2026
+Your share
+$125.00
+Submit a Claim
+
+Prior Authorization
+View All
+Sample Hospital
+Mar 6, 2026
+
+Documents
+Summary of Benefits and Coverage PDF
+Plan document
+Explanation of Benefits
+EOB
+
+ID card
+Digital ID card
+Member ID ending in 1234
+
+Pharmacy
+Prescription coverage
+Rx
+Drug list
+Formulary
+Mail order

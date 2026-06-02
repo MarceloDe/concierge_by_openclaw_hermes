@@ -40,6 +40,21 @@ function structuredClaimsLine(structured) {
   return `Structured claims/prior authorization evidence: ${parts.join(" | ")}.`;
 }
 
+function structuredSectionsLine(structured) {
+  const sectionNames = structured?.sectionEvidence?.sections?.map((section) => section.section) ?? [];
+  const documentSignals = structured?.documentSignals;
+  const extras = [];
+  if (sectionNames.length) extras.push(`sections ${sectionNames.join(", ")}`);
+  if (documentSignals?.candidateCount) {
+    extras.push(`document candidates ${documentSignals.candidateCount} (${documentSignals.sbcPdfCandidateCount ?? 0} SBC/PDF)`);
+  }
+  if (structured?.idCardSignals?.present) extras.push("ID card signal");
+  if (structured?.pharmacySignals?.present) extras.push("pharmacy signal");
+  if (structured?.networkSignals?.present) extras.push("network signal");
+  if (!extras.length) return "Structured section evidence: no section-specific signals were extracted yet.";
+  return `Structured section evidence: ${extras.join("; ")}.`;
+}
+
 function sourcePointerLine(sourcePointers = []) {
   if (!sourcePointers.length) return "Source pointers: none stored yet.";
   return `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`;
@@ -69,6 +84,11 @@ function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = 
     if (evidenceObservation.status === "captured_official_openclaw_read_only_observation") {
       return "The approved read-only observation was executed by the dedicated official OpenClaw profile with DOM/accessibility and visual OCR checks before LangGraph retained evidence.";
     }
+    if (evidenceObservation.status === "captured_official_openclaw_document_read_only_observation") {
+      const candidate = evidenceObservation.approvedDocumentCandidate;
+      const label = candidate?.label ? ` Approved candidate: ${candidate.label}.` : "";
+      return `The approved read-only document observation was executed by the dedicated official OpenClaw profile against exactly one candidate with DOM/accessibility and visual OCR checks before LangGraph retained the source pointer.${label}`;
+    }
     return "The approved read-only portal observation was verified by LangGraph before evidence was retained.";
   })();
   const pageTitle = browserResult?.page?.title ? `Observed page: ${browserResult.page.title}.` : null;
@@ -76,6 +96,7 @@ function compactEvidenceResponse({ browserResult, eligibility, sourcePointers = 
     "I captured approved read-only portal evidence and prepared the benefits answer from stored source pointers.",
     structuredBenefitLine(structured),
     structuredClaimsLine(structured),
+    structuredSectionsLine(structured),
     discoveryLine(evidenceObservation),
     sourcePointerLine(sourcePointers),
     pageTitle,
@@ -112,6 +133,7 @@ export function composeResponse({ user, portal, policyResult, intent, browserRes
     extractedLine,
     structuredLine,
     structuredBenefitLine(structured),
+    structuredSectionsLine(structured),
     `Workflow intent: ${intent}. Policy checks: ${checks}.`,
     "No payer API was used, no external message was sent, and Brainstyworkers is not providing medical advice.",
     "Your approval allows local PHI storage and portal extraction for this prototype; passwords, passkeys, SSNs, and 2FA remain under your direct control in Chrome."

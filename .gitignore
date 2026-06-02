@@ -10,3 +10,4 @@ data/
 !data/.gitkeep
 eng.traineddata
 *.log
+concierge_by_openclaw_hermes/
