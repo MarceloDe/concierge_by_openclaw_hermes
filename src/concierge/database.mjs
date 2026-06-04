@@ -100,10 +100,181 @@ export class SqliteStore {
       ["workflow_key", "ALTER TABLE agent_tasks ADD COLUMN workflow_key TEXT;"],
       ["journey_stage", "ALTER TABLE agent_tasks ADD COLUMN journey_stage TEXT;"]
     ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS human_handoff_items (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        task_id TEXT,
+        message_id TEXT,
+        handoff_type TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        response_guidance TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.migrateColumns("knowledge_sources", [
+      ["priority", "ALTER TABLE knowledge_sources ADD COLUMN priority INTEGER NOT NULL DEFAULT 100;"],
+      ["last_run_at", "ALTER TABLE knowledge_sources ADD COLUMN last_run_at TEXT;"],
+      ["last_status", "ALTER TABLE knowledge_sources ADD COLUMN last_status TEXT;"],
+      ["metadata_json", "ALTER TABLE knowledge_sources ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';"],
+      ["proposed_by", "ALTER TABLE knowledge_sources ADD COLUMN proposed_by TEXT;"],
+      ["approved_by", "ALTER TABLE knowledge_sources ADD COLUMN approved_by TEXT;"],
+      ["reviewed_at", "ALTER TABLE knowledge_sources ADD COLUMN reviewed_at TEXT;"]
+    ]);
     await this.migrateColumns("scheduled_jobs", [
       ["workflow_key", "ALTER TABLE scheduled_jobs ADD COLUMN workflow_key TEXT;"],
       ["journey_stage", "ALTER TABLE scheduled_jobs ADD COLUMN journey_stage TEXT;"]
     ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_schedules (
+        id TEXT PRIMARY KEY,
+        schedule_key TEXT NOT NULL UNIQUE,
+        actor_user_id TEXT,
+        source_id TEXT,
+        source_key TEXT,
+        schedule_label TEXT NOT NULL,
+        interval_hours INTEGER NOT NULL,
+        workflow_key TEXT NOT NULL,
+        topic TEXT NOT NULL DEFAULT '',
+        query_json TEXT NOT NULL DEFAULT '{}',
+        worker_mode TEXT NOT NULL DEFAULT 'deterministic_fetch',
+        status TEXT NOT NULL,
+        approval_status TEXT NOT NULL,
+        next_run_at TEXT NOT NULL,
+        last_run_at TEXT,
+        last_run_id TEXT,
+        last_status TEXT,
+        run_count INTEGER NOT NULL DEFAULT 0,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_scheduler_daemon_state (
+        id TEXT PRIMARY KEY,
+        daemon_key TEXT NOT NULL UNIQUE,
+        actor_user_id TEXT,
+        status TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        interval_ms INTEGER NOT NULL,
+        tick_limit INTEGER NOT NULL,
+        execute_due_runs INTEGER NOT NULL DEFAULT 0,
+        approved_worker_dispatch INTEGER NOT NULL DEFAULT 0,
+        worker_mode TEXT,
+        last_tick_at TEXT,
+        last_tick_event_id TEXT,
+        last_success_at TEXT,
+        last_failure_at TEXT,
+        last_error TEXT,
+        last_processed_count INTEGER NOT NULL DEFAULT 0,
+        last_blocked_count INTEGER NOT NULL DEFAULT 0,
+        last_actions_json TEXT NOT NULL DEFAULT '[]',
+        tick_count INTEGER NOT NULL DEFAULT 0,
+        overlap_skipped_count INTEGER NOT NULL DEFAULT 0,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_routes (
+        id TEXT PRIMARY KEY,
+        route_key TEXT NOT NULL UNIQUE,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        selected_by TEXT,
+        selected_at TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_jobs (
+        id TEXT PRIMARY KEY,
+        route_key TEXT NOT NULL,
+        actor_user_id TEXT,
+        job_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        artifact_count INTEGER NOT NULL DEFAULT 0,
+        indexed_count INTEGER NOT NULL DEFAULT 0,
+        skipped_count INTEGER NOT NULL DEFAULT 0,
+        failure_reason TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_index (
+        id TEXT PRIMARY KEY,
+        artifact_id TEXT NOT NULL,
+        route_key TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        vector_json TEXT NOT NULL,
+        vector_hash TEXT NOT NULL,
+        text_hash TEXT NOT NULL,
+        source_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        job_id TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_graph_builds (
+        id TEXT PRIMARY KEY,
+        actor_user_id TEXT,
+        status TEXT NOT NULL,
+        node_count INTEGER NOT NULL DEFAULT 0,
+        edge_count INTEGER NOT NULL DEFAULT 0,
+        graph_hash TEXT NOT NULL,
+        graph_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        failure_reason TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_claim_evaluations (
+        id TEXT PRIMARY KEY,
+        actor_user_id TEXT,
+        question_hash TEXT,
+        question_preview TEXT,
+        answer_hash TEXT NOT NULL,
+        answer_preview TEXT NOT NULL,
+        status TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        claim_count INTEGER NOT NULL DEFAULT 0,
+        supported_count INTEGER NOT NULL DEFAULT 0,
+        unsupported_count INTEGER NOT NULL DEFAULT 0,
+        low_confidence_count INTEGER NOT NULL DEFAULT 0,
+        evaluation_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
     await this.exec(`
       CREATE TABLE IF NOT EXISTS worker_continuations (
         id TEXT PRIMARY KEY,

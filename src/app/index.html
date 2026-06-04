@@ -89,6 +89,88 @@
         <section class="review-panel">
           <div class="review-header">
             <div>
+              <p class="eyebrow">Phase 10T</p>
+              <h2>Operator Research Console</h2>
+            </div>
+            <div class="review-actions">
+              <span id="researchStatus">Not loaded</span>
+              <span id="operatorAssistantStatus">Assistant idle</span>
+              <button id="loadResearchKpis" type="button">Load KPIs</button>
+              <button id="loadHandoffs" type="button">Human Handoffs</button>
+              <button id="loadResearchWorker" type="button">Worker Status</button>
+              <button id="loadResearchEmbeddings" type="button">Embedding Status</button>
+              <button id="reindexResearchEmbeddings" type="button">Reindex Embeddings</button>
+              <button id="loadResearchGraph" type="button">Research Graph</button>
+              <button id="buildResearchGraph" type="button">Build Graph</button>
+              <button id="loadCitationClosure" type="button">Citation Closure</button>
+              <button id="loadResearchArtifacts" type="button">Review Artifacts</button>
+              <button id="loadResearchSources" type="button">Load Sources</button>
+              <button id="loadResearchRuns" type="button">Load Runs</button>
+              <button id="loadResearchSchedules" type="button">Load Schedules</button>
+              <button id="loadResearchSchedulerStatus" type="button">Scheduler Daemon</button>
+              <button id="tickResearchSchedulerDaemon" type="button">Daemon Tick</button>
+              <button id="tickResearchSchedules" type="button">Run Due</button>
+              <button id="loadAuditLog" type="button">Audit Log</button>
+              <button id="startResearchRun" type="button">Start Manual Run</button>
+              <button id="loadOperatorTools" type="button">Assistant Tools</button>
+              <button id="loadOperatorProposals" type="button">Assistant Proposals</button>
+            </div>
+          </div>
+          <div class="operator-assistant-form">
+            <label>
+              Operator request
+              <textarea id="operatorAssistantMessage" rows="3">Search evidence for deductible benefits</textarea>
+            </label>
+            <button id="runOperatorAssistant" type="button">Run Assistant</button>
+          </div>
+          <div id="operatorAssistantConsole" class="research-grid"></div>
+          <div class="operator-form-grid">
+            <label>
+              Source URL
+              <input id="researchSourceUrl" value="https://www.aetna.com/health-care-professionals/clinical-policy-bulletins.html" />
+            </label>
+            <label>
+              Source title
+              <input id="researchSourceTitle" value="Aetna Clinical Policy Bulletins Review" />
+            </label>
+            <label>
+              Topic
+              <input id="researchTopic" value="Benefits and policy source review" />
+            </label>
+            <label>
+              Evidence search
+              <input id="researchSearchQuery" value="deductible benefits" />
+            </label>
+            <label>
+              Answer to judge
+              <textarea id="researchAnswerToJudge" rows="4">The annual deductible applies before coinsurance starts for covered services. Skydiving vacations are fully reimbursed.</textarea>
+            </label>
+            <label>
+              Embedding provider
+              <select id="researchEmbeddingProvider">
+                <option value="local_tfidf">Local TF-IDF</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </label>
+            <label>
+              Embedding dimensions
+              <input id="researchEmbeddingDimensions" type="number" value="64" min="8" max="4096" />
+            </label>
+            <label>
+              Audit prefix
+              <input id="auditEventPrefix" value="research" />
+            </label>
+            <button id="proposeResearchSource" type="button">Propose Source</button>
+            <button id="chooseResearchEmbeddingRoute" type="button">Choose Route</button>
+            <button id="searchResearchEvidence" type="button">Search Evidence</button>
+            <button id="evaluateCitationClosure" type="button">Judge Citations</button>
+          </div>
+          <div id="researchConsole" class="research-grid"></div>
+        </section>
+
+        <section class="review-panel">
+          <div class="review-header">
+            <div>
               <p class="eyebrow">Memory Harness</p>
               <h2>OpenClaw Arm Heartbeat</h2>
             </div>

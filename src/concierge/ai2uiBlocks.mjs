@@ -1,0 +1,283 @@
+export const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
+
+export const AI2UI_BLOCK_TYPES = Object.freeze({
+  ANSWER_MARKDOWN: "answer_markdown",
+  WORKFLOW_STATUS: "workflow_status",
+  APPROVAL_GATE: "approval_gate",
+  WORKER_STATUS: "worker_status",
+  SOURCE_CITATIONS: "source_citations",
+  MEMORY_STATUS: "memory_status",
+  HUMAN_HANDOFF: "human_handoff",
+  SAFETY_NOTICE: "safety_notice",
+  NEXT_STEPS: "next_steps",
+  UNKNOWN: "unknown"
+});
+
+const SUPPORTED_TYPES = new Set(Object.values(AI2UI_BLOCK_TYPES));
+
+function safeString(value, fallback = "") {
+  if (value === undefined || value === null || value === "") return fallback;
+  return String(value);
+}
+
+function blockId(state, type, index) {
+  const root = state?.graph_trace_id ?? state?.session_id ?? "graph";
+  return `${root}:${type}:${index}`;
+}
+
+function previewPayload(value) {
+  try {
+    return JSON.stringify(value ?? {}).slice(0, 600);
+  } catch {
+    return String(value ?? "").slice(0, 600);
+  }
+}
+
+export function normalizeAi2UiBlock(block, index = 0) {
+  const type = safeString(block?.type, AI2UI_BLOCK_TYPES.UNKNOWN);
+  if (!SUPPORTED_TYPES.has(type) || type === AI2UI_BLOCK_TYPES.UNKNOWN) {
+    return {
+      id: safeString(block?.id, `unknown:${index}`),
+      type: AI2UI_BLOCK_TYPES.UNKNOWN,
+      version: AI2UI_BLOCK_CONTRACT_VERSION,
+      title: "Unsupported UI block",
+      payload: {
+        originalType: type,
+        safePreview: previewPayload(block?.payload ?? block)
+      },
+      renderHints: {
+        severity: "warning",
+        fallback: "safe_json_preview"
+      }
+    };
+  }
+  return {
+    id: safeString(block.id, `${type}:${index}`),
+    type,
+    version: AI2UI_BLOCK_CONTRACT_VERSION,
+    title: safeString(block.title, humanTitle(type)),
+    payload: block.payload ?? {},
+    renderHints: block.renderHints ?? {}
+  };
+}
+
+export function normalizeAi2UiBlocks(blocks = []) {
+  return (Array.isArray(blocks) ? blocks : []).map((block, index) => normalizeAi2UiBlock(block, index));
+}
+
+function humanTitle(type) {
+  return type
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function sourcePointersFromState(state = {}) {
+  return (state.source_pointers ?? []).map((pointer) => ({
+    table: pointer.table ?? null,
+    id: pointer.id ?? pointer.rowId ?? null,
+    kind: pointer.kind ?? pointer.table ?? "source_pointer",
+    displayLabel: pointer.displayLabel ?? pointer.summary ?? pointer.sourceUrl ?? `${pointer.table ?? "source"}/${pointer.id ?? pointer.rowId ?? "unknown"}`,
+    sourceUrl: pointer.sourceUrl ?? null,
+    summary: pointer.summary ?? null,
+    createdAt: pointer.createdAt ?? pointer.created_at ?? null,
+    extractionHash: pointer.extractionHash ?? pointer.sha256 ?? null,
+    evidenceFieldCount: Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields.length : 0
+  }));
+}
+
+function approvalPayload(state = {}) {
+  const proposal = state.openclaw_skill_proposal ?? {};
+  const evidence = state.evidence_observation ?? {};
+  const validation = state.openclaw_skill_validation ?? {};
+  const approval = evidence.approval ?? state.approval_resume ?? {};
+  const status =
+    approval.status ??
+    (String(evidence.status ?? "").includes("waiting_for_approval") ? "needed" : null) ??
+    proposal.task?.status ??
+    proposal.status ??
+    "not_requested";
+  return {
+    status,
+    taskId: evidence.workerContinuation?.taskId ?? proposal.task?.id ?? null,
+    approvalTokenConsumed: ["consumed", "approved_consumed"].includes(status) || Boolean(state.source_pointers?.length),
+    approvalScope: approval.approvalScope ?? evidence.approvalScope ?? validation.approvalScope ?? "read_only_observation",
+    allowedAction: approval.allowedAction ?? evidence.allowedAction ?? null,
+    approvalsRequired: validation.approvalsRequired ?? [],
+    executionMode: validation.executionMode ?? proposal.executionMode ?? "proposal_only",
+    actionsTaken: validation.actionsTaken ?? evidence.actionsTaken ?? []
+  };
+}
+
+function workerPayload(state = {}) {
+  const evidence = state.evidence_observation ?? {};
+  return {
+    status: evidence.status ?? "not_requested",
+    terminalOutcome: evidence.workerTerminalOutcome ?? evidence.terminalOutcome ?? state.workflow_outcome ?? "not_reported",
+    actionsTaken: evidence.actionsTaken ?? [],
+    sourcePointerCount: state.source_pointers?.length ?? 0,
+    continuationId: evidence.workerContinuation?.id ?? state.worker_continuation?.id ?? null,
+    blocker: evidence.blocker ?? evidence.reason ?? evidence.error ?? evidence.officialOpenClaw?.blocker ?? null,
+    evidenceChannels: evidence.evidenceChannels ?? [],
+    discoveryAvailable: Boolean(evidence.discoveryReport)
+  };
+}
+
+function memoryPayload(state = {}, productMemory = {}) {
+  const retain = state.product_memory_retain ?? productMemory.retain ?? {};
+  const recall = state.product_memory_recall ?? productMemory.recall ?? {};
+  return {
+    adapter: retain.adapter ?? recall.adapter ?? "graphiti",
+    recallStatus: recall.ok === false ? "recall_failed" : recall.status ?? (recall.enabled === false ? "disabled" : "available"),
+    recalledFactCount: recall.facts?.length ?? 0,
+    retainStatus: retain.status ?? retain.repairStatus ?? (retain.retained ? "retained" : retain.enabled === false ? "disabled" : "not_reported"),
+    retained: Boolean(retain.retained),
+    episodeUuid: retain.episodeUuid ?? null,
+    nextAction: retain.repairPlan?.nextAction ?? retain.message ?? retain.error ?? null,
+    cortexProductMemory: false
+  };
+}
+
+function nextStepsForState(state = {}) {
+  const approval = approvalPayload(state);
+  const worker = workerPayload(state);
+  const pointers = sourcePointersFromState(state);
+  if (state.human_handoff?.handoff) {
+    return [
+      "Use emergency or urgent-care channels now if there may be immediate danger.",
+      "Review the created handoff item in the Safety panel.",
+      "Do not wait for portal evidence before seeking urgent help."
+    ];
+  }
+  if (approval.status === "pending_approval" || approval.status === "needed") {
+    return [
+      "Review the read-only approval scope.",
+      "Approve only if the authenticated portal or document candidate is ready.",
+      "The worker remains idle until approval is consumed."
+    ];
+  }
+  if (worker.blocker) {
+    return [
+      "Resolve the blocker shown by the worker.",
+      "Keep login, passkey, 2FA, captcha, and password-manager steps user-controlled.",
+      "Retry the same session after the approved source is available."
+    ];
+  }
+  if (pointers.length) {
+    return [
+      "Review the cited source pointer cards.",
+      "Use feedback if the answer needs follow-up.",
+      "Open the operator proof dashboard for the full audit trail."
+    ];
+  }
+  return [
+    "Ask an insurance benefits, claim, authorization, or document question.",
+    "Attach evidence or approve a read-only worker observation when requested.",
+    "Wait for a sourced answer or a precise blocker."
+  ];
+}
+
+export function buildAi2UiBlocksFromState(state = {}, options = {}) {
+  const productMemory = options.productMemory ?? {};
+  const handoff = state.human_handoff?.handoff ?? null;
+  const blocks = [
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
+      type: AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN,
+      title: "Answer",
+      payload: {
+        markdown: state.final_response ?? "",
+        workflow: state.workflow ?? null,
+        outcome: state.workflow_outcome ?? null
+      },
+      renderHints: { priority: "primary" }
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.WORKFLOW_STATUS, 1),
+      type: AI2UI_BLOCK_TYPES.WORKFLOW_STATUS,
+      title: "Workflow",
+      payload: {
+        workflow: state.workflow ?? null,
+        intent: state.structured_intent?.intent ?? state.intent ?? null,
+        confidence: state.structured_intent?.confidence ?? null,
+        routeReason: state.route_reason ?? null,
+        traceId: state.graph_trace_id ?? null,
+        llmDecisionMode: state.llm_orchestration_decision?.mode ?? state.model_invocation?.mode ?? "not_reported"
+      }
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.APPROVAL_GATE, 2),
+      type: AI2UI_BLOCK_TYPES.APPROVAL_GATE,
+      title: "Approval Gate",
+      payload: approvalPayload(state),
+      renderHints: { severity: approvalPayload(state).status === "pending_approval" ? "warning" : "neutral" }
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.WORKER_STATUS, 3),
+      type: AI2UI_BLOCK_TYPES.WORKER_STATUS,
+      title: "Worker",
+      payload: workerPayload(state)
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.SOURCE_CITATIONS, 4),
+      type: AI2UI_BLOCK_TYPES.SOURCE_CITATIONS,
+      title: "Citations",
+      payload: {
+        sourcePointers: sourcePointersFromState(state),
+        sourcePointerCount: state.source_pointers?.length ?? 0,
+        evidenceStatus: state.evidence_observation?.status ?? "not_requested"
+      }
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.MEMORY_STATUS, 5),
+      type: AI2UI_BLOCK_TYPES.MEMORY_STATUS,
+      title: "Product Memory",
+      payload: memoryPayload(state, productMemory)
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.SAFETY_NOTICE, 6),
+      type: AI2UI_BLOCK_TYPES.SAFETY_NOTICE,
+      title: "Safety Boundary",
+      payload: {
+        healthcareDomain: state.policy_result?.healthcareDomain ?? true,
+        urgentEscalationRequired: Boolean(state.policy_result?.urgentEscalationRequired),
+        blockedActions: [
+          "credential_entry",
+          "passkey_or_2fa_handling",
+          "captcha_bypass",
+          "payer_contact_without_gate",
+          "form_submission_without_gate",
+          "account_record_change",
+          "medical_advice"
+        ],
+        message: "Read-only evidence work is allowed only after the matching approval gate is consumed."
+      },
+      renderHints: { severity: state.policy_result?.urgentEscalationRequired ? "critical" : "info" }
+    },
+    {
+      id: blockId(state, AI2UI_BLOCK_TYPES.NEXT_STEPS, 7),
+      type: AI2UI_BLOCK_TYPES.NEXT_STEPS,
+      title: "Next Steps",
+      payload: {
+        items: nextStepsForState(state)
+      }
+    }
+  ];
+  if (handoff) {
+    blocks.splice(5, 0, {
+      id: blockId(state, AI2UI_BLOCK_TYPES.HUMAN_HANDOFF, 8),
+      type: AI2UI_BLOCK_TYPES.HUMAN_HANDOFF,
+      title: "Human Handoff",
+      payload: {
+        id: handoff.id ?? null,
+        taskId: handoff.taskId ?? handoff.task_id ?? null,
+        status: handoff.status ?? "open",
+        priority: handoff.priority ?? "urgent",
+        handoffType: handoff.handoffType ?? handoff.handoff_type ?? "human_handoff",
+        summary: handoff.summary ?? "Handoff created."
+      },
+      renderHints: { severity: "critical" }
+    });
+  }
+  return normalizeAi2UiBlocks(blocks);
+}

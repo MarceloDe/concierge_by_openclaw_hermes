@@ -308,27 +308,30 @@ export async function retainMemoryFromSession(store, { user, session, reason = "
   const retained = [];
   if (latestMessage) {
     const messageRisk = classifyUntrustedTextRisk(latestMessage.content);
+    const blockedForRecall = messageRisk.promptInjection || messageRisk.credential || messageRisk.urgentEscalation;
     retained.push(
       await upsertMemoryItem(store, {
         user_id: user.id,
         session_id: session.id,
         memory_scope: "episodic",
-        memory_type: messageRisk.promptInjection || messageRisk.credential ? "blocked_policy_event" : "last_user_task",
+        memory_type: blockedForRecall ? "blocked_policy_event" : "last_user_task",
         content:
-          messageRisk.promptInjection || messageRisk.credential
-            ? "A user request was blocked by guardrails and the unsafe text was not retained for prompt recall."
+          blockedForRecall
+            ? "A user request was blocked or escalated by guardrails and the sensitive text was not retained for prompt recall."
             : latestMessage.content,
         metadata_json: JSON.stringify({
           reason,
           channel: session.channel,
           threadId: session.langgraph_thread_id,
           promptInjectionRisk: messageRisk.promptInjection,
-          credentialRisk: messageRisk.credential
+          credentialRisk: messageRisk.credential,
+          urgentEscalation: messageRisk.urgentEscalation,
+          urgentEscalationCategory: messageRisk.urgentEscalationCategory
         }),
         source_table: "conversation_messages",
         source_id: latestMessage.id,
         source_url: null,
-        sensitivity: messageRisk.promptInjection || messageRisk.credential ? "blocked_unsafe_prompt_pointer" : "user_request_phi_possible",
+        sensitivity: blockedForRecall ? "blocked_unsafe_prompt_pointer" : "user_request_phi_possible",
         retention_policy: "local_cross_session_until_user_policy_changes",
         adapter_status: "local_hook_ready_hindsight_deferred",
         occurred_at: latestMessage.created_at,

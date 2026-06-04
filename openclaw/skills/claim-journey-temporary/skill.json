@@ -1,0 +1,11 @@
+{
+  "schema_version": "2026-06-02.journey-skill.sketch.v1",
+  "skill_key": "claim_journey_temporary",
+  "title": "Temporary Claim Journey Skill",
+  "status": "draft_sketch_runtime_gated",
+  "risk_level": "medium_high",
+  "purpose": "Guide LangGraph claim-status orchestration with dynamic memory/session/database mounts and worker requirements.",
+  "compatible_hosts": ["langgraph", "openclaw", "brainstyworkers_dynamic_skill_server"],
+  "execution_mode": "context_resolution_only",
+  "portal_access": "delegate_to_insurance_portal_browser_with_read_only_approval"
+}

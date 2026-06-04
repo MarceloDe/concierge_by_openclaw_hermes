@@ -48,3 +48,11 @@ test("structured classifier preserves credential-entry refusal before workflow r
   assert.equal(result.intent, "safety_refusal");
   assert.equal(result.refusalOrEscalationFlag, "refusal");
 });
+
+test("structured classifier routes emergency language to human handoff escalation", () => {
+  const result = classify("I have chest pain and trouble breathing while looking at my plan.");
+  assert.equal(result.workflow, "human_approval_escalation");
+  assert.equal(result.intent, "urgent_emergency_escalation");
+  assert.equal(result.refusalOrEscalationFlag, "urgent_emergency_escalation");
+  assert.ok(result.requiredEvidence.includes("human_handoff_record"));
+});

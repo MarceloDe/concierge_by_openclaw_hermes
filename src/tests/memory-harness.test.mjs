@@ -1,8 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
+import { mkdtemp } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createId, nowIso, SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
+import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
 import { getMemoryContextForUser, listHarnessState, planTaskFollowups, runUserHeartbeat } from "../concierge/memoryHarness.mjs";
+
+async function createStore() {
+  const dir = await mkdtemp(join(tmpdir(), "brainsty-memory-harness-"));
+  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+}
 
 test("memory harness injects cross-session context and retains database pointers from real Aetna data", async () => {
   const store = await new SqliteStore(DEFAULT_DB_PATH).initialize();
@@ -43,18 +52,35 @@ test("memory harness injects cross-session context and retains database pointers
 });
 
 test("claim submission event creates approval-gated heartbeat jobs without sending external messages", async () => {
-  const store = await new SqliteStore(DEFAULT_DB_PATH).initialize();
-  const session = await store.get(
-    "SELECT s.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = 'mocfelix@gmail.com' ORDER BY COALESCE(s.last_active_at, s.created_at) DESC LIMIT 1;"
-  );
-  const user = await store.findOne("users", { email: "mocfelix@gmail.com" });
-  const claim = await store.get(
-    "SELECT ci.* FROM claim_items ci JOIN eligibility_snapshots es ON es.id = ci.snapshot_id WHERE es.user_id = (SELECT id FROM users WHERE email = 'mocfelix@gmail.com') ORDER BY ci.created_at DESC LIMIT 1;"
-  );
-
-  assert.ok(user, "Run enrollment before this harness test.");
-  assert.ok(session, "Run a session before this harness test.");
-  assert.ok(claim, "Run real Aetna structured extraction before this harness test.");
+  const store = await createStore();
+  const { user, session, portal } = await enrollDefaultMember(store, {
+    email: "memory-heartbeat@example.test",
+    name: "Memory Harness Test"
+  });
+  const time = nowIso();
+  const snapshot = {
+    id: createId("eligibility"),
+    user_id: user.id,
+    session_id: session.id,
+    portal_account_id: portal.id,
+    source_url: portal.portal_url,
+    summary: "Fixture claim source pointer for heartbeat followup planning.",
+    raw_text: "Claim detail fixture with no external message sent.",
+    created_at: time
+  };
+  await store.insert("eligibility_snapshots", snapshot);
+  const claim = {
+    id: createId("claim"),
+    snapshot_id: snapshot.id,
+    description: "Fixture office visit claim",
+    member_name: null,
+    service_date: "2026-05-01",
+    share_amount: 42.5,
+    raw_text: "Fixture office visit claim",
+    source: "fixture_claim_for_heartbeat",
+    created_at: time
+  };
+  await store.insert("claim_items", claim);
 
   const planned = await planTaskFollowups(store, {
     user,

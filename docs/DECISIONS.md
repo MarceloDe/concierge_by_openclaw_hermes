@@ -163,6 +163,25 @@ This proves the harness can project its state into the shapes required by the ne
 Cost of changing later:
 Low to medium. Field names and transport wrappers may need adjustment when the actual LangGraph/OpenClaw/Hindsight libraries are installed, but the user/session/thread IDs, database pointers, prompt bundle, memory context, approval policy, and heartbeat semantics should remain stable.
 
+## 2026-06-02: Dynamic Skill Server As LangGraph State, Not Hidden Worker Autonomy
+
+Context:
+`docs/INSURANCE_PLAN_SKILL_METHODOLOGY.md` calls for plan-specialist insurance skills beside journey/workflow skills, while the current runner still hardcodes `insurance_portal_browser` at execution time. The user asked for editable Aetna and claim skills that can mount session, memory, database pointers, success likelihood, dynamic runtime variables, required OpenClaw worker tasks, search engines, and APIs.
+
+Options considered:
+- Let OpenClaw choose the skill and workflow dynamically.
+- Add arbitrary SQL/tool declarations directly to generated skill files.
+- Add a LangGraph-compatible dynamic skill server that reads editable artifacts, validates named mounts, and returns structured graph state.
+
+Decision:
+Add a `dynamic_skill_context` state field and a `skill_resolver` LangGraph node. The dynamic skill server reads `skill-server.json` files from `openclaw/skills/*`, validates them, mounts only allowlisted database queries, and returns selected insurance, journey, and execution skill keys plus success estimates and required worker/search/API contracts.
+
+Reason:
+This keeps LangGraph as workflow master while allowing progressively smarter skill generation. External skill-generator LLMs can edit structured skill artifacts, but they cannot introduce raw SQL, credential capture, medical advice, or unapproved external actions. The design follows LangGraph's shared-state node pattern and keeps skill selection visible in proof/audit.
+
+Cost of changing later:
+Low to medium. Additional generated skills can be added as files. Moving to a database-backed skill registry later will require preserving the `dynamic_skill_context` contract and named mount validation.
+
 ## 2026-05-17: Workflow Architecture Registry Before Live LangGraph/OpenClaw
 
 Context:
@@ -1168,3 +1187,479 @@ This is the safest bridge to the Wefella architecture: the frontend can now beha
 
 Cost of changing later:
 Low. Phase 9D can switch the default route to FastAPI and add formal parity comparison without changing the underlying orchestration contracts.
+
+## 2026-06-01 - Make The MVP FastAPI-First Only After Visible Parity Proof
+
+Context:
+Phase 9C moved all user-facing `/mvp` actions behind FastAPI when the Wefella route is selected, but the screen still defaulted to the direct Node path. The Wefella target asks for FastAPI to become the public production API, while the current Node/LangGraph/OpenClaw/Zep Graphiti runtime remains the proven orchestration source of truth.
+
+Options considered:
+- Remove Node-direct from `/mvp` and make FastAPI the only route immediately.
+- Keep Node-direct as the default until a later backend migration.
+- Default `/mvp` to FastAPI now, but keep Node-direct selectable and add an explicit side-by-side parity check.
+
+Decision:
+Phase 9D defaults `/mvp` to the Wefella FastAPI facade and adds a visible Node-direct versus FastAPI parity panel for the same Benefits prompt. The parity check uses separate temporary sessions, compares stable graph-contract fields, and remains proposal-only with no approved worker action. Direct Node remains selectable for operator/debug fallback.
+
+Reason:
+This makes the user-facing app behave like the future public API without pretending the runtime has been rewritten. A visible parity check is the guardrail that keeps FastAPI honest while Node/LangGraph/OpenClaw continues to own healthcare orchestration.
+
+Cost of changing later:
+Low. Once parity stays stable, the Node selector can move out of the user MVP surface and into the operator dashboard. A Python orchestration migration should still wait for parity tests that prove behavior, approval, audit, source-pointer, and memory equivalence.
+
+## 2026-06-01 - Add Provider-Style JWT Checks Before Deeper FastAPI Expansion
+
+Context:
+Phase 9D made `/mvp` FastAPI-first and proved parity with the Node runtime, but FastAPI auth was still purely local-development HS256 bearer tokens. The Wefella support document requires JWT auth on public API routes and a production-ready auth posture before the facade becomes more than a local bridge.
+
+Options considered:
+- Keep local dev tokens only until deployment.
+- Replace local MVP auth immediately with a hosted auth provider.
+- Add provider-style JWT claim validation now while preserving local MVP auth for development and parity testing.
+
+Decision:
+Phase 9E keeps local HS256 tokens as the default development path, adds explicit `WEFELLA_AUTH_MODE=provider`, requires issuer/audience configuration in provider mode, validates subject, expiration, not-before, issuer, and audience, disables local MVP auth by default in provider mode, and exposes only safe auth metadata from `/api/health`.
+
+Reason:
+This improves the public API contract without forcing a provider choice or breaking the local `/mvp` proof loop. It also creates testable auth boundaries before adding production deployment, rate limiting, or deeper Python orchestration.
+
+Cost of changing later:
+Low to medium. A later hosted provider can add JWKS/RS256 verification behind the same `require_user` contract. The local dev path can remain for non-production testing while production runs with provider mode and disabled local auth.
+
+## 2026-06-01 - Treat The FastAPI Approved Loop As Complete With A Precise External Blocker
+
+Context:
+Phase 9E secured the FastAPI facade auth path. The next risk was whether `/mvp` could drive the same real approval and OpenClaw continuation loop through FastAPI, then let the operator dashboard inspect the same session. The current machine has the dedicated OpenClaw profile available, but no authenticated member-portal tab was available during this proof.
+
+Options considered:
+- Wait for an authenticated payer portal before implementing the Phase 9F proof surface.
+- Mark the phase incomplete until source pointers can be created from a live member portal.
+- Implement the full FastAPI-approved loop now and accept either verified source pointers or a precise external blocker, matching the final-system contract.
+
+Decision:
+Phase 9F treats a precise fail-closed blocker as a valid proof branch when authenticated external portal state is missing. `/mvp` now shows a Phase 9F proof panel, the approved loop runs through FastAPI, and `/` can hydrate the same session from the proof link. Tests assert the approved resume carries approval and worker continuation fields to Node/LangGraph, and the live facade gate accepts source pointers or a precise blocker.
+
+Reason:
+This proves the product can guide a user through the real deterministic harness without fabricating evidence when the payer portal is unavailable or unauthenticated. It keeps LangGraph and OpenClaw honest: approval can be consumed, read-only worker actions can start, blockers are explicit, and the operator can inspect the same trace.
+
+Cost of changing later:
+Low. When the user signs into the dedicated OpenClaw browser profile, the same 9F path can produce source pointers instead of the current `blocked_no_authenticated_evidence` result. The proof panel and tests already accept that sourced-result branch.
+
+## 2026-06-01 - Harden FastAPI Without Moving Orchestration Out Of Node/LangGraph
+
+Context:
+Phase 9F proved the FastAPI-first approved loop from `/mvp`, including the correct precise-blocker branch when no authenticated OpenClaw member-portal tab is available. The Wefella support document calls for production API behaviors such as rate limiting, CORS, task status, error contracts, source grounding, and durable task tracking. The risk is adding those concerns by creating a second healthcare runtime.
+
+Options considered:
+- Move orchestration into FastAPI now while adding production API features.
+- Keep FastAPI as a thin proxy and postpone all hardening until deployment.
+- Harden the FastAPI facade contract while continuing to delegate healthcare decisions, approvals, worker dispatch, evidence, memory, and audit to Node/LangGraph/OpenClaw.
+
+Decision:
+Phase 9G hardens the facade layer only. FastAPI now adds request IDs, standardized error envelopes, configurable rate limiting, explicit CORS metadata/defaults, optional local JSON task persistence, and source-grounding metadata/enforcement around completed facade chat tasks. Node/LangGraph/OpenClaw remains the orchestration source of truth.
+
+Reason:
+This gives the public API a safer deployment posture without reintroducing runtime divergence. Source grounding is checked at the facade boundary as an additional guardrail, but LangGraph still decides workflow state, approval consumption, source-pointer creation, final answer composition, and memory behavior.
+
+Cost of changing later:
+Low to medium. The local JSON task store can later become Redis/Postgres while keeping the task registry interface. Source-grounding enforcement can be enabled in production once the sourced-result and blocker branches are both stable across real user sessions.
+
+## 2026-06-01 - Add Readiness And Observability Hooks Without Adding A Second Runtime
+
+Context:
+The Phase 9G facade had production API guardrails, but deployment still lacked an operator-ready runbook, a readiness endpoint, a smoke command, and a safe task-level observability hook. The final goal requires public/internal APIs, background/worker status, SSE recovery, and auditable behavior, but the current MVP must not become a FastAPI rewrite of the working Node/LangGraph/OpenClaw runtime.
+
+Options considered:
+- Add LangSmith as a required dependency before deployment proof.
+- Build a broad production backend rewrite with new operator/research APIs.
+- Add small deployment hooks around the current facade and keep product orchestration delegated to Node/LangGraph/OpenClaw.
+
+Decision:
+Phase 9H adds deployment and observability readiness at the facade boundary: `/api/readiness`, safe observability metadata in health, optional JSONL facade task events, a running-service `npm run smoke:facade` command, a deployment runbook, and expanded environment examples. The JSONL export stores message hashes and statuses, not raw healthcare input.
+
+Reason:
+This gives the project a deployable operating surface without changing who owns healthcare behavior. Readiness and smoke checks make the FastAPI facade easier to run in CI or local demos, while the optional event export gives useful task lifecycle proof without leaking PHI.
+
+Cost of changing later:
+Low. JSONL export can be replaced by LangSmith/OpenTelemetry/log drains behind the same event shape. The readiness checks can grow as Postgres, Redis, vector stores, MockWorker, Hermes, or operator/research APIs are implemented.
+
+## 2026-06-01 - Add Document Upload As A Facade Capability Before Chat Grounding
+
+Context:
+The broad final-system goal requires user document upload and extraction, but the current MVP proof loop is centered on LangGraph chat plus approval-gated OpenClaw portal observation. Adding document ingest directly into the orchestrator before there is a proven upload/extraction surface would make failures harder to isolate.
+
+Options considered:
+- Add uploaded documents directly to the LangGraph chat path first.
+- Defer document ingest until after all operator/research APIs are built.
+- Build a narrow FastAPI upload/extraction harness first, then connect extracted fields to LangGraph in a later slice.
+
+Decision:
+Phase 10A adds authenticated upload and local extraction at the FastAPI facade boundary first. The harness stores files locally, validates type and size, runs real local extraction for text/PDF/image when runtimes are available, returns safe redacted previews and structured fields, and exposes the result in `/mvp`. It does not yet let chat use uploaded document evidence.
+
+Reason:
+This satisfies a concrete final-system user capability while keeping the runtime boundaries clean. Upload/extraction can now be tested independently from LangGraph routing, OpenClaw worker state, Graphiti retain, and answer composition. The next phase can wire only the safe extracted evidence into the orchestrator with source-pointer tests.
+
+Cost of changing later:
+Low to medium. The local filesystem store can later become object storage with the same upload id and extraction response shape. The extraction harness can be replaced by a stronger OCR/document AI service behind the same API contract, as long as safe preview, fields, provenance, blockers, and user ownership remain stable.
+
+## 2026-06-01 - Ground Chat On Uploaded Extractions Without Dispatching OpenClaw
+
+Context:
+Phase 10A proved authenticated upload and local extraction, but the user-facing value loop still could not answer a chat question from an uploaded insurance document. The final-system goal needs user-supplied documents to become evidence, but OpenClaw should remain the adaptive portal/worker arm rather than the mechanism for reading already-extracted local uploads.
+
+Options considered:
+- Send uploaded files directly to Node and let LangGraph extract them.
+- Dispatch OpenClaw for every uploaded document question.
+- Keep extraction and ownership in FastAPI, pass only safe extraction packets into LangGraph, and treat the upload as a read-only local evidence source.
+
+Decision:
+Phase 10B keeps upload ownership and extraction at the FastAPI facade boundary. FastAPI resolves `uploaded_document_ids` for the authenticated user and passes safe extraction packets to Node/LangGraph. LangGraph creates `uploaded_document_extractions` source pointers and composes a sourced answer without any OpenClaw worker dispatch.
+
+Reason:
+This preserves the runtime boundaries: FastAPI owns public upload/auth checks, LangGraph remains the healthcare workflow master, and OpenClaw stays reserved for approval-gated adaptive portal/document observation. It also gives the user-facing app an immediate document-grounded chat capability without inventing a mock worker path.
+
+Cost of changing later:
+Low. The source pointer and safe extraction packet shape can survive a later object-storage or document-AI backend. If uploaded document observation later needs OpenClaw for complex PDFs or OCR, it can be added as an approved worker path without changing the basic ownership and source-pointer contract.
+
+## 2026-06-01 - Make Uploaded Document Citations First-Class MVP Evidence
+
+Context:
+Phase 10B allowed chat to answer from uploaded document extractions, but the user-facing UI still showed mostly source-pointer counts and compact labels. The final-system goal requires citations/source views and cross-session product-memory proof, not just an internal source pointer array.
+
+Options considered:
+- Leave citation details only in the operator dashboard.
+- Add a separate document-inspection workflow before improving the chat result.
+- Enrich the existing uploaded-document source pointer and render it directly in `/mvp`, while proving Graphiti retain/recall across sessions.
+
+Decision:
+Phase 10C treats uploaded-document extractions as first-class source-backed evidence. LangGraph source pointers now include uploaded-document citation metadata, `/mvp` renders source detail cards and Graphiti memory proof, and product-memory retain sanitizes uploaded-document fields/spans before sending them to Graphiti.
+
+Reason:
+This makes the existing user-facing value loop more real without adding a new workflow or runtime fork. The user can see where an answer came from, while the system proves memory is source-pointer based and not raw-document based.
+
+Cost of changing later:
+Low. The enriched pointer shape can be reused if storage moves from local files to object storage or if extraction moves to a document-AI service. The UI cards can later render richer page and bounding-box citations without changing the core LangGraph evidence contract.
+
+## 2026-06-01 - Add User Continuity Without Creating A Second Runtime
+
+Context:
+The final-system goal requires a user to resume sessions, review prior answers, submit feedback, and export useful outputs. Before Phase 10D, the operator dashboard could inspect session state, but the user-facing `/mvp` app did not have a protected continuity loop through the FastAPI-first route.
+
+Options considered:
+- Keep session continuity only in the operator/debug dashboard.
+- Add a separate FastAPI session store independent from the Node/LangGraph runtime.
+- Add a thin continuity module over the existing SQLite session/messages/state tables and expose it through both Node and FastAPI.
+
+Decision:
+Phase 10D adds `sessionContinuity.mjs`, a `feedback_items` table, Node continuity endpoints, FastAPI protected proxy endpoints, and `/mvp` controls for history, feedback, and Markdown export. The continuity layer reads from the existing LangGraph-backed session state and conversation messages, and it persists feedback back into the same audit/session database.
+
+Reason:
+This closes user-facing resume/feedback/export gaps without splitting runtime authority. LangGraph remains the workflow master, FastAPI remains the public/auth facade, and Node remains the current product runtime for session state, source pointers, audit, and feedback persistence.
+
+Cost of changing later:
+Low to medium. The endpoint contracts can survive a later move from SQLite to Postgres. Markdown export can become server-side artifact storage later, and feedback can feed an operator queue or evaluation workflow without changing the current user ownership checks.
+
+## 2026-06-01 - Add Operator Research Control Plane Without Executing Research Yet
+
+Context:
+The final-system goal calls for operator/research APIs, source management, task control, and proof dashboards. After Phase 10D, the user-facing continuity loop existed, but the operator dashboard still had no first-class way to manage research sources or queue source-review work. The risk was jumping straight to scraping/crawling/worker execution without a stable source/run/audit contract.
+
+Options considered:
+- Add scrapers or OpenClaw research dispatch immediately.
+- Move research APIs into a new backend architecture before finishing the current MVP runtime.
+- Add a narrow operator research control plane first, using the current Node/LangGraph database and FastAPI facade, and leave execution queued until the next phase.
+
+Decision:
+Phase 10E adds the operator research API foundation only. `knowledge_sources` now supports proposal/review/run metadata, `research_runs` and `research_run_events` store queued manual runs and lifecycle events, Node owns the research operation logic, FastAPI protects the public proxy routes and binds `actorUserId` to the JWT subject, and `/` renders the operator research console. A run is a real queued/audited record, not a scraped result and not a mock answer.
+
+Reason:
+This creates the contracts needed for real research execution without hiding behavior. It keeps healthcare orchestration in the existing Node/LangGraph/OpenClaw runtime, keeps FastAPI as the public/auth facade, and gives the operator UI a visible source/run lifecycle before any scraper, crawler, or worker is allowed to act.
+
+Cost of changing later:
+Low to medium. The queued run/event shape can feed deterministic fetchers, OpenClaw worker jobs, MockWorker/Hermes mode, or a later Postgres-backed task system. Full RBAC still needs to be added before this becomes a production operator surface.
+
+## 2026-06-01 - Require Operator/Admin RBAC For FastAPI Research Routes
+
+Context:
+Phase 10E created the first operator research control plane, but the FastAPI facade only required a valid JWT subject and actor binding. That protected cross-user access but still let any authenticated local user call operator/research routes if they knew the endpoint.
+
+Options considered:
+- Leave research routes subject-bound only until the production identity provider is selected.
+- Hide research controls only in the UI.
+- Add a narrow role boundary in the FastAPI facade now while keeping the Node runtime unchanged.
+
+Decision:
+Phase 10F adds role-based authorization at the FastAPI public boundary. The facade normalizes roles from `roles`, `role`, `groups`, `permissions`, `scope`, and `scp` claims. All `/api/research/*` routes require `operator` or `admin`; normal local-session tokens remain user role only. The existing `actorUserId` subject binding remains required after the role check.
+
+Reason:
+The final-system goal requires user/operator/admin separation, and research controls are operator actions even before real scraper or OpenClaw execution is attached. Enforcing this at FastAPI is the smallest useful production boundary because `/mvp` user routes keep working while operator routes become explicitly privileged.
+
+Cost of changing later:
+Low. The role parser can be narrowed to the selected identity provider's exact claim shape, and the same `require_operator` dependency can later protect additional operator APIs such as write proposals, tool control, and research execution.
+
+## 2026-06-01 - Execute Approved Research Runs With Deterministic Fetch Before Worker Expansion
+
+Context:
+After Phase 10F, operator research routes were role-protected, but manual runs were still queued control records only. The final-system contract requires background/evidence pipeline behavior, MockWorker mode, worker status, source artifacts, auditability, and no hidden worker action. Jumping directly to OpenClaw/Hermes research execution would blur the boundary between a proven deterministic pipeline and future adaptive workers.
+
+Options considered:
+- Keep research runs queued until OpenClaw/Hermes research workers are ready.
+- Add MockWorker only.
+- Add a bounded deterministic fetch executor first, plus an explicit MockWorker fallback.
+
+Decision:
+Phase 10G executes approved research runs through a deterministic fetch adapter and stores source/run artifacts. The adapter fetches only approved HTTP(S) sources, enforces a byte/content-type boundary, extracts local text, stores a raw artifact file under a git-ignored directory, records hashes and safe previews in `research_artifacts`, and writes execution events/audit rows. MockWorker mode is available and visible, but outputs are marked `mock_worker_untrusted`. OpenClaw and Hermes research modes remain feature-gated.
+
+Reason:
+This creates the first real operator research execution loop while preserving truthfulness. The system can now prove source proposal, approval, run queueing, execution, artifact provenance, audit, and UI visibility without overclaiming adaptive worker readiness or trusted retrieval closure.
+
+Cost of changing later:
+Low to medium. The artifact table and run event lifecycle can feed future scrapers, OCR/PDF extraction, embeddings, citation closure, OpenClaw worker dispatch, Hermes workers, or a Postgres-backed evidence pipeline. The deterministic adapter may later become one worker mode among several.
+
+## 2026-06-01 - Require Artifact Review Before Trusted Research Retrieval
+
+Context:
+Phase 10G created real research artifacts, but deterministic fetch output was intentionally marked `extracted_pending_review`. The final-system goal requires evidence search, citation closure, groundedness, and a review queue. If fetched artifacts became searchable as trusted evidence immediately, the system could silently cite unreviewed scrape/fetch output in healthcare answers.
+
+Options considered:
+- Treat every deterministic fetch artifact as trusted because it came from an approved source.
+- Wait for embeddings/vector search before exposing any evidence search.
+- Add a deterministic review gate and safe-preview search first.
+
+Decision:
+Phase 10H adds artifact review and trusted-only evidence search. Operators can approve an artifact for `trusted_retrieval_approved`, quarantine unsuitable artifacts, or leave artifacts pending. Default search returns only trusted reviewed artifacts; pending matches are reported as unavailable to trusted retrieval. MockWorker artifacts are blocked from trusted approval.
+
+Reason:
+This creates citation closure before broader retrieval. It preserves the truth boundary between "we fetched something" and "the system may cite it," while still giving operators a usable review/search loop over real artifacts.
+
+Cost of changing later:
+Low. Embeddings, Graphiti/Zep indexing, OpenClaw/Hermes research workers, and scheduled automation can all reuse the same citation status contract. If storage moves to Postgres/object storage, the review state remains a simple artifact-level field.
+
+## 2026-06-01 - Let User Answers Use Only Reviewed Research Evidence
+
+Context:
+Phase 10H created trusted research artifact search, but user-facing healthcare answers still did not consume that store. The remaining risk was two-sided: answering from scripted templates when no portal evidence was available, or prematurely citing unreviewed fetch/worker artifacts.
+
+Options considered:
+- Keep research search operator-only until embeddings or Graphiti indexing are ready.
+- Let deterministic fetch artifacts answer users immediately after execution.
+- Add a narrow LangGraph evidence node path that uses only `trusted_retrieval_approved` artifacts and refuses when evidence is missing or pending.
+
+Decision:
+Phase 10I connects reviewed research evidence to user-facing LangGraph answers. The graph searches reviewed research artifacts when no approved portal/document observation is present, maps trusted matches into `trusted_research_artifact` source pointers, and composes a sourced answer from reviewed snippets. Pending-review matches and missing evidence create blocker/refusal responses, not healthcare answers. MockWorker output remains excluded.
+
+Reason:
+This closes the citation loop without weakening the review boundary. It also keeps LangGraph as workflow master, FastAPI as public facade, and Node as the current runtime while making the user-facing MVP more useful: a user can now receive a sourced answer from operator-reviewed evidence without requiring live portal access.
+
+Cost of changing later:
+Low to medium. The same source-pointer shape can be backed by embeddings, Graphiti/Zep indexing, scheduled research refreshes, OpenClaw research workers, or Hermes workers later. Ranking may need improvement once many trusted artifacts exist, but the trust boundary remains artifact-level citation status.
+
+## 2026-06-01 - Gate Operator Natural-Language Write Actions With Proposals
+
+Context:
+After Phase 10I, user answers could cite reviewed research evidence, but the operator control plane still required direct button/API actions for source/run/artifact changes. The final-system goal calls for a more flexible operator assistant, but letting natural-language instructions mutate research state directly would create hidden worker/operator action risk.
+
+Options considered:
+- Let the operator assistant execute all parsed actions immediately.
+- Defer natural-language operator control until an LLM planner is added.
+- Add a fixed registry-bound assistant now where read tools execute directly and write tools become approval-bound proposals.
+
+Decision:
+Phase 10J adds an operator assistant with a fixed research tool registry. Read-only requests execute immediately through registered read tools. Write/action requests create `operator_tool_proposals` with risk, expected effect, hashes, status, and audit proof. Approval or rejection is a separate endpoint; approval executes the stored tool/args exactly once, while rejection performs no target mutation. FastAPI protects the same routes with operator/admin RBAC and actor binding.
+
+Reason:
+This gives the operator surface more flexibility without weakening the audit boundary. The system can now accept plain-English operator requests while preserving deterministic tool selection, visible proposal review, and no hidden source/run/artifact changes.
+
+Cost of changing later:
+Low. The curated parser can later be replaced or augmented by an LLM classifier/planner as long as it still emits one of the registered tool keys and validated args. The proposal table can also wrap future OpenClaw/Hermes dispatch and scheduled automation actions without changing the approval lifecycle.
+
+## 2026-06-01 - Represent Scheduled Research As Approved Records Plus Explicit Due Ticks
+
+Context:
+After Phase 10J, operators could create gated proposals for source/run/artifact changes, but the final-system goal still required recurring research automation. Adding a hidden cron or daemon immediately would make it hard to prove which worker action happened and under whose authority.
+
+Options considered:
+- Add a background daemon that automatically executes research on an interval.
+- Defer all recurring automation until production infrastructure is chosen.
+- Add persisted schedules and an explicit due-tick endpoint that queues work first.
+
+Decision:
+Phase 10K stores approved research schedules in `research_schedules` and exposes due ticks that queue `scheduled_research_run` records by default. Schedule creation/pause/resume/run-due are available through the operator tool registry and remain proposal-gated when driven by natural language. Real execution remains a separate worker action.
+
+Reason:
+This gives the MVP an auditable automation contract without hiding worker behavior. It preserves the rule that scheduled work must be visible, source-bound, and reviewable before execution.
+
+Cost of changing later:
+Low. A real cron, external scheduler, queue worker, OpenClaw dispatch, or Hermes dispatch can call the same due-tick contract. The schedule table can move to Postgres without changing the operator-visible lifecycle.
+
+## 2026-06-01 - Expose Audit Logs Through Redacted Operator API Before More Worker Expansion
+
+Context:
+The project already had hash-chained `audit_events`, but the operator dashboard could only see scattered audit snippets embedded in specific task results. The final-system checklist explicitly calls for `GET /api/audit`, and new source/proposal/schedule actions need a single proof surface before adding more autonomous workers.
+
+Options considered:
+- Keep audit only inside per-feature responses.
+- Return raw audit details to the dashboard for maximum debugging.
+- Add a redacted audit API that returns event metadata, hashes, safe previews, and chain verification.
+
+Decision:
+Phase 10L adds `GET /api/audit` in Node and a FastAPI operator/admin proxy. The response includes event ids, session ids, event types, action kinds, timestamps, event hashes, details hashes, redacted/truncated details previews, event-type counts, pagination, and visible-chain verification. It explicitly does not return raw audit details.
+
+Reason:
+This closes the audit-log API gap while respecting healthcare data boundaries. Operators can now inspect what happened, prove hash-chain status, and trace proposal/scheduler/research events without turning the audit endpoint into a raw data export.
+
+Cost of changing later:
+Low. The same contract can later add search indexes, Postgres pagination, downloadable operator reports, or tamper-evidence dashboards while preserving the default redacted response shape.
+
+## 2026-06-01 - Add Explicit Embedding Route Selection Before Adaptive Research Workers
+
+Context:
+Phase 10L made research/source/scheduler/proposal actions visible through a redacted audit API. The next gap was retrieval quality and index lifecycle: trusted research artifacts were searchable only by deterministic token scoring, and the final-system goal explicitly required an embedding route decision plus safe reindexing before broader knowledge growth.
+
+Options considered:
+- Jump directly to OpenClaw/Hermes research-worker dispatch.
+- Wire OpenAI embeddings as the only route.
+- Add a persisted route/index/reindex contract first, with a credential-free local route and a failure-safe OpenAI route option.
+
+Decision:
+Phase 10M adds `research_embedding_routes`, `research_embedding_jobs`, and `research_embedding_index`. The default route is `local_tfidf` with deterministic local vectors so the MVP has a real, reproducible backend without requiring external credentials. Operators can select `local_tfidf` or `openai`, inspect status, and reindex trusted artifacts. Reindexing writes only `trusted_retrieval_approved` artifacts, reports route use in search, blocks dimension mismatches safely, and preserves prior active index rows unless a new reindex succeeds.
+
+Reason:
+This closes the route-selection/reindexing contract without pretending that every environment has OpenAI embedding credentials. It keeps the artifact review boundary intact: approved sources and completed runs still do not become citable until artifact citation review approves them. It also gives future OpenClaw/Hermes research workers a stable rule: worker output must pass review before entering trusted retrieval.
+
+Cost of changing later:
+Low to medium. The local vector route can be replaced or complemented by OpenAI, pgvector, Graphiti/Zep, Chroma, or another vector backend behind the same route/job/index contract. If production storage moves to Postgres, the route/job semantics should remain stable while vector storage moves out of SQLite.
+
+## 2026-06-01 - Attach OpenClaw And Hermes As Bounded Research Workers
+
+Context:
+Phase 10M closed the trusted-evidence embedding lifecycle, but OpenClaw and Hermes were still visible only as future feature-gated modes. The final-system contract requires real worker adapter modes without letting the frontend call workers directly or letting workers bypass source approval, operator approval, audit, artifact review, or trusted retrieval gates.
+
+Options considered:
+- Keep OpenClaw/Hermes as labels until a production queue exists.
+- Let `/` execute OpenClaw/Hermes directly as broad autonomous research agents.
+- Add bounded adapter modes now, disabled by default, using a typed task envelope and pending-review artifact lifecycle.
+
+Decision:
+Phase 10N adds `openclaw` and `hermes` worker modes to research run execution. Both require an approved source/run, explicit `approvedWorkerDispatch=true`, and an environment feature flag before command dispatch. OpenClaw uses the official project profile through `openclaw --profile brainstyworkers agent --local ... --json`; Hermes uses `hermes --oneshot`. Both receive the same `brainstyworkers.research_worker_task.v1` envelope and must return structured JSON. Results become pending-review artifacts, never trusted retrieval evidence directly.
+
+Reason:
+This gives the MVP a real adaptive-worker attachment point without weakening the deterministic governance already built. OpenClaw/Hermes can now be tested as powerful workers inside an approved source-scoped task, while LangGraph/FastAPI/researchOps still own routing, approval, audit, artifact review, embeddings, and user-facing citation.
+
+Cost of changing later:
+Low to medium. The command runners can be replaced by OpenClaw MCP/channel endpoints, Hermes task channels, a durable queue, or a Postgres-backed worker table while preserving the typed envelope and result schema. The important invariant is stable: adaptive worker output enters trusted retrieval only after operator review.
+
+## 2026-06-01 - Build Research Evidence Graph From Safe Metadata Only
+
+Context:
+After Phase 10N, the research system had approved sources, runs, artifacts, review gates, embeddings, schedules, audit, and bounded adaptive workers, but the final-system checklist still required `GET /api/research/graph` and `POST /api/research/graph/build`. The graph needs to help operators understand relationships without becoming another raw-content export.
+
+Options considered:
+- Return raw artifact previews and URLs as graph labels for easier debugging.
+- Defer the graph until Neo4j or Graphiti production storage is chosen.
+- Build a local metadata graph from the existing SQLite research tables and persist graph-build proof rows.
+
+Decision:
+Phase 10O adds a metadata-only research evidence graph. Nodes and edges are built from `knowledge_sources`, `research_runs`, `research_artifacts`, `research_embedding_*`, and `research_schedules`. Artifact bodies and safe text previews are not returned. URLs are reduced to host plus hashes inside graph metadata. `POST /api/research/graph/build` records a `research_graph_builds` row and a hash-chained `research_graph_build_completed` audit event.
+
+Reason:
+This closes D17/D18 without adding a new graph database or weakening citation safety. Operators get relationship proof across sources, runs, artifacts, schedules, and embedding routes while trusted retrieval still depends on artifact review and reindexing.
+
+Cost of changing later:
+Low. The local graph builder can later publish the same node/edge contract to Graphiti, Neo4j, Postgres graph tables, or a UI visualization. The safety invariant should remain: raw artifact text and raw portal/private dumps do not appear in graph responses.
+
+## 2026-06-01 - Add Labels-Only Claim Citation Closure Before Final Answers Are Trusted
+
+Context:
+Phase 10O made the research evidence graph visible, but the system still needed a direct answer-quality boundary: every factual answer claim should be linked to trusted reviewed evidence or treated as not citation-closed. Without this, a user-facing answer could contain a well-sourced sentence beside an unsupported sentence and still look grounded.
+
+Options considered:
+- Let the LLM decide groundedness in free text.
+- Use all fetched and pending-review artifacts as support to maximize coverage.
+- Add a deterministic labels-only claim judge over trusted reviewed artifacts first, then later swap in richer LLM/embedding entailment behind the same contract.
+
+Decision:
+Phase 10P adds `research_claim_evaluations` and a citation-closure evaluator that extracts factual/domain claims from a safe answer preview, scores them only against `trusted_retrieval_approved` artifacts, labels each claim as supported, low-confidence, or unsupported, and writes only labels, scores, hashes, safety flags, metadata citation pointers, and audit proof. Pending-review evidence cannot support a trusted answer, and the judge never creates or promotes evidence.
+
+Reason:
+This closes the immediate grounded-answer safety gap without introducing another source of invented facts. The evaluator can fail an answer cleanly when citation closure is incomplete, while the UI and operator assistant can show exactly which claims need revision or more evidence.
+
+Cost of changing later:
+Low to medium. The deterministic scorer can be replaced or complemented by an LLM judge, embedding reranker, or graph entailment service as long as the same invariant holds: the judge labels claims against trusted reviewed evidence and never manufactures support.
+
+## 2026-06-01 - Keep A Tested Final Verification Matrix Before Claiming Completion
+
+Context:
+After Phase 10P, the project had many green local gates and a working MVP value loop, but `docs/goal_final_system.md` remained broader than the implemented surface. It included UI mode switching, urgent escalation, manual research PDF ingestion, analytics, budget/kill-switch controls, and live worker/provider proof that were not all finished. The goal instructions require completion to be proven requirement by requirement, not inferred from passing tests.
+
+Options considered:
+- Continue directly to another feature without a full matrix.
+- Mark the active goal complete because the main local MVP path passes.
+- Add a maintained final-system report and make tests/build guards check its coverage.
+
+Decision:
+Phase 10Q adds `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md` and a report coverage test. The report maps every explicit `A*` through `H*` item in `docs/goal_final_system.md` to one of the allowed final-report statuses. Known gaps remain visible as `FAILING / NEEDS FIX`, and live OpenClaw/Hermes proof remains `BLOCKED BY EXTERNAL DEPENDENCY`.
+
+Reason:
+This prevents accidental completion claims and gives the next agent a crisp, test-backed backlog. It also keeps the project honest: green local tests prove many slices, but the broad final-system contract still contains unfinished surfaces.
+
+Cost of changing later:
+Low. As future phases close gaps, the report rows can move from failing/blocked to passing with evidence. The coverage test will keep the report aligned with any new goal-file requirement ids.
+
+## 2026-06-01 - Urgent/Emergency Prompts Bypass Workers And Create Human Handoffs
+
+Context:
+The final verification matrix showed A19, A20, and H10 as failing. Unsafe medical-advice prompts were blocked, but emergency/safety-critical messages did not yet have a first-class bypass path, durable handoff record, audit proof, or dashboard visibility.
+
+Options considered:
+- Treat urgent prompts as generic medical-advice refusals.
+- Let GPT classify emergency language and decide whether to escalate.
+- Add a deterministic urgent policy signal that routes directly to a durable handoff before GPT, OpenClaw, or evidence observation.
+
+Decision:
+Phase 10R adds deterministic urgent/emergency detection and routes those messages to `human_approval_escalation` with `urgent_emergency_escalation`. LangGraph creates `human_handoff_items`, an `urgent_human_handoff` task, a hash-chained `human_handoff_created` audit event, and immediate emergency-safe guidance. The urgent path skips OpenClaw proposal/dispatch, browser observation, payer contact, external messaging, credential entry, form submission, and GPT calls.
+
+Reason:
+Emergency handling must be predictable and must not depend on adaptive worker behavior or model availability. Durable handoff rows give the operator proof surface something concrete to review without turning the worker into a clinical responder.
+
+Cost of changing later:
+Low to medium. Assignment, acknowledgement, closure, and notification workflows can be added around `human_handoff_items` without changing the critical invariant: urgent/safety prompts bypass normal worker execution and create audit-backed handoff proof.
+
+## 2026-06-01 - Render The MVP From Typed AI2UI Blocks Instead Of Ad Hoc Text
+
+Context:
+The final verification matrix showed A6 and A7 as failing. `/mvp` already displayed answers, citations, approval state, worker state, memory, and handoffs, but it did not have the requested Chat/Split/Guided/Bento mode system and it did not receive a complete typed AI-to-UI block payload from the backend. Without a typed contract, frontend mode changes risk becoming string-specific or duplicating orchestration logic in the browser.
+
+Options considered:
+- Keep rendering only the final response text plus scattered proof panels.
+- Build a new frontend framework or separate Next.js app before finishing the current MVP scope.
+- Add a small backend block contract inside the existing Node/LangGraph runtime and let `/mvp` switch presentation modes over the same run state.
+
+Decision:
+Phase 10S adds `brainstyworkers.ai2ui.blocks.v1` through `src/concierge/ai2uiBlocks.mjs`. LangGraph attaches blocks after product-memory retain and `POST /api/chat` returns them as `ai2uiBlocks`. `/mvp` renders typed answer, workflow, approval, worker, citation, memory, handoff, safety, and next-step cards. It also adds Chat, Split, Guided, and Bento modes that re-render the same current result and persist the selected mode in localStorage. Unknown future block types render as safe warning cards.
+
+Reason:
+This closes A6/A7 without a frontend rewrite or runtime fork. It keeps LangGraph as the source of truth for healthcare workflow state while giving the UI a stable, testable rendering contract. State-preserving modes help user testing because the same session can be inspected in a friendly chat shape, guided workflow shape, or proof-dense bento shape.
+
+Cost of changing later:
+Low. The block schema can be extended with new typed cards, richer renderer hints, or a future Next.js frontend as long as unknown block fallback remains and mode switching stays presentation-only.
+
+## 2026-06-01 - Use An Env-Gated Approved-Schedule Daemon Instead Of Hidden Cron Execution
+
+Context:
+Phase 10K created approved research schedules and an explicit due-tick endpoint, but the final verification matrix still showed E1 as failing because there was no always-on daemon/cron proof. The system needed recurring research automation without weakening the existing approval/source/audit boundaries.
+
+Options considered:
+- Leave schedule execution as manual `POST /api/research/schedules/tick` only.
+- Add an external cron first, before local daemon state and tests.
+- Add a hidden background worker that executes all due work automatically.
+- Add an env-gated local daemon that calls the same approved due-tick contract and defaults to queue-only behavior.
+
+Decision:
+Phase 10T adds `src/concierge/researchScheduler.mjs` and `research_scheduler_daemon_state`. The Node server creates the daemon at startup and auto-starts only when `BRAINSTY_RESEARCH_SCHEDULER_ENABLED=1`. Each tick calls `runDueResearchSchedules`, emits runtime events, writes hash-chain audit proof, records daemon state, and skips overlapping same-process ticks. Default behavior queues `scheduled_research_run` records; adaptive OpenClaw/Hermes execution remains feature-flagged and requires `approvedWorkerDispatch=true`.
+
+Reason:
+This closes the local MVP E1 proof while preserving the deterministic research contract. The daemon is observable, testable, and operator-visible, and it does not create a second hidden path for worker execution.
+
+Cost of changing later:
+Low to medium. A production cron, queue worker, Vercel Cron, systemd/launchd job, or external scheduler can call the same daemon tick contract. High-volume production should move overlap/concurrency guarantees from the in-process guard and shell-out SQLite to Postgres transactions, leases, or a durable queue.

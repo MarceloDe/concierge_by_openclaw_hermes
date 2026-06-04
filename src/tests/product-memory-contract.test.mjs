@@ -57,6 +57,75 @@ test("product memory contract builds safe source-pointer summaries without raw d
   assert.equal(episode.localMemoryItemPointers[0].table, "memory_items");
 });
 
+test("product memory contract keeps uploaded document retain payload sourced and identifier-safe", () => {
+  const episode = buildSafeProductMemoryEpisode({
+    user: {
+      id: "user_upload_memory",
+      name: "Upload Memory User",
+      email: "upload-memory@example.com"
+    },
+    session: { id: "session_upload_memory" },
+    state: {
+      context_packet: {
+        user: {
+          id: "user_upload_memory",
+          name: "Upload Memory User",
+          email: "upload-memory@example.com"
+        }
+      },
+      workflow: "eligibility_benefits_navigation",
+      route_reason: "uploaded_document_evidence",
+      workflow_outcome: "uploaded_document_explained",
+      approval_resume: { status: null },
+      evidence_observation: { status: "captured_uploaded_document_extraction" },
+      source_pointers: [
+        {
+          kind: "uploaded_document_extraction",
+          table: "uploaded_document_extractions",
+          id: "upload_contract",
+          displayLabel: "benefits-upload.txt",
+          sourceUrl: "upload://upload_contract",
+          summary:
+            "benefits-upload.txt: extraction completed; member_id_last4=last4:7788; deductible=Deductible $1,500",
+          extractionHash: "c".repeat(64),
+          evidenceFields: [
+            { label: "member_id_last4", value: "ABCD-1234-7788", confidence: "medium" },
+            { label: "deductible", value: "Deductible $1,500", confidence: "medium" }
+          ],
+          citation: {
+            sourceKind: "uploaded_document_extraction",
+            uploadId: "upload_contract",
+            filename: "benefits-upload.txt",
+            extractionStatus: "completed",
+            extractionMethod: "utf8_text",
+            confidence: "medium",
+            sourceSpans: [
+              {
+                spanId: "span_1",
+                snippet: "Member ID ABCD-1234-7788 Deductible $1,500 upload-memory@example.com",
+                confidence: "medium"
+              }
+            ]
+          }
+        }
+      ],
+      memory_summary:
+        "Upload Memory User asked about an uploaded benefits document; source pointers: uploaded_document_extractions/upload_contract."
+    },
+    localMemoryItems: []
+  });
+
+  const serialized = JSON.stringify(episode);
+  assert.equal(episode.sourcePointers[0].table, "uploaded_document_extractions");
+  assert.equal(episode.sourcePointers[0].kind, "uploaded_document_extraction");
+  assert.equal(episode.sourcePointers[0].evidenceFields[0].value, "last4:7788");
+  assert.match(serialized, /uploaded_document_extractions\/upload_contract/);
+  assert.match(serialized, /Deductible \$1,500/);
+  assert.doesNotMatch(serialized, /Upload Memory User|upload-memory@example\.com|ABCD-1234-7788/);
+  assert.equal(episode.boundaries.rawPortalTextStored, false);
+  assert.equal(episode.boundaries.cortexProductMemory, false);
+});
+
 test("product memory config defaults to disabled unless Graphiti is explicitly selected", () => {
   const previous = process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER;
   delete process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER;

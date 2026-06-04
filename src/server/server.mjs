@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
+import { listAuditEvents } from "../concierge/audit.mjs";
 import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { normalizeWebChat } from "../concierge/channelAdapter.mjs";
@@ -9,12 +10,56 @@ import { traceForSession } from "../concierge/engine.mjs";
 import { describeLangGraphScope } from "../concierge/langgraphScope.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { probeChrome } from "../concierge/browserAutomation.mjs";
-import { getMemoryContextForUser, listHarnessState, planTaskFollowups, runUserHeartbeat } from "../concierge/memoryHarness.mjs";
+import { buildContextPacket, getMemoryContextForUser, listHarnessState, planTaskFollowups, runUserHeartbeat } from "../concierge/memoryHarness.mjs";
 import { auditPromptContractSafety } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
 import { listOpenClawSkillArtifacts, loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
+import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
 import { getOpenAiConfig, loadLocalEnvOnce } from "../concierge/secrets.mjs";
 import { closeManagedSession, getManagedSessionState, listManagedSessions } from "../concierge/sessionManager.mjs";
+import {
+  SessionContinuityError,
+  buildSessionExport,
+  getSessionContinuity,
+  recordSessionFeedback
+} from "../concierge/sessionContinuity.mjs";
+import { listHumanHandoffs } from "../concierge/humanHandoffs.mjs";
+import {
+  ResearchOpsError,
+  buildResearchGraph,
+  cancelResearchRun,
+  chooseResearchEmbeddingRoute,
+  evaluateCitationClosure,
+  executeResearchRun,
+  getResearchEmbeddingStatus,
+  getResearchGraph,
+  getResearchKpis,
+  getResearchRun,
+  getResearchWorkerStatus,
+  listResearchArtifacts,
+  listCitationClosureEvaluations,
+  listResearchRunEvents,
+  listResearchRuns,
+  listResearchSchedules,
+  listResearchSources,
+  proposeResearchSource,
+  retryResearchRun,
+  reviewResearchArtifact,
+  reviewResearchSource,
+  reindexResearchEmbeddings,
+  runDueResearchSchedules,
+  searchResearchEvidence,
+  startManualResearchRun,
+  updateResearchSource
+} from "../concierge/researchOps.mjs";
+import { createResearchSchedulerDaemon } from "../concierge/researchScheduler.mjs";
+import {
+  OperatorAssistantError,
+  decideOperatorProposal,
+  listOperatorProposals,
+  listOperatorTools,
+  runOperatorAssistant
+} from "../concierge/operatorAssistant.mjs";
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisode } from "../concierge/productMemory.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
@@ -54,10 +99,20 @@ const MIME = {
 };
 
 const store = await new SqliteStore(process.env.BRAINSTY_DB_PATH ?? DEFAULT_DB_PATH).initialize();
+const researchSchedulerDaemon = createResearchSchedulerDaemon(store);
+await researchSchedulerDaemon.start();
 
 function sendJson(res, status, payload) {
   res.writeHead(status, { "content-type": MIME[".json"] });
   res.end(JSON.stringify(payload, null, 2));
+}
+
+function sendApiError(res, error) {
+  if (error instanceof SessionContinuityError || error instanceof ResearchOpsError || error instanceof OperatorAssistantError) {
+    sendJson(res, error.statusCode, { error: error.message, status: "failed" });
+    return;
+  }
+  throw error;
 }
 
 async function readJson(req) {
@@ -117,6 +172,25 @@ async function handleApi(req, res, url) {
           limit: Number(url.searchParams.get("limit") ?? 100)
         })
       }
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/audit") {
+    sendJson(
+      res,
+      200,
+      await listAuditEvents(store, {
+        sessionId: url.searchParams.get("sessionId") ?? null,
+        rootOnly: url.searchParams.get("rootOnly") ?? null,
+        eventType: url.searchParams.get("eventType") ?? null,
+        eventPrefix: url.searchParams.get("eventPrefix") ?? url.searchParams.get("prefix") ?? null,
+        query: url.searchParams.get("q") ?? url.searchParams.get("query") ?? null,
+        since: url.searchParams.get("since") ?? null,
+        until: url.searchParams.get("until") ?? null,
+        limit: Number(url.searchParams.get("limit") ?? 100),
+        offset: Number(url.searchParams.get("offset") ?? 0)
+      })
     );
     return;
   }
@@ -463,6 +537,50 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/dynamic-skills") {
+    sendJson(res, 200, await loadDynamicSkillDefinitions());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/dynamic-skills/resolve") {
+    const body = await readJson(req);
+    const enrollment = await enrollDefaultMember(store, body.member ?? {}, {
+      sessionId: body.sessionId,
+      resumeLatestSession: Boolean(body.resumeLatestSession),
+      title: body.sessionTitle ?? "Dynamic skill resolution"
+    });
+    const userInput =
+      body.message ??
+      body.userInput ??
+      "Resolve dynamic insurance and journey skills for this healthcare insurance request.";
+    const packet = await buildContextPacket(store, {
+      user: enrollment.user,
+      session: enrollment.session,
+      channel: enrollment.session.channel,
+      userInput
+    });
+    const dynamicSkillContext = await resolveDynamicSkillContext(store, {
+      user_id: enrollment.user.id,
+      session_id: enrollment.session.id,
+      graph_trace_id: enrollment.session.langgraph_thread_id,
+      channel: enrollment.session.channel,
+      user_input: userInput,
+      context_packet: packet,
+      structured_intent: body.structuredIntent ?? null,
+      llm_orchestration_decision: body.llmDecision ?? null,
+      workflow: body.workflow ?? body.structuredIntent?.workflow ?? body.llmDecision?.workflow ?? null,
+      product_memory_recall: body.productMemoryRecall ?? null
+    });
+    sendJson(res, 200, {
+      user: enrollment.user,
+      portal: enrollment.portal,
+      session: enrollment.session,
+      dynamicSkillContext,
+      actionsTaken: []
+    });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/openclaw/official/status") {
     const readiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() });
     sendJson(res, 200, {
@@ -503,6 +621,7 @@ async function handleApi(req, res, url) {
       skillArtifact: await loadOpenClawSkillArtifact("insurance_portal_browser"),
       envelope: graphRun.state.openclaw_envelope,
       validation: graphRun.state.openclaw_skill_validation,
+      dynamicSkillContext: graphRun.state.dynamic_skill_context,
       workerPlan: graphRun.state.openclaw_worker_plan,
       proposal: graphRun.state.openclaw_skill_proposal,
       executionMode: graphRun.state.openclaw_skill_validation?.executionMode ?? "proposal_only",
@@ -651,6 +770,7 @@ async function handleApi(req, res, url) {
       eligibility: graphRun.state.eligibility_result,
       portalScan: graphRun.state.portal_scan,
       sourcePointers: graphRun.state.source_pointers,
+      ai2uiBlocks: graphRun.state.ai2ui_blocks,
       finalResponse: graphRun.state.final_response,
       graphRun,
       trace,
@@ -760,6 +880,560 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/research/kpis") {
+    sendJson(res, 200, await getResearchKpis(store));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/handoffs") {
+    sendJson(
+      res,
+      200,
+      await listHumanHandoffs(store, {
+        userId: url.searchParams.get("userId") ?? undefined,
+        sessionId: url.searchParams.get("sessionId") ?? undefined,
+        status: url.searchParams.get("status") ?? undefined,
+        limit: Number(url.searchParams.get("limit") ?? 25)
+      })
+    );
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/worker-status") {
+    sendJson(res, 200, getResearchWorkerStatus());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/embeddings/status") {
+    try {
+      sendJson(res, 200, await getResearchEmbeddingStatus(store));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/graph") {
+    try {
+      sendJson(
+        res,
+        200,
+        await getResearchGraph(store, {
+          limit: Number(url.searchParams.get("limit") ?? 250)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/citation-closure") {
+    try {
+      sendJson(
+        res,
+        200,
+        await listCitationClosureEvaluations(store, {
+          status: url.searchParams.get("status") ?? null,
+          verdict: url.searchParams.get("verdict") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 25)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/citation-closure/evaluate") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await evaluateCitationClosure(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          question: body.question ?? "",
+          answer: body.answer ?? "",
+          limit: Number(body.limit ?? 12),
+          minSupportScore: Number(body.minSupportScore ?? 3)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/graph/build") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await buildResearchGraph(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          limit: Number(body.limit ?? 250)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/embeddings/route") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await chooseResearchEmbeddingRoute(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          provider: body.provider ?? null,
+          model: body.model ?? null,
+          dimensions: body.dimensions ?? null,
+          status: body.status ?? "active",
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/embeddings/reindex") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await reindexResearchEmbeddings(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          routeKey: body.routeKey ?? "default",
+          artifactIds: Array.isArray(body.artifactIds) ? body.artifactIds : null,
+          force: Boolean(body.force)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/schedules") {
+    try {
+      sendJson(
+        res,
+        200,
+        await listResearchSchedules(store, {
+          status: url.searchParams.get("status") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 50)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/scheduler/status") {
+    try {
+      sendJson(res, 200, await researchSchedulerDaemon.status());
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/scheduler/tick") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await researchSchedulerDaemon.tickOnce({
+          actorUserId: body.actorUserId ?? body.userId ?? undefined,
+          now: body.now ?? undefined,
+          tickLimit: Number(body.limit ?? body.tickLimit ?? researchSchedulerDaemon.config.tickLimit),
+          executeDueRuns: Boolean(body.executeDueRuns ?? body.execute),
+          workerMode: body.workerMode ?? undefined,
+          approvedWorkerDispatch: Boolean(body.approvedWorkerDispatch),
+          trigger: body.trigger ?? "api_daemon_tick"
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/schedules/tick") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await runDueResearchSchedules(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          now: body.now ?? undefined,
+          limit: Number(body.limit ?? 5),
+          execute: Boolean(body.execute),
+          workerMode: body.workerMode ?? null,
+          approvedWorkerDispatch: Boolean(body.approvedWorkerDispatch)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/operator/tools") {
+    sendJson(res, 200, listOperatorTools());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/operator/proposals") {
+    try {
+      sendJson(
+        res,
+        200,
+        await listOperatorProposals(store, {
+          status: url.searchParams.get("status") ?? null,
+          actorUserId: url.searchParams.get("actorUserId") ?? url.searchParams.get("userId") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 50)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/operator/assistant") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await runOperatorAssistant(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          message: body.message ?? "",
+          toolKey: body.toolKey ?? null,
+          args: body.args ?? {},
+          context: body.context ?? {}
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/operator/proposals/") && (url.pathname.endsWith("/approve") || url.pathname.endsWith("/reject"))) {
+    const body = await readJson(req);
+    const decision = url.pathname.endsWith("/approve") ? "approve" : "reject";
+    const proposalId = decodeURIComponent(url.pathname.replace("/api/operator/proposals/", "").replace(`/${decision}`, "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await decideOperatorProposal(store, {
+          proposalId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          decision,
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/artifacts") {
+    try {
+      sendJson(
+        res,
+        200,
+        await listResearchArtifacts(store, {
+          citationStatus: url.searchParams.get("citationStatus") ?? url.searchParams.get("citation_status") ?? null,
+          runId: url.searchParams.get("runId") ?? url.searchParams.get("run_id") ?? null,
+          sourceId: url.searchParams.get("sourceId") ?? url.searchParams.get("source_id") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 50)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && (url.pathname === "/api/research/search" || url.pathname === "/api/research/evidence")) {
+    try {
+      sendJson(
+        res,
+        200,
+        await searchResearchEvidence(store, {
+          query: url.searchParams.get("q") ?? url.searchParams.get("query") ?? "",
+          includePending: ["1", "true", "yes"].includes(String(url.searchParams.get("includePending") ?? "").toLowerCase()),
+          citationStatus: url.searchParams.get("citationStatus") ?? url.searchParams.get("citation_status") ?? null,
+          runId: url.searchParams.get("runId") ?? url.searchParams.get("run_id") ?? null,
+          sourceId: url.searchParams.get("sourceId") ?? url.searchParams.get("source_id") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 10)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/artifacts/") && url.pathname.endsWith("/review")) {
+    const body = await readJson(req);
+    const artifactId = decodeURIComponent(url.pathname.replace("/api/research/artifacts/", "").replace("/review", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await reviewResearchArtifact(store, {
+          artifactId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          decision: body.decision,
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/sources") {
+    sendJson(
+      res,
+      200,
+      await listResearchSources(store, {
+        status: url.searchParams.get("status") ?? null,
+        limit: Number(url.searchParams.get("limit") ?? 50)
+      })
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/sources/propose") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await proposeResearchSource(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          url: body.url,
+          title: body.title ?? null,
+          sourceType: body.sourceType ?? "web_source",
+          authorityLevel: body.authorityLevel ?? "operator_proposed",
+          workflowKeys: body.workflowKeys ?? [],
+          reason: body.reason ?? "",
+          priority: body.priority ?? 500
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/sources/") && url.pathname.endsWith("/approve")) {
+    const body = await readJson(req);
+    const sourceId = decodeURIComponent(url.pathname.replace("/api/research/sources/", "").replace("/approve", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await reviewResearchSource(store, {
+          sourceId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          decision: "approved",
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/sources/") && url.pathname.endsWith("/reject")) {
+    const body = await readJson(req);
+    const sourceId = decodeURIComponent(url.pathname.replace("/api/research/sources/", "").replace("/reject", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await reviewResearchSource(store, {
+          sourceId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          decision: "rejected",
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "PATCH" && url.pathname.startsWith("/api/research/sources/")) {
+    const body = await readJson(req);
+    const sourceId = decodeURIComponent(url.pathname.replace("/api/research/sources/", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await updateResearchSource(store, {
+          sourceId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          patch: body.patch ?? body
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/runs") {
+    sendJson(
+      res,
+      200,
+      await listResearchRuns(store, {
+        status: url.searchParams.get("status") ?? null,
+        limit: Number(url.searchParams.get("limit") ?? 50)
+      })
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/runs") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await startManualResearchRun(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          sourceId: body.sourceId ?? null,
+          sourceKey: body.sourceKey ?? null,
+          topic: body.topic ?? "",
+          query: body.query ?? {},
+          workflowKey: body.workflowKey ?? "general_rag",
+          metadata: body.metadata ?? {}
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/research/runs/") && url.pathname.endsWith("/events")) {
+    const runId = decodeURIComponent(url.pathname.replace("/api/research/runs/", "").replace("/events", "").replace(/\/$/, ""));
+    try {
+      sendJson(res, 200, await listResearchRunEvents(store, { runId }));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/runs/") && url.pathname.endsWith("/cancel")) {
+    const body = await readJson(req);
+    const runId = decodeURIComponent(url.pathname.replace("/api/research/runs/", "").replace("/cancel", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await cancelResearchRun(store, {
+          runId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/runs/") && url.pathname.endsWith("/retry")) {
+    const body = await readJson(req);
+    const runId = decodeURIComponent(url.pathname.replace("/api/research/runs/", "").replace("/retry", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await retryResearchRun(store, {
+          runId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          reason: body.reason ?? ""
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/runs/") && url.pathname.endsWith("/execute")) {
+    const body = await readJson(req);
+    const runId = decodeURIComponent(url.pathname.replace("/api/research/runs/", "").replace("/execute", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await executeResearchRun(store, {
+          runId,
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          workerMode: body.workerMode ?? null,
+          approvedWorkerDispatch: Boolean(body.approvedWorkerDispatch)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/research/runs/")) {
+    const runId = decodeURIComponent(url.pathname.replace("/api/research/runs/", "").replace(/\/$/, ""));
+    try {
+      sendJson(res, 200, await getResearchRun(store, { runId }));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/export")) {
+    const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace("/export", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await buildSessionExport(store, {
+          sessionId,
+          userId: url.searchParams.get("userId") ?? undefined
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
   if (req.method === "GET" && url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/state")) {
     const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace("/state", "").replace(/\/$/, ""));
     const state = await getManagedSessionState(store, sessionId);
@@ -775,6 +1449,46 @@ async function handleApi(req, res, url) {
     const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace("/close", "").replace(/\/$/, ""));
     await closeManagedSession(store, sessionId);
     sendJson(res, 200, { ok: true, sessionId });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/sessions/")) {
+    const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await getSessionContinuity(store, {
+          sessionId,
+          userId: url.searchParams.get("userId") ?? undefined
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/feedback") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await recordSessionFeedback(store, {
+          sessionId: body.sessionId ?? body.session_id,
+          userId: body.userId ?? body.user_id,
+          messageId: body.messageId ?? body.message_id ?? null,
+          taskId: body.taskId ?? body.task_id ?? null,
+          answerHash: body.answerHash ?? body.answer_hash ?? null,
+          rating: body.rating,
+          comment: body.comment ?? "",
+          metadata: body.metadata ?? {}
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
     return;
   }
 
@@ -825,6 +1539,29 @@ export const server = createServer(async (req, res) => {
 });
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  let shuttingDown = false;
+  async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal}; stopping Brainstyworkers services...`);
+    try {
+      await researchSchedulerDaemon.stop(`process_${signal.toLowerCase()}_shutdown`);
+    } catch (error) {
+      console.error(`Research scheduler daemon stop failed: ${error.message}`);
+    }
+    server.close((error) => {
+      if (error) console.error(`HTTP server close failed: ${error.message}`);
+      process.exit(error ? 1 : 0);
+    });
+  }
+
+  process.once("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  process.once("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+
   server.listen(PORT, HOST, () => {
     console.log(`Brainstyworkers AI Concierge running at http://${HOST}:${PORT}`);
     console.log(`SQLite database: ${store.dbPath}`);

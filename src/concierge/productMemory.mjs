@@ -208,13 +208,16 @@ export async function recallProductMemoryForRequest({ store = null, user, sessio
 export function buildSafeProductMemoryEpisode({ user, session, state, localMemoryItems = [] }) {
   const stateForMasking = { context_packet: state.context_packet };
   const sourcePointers = (state.source_pointers ?? []).map((pointer) => ({
+    kind: pointer.kind ?? null,
     table: pointer.table ?? null,
     id: pointer.id ?? null,
+    displayLabel: maskDirectIdentifiers(pointer.displayLabel ?? "", stateForMasking) || null,
     sourceUrl: pointer.sourceUrl ?? null,
     summary: maskDirectIdentifiers(pointer.summary ?? "", stateForMasking),
     domHash: pointer.domHash ?? null,
     extractionHash: pointer.extractionHash ?? null,
-    evidenceFields: pointer.evidenceFields ?? null
+    evidenceFields: sanitizeEvidenceFields(pointer.evidenceFields ?? [], stateForMasking),
+    citation: sanitizeCitation(pointer.citation, stateForMasking)
   }));
   return {
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
@@ -247,6 +250,44 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
       credentialStorage: "not_allowed",
       irreversiblePortalActions: "not_allowed"
     }
+  };
+}
+
+function sanitizeEvidenceFields(fields = [], stateForMasking) {
+  const normalized = Array.isArray(fields)
+    ? fields
+    : Object.entries(fields ?? {}).map(([label, value]) => ({ label, value, confidence: "unknown" }));
+  return normalized.slice(0, 20).map((field) => ({
+    label: maskDirectIdentifiers(field.label ?? "field", stateForMasking),
+    value: sanitizeEvidenceFieldValue(field, stateForMasking),
+    confidence: field.confidence ?? "unknown"
+  }));
+}
+
+function sanitizeEvidenceFieldValue(field, stateForMasking) {
+  const label = String(field.label ?? "");
+  const value = String(field.value ?? "");
+  if (/member|subscriber|policy|group/i.test(label) && !/^last4:/i.test(value)) {
+    const match = value.match(/([A-Z0-9]{4})$/i);
+    return match ? `last4:${match[1]}` : "[DB_POINTER:insurance_identifiers:member_or_subscriber_id]";
+  }
+  return maskDirectIdentifiers(value, stateForMasking);
+}
+
+function sanitizeCitation(citation, stateForMasking) {
+  if (!citation || typeof citation !== "object") return null;
+  return {
+    sourceKind: citation.sourceKind ?? null,
+    uploadId: citation.uploadId ?? null,
+    filename: maskDirectIdentifiers(citation.filename ?? "", stateForMasking) || null,
+    extractionStatus: citation.extractionStatus ?? null,
+    extractionMethod: citation.extractionMethod ?? null,
+    confidence: citation.confidence ?? null,
+    sourceSpans: (citation.sourceSpans ?? []).slice(0, 5).map((span) => ({
+      spanId: span.spanId ?? span.span_id ?? null,
+      snippet: maskDirectIdentifiers(span.snippet ?? "", stateForMasking),
+      confidence: span.confidence ?? citation.confidence ?? "unknown"
+    }))
   };
 }
 

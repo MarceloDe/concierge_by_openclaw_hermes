@@ -34,6 +34,9 @@ test("OpenClaw validate-envelope API returns proposal-only proof", async () => {
     assert.equal(payload.workerPlan.workerJobs[0].deterministicControls.workerMayChooseWorkflow, false);
     assert.equal(payload.workerPlan.workerJobs[0].deterministicControls.workerMayCreateSubtasks, true);
     assert.equal(payload.workerPlan.workerJobs[0].progressProtocol.reportEverySeconds, 30);
+    assert.equal(payload.dynamicSkillContext.selected.insuranceSkillKey, "insurance_plan_aetna_temporary");
+    assert.equal(payload.dynamicSkillContext.selected.executionSkillKey, "insurance_portal_browser");
+    assert.ok(payload.dynamicSkillContext.requiredOpenClawTasks.includes("insurance_portal_browser.read_only_observation"));
     assert.equal(payload.proposal.task.task_type, "openclaw_skill_invocation_proposal");
     assert.deepEqual(payload.actionsTaken, []);
     assert.ok(payload.validation.fallbackPath.includes("manual_user_export"));

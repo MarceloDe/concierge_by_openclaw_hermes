@@ -17,6 +17,11 @@ const orchestrator = document.querySelector("#orchestrator");
 const orchestratorStatus = document.querySelector("#orchestratorStatus");
 const phase4 = document.querySelector("#phase4");
 const phase4Status = document.querySelector("#phase4Status");
+const researchStatus = document.querySelector("#researchStatus");
+const researchConsole = document.querySelector("#researchConsole");
+const loadHandoffsButton = document.querySelector("#loadHandoffs");
+const operatorAssistantStatus = document.querySelector("#operatorAssistantStatus");
+const operatorAssistantConsole = document.querySelector("#operatorAssistantConsole");
 const productAuthStatus = document.querySelector("#productAuthStatus");
 const productAuth = document.querySelector("#productAuth");
 const requireLivePortalProof = document.querySelector("#requireLivePortalProof");
@@ -122,6 +127,89 @@ function missingInfoLines(state) {
   ];
   if (!hasCapturedPortalEvidence(state)) return lines;
   return lines.filter((line) => !isSatisfiedByCapturedPortalEvidence(line));
+}
+
+function dynamicSkillContextFromState(state = {}) {
+  return state.dynamic_skill_context ?? state.dynamicSkillContext ?? null;
+}
+
+function dynamicSkillSelectedLine(context = {}) {
+  const selected = context.selected ?? {};
+  return [
+    selected.insuranceSkillKey ? `insurance=${selected.insuranceSkillKey}` : null,
+    selected.journeySkillKey ? `journey=${selected.journeySkillKey}` : null,
+    selected.executionSkillKey ? `execution=${selected.executionSkillKey}` : null
+  ].filter(Boolean).join(" · ") || "none selected";
+}
+
+function dynamicSkillMissingData(context = {}) {
+  const missing = new Set(context.dataNeeded ?? []);
+  for (const match of context.matches ?? []) {
+    for (const item of match.success?.missingData ?? []) missing.add(item);
+  }
+  return [...missing].filter(Boolean);
+}
+
+function dynamicSkillMatchCards(context = {}) {
+  const matches = context.matches ?? [];
+  if (!matches.length) return '<p class="status-text">No matching dynamic skill selected for this run.</p>';
+  return `
+    <div class="dynamic-skill-match-grid">
+      ${matches
+        .slice(0, 4)
+        .map(
+          (match) => `
+            <article class="dynamic-skill-match-card">
+              <strong>${escapeHtml(match.title ?? match.skillKey)}</strong>
+              <span>${escapeHtml(match.skillKind ?? "skill")} · fit ${escapeHtml(match.fit?.score ?? 0)} · success ${escapeHtml(match.success?.chance ?? "n/a")}</span>
+              <small>${escapeHtml((match.questionsSolved ?? []).slice(0, 2).join(" · ") || "questions not listed")}</small>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDynamicSkillProof(context, options = {}) {
+  if (!context) {
+    return options.empty === false
+      ? ""
+      : `
+        <article class="dynamic-skill-card">
+          <div>
+            <p class="eyebrow">Dynamic Skills</p>
+            <h3>No skill context yet</h3>
+          </div>
+          <p class="status-text">Run a LangGraph workflow to resolve insurance, journey, and execution skills.</p>
+        </article>
+      `;
+  }
+  const missing = dynamicSkillMissingData(context);
+  return `
+    <article class="dynamic-skill-card">
+      <div class="dynamic-skill-header">
+        <div>
+          <p class="eyebrow">Dynamic Skills</p>
+          <h3>${escapeHtml(dynamicSkillSelectedLine(context))}</h3>
+        </div>
+        <span>${escapeHtml(context.successEstimate?.overallChance ?? "n/a")} chance</span>
+      </div>
+      <dl>
+        <dt>Missing data</dt>
+        <dd>${escapeHtml(missing.join(" · ") || "none")}</dd>
+        <dt>OpenClaw tasks</dt>
+        <dd>${escapeHtml((context.requiredOpenClawTasks ?? []).join(" · ") || "none")}</dd>
+        <dt>Search</dt>
+        <dd>${escapeHtml((context.requiredSearch ?? []).join(" · ") || "none")}</dd>
+        <dt>APIs</dt>
+        <dd>${escapeHtml((context.requiredApis ?? []).join(" · ") || "none")}</dd>
+        <dt>Generator edits</dt>
+        <dd>${escapeHtml(context.generatorEditContract?.editableBy ?? "not reported")} · forbids ${escapeHtml((context.generatorEditContract?.forbiddenEdits ?? []).join(", ") || "none")}</dd>
+      </dl>
+      ${dynamicSkillMatchCards(context)}
+    </article>
+  `;
 }
 
 function outboundPayloadAuditSummary(result) {
@@ -279,6 +367,7 @@ function renderAnswerPanel(result = null, options = {}) {
   const priorAuthorizations = result.trace?.priorAuthorizations ?? [];
   const memoryRetain = state.product_memory_retain ?? result?.graphRun?.productMemory?.retain ?? {};
   const discovery = evidence.discoveryReport ?? {};
+  const dynamicSkillContext = dynamicSkillContextFromState(state);
   const approvalNeeded = pendingReadOnlyTaskId(result);
   const finalText = result.finalResponse ?? "The workflow completed without a final answer.";
   const answerStatus =
@@ -345,6 +434,7 @@ function renderAnswerPanel(result = null, options = {}) {
         <span>${escapeHtml(state.graph_trace_id ?? result.session?.langgraph_thread_id ?? "none")}</span>
       </div>
     </div>
+    ${renderDynamicSkillProof(dynamicSkillContext, { empty: false })}
     ${
       approvalNeeded
         ? `<div class="button-row">
@@ -516,6 +606,7 @@ function renderChatProof(result) {
   const missing = missingInfoLines(state);
   const sourcePointers = uniqueSourcePointers(state);
   const discovery = evidence.discoveryReport ?? {};
+  const dynamicSkillContext = dynamicSkillContextFromState(state);
   const canRequestWorkerAction = proposalTask.id && !hasCapturedPortalEvidence(state);
   return renderOperatorProofDetails(
     "Workflow Proof",
@@ -529,6 +620,8 @@ function renderChatProof(result) {
         <dd>${escapeHtml(llmDecision.mode ?? "not run")} · ${escapeHtml(llmDecision.usedByRouter ? "used by router" : "not used")} · ${escapeHtml(llmDecision.workflow ?? "no workflow")} · confidence ${escapeHtml(llmDecision.confidence ?? "n/a")}</dd>
         <dt>Missing info</dt>
         <dd>${escapeHtml(missing.join(" · ") || "none")}</dd>
+        <dt>Dynamic skills</dt>
+        <dd>${escapeHtml(dynamicSkillSelectedLine(dynamicSkillContext ?? {}))} · chance ${escapeHtml(dynamicSkillContext?.successEstimate?.overallChance ?? "n/a")}</dd>
         <dt>OpenClaw proposal</dt>
         <dd>${escapeHtml(proposalTask.status ?? "not prepared")} · ${escapeHtml(proposalTask.id ?? "no task")}</dd>
         <dt>Worker plan</dt>
@@ -558,6 +651,7 @@ function renderChatProof(result) {
             </div>`
           : ""
       }
+      ${renderDynamicSkillProof(dynamicSkillContext)}
       ${renderDocumentCandidateProof(result)}
     `,
     { open: !hasCapturedPortalEvidence(state) }
@@ -1080,6 +1174,7 @@ function renderSkillProposal(payload) {
   const validation = payload.validation ?? {};
   const proposal = payload.proposal ?? {};
   const workerPlan = payload.workerPlan ?? {};
+  const dynamicSkillContext = payload.dynamicSkillContext ?? payload.graphRun?.state?.dynamic_skill_context ?? null;
   const task = proposal.task ?? {};
   const auditEvent = proposal.auditEvent ?? {};
   skillStatus.textContent = `${validation.status ?? "unknown"} · task ${task.id ? "recorded" : "not recorded"}`;
@@ -1107,6 +1202,8 @@ function renderSkillProposal(payload) {
         <dd>${escapeHtml(workerPlan.planId ?? "not prepared")} · ${escapeHtml(workerPlan.dispatchStatus ?? "not_dispatched")}</dd>
         <dt>Worker jobs</dt>
         <dd>${escapeHtml((workerPlan.workerJobs ?? []).map((job) => `${job.worker?.agentId ?? "worker"}:${job.jobId}`).join(" · ") || "none")}</dd>
+        <dt>Dynamic skills</dt>
+        <dd>${escapeHtml(dynamicSkillSelectedLine(dynamicSkillContext ?? {}))} · chance ${escapeHtml(dynamicSkillContext?.successEstimate?.overallChance ?? "n/a")}</dd>
         <dt>Fan-out/Fan-in</dt>
         <dd>${escapeHtml(`${workerPlan.fanOut?.mode ?? "none"} / ${workerPlan.fanIn?.owner ?? "none"}`)}</dd>
         <dt>Audit event</dt>
@@ -1115,6 +1212,7 @@ function renderSkillProposal(payload) {
         <dd>${escapeHtml((validation.actionsTaken ?? []).join(", ") || "none")}</dd>
       </dl>
     </article>
+    ${renderDynamicSkillProof(dynamicSkillContext)}
   `;
 }
 
@@ -1423,6 +1521,999 @@ async function loadSessionState() {
   const result = await api(`/api/sessions/${encodeURIComponent(sessionId)}/state`);
   sessionStatus.textContent = `${result.session.current_step} · v${result.session.state_version}`;
   trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+function renderResearchConsole(payload, mode = "kpis") {
+  if (!researchConsole) return;
+  const candidateKpis = payload.kpis ?? payload;
+  const hasKpiPayload =
+    !Array.isArray(candidateKpis.sources) &&
+    !Array.isArray(candidateKpis.runs) &&
+    (candidateKpis.sources || candidateKpis.runs || candidateKpis.artifacts || candidateKpis.schedules || candidateKpis.reviewQueue);
+  const kpis = hasKpiPayload ? candidateKpis : {};
+  const sources = payload.sources ?? [];
+  const runs = payload.runs ?? [];
+  const schedules = payload.schedules ?? [];
+  const run = payload.run ?? null;
+  const events = payload.events ?? [];
+  const artifacts = payload.artifacts ?? (payload.artifact ? [payload.artifact] : []);
+  const searchResults = payload.results ?? [];
+  const worker = payload.worker ?? (payload.modes && payload.defaultMode ? payload : null);
+  const workerResult = payload.workerResult ?? null;
+  const embeddingStatus = payload.route && (payload.counts || payload.job || payload.latestJob) ? payload : null;
+  const graphPayload = payload.graph?.nodes && payload.graph?.edges ? payload : null;
+  const schedulerDaemon = payload.daemon
+    ? payload
+    : payload.schedulerDaemon
+      ? { daemon: payload.schedulerDaemon, schedules: payload.schedules ?? {}, dueCount: payload.dueCount, safety: payload.safety ?? {} }
+      : null;
+  const sections = [];
+  if (payload.status && Array.isArray(payload.results)) {
+    const embeddingSearch = payload.embeddingSearch ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Trusted Evidence Search</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(payload.status)} · low confidence ${escapeHtml(payload.lowConfidence ?? false)}</dd>
+          <dt>Trusted</dt>
+          <dd>${escapeHtml(payload.trustedResultCount ?? 0)} results</dd>
+          <dt>Pending</dt>
+          <dd>${escapeHtml(payload.pendingReviewCount ?? 0)} matching artifacts unavailable to trusted retrieval</dd>
+          <dt>Embedding route</dt>
+          <dd>${escapeHtml(
+            embeddingSearch.route
+              ? `${embeddingSearch.route.provider}/${embeddingSearch.route.model} · ${embeddingSearch.status}`
+              : embeddingSearch.status ?? "not used"
+          )}</dd>
+          <dt>Message</dt>
+          <dd>${escapeHtml(payload.message ?? "")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (embeddingStatus) {
+    const route = embeddingStatus.route ?? {};
+    const latestJob = embeddingStatus.latestJob ?? embeddingStatus.job ?? {};
+    const counts = embeddingStatus.counts ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Embedding Route</h3>
+        <dl>
+          <dt>Route</dt>
+          <dd>${escapeHtml(`${route.routeKey ?? "default"} · ${route.provider ?? "unknown"} · ${route.model ?? "unknown"}`)}</dd>
+          <dt>Dimensions</dt>
+          <dd>${escapeHtml(route.dimensions ?? "unknown")}</dd>
+          <dt>Trusted artifacts</dt>
+          <dd>${escapeHtml(`${counts.trustedArtifacts ?? "-"} trusted · ${counts.activeIndexedArtifacts ?? "-"} indexed · ${counts.staleTrustedArtifacts ?? "-"} stale`)}</dd>
+          <dt>Latest job</dt>
+          <dd>${escapeHtml(latestJob.status ? `${latestJob.status} · ${latestJob.indexedCount ?? 0} indexed · ${latestJob.failureReason ?? "no failure"}` : "none")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(embeddingStatus.safety?.indexesOnlyApprovedEvidence ? "approved evidence only" : "review required")}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((embeddingStatus.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (graphPayload) {
+    const graph = graphPayload.graph ?? {};
+    const summary = graph.summary ?? {};
+    const build = graphPayload.build ?? graphPayload.latestBuild ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Research Evidence Graph</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(graph.status ?? "unknown")}</dd>
+          <dt>Nodes</dt>
+          <dd>${escapeHtml(`${summary.nodeCount ?? 0} nodes · ${summary.edgeCount ?? 0} edges`)}</dd>
+          <dt>Sources</dt>
+          <dd>${escapeHtml(`${summary.approvedSourceCount ?? 0} approved · ${summary.activeRunCount ?? 0} active runs`)}</dd>
+          <dt>Artifacts</dt>
+          <dd>${escapeHtml(`${summary.trustedArtifactCount ?? 0} trusted · ${summary.pendingArtifactCount ?? 0} pending`)}</dd>
+          <dt>Latest build</dt>
+          <dd>${escapeHtml(build.id ? `${build.status} · ${build.nodeCount ?? 0}/${build.edgeCount ?? 0} · ${build.graphHash ?? "no hash"}` : "none")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(graphPayload.safety?.rawArtifactTextReturned === false ? "metadata only · raw artifact text hidden" : "verify graph safety")}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((graphPayload.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+        <h4>Node Types</h4>
+        <ol class="research-event-list">
+          ${Object.entries(summary.nodeTypes ?? {}).map(([key, count]) => `<li><b>${escapeHtml(key)}</b><span>${escapeHtml(count)}</span></li>`).join("") || "<li>No graph nodes yet.</li>"}
+        </ol>
+        <h4>Edges</h4>
+        <ol class="research-event-list">
+          ${(graph.edges ?? []).slice(0, 12).map((edge) => `<li><b>${escapeHtml(edge.type)}</b><span>${escapeHtml(`${edge.from} -> ${edge.to}`)}</span></li>`).join("") || "<li>No graph edges yet.</li>"}
+        </ol>
+      </article>
+    `);
+  }
+  if (payload.evaluation || Array.isArray(payload.evaluations)) {
+    const evaluation = payload.evaluation ?? payload.latest ?? {};
+    const details = evaluation.evaluation ?? {};
+    const claims = details.claims ?? [];
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Claim Citation Closure</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(payload.status ?? evaluation.status ?? "loaded")} · ${escapeHtml(payload.verdict ?? evaluation.verdict ?? "unknown")}</dd>
+          <dt>Claims</dt>
+          <dd>${escapeHtml(`${evaluation.claimCount ?? details.claimCount ?? 0} total · ${evaluation.supportedCount ?? details.supportedCount ?? 0} supported · ${evaluation.unsupportedCount ?? details.unsupportedCount ?? 0} unsupported · ${evaluation.lowConfidenceCount ?? details.lowConfidenceCount ?? 0} low confidence`)}</dd>
+          <dt>Latest</dt>
+          <dd>${escapeHtml(evaluation.id ? `${evaluation.id} · audit ${evaluation.auditEventId ?? "pending"}` : "none")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(payload.safety?.judgeCreatesEvidence === false || evaluation.safety?.judgeCreatesEvidence === false ? "labels only · no evidence invented" : "verify judge safety")}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((payload.actionsTaken ?? details.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+        <h4>Claims</h4>
+        <ol class="research-event-list">
+          ${claims
+            .slice(0, 8)
+            .map(
+              (claim) =>
+                `<li><b>${escapeHtml(claim.status)}</b><span>${escapeHtml(claim.text)}${claim.citations?.length ? ` · cites ${escapeHtml(claim.citations.map((item) => item.artifactId).join(", "))}` : ""}</span></li>`
+            )
+            .join("") || "<li>No claim-level evaluation yet.</li>"}
+        </ol>
+      </article>
+    `);
+  }
+  if (worker) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Worker Status</h3>
+        <dl>
+          <dt>Default mode</dt>
+          <dd>${escapeHtml(worker.defaultMode ?? "unknown")}</dd>
+          <dt>Deterministic fetch</dt>
+          <dd>${escapeHtml(worker.modes?.deterministicFetch?.enabled ? "enabled" : "disabled")} · ${escapeHtml(worker.modes?.deterministicFetch?.description ?? "")}</dd>
+          <dt>MockWorker</dt>
+          <dd>${escapeHtml(worker.modes?.mockWorker?.enabled ? "enabled" : "disabled")} · trusted retrieval ${escapeHtml(worker.modes?.mockWorker?.trustedRetrieval ?? false)}</dd>
+          <dt>OpenClaw</dt>
+          <dd>${escapeHtml(worker.modes?.openclaw?.enabled ? "enabled" : "feature-gated")} · ${escapeHtml(worker.modes?.openclaw?.description ?? "")} · ${escapeHtml(worker.modes?.openclaw?.approvalGate ?? "")}</dd>
+          <dt>Hermes</dt>
+          <dd>${escapeHtml(worker.modes?.hermes?.enabled ? "enabled" : "feature-gated")} · ${escapeHtml(worker.modes?.hermes?.description ?? "")} · ${escapeHtml(worker.modes?.hermes?.approvalGate ?? "")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (hasKpiPayload) {
+    sections.push(`
+      <article class="research-card">
+        <h3>Research KPIs</h3>
+        <dl>
+          <dt>Sources</dt>
+          <dd>${escapeHtml(`${kpis.sources?.approved ?? 0} approved · ${kpis.sources?.pendingReview ?? 0} pending · ${kpis.sources?.total ?? 0} total`)}</dd>
+          <dt>Runs</dt>
+          <dd>${escapeHtml(`${kpis.runs?.active ?? 0} active · ${kpis.runs?.total ?? 0} total`)}</dd>
+          <dt>Artifacts</dt>
+          <dd>${escapeHtml(`${kpis.artifacts?.trustedRetrieval ?? 0} trusted · ${kpis.artifacts?.pendingReview ?? 0} pending · ${kpis.artifacts?.total ?? 0} total`)}</dd>
+          <dt>Feedback queue</dt>
+          <dd>${escapeHtml(kpis.reviewQueue?.feedbackItems ?? 0)}</dd>
+          <dt>Artifact queue</dt>
+          <dd>${escapeHtml(kpis.reviewQueue?.pendingArtifacts ?? 0)}</dd>
+          <dt>Audit events</dt>
+          <dd>${escapeHtml(kpis.audit?.totalEvents ?? 0)}</dd>
+          <dt>Schedules</dt>
+          <dd>${escapeHtml(`${kpis.schedules?.active ?? 0} active · ${kpis.schedules?.paused ?? 0} paused · ${kpis.schedules?.due ?? 0} due`)}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (payload.scheduler) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Scheduled Research Tick</h3>
+        <dl>
+          <dt>Mode</dt>
+          <dd>${escapeHtml(payload.scheduler.mode)}</dd>
+          <dt>Processed</dt>
+          <dd>${escapeHtml(payload.scheduler.processedCount ?? 0)}</dd>
+          <dt>Blocked</dt>
+          <dd>${escapeHtml(payload.scheduler.blockedCount ?? 0)}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((payload.scheduler.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (schedulerDaemon?.daemon) {
+    const daemon = schedulerDaemon.daemon;
+    const runtime = daemon.runtime ?? {};
+    const safety = schedulerDaemon.safety ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Scheduler Daemon</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(`${daemon.status ?? "unknown"} · process ${runtime.processStatus ?? "unknown"}`)}</dd>
+          <dt>Cadence</dt>
+          <dd>${escapeHtml(`${daemon.intervalMs ?? "-"} ms · limit ${daemon.tickLimit ?? "-"}`)}</dd>
+          <dt>Due schedules</dt>
+          <dd>${escapeHtml(`${schedulerDaemon.dueCount ?? schedulerDaemon.schedules?.dueCount ?? 0} due · ${schedulerDaemon.schedules?.activeCount ?? 0} active`)}</dd>
+          <dt>Last tick</dt>
+          <dd>${escapeHtml(`${daemon.lastTickAt ?? "never"} · processed ${daemon.lastProcessedCount ?? 0} · blocked ${daemon.lastBlockedCount ?? 0}`)}</dd>
+          <dt>Tick count</dt>
+          <dd>${escapeHtml(`${daemon.tickCount ?? 0} ticks · ${daemon.overlapSkippedCount ?? 0} overlaps skipped`)}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((daemon.lastActions ?? []).join(", ") || "none")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(safety.onlyApprovedSchedules ? "approved schedules only · no hidden worker dispatch" : "verify scheduler safety")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (sources.length) {
+    sections.push(
+      sources
+        .slice(0, 8)
+        .map(
+          (source) => `
+            <article class="research-card">
+              <h3>${escapeHtml(source.title)}</h3>
+              <dl>
+                <dt>Status</dt>
+                <dd>${escapeHtml(source.status)} · priority ${escapeHtml(source.priority)}</dd>
+                <dt>Authority</dt>
+                <dd>${escapeHtml(source.authorityLevel)}</dd>
+                <dt>URL</dt>
+                <dd>${escapeHtml(source.baseUrl)}</dd>
+                <dt>Last run</dt>
+                <dd>${escapeHtml(source.lastRunAt ?? "none")} · ${escapeHtml(source.lastStatus ?? "not run")}</dd>
+              </dl>
+              <div class="button-row">
+                ${source.status === "pending_review" ? `<button type="button" data-research-source-approve="${escapeHtml(source.id)}">Approve</button>` : ""}
+                ${source.status === "pending_review" ? `<button type="button" data-research-source-reject="${escapeHtml(source.id)}">Reject</button>` : ""}
+                <button type="button" data-research-run-source="${escapeHtml(source.id)}">Run</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    );
+  }
+  if (runs.length) {
+    sections.push(
+      runs
+        .slice(0, 8)
+        .map(
+          (item) => `
+            <article class="research-card">
+              <h3>${escapeHtml(item.topic || item.sourceKey || item.id)}</h3>
+              <dl>
+                <dt>Status</dt>
+                <dd>${escapeHtml(item.status)}</dd>
+                <dt>Source</dt>
+                <dd>${escapeHtml(item.sourceKey ?? "none")}</dd>
+                <dt>Started</dt>
+                <dd>${escapeHtml(item.startedAt)}</dd>
+                <dt>Summary</dt>
+                <dd>${escapeHtml(item.summary)}</dd>
+              </dl>
+              <div class="button-row">
+                <button type="button" data-research-run-open="${escapeHtml(item.id)}">Open</button>
+                ${item.status === "queued" || item.status === "running" ? `<button type="button" data-research-run-cancel="${escapeHtml(item.id)}">Cancel</button>` : ""}
+                ${item.status === "queued" ? `<button type="button" data-research-run-execute="${escapeHtml(item.id)}">Execute Fetch</button>` : ""}
+                ${item.status === "queued" ? `<button type="button" data-research-run-mock="${escapeHtml(item.id)}">MockWorker</button>` : ""}
+                ${item.status === "queued" ? `<button type="button" data-research-run-openclaw="${escapeHtml(item.id)}">OpenClaw</button>` : ""}
+                ${item.status === "queued" ? `<button type="button" data-research-run-hermes="${escapeHtml(item.id)}">Hermes</button>` : ""}
+                <button type="button" data-research-run-retry="${escapeHtml(item.id)}">Retry</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    );
+  }
+  if (schedules.length) {
+    sections.push(
+      schedules
+        .slice(0, 8)
+        .map(
+          (schedule) => `
+            <article class="research-card">
+              <h3>${escapeHtml(schedule.scheduleLabel || schedule.scheduleKey)}</h3>
+              <dl>
+                <dt>Status</dt>
+                <dd>${escapeHtml(schedule.status)} · approval ${escapeHtml(schedule.approvalStatus)}</dd>
+                <dt>Next run</dt>
+                <dd>${escapeHtml(schedule.nextRunAt)}</dd>
+                <dt>Interval</dt>
+                <dd>${escapeHtml(`${schedule.intervalHours}h · ${schedule.workerMode}`)}</dd>
+                <dt>Source</dt>
+                <dd>${escapeHtml(schedule.sourceKey ?? "priority approved source")}</dd>
+                <dt>Runs</dt>
+                <dd>${escapeHtml(`${schedule.runCount ?? 0} · last ${schedule.lastStatus ?? "none"}`)}</dd>
+              </dl>
+            </article>
+          `
+        )
+        .join("")
+    );
+  }
+  if (run) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Run Detail</h3>
+        <dl>
+          <dt>Run</dt>
+          <dd>${escapeHtml(run.id)}</dd>
+          <dt>Status</dt>
+          <dd>${escapeHtml(run.status)}</dd>
+          <dt>Source</dt>
+          <dd>${escapeHtml(run.sourceKey ?? "none")}</dd>
+          <dt>Summary</dt>
+          <dd>${escapeHtml(run.summary)}</dd>
+          ${workerResult ? `<dt>Worker result</dt><dd>${escapeHtml(`${workerResult.status} · ${(workerResult.actionsTaken ?? []).join(", ") || "no actions reported"}`)}</dd>` : ""}
+        </dl>
+        <div class="button-row">
+          ${run.status === "queued" ? `<button type="button" data-research-run-execute="${escapeHtml(run.id)}">Execute Fetch</button>` : ""}
+          ${run.status === "queued" ? `<button type="button" data-research-run-mock="${escapeHtml(run.id)}">MockWorker</button>` : ""}
+          ${run.status === "queued" ? `<button type="button" data-research-run-openclaw="${escapeHtml(run.id)}">OpenClaw</button>` : ""}
+          ${run.status === "queued" ? `<button type="button" data-research-run-hermes="${escapeHtml(run.id)}">Hermes</button>` : ""}
+        </div>
+        <h4>Events</h4>
+        <ol class="research-event-list">
+          ${events.map((event) => `<li><b>${escapeHtml(event.eventType)}</b><span>${escapeHtml(event.status)} · ${escapeHtml(event.summary)}</span></li>`).join("") || "<li>No events recorded.</li>"}
+        </ol>
+        <h4>Artifacts</h4>
+        <ol class="research-artifact-list">
+          ${
+            artifacts
+              .map(
+                (artifact) => `
+                  <li>
+                    <b>${escapeHtml(artifact.artifactType ?? artifact.id)}</b>
+                    <span>${escapeHtml(artifact.citationStatus ?? "unknown")} · ${escapeHtml(artifact.title ?? artifact.sourceUrl ?? "")}</span>
+                    <span>content ${escapeHtml(artifact.contentHash ?? "none")} · extraction ${escapeHtml(artifact.extractionHash ?? "none")}</span>
+                    <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
+                    <span>
+                      ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-approve="${escapeHtml(artifact.id)}">Approve Citation</button>` : ""}
+                      ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-quarantine="${escapeHtml(artifact.id)}">Quarantine</button>` : ""}
+                    </span>
+                  </li>
+                `
+              )
+              .join("") || "<li>No artifacts recorded.</li>"
+          }
+        </ol>
+      </article>
+    `);
+  }
+  if (artifacts.length && !run) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Artifact Review Queue</h3>
+        <ol class="research-artifact-list">
+          ${artifacts
+            .map(
+              (artifact) => `
+                <li>
+                  <b>${escapeHtml(artifact.title ?? artifact.artifactType ?? artifact.id)}</b>
+                  <span>${escapeHtml(artifact.citationStatus ?? "unknown")} · ${escapeHtml(artifact.sourceUrl ?? "")}</span>
+                  <span>run ${escapeHtml(artifact.runId ?? "none")} · content ${escapeHtml(artifact.contentHash ?? "none")}</span>
+                  <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
+                  <span>
+                    ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-approve="${escapeHtml(artifact.id)}">Approve Citation</button>` : ""}
+                    ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-quarantine="${escapeHtml(artifact.id)}">Quarantine</button>` : ""}
+                  </span>
+                </li>
+              `
+            )
+            .join("")}
+        </ol>
+      </article>
+    `);
+  }
+  if (searchResults.length) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Search Results</h3>
+        <ol class="research-artifact-list">
+          ${searchResults
+            .map(
+              (result) => `
+                <li>
+                  <b>${escapeHtml(result.title ?? result.artifactId)}</b>
+                  <span>${escapeHtml(result.citationStatus)} · score ${escapeHtml(result.score)} · ${escapeHtml(result.confidence ?? "unknown")}</span>
+                  <span>lexical ${escapeHtml(result.lexicalScore ?? 0)} · embedding ${escapeHtml(result.embeddingScore ?? 0)} · ${escapeHtml(result.embeddingRoute?.provider ?? "no embedding")}</span>
+                  <span>${escapeHtml(result.sourceUrl ?? "")}</span>
+                  <p>${escapeHtml(result.snippet ?? "")}</p>
+                </li>
+              `
+            )
+            .join("")}
+        </ol>
+      </article>
+    `);
+  }
+  researchConsole.innerHTML = sections.join("") || `<p>No research ${escapeHtml(mode)} data yet.</p>`;
+}
+
+function renderAuditLog(payload) {
+  if (!researchConsole) return;
+  const events = payload.events ?? [];
+  const chain = payload.chain ?? {};
+  const eventTypes = payload.eventTypes ?? [];
+  researchConsole.innerHTML = `
+    <article class="research-card wide">
+      <h3>Audit Log</h3>
+      <dl>
+        <dt>Status</dt>
+        <dd>${escapeHtml(payload.status ?? "unknown")}</dd>
+        <dt>Returned</dt>
+        <dd>${escapeHtml(`${payload.pagination?.returned ?? events.length} of ${payload.pagination?.total ?? events.length}`)}</dd>
+        <dt>Chain</dt>
+        <dd>${escapeHtml(chain.valid ? "valid" : "attention")} · ${escapeHtml(chain.checkedChains ?? 0)} chains · ${escapeHtml(chain.hashedCount ?? 0)} hashed events</dd>
+        <dt>Safety</dt>
+        <dd>${escapeHtml(payload.safety?.rawDetailsReturned === false ? "raw details hidden" : "review")}</dd>
+      </dl>
+    </article>
+    ${
+      eventTypes.length
+        ? `<article class="research-card">
+            <h3>Event Types</h3>
+            <ol class="research-event-list">
+              ${eventTypes.map((item) => `<li><b>${escapeHtml(item.eventType)}</b><span>${escapeHtml(item.count)} events</span></li>`).join("")}
+            </ol>
+          </article>`
+        : ""
+    }
+    ${
+      events.length
+        ? events
+            .map(
+              (event) => `
+                <article class="research-card">
+                  <h3>${escapeHtml(event.eventType)}</h3>
+                  <dl>
+                    <dt>Event</dt>
+                    <dd>${escapeHtml(event.id)}</dd>
+                    <dt>Kind</dt>
+                    <dd>${escapeHtml(event.actionKind)}</dd>
+                    <dt>Created</dt>
+                    <dd>${escapeHtml(event.createdAt)}</dd>
+                    <dt>Session</dt>
+                    <dd>${escapeHtml(event.sessionId ?? "root")}</dd>
+                    <dt>Hash</dt>
+                    <dd>${escapeHtml(event.eventHash ?? "legacy")}</dd>
+                    <dt>Details hash</dt>
+                    <dd>${escapeHtml(event.detailsHash)}</dd>
+                  </dl>
+                  <pre>${escapeHtml(event.detailsPreview ?? "")}</pre>
+                </article>
+              `
+            )
+            .join("")
+        : `<article class="research-card"><h3>No Audit Events</h3><p>No matching audit events found.</p></article>`
+    }
+  `;
+}
+
+function renderOperatorProposalCard(proposal) {
+  const canDecide = proposal.status === "pending_approval" && Number(proposal.executionCount ?? 0) === 0;
+  return `
+    <article class="research-card">
+      <h3>${escapeHtml(proposal.toolKey ?? proposal.id)}</h3>
+      <dl>
+        <dt>Proposal</dt>
+        <dd>${escapeHtml(proposal.id)}</dd>
+        <dt>Status</dt>
+        <dd>${escapeHtml(proposal.status)} · ${escapeHtml(proposal.riskLevel ?? "unknown")} risk</dd>
+        <dt>Effect</dt>
+        <dd>${escapeHtml(proposal.expectedEffect ?? "none")}</dd>
+        <dt>Request</dt>
+        <dd>${escapeHtml(proposal.requestMessagePreview ?? "")}</dd>
+        <dt>Args hash</dt>
+        <dd>${escapeHtml(proposal.argsHash ?? "none")}</dd>
+        <dt>Executions</dt>
+        <dd>${escapeHtml(proposal.executionCount ?? 0)}</dd>
+      </dl>
+      <pre>${escapeHtml(JSON.stringify(proposal.args ?? {}, null, 2))}</pre>
+      ${
+        canDecide
+          ? `<div class="button-row">
+              <button type="button" data-operator-proposal-approve="${escapeHtml(proposal.id)}">Approve Proposal</button>
+              <button type="button" data-operator-proposal-reject="${escapeHtml(proposal.id)}">Reject Proposal</button>
+            </div>`
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderOperatorAssistantConsole(payload, mode = "assistant") {
+  if (!operatorAssistantConsole) return;
+  const sections = [];
+  const tools = payload.tools ?? [];
+  const proposals = payload.proposals ?? (payload.proposal ? [payload.proposal] : []);
+  const toolResult = payload.toolResult ?? null;
+  const result = payload.result ?? null;
+  if (payload.status || payload.mode || payload.message) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Operator Assistant</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(payload.status ?? "ok")} · ${escapeHtml(payload.mode ?? mode)}</dd>
+          <dt>Message</dt>
+          <dd>${escapeHtml(payload.message ?? payload.error ?? "")}</dd>
+          <dt>Tool</dt>
+          <dd>${escapeHtml(payload.toolCall?.toolKey ?? payload.proposal?.toolKey ?? "none")}</dd>
+          <dt>Actions taken</dt>
+          <dd>${escapeHtml((payload.actionsTaken ?? []).join(", ") || "none")}</dd>
+          <dt>Audit</dt>
+          <dd>${escapeHtml(Array.isArray(payload.audit) ? payload.audit.map((item) => item.eventType).join(", ") : payload.audit?.eventType ?? "none")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (tools.length) {
+    const readCount = tools.filter((tool) => tool.type === "read").length;
+    const writeCount = tools.filter((tool) => tool.type === "write").length;
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Registered Operator Tools</h3>
+        <dl>
+          <dt>Read tools</dt>
+          <dd>${escapeHtml(readCount)}</dd>
+          <dt>Write tools</dt>
+          <dd>${escapeHtml(writeCount)} gated</dd>
+          <dt>Version</dt>
+          <dd>${escapeHtml(payload.version ?? "unknown")}</dd>
+        </dl>
+        <ol class="research-artifact-list">
+          ${tools
+            .map(
+              (tool) => `
+                <li>
+                  <b>${escapeHtml(tool.key)}</b>
+                  <span>${escapeHtml(tool.type)} · approval ${escapeHtml(tool.approvalRequired ? "required" : "not required")} · ${escapeHtml(tool.riskLevel)}</span>
+                </li>
+              `
+            )
+            .join("")}
+        </ol>
+      </article>
+    `);
+  }
+  if (toolResult) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Read Tool Result</h3>
+        <pre>${escapeHtml(JSON.stringify(toolResult, null, 2))}</pre>
+      </article>
+    `);
+  }
+  if (result) {
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Executed Proposal Result</h3>
+        <pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre>
+      </article>
+    `);
+  }
+  if (proposals.length) {
+    sections.push(...proposals.slice(0, 12).map(renderOperatorProposalCard));
+  }
+  operatorAssistantConsole.innerHTML = sections.join("") || `<p>No operator ${escapeHtml(mode)} data yet.</p>`;
+}
+
+async function loadResearchKpis() {
+  const result = await api("/api/research/kpis");
+  researchStatus.textContent = `${result.sources?.approved ?? 0} approved sources · ${result.runs?.total ?? 0} runs`;
+  renderResearchConsole(result, "kpis");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+function renderHumanHandoffs(payload) {
+  const handoffs = payload.handoffs ?? [];
+  researchConsole.innerHTML =
+    handoffs
+      .map(
+        (handoff) => `
+          <article class="research-card wide handoff-card">
+            <h3>Human Handoff</h3>
+            <dl>
+              <dt>Status</dt>
+              <dd>${escapeHtml(handoff.status ?? "open")} · ${escapeHtml(handoff.priority ?? "urgent")}</dd>
+              <dt>Type</dt>
+              <dd>${escapeHtml(handoff.handoffType ?? "urgent_emergency")}</dd>
+              <dt>Session</dt>
+              <dd>${escapeHtml(handoff.sessionId ?? "not reported")}</dd>
+              <dt>Task</dt>
+              <dd>${escapeHtml(handoff.taskId ?? "not reported")}</dd>
+              <dt>Summary</dt>
+              <dd>${escapeHtml(handoff.summary ?? "")}</dd>
+              <dt>Audit</dt>
+              <dd>${escapeHtml(handoff.auditEventId ?? "not reported")}</dd>
+            </dl>
+          </article>
+        `
+      )
+      .join("") || `<p>No human handoffs found for the current filter.</p>`;
+}
+
+async function loadHumanHandoffs() {
+  const params = new URLSearchParams({ limit: "25" });
+  const sessionId = value("sessionId");
+  if (sessionId) params.set("sessionId", sessionId);
+  const result = await api(`/api/handoffs?${params.toString()}`);
+  researchStatus.textContent = `${result.openCount ?? 0} open handoff(s) · ${result.count ?? 0} listed`;
+  renderHumanHandoffs(result);
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchWorkerStatus() {
+  const result = await api("/api/research/worker-status");
+  researchStatus.textContent = `${result.defaultMode ?? "unknown"} worker mode · mock ${result.modes?.mockWorker?.enabled ? "available" : "unavailable"}`;
+  renderResearchConsole(result, "worker status");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchEmbeddingStatus() {
+  const result = await api("/api/research/embeddings/status");
+  const route = result.route ?? {};
+  const counts = result.counts ?? {};
+  researchStatus.textContent = `${route.provider ?? "unknown"} embeddings · ${counts.activeIndexedArtifacts ?? 0}/${counts.trustedArtifacts ?? 0} trusted indexed`;
+  renderResearchConsole(result, "embedding status");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function chooseResearchEmbeddingRoute() {
+  const dimensions = Number(value("researchEmbeddingDimensions") || 64);
+  const result = await api("/api/research/embeddings/route", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      provider: value("researchEmbeddingProvider") || "local_tfidf",
+      dimensions,
+      reason: "Operator selected from local proof dashboard."
+    })
+  });
+  researchStatus.textContent = `${result.route?.provider ?? "unknown"} route selected · ${result.route?.dimensions ?? "?"} dimensions`;
+  renderResearchConsole({ ...result, counts: {} }, "embedding route");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function reindexResearchEmbeddings() {
+  const result = await api("/api/research/embeddings/reindex", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      routeKey: "default"
+    })
+  });
+  researchStatus.textContent = `${result.status ?? "reindex"} · ${result.job?.indexedCount ?? 0} indexed`;
+  renderResearchConsole(result, "embedding reindex");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchGraph() {
+  const result = await api("/api/research/graph");
+  const summary = result.graph?.summary ?? {};
+  researchStatus.textContent = `${summary.nodeCount ?? 0} graph nodes · ${summary.edgeCount ?? 0} edges`;
+  renderResearchConsole(result, "research graph");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function buildResearchGraph() {
+  const result = await api("/api/research/graph/build", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      limit: 250
+    })
+  });
+  researchStatus.textContent = `${result.status ?? "graph build"} · ${result.build?.nodeCount ?? 0} nodes · ${result.build?.edgeCount ?? 0} edges`;
+  renderResearchConsole(result, "research graph build");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadCitationClosure() {
+  const result = await api("/api/research/citation-closure");
+  const latest = result.latest ?? {};
+  researchStatus.textContent = `${result.evaluations?.length ?? 0} citation evaluations · latest ${latest.verdict ?? "none"}`;
+  renderResearchConsole(result, "citation closure");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function evaluateCitationClosure() {
+  const result = await api("/api/research/citation-closure/evaluate", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      question: value("researchSearchQuery"),
+      answer: value("researchAnswerToJudge"),
+      limit: 12,
+      minSupportScore: 3
+    })
+  });
+  researchStatus.textContent = `${result.status ?? "citation closure"} · ${result.verdict ?? "unknown"}`;
+  renderResearchConsole(result, "citation closure");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchSources() {
+  const result = await api("/api/research/sources");
+  researchStatus.textContent = `${result.sources?.length ?? 0} sources loaded`;
+  renderResearchConsole(result, "sources");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchArtifacts() {
+  const result = await api("/api/research/artifacts?citationStatus=extracted_pending_review");
+  researchStatus.textContent = `${result.artifacts?.length ?? 0} pending artifacts`;
+  renderResearchConsole(result, "artifacts");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function searchResearchEvidence() {
+  const query = encodeURIComponent(value("researchSearchQuery"));
+  const result = await api(`/api/research/search?q=${query}`);
+  researchStatus.textContent = `${result.status} · ${result.trustedResultCount ?? 0} trusted results`;
+  renderResearchConsole(result, "evidence search");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchRuns() {
+  const result = await api("/api/research/runs");
+  researchStatus.textContent = `${result.runs?.length ?? 0} research runs loaded`;
+  renderResearchConsole(result, "runs");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchSchedules() {
+  const result = await api("/api/research/schedules");
+  researchStatus.textContent = `${result.schedules?.length ?? 0} schedules loaded · ${result.dueCount ?? 0} due`;
+  renderResearchConsole(result, "schedules");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchSchedulerStatus() {
+  const result = await api("/api/research/scheduler/status");
+  const daemon = result.daemon ?? {};
+  researchStatus.textContent = `${daemon.status ?? "unknown"} scheduler daemon · process ${daemon.runtime?.processStatus ?? "unknown"} · ${result.dueCount ?? 0} due`;
+  renderResearchConsole(result, "scheduler daemon");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function tickResearchSchedulerDaemon() {
+  const result = await api("/api/research/scheduler/tick", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      executeDueRuns: false,
+      limit: 5,
+      trigger: "operator_dashboard_daemon_tick"
+    })
+  });
+  researchStatus.textContent = `${result.status ?? "scheduler tick"} · ${result.scheduler?.processedCount ?? 0} queued · ${result.scheduler?.blockedCount ?? 0} blocked`;
+  renderResearchConsole(result, "scheduler daemon tick");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function tickResearchSchedules() {
+  const result = await api("/api/research/schedules/tick", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      execute: false,
+      limit: 5
+    })
+  });
+  researchStatus.textContent = `${result.scheduler?.processedCount ?? 0} scheduled runs queued · ${result.scheduler?.blockedCount ?? 0} blocked`;
+  renderResearchConsole({ ...result, runs: result.processed?.map((item) => item.run) ?? [], schedules: result.processed?.map((item) => item.schedule) ?? [] }, "schedule tick");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadAuditLog() {
+  const params = new URLSearchParams({
+    limit: "25"
+  });
+  const prefix = value("auditEventPrefix");
+  const sessionId = value("sessionId");
+  if (prefix) params.set("prefix", prefix);
+  if (sessionId) params.set("sessionId", sessionId);
+  const result = await api(`/api/audit?${params.toString()}`);
+  researchStatus.textContent = `${result.events?.length ?? 0} audit events · chain ${result.chain?.valid ? "valid" : "attention"}`;
+  renderAuditLog(result);
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadOperatorTools() {
+  const result = await api("/api/operator/tools");
+  const readCount = (result.tools ?? []).filter((tool) => tool.type === "read").length;
+  const writeCount = (result.tools ?? []).filter((tool) => tool.type === "write").length;
+  operatorAssistantStatus.textContent = `${readCount} read tools · ${writeCount} gated write tools`;
+  renderOperatorAssistantConsole(result, "tools");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadOperatorProposals(status = null) {
+  const params = new URLSearchParams({
+    actorUserId: value("email"),
+    limit: "25"
+  });
+  if (status) params.set("status", status);
+  const result = await api(`/api/operator/proposals?${params.toString()}`);
+  operatorAssistantStatus.textContent = `${result.proposals?.length ?? 0} assistant proposals loaded`;
+  renderOperatorAssistantConsole(result, "proposals");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function runOperatorAssistant() {
+  const message = value("operatorAssistantMessage");
+  if (!message) throw new Error("Enter an operator request first.");
+  const result = await api("/api/operator/assistant", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      message
+    })
+  });
+  operatorAssistantStatus.textContent = `${result.status ?? "ok"} · actions ${(result.actionsTaken ?? []).join(", ") || "none"}`;
+  renderOperatorAssistantConsole(result, "assistant result");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function decideOperatorProposal(proposalId, decision) {
+  const result = await api(`/api/operator/proposals/${encodeURIComponent(proposalId)}/${decision}`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      reason: `Operator ${decision} from Phase 10J dashboard.`
+    })
+  });
+  operatorAssistantStatus.textContent = `${result.status ?? "decided"} · actions ${(result.actionsTaken ?? []).join(", ") || "none"}`;
+  renderOperatorAssistantConsole(result, "proposal decision");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function startResearchRun(sourceId = null) {
+  const result = await api("/api/research/runs", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      sourceId,
+      topic: value("researchTopic"),
+      workflowKey: "general_rag",
+      query: {
+        requestedFrom: "operator_dashboard",
+        topic: value("researchTopic")
+      }
+    })
+  });
+  researchStatus.textContent = `${result.run.status} · ${result.run.id}`;
+  renderResearchConsole({ runs: [result.run], run: result.run, source: result.source, events: [result.event] }, "run");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function proposeResearchSource() {
+  const result = await api("/api/research/sources/propose", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      url: value("researchSourceUrl"),
+      title: value("researchSourceTitle"),
+      workflowKeys: ["general_rag", "eligibility_benefits_navigation"],
+      reason: "Operator proposed from local proof dashboard."
+    })
+  });
+  researchStatus.textContent = `${result.source.status} · ${result.source.sourceKey}`;
+  renderResearchConsole({ sources: [result.source] }, "source proposal");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function reviewResearchSource(sourceId, decision) {
+  const result = await api(`/api/research/sources/${encodeURIComponent(sourceId)}/${decision}`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      reason: `Operator ${decision} from local proof dashboard.`
+    })
+  });
+  researchStatus.textContent = `${result.source.status} · ${result.source.sourceKey}`;
+  renderResearchConsole({ sources: [result.source] }, "source review");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function openResearchRun(runId) {
+  const result = await api(`/api/research/runs/${encodeURIComponent(runId)}`);
+  researchStatus.textContent = `${result.run.status} · ${result.run.id}`;
+  renderResearchConsole(result, "run detail");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function cancelResearchRun(runId) {
+  const result = await api(`/api/research/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      reason: "Cancelled from operator dashboard."
+    })
+  });
+  researchStatus.textContent = `${result.run.status} · ${result.run.id}`;
+  renderResearchConsole({ runs: [result.run], run: result.run, events: [result.event] }, "cancelled run");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function retryResearchRun(runId) {
+  const result = await api(`/api/research/runs/${encodeURIComponent(runId)}/retry`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      reason: "Retried from operator dashboard."
+    })
+  });
+  researchStatus.textContent = `${result.run.status} retry · ${result.run.id}`;
+  renderResearchConsole({ runs: [result.run], run: result.run, events: [result.event] }, "retry run");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function executeResearchRun(runId, workerMode = "deterministic_fetch") {
+  const adaptiveWorker = workerMode === "openclaw" || workerMode === "hermes";
+  const result = await api(`/api/research/runs/${encodeURIComponent(runId)}/execute`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      workerMode,
+      approvedWorkerDispatch: adaptiveWorker
+    })
+  });
+  researchStatus.textContent = `${result.run.status} · ${result.run.id} · ${workerMode}`;
+  renderResearchConsole(result, "executed run");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function reviewResearchArtifact(artifactId, decision) {
+  const result = await api(`/api/research/artifacts/${encodeURIComponent(artifactId)}/review`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      decision,
+      reason: `Operator ${decision} from local proof dashboard.`
+    })
+  });
+  researchStatus.textContent = `${result.artifact.citationStatus} · ${result.artifact.id}`;
+  renderResearchConsole({ artifacts: [result.artifact], events: [result.event] }, "artifact review");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
 }
 
 async function loadPortalPages() {
@@ -2131,6 +3222,361 @@ document.querySelector("#loadSessionState").addEventListener("click", async () =
   }
 });
 
+document.querySelector("#loadResearchKpis").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchKpis"), "Loading...");
+  try {
+    await loadResearchKpis();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+loadHandoffsButton.addEventListener("click", async () => {
+  const restore = setBusy(loadHandoffsButton, "Loading...");
+  try {
+    await loadHumanHandoffs();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchWorker").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchWorker"), "Loading...");
+  try {
+    await loadResearchWorkerStatus();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchEmbeddings").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchEmbeddings"), "Loading...");
+  try {
+    await loadResearchEmbeddingStatus();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#chooseResearchEmbeddingRoute").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#chooseResearchEmbeddingRoute"), "Saving...");
+  try {
+    await chooseResearchEmbeddingRoute();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#reindexResearchEmbeddings").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#reindexResearchEmbeddings"), "Reindexing...");
+  try {
+    await reindexResearchEmbeddings();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchGraph").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchGraph"), "Loading...");
+  try {
+    await loadResearchGraph();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#buildResearchGraph").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#buildResearchGraph"), "Building...");
+  try {
+    await buildResearchGraph();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadCitationClosure").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadCitationClosure"), "Loading...");
+  try {
+    await loadCitationClosure();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchArtifacts").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchArtifacts"), "Loading...");
+  try {
+    await loadResearchArtifacts();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchSources").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchSources"), "Loading...");
+  try {
+    await loadResearchSources();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchRuns").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchRuns"), "Loading...");
+  try {
+    await loadResearchRuns();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchSchedules").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchSchedules"), "Loading...");
+  try {
+    await loadResearchSchedules();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchSchedulerStatus").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchSchedulerStatus"), "Loading...");
+  try {
+    await loadResearchSchedulerStatus();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#tickResearchSchedulerDaemon").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#tickResearchSchedulerDaemon"), "Running...");
+  try {
+    await tickResearchSchedulerDaemon();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#tickResearchSchedules").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#tickResearchSchedules"), "Running...");
+  try {
+    await tickResearchSchedules();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadAuditLog").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadAuditLog"), "Loading...");
+  try {
+    await loadAuditLog();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#startResearchRun").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#startResearchRun"), "Starting...");
+  try {
+    await startResearchRun();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#searchResearchEvidence").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#searchResearchEvidence"), "Searching...");
+  try {
+    await searchResearchEvidence();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#evaluateCitationClosure").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#evaluateCitationClosure"), "Judging...");
+  try {
+    await evaluateCitationClosure();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#proposeResearchSource").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#proposeResearchSource"), "Proposing...");
+  try {
+    await proposeResearchSource();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadOperatorTools").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadOperatorTools"), "Loading...");
+  try {
+    await loadOperatorTools();
+  } catch (error) {
+    operatorAssistantStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadOperatorProposals").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadOperatorProposals"), "Loading...");
+  try {
+    await loadOperatorProposals();
+  } catch (error) {
+    operatorAssistantStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#runOperatorAssistant").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#runOperatorAssistant"), "Running...");
+  try {
+    await runOperatorAssistant();
+  } catch (error) {
+    operatorAssistantStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+operatorAssistantConsole.addEventListener("click", async (event) => {
+  const proposalToApprove = event.target?.dataset?.operatorProposalApprove;
+  const proposalToReject = event.target?.dataset?.operatorProposalReject;
+  if (!(proposalToApprove || proposalToReject)) return;
+  const restore = setBusy(event.target, "Deciding...");
+  try {
+    if (proposalToApprove) await decideOperatorProposal(proposalToApprove, "approve");
+    else if (proposalToReject) await decideOperatorProposal(proposalToReject, "reject");
+  } catch (error) {
+    operatorAssistantStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+researchConsole.addEventListener("click", async (event) => {
+  const sourceToApprove = event.target?.dataset?.researchSourceApprove;
+  const sourceToReject = event.target?.dataset?.researchSourceReject;
+  const sourceToRun = event.target?.dataset?.researchRunSource;
+  const runToOpen = event.target?.dataset?.researchRunOpen;
+  const runToCancel = event.target?.dataset?.researchRunCancel;
+  const runToRetry = event.target?.dataset?.researchRunRetry;
+  const runToExecute = event.target?.dataset?.researchRunExecute;
+  const runToMock = event.target?.dataset?.researchRunMock;
+  const runToOpenClaw = event.target?.dataset?.researchRunOpenclaw;
+  const runToHermes = event.target?.dataset?.researchRunHermes;
+  const artifactToApprove = event.target?.dataset?.researchArtifactApprove;
+  const artifactToQuarantine = event.target?.dataset?.researchArtifactQuarantine;
+  if (
+    !(
+      sourceToApprove ||
+      sourceToReject ||
+      sourceToRun ||
+      runToOpen ||
+      runToCancel ||
+      runToRetry ||
+      runToExecute ||
+      runToMock ||
+      runToOpenClaw ||
+      runToHermes ||
+      artifactToApprove ||
+      artifactToQuarantine
+    )
+  ) return;
+  const restore = setBusy(event.target, "Working...");
+  try {
+    if (sourceToApprove) await reviewResearchSource(sourceToApprove, "approve");
+    else if (sourceToReject) await reviewResearchSource(sourceToReject, "reject");
+    else if (sourceToRun) await startResearchRun(sourceToRun);
+    else if (runToOpen) await openResearchRun(runToOpen);
+    else if (runToCancel) await cancelResearchRun(runToCancel);
+    else if (runToRetry) await retryResearchRun(runToRetry);
+    else if (runToExecute) await executeResearchRun(runToExecute, "deterministic_fetch");
+    else if (runToMock) await executeResearchRun(runToMock, "mock_worker");
+    else if (runToOpenClaw) await executeResearchRun(runToOpenClaw, "openclaw");
+    else if (runToHermes) await executeResearchRun(runToHermes, "hermes");
+    else if (artifactToApprove) await reviewResearchArtifact(artifactToApprove, "approve");
+    else if (artifactToQuarantine) await reviewResearchArtifact(artifactToQuarantine, "quarantine");
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 document.querySelector("#loadHarness").addEventListener("click", async () => {
   try {
     await loadHarness();
@@ -2467,10 +3913,36 @@ sessions.addEventListener("click", async (event) => {
   await loadRuntimeEventsForSession(sessionId);
 });
 
+async function hydrateOperatorFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("sessionId");
+  const userId = params.get("userId");
+  if (!sessionId) return;
+  document.querySelector("#sessionId").value = sessionId;
+  document.querySelector("#resumeLatestSession").checked = true;
+  productSignedIn = true;
+  productAuthStatus.textContent = `Proof session · ${sessionId}`;
+  sessionStatus.textContent = "Loading linked session...";
+  try {
+    const state = await loadSessionState();
+    startRuntimeEventStream(sessionId, userId || undefined);
+    await loadRuntimeEventsForSession(sessionId);
+    addMessage(
+      "assistant",
+      `Loaded operator proof for session ${sessionId}. The trace panel now shows the linked LangGraph state.`
+    );
+    if (state?.session) sessionStatus.textContent = `${state.session.current_step} · v${state.session.state_version}`;
+  } catch (error) {
+    sessionStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  }
+}
+
 renderJourneyState();
 renderAnswerPanel();
 renderRuntimeTimeline();
 renderLiveWorkerGuide();
+hydrateOperatorFromQuery();
 addMessage(
   "assistant",
   "Sign in, choose a workflow, or type a benefits question. I will route it through the real LangGraph harness and show workflow proof here in chat. OpenClaw remains approval-gated."

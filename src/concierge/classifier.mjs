@@ -1,6 +1,10 @@
 import { WORKFLOWS } from "./types.mjs";
 
 export function classifyIntent(message, policyResult) {
+  if (policyResult.urgentEscalationRequired) {
+    return WORKFLOWS.URGENT_HUMAN_HANDOFF;
+  }
+
   if (!policyResult.allowed) {
     if (policyResult.checks.some((check) => !check.passed && check.name === "prompt_injection_boundary")) {
       return WORKFLOWS.REFUSE_PROMPT_INJECTION;

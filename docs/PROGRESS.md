@@ -4276,3 +4276,1630 @@ What was tested:
 
 Next step:
 - Phase 9D should make `/mvp` FastAPI-first by default, add an explicit Node-direct versus FastAPI parity comparison for the same Benefits prompt/session family, and keep direct Node as an operator escape hatch until the parity proof is stable.
+
+## Phase 9D FastAPI-First MVP Parity - 2026-06-01
+
+What was built:
+- `/mvp` now defaults to the Wefella FastAPI facade route.
+- The direct Node/LangGraph route remains selectable as an operator parity escape hatch.
+- `/mvp` now includes a visible `Node vs FastAPI` parity panel.
+- The parity panel runs the same Benefits prompt through:
+  - direct Node local auth plus `/api/chat`,
+  - FastAPI local auth plus protected async `/api/chat` and stream/status completion.
+- The parity check uses separate temporary sessions so it does not overwrite the active user chat.
+- The parity check compares stable graph-contract fields:
+  - workflow,
+  - intent,
+  - approval state,
+  - proposal status,
+  - evidence status,
+  - source-pointer count,
+  - answer presence,
+  - trace presence.
+- The parity check is proposal-only and does not approve evidence observation or dispatch an OpenClaw worker.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with 9 tests, 8 passed and 1 expected live-gated skip.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 9 tests.
+- `node --check src/app/mvp.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - default route was `wefella`,
+  - FastAPI health showed `0.1.0-phase9d-fastapi-first-parity` and Node connected,
+  - parity compared Node direct and FastAPI facade with the same Benefits prompt,
+  - parity result was `Parity passed`,
+  - both routes matched `eligibility_benefits_navigation`, `eligibility_benefits_question`, pending approval, pending proposal, no requested evidence, 0 source pointers, answer present, and trace present,
+  - no evidence observation or OpenClaw worker action was approved,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase9d_fastapi_first_parity.png`.
+
+Next step:
+- Phase 9E should add production-grade auth/JWT provider alignment only if the user wants to continue the Wefella production API path now. Otherwise, the next product-value slice should keep testing the original MVP loop through FastAPI-first `/mvp`: approval, OpenClaw worker, source pointers, and Graphiti retain from one user-friendly session.
+
+## Phase 9E Provider-Style JWT Alignment - 2026-06-01
+
+What was built:
+- FastAPI auth now has explicit auth modes:
+  - default local development mode,
+  - `WEFELLA_AUTH_MODE=provider` for stricter provider-style validation.
+- Provider mode validates:
+  - subject,
+  - expiration,
+  - not-before,
+  - configured issuer,
+  - configured audience.
+- Provider mode requires:
+  - `WEFELLA_JWT_ISSUER`,
+  - `WEFELLA_JWT_AUDIENCE`.
+- Local MVP auth at `POST /api/auth/local-session` is disabled by default in provider mode unless explicitly re-enabled.
+- `GET /api/health` now returns safe auth metadata:
+  - mode,
+  - algorithm,
+  - provider-claim requirement,
+  - issuer configured,
+  - audience configured,
+  - local auth enabled.
+- Health does not expose JWT secrets.
+- FastAPI facade version is now `0.1.0-phase9e-provider-jwt-alignment`.
+- `docs/goal_final_system.md` now records the final-system contract, current baseline, remaining MVP requirements, next phases, and completion evidence.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with 13 tests, 12 passed and 1 expected live-gated skip.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 13 tests against the running Node runtime at `http://127.0.0.1:4173`.
+- `node --check src/app/mvp.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+
+Next step:
+- Phase 9F should test the FastAPI-first approved live loop from `/mvp` through approval, official OpenClaw continuation, source pointers or precise blocker, Graphiti retain, and matching operator proof.
+
+## Phase 9F FastAPI-First Approved Loop Proof - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase9f-approved-loop-proof`.
+- `/mvp` now labels the current user-facing proof as Phase 9F.
+- `/mvp` now includes a `FastAPI Live Loop` proof panel that summarizes:
+  - backend route,
+  - session id,
+  - graph trace,
+  - approval state,
+  - worker outcome,
+  - evidence status,
+  - source pointer count,
+  - product-memory retain status,
+  - precise blocker when evidence cannot be created.
+- The Phase 9F panel links to the operator dashboard with the same session and user id.
+- `/` now reads `?sessionId=...&userId=...` on load and opens the linked operator proof session automatically.
+- FastAPI facade tests now include an approved-loop payload forwarding test that proves approval tokens, worker continuation ids, live portal flags, official OpenClaw flags, approval scope/action, and document candidate ids reach the Node/LangGraph runtime.
+- The live Node facade test now runs the approved read-only loop through:
+  - `POST /api/auth/local-session`,
+  - `POST /api/chat` proposal,
+  - `POST /api/worker-continuations`,
+  - `POST /api/orchestrator/approve`,
+  - approved `POST /api/chat` resume.
+- The approved live loop accepts either verified source pointers or a precise blocker and asserts no credential, password, 2FA, submit, payer-contact, or external-message actions occur.
+
+What was tested:
+- `node --check src/app/mvp.js` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run test:facade` passed with 15 tests, 13 passed and 2 expected live-gated skips.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 15 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed through the FastAPI facade:
+  - facade health was connected to Node,
+  - local planned-user auth succeeded,
+  - Portal Ready enabled live portal proof, official OpenClaw, current tab, and multi-page preferences,
+  - OpenClaw readiness returned `auth_required`,
+  - Benefits produced pending approval task `task_d664f45e-e7df-4f4f-a951-40fe86325e54`,
+  - approval was recorded and consumed,
+  - FastAPI accepted approved resume task `task_d87b066a-e1e6-47a2-aca3-5ed32dec0a63`,
+  - approved worker result returned `blocked_no_authenticated_evidence`,
+  - precise blocker was `No current OpenClaw browser tab is available. The user must manually sign in and leave the member portal tab open.`,
+  - worker actions were limited to `openclaw_browser_start` and `openclaw_browser_use_current_tab`,
+  - source pointers remained `0`,
+  - product-memory status rendered as `disabled_by_env`,
+  - the answer explicitly stated no eligibility snapshot, document candidate, payer contact, external message, credential entry, medical advice, form submission, or account change was created.
+- Browser operator proof link opened `/` for the same session:
+  - session `session_d41a532c-81be-4667-af02-ccef09ae2489`,
+  - operator trace loaded `langgraph_run_completed · v3`,
+  - trace panel showed the matching LangGraph thread,
+  - browser console had 0 errors.
+- Screenshot proof:
+  - `/tmp/workerprototype_phase9f_fastapi_approved_blocker.png`,
+  - `/tmp/workerprototype_phase9f_operator_linked_session.png`.
+
+External blocker status:
+- The sourced-result branch still requires the user to manually sign in to an authenticated member portal tab in the dedicated OpenClaw profile. With no authenticated current tab, Phase 9F now proves the correct fail-closed result instead of fabricating evidence.
+
+Next step:
+- Phase 9G should harden the production API facade around this proven loop: rate limiting, safer error envelopes, production CORS defaults, task registry persistence plan, and source-grounding checks.
+
+## Phase 9G Production API Facade Hardening - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase9g-facade-hardening`.
+- Every FastAPI response now carries an `x-request-id`; callers can also provide one.
+- FastAPI errors now use a stable envelope with:
+  - top-level `detail`,
+  - `error.code`,
+  - `error.message`,
+  - `error.request_id`,
+  - optional structured `error.details`.
+- The facade now has in-memory per-scope rate limiting with deployment configuration through `WEFELLA_RATE_LIMIT_PER_MINUTE` and `WEFELLA_RATE_LIMIT_DISABLED`.
+- `GET /api/health` now reports safe deployment metadata for:
+  - auth,
+  - CORS,
+  - task registry,
+  - rate limiting,
+  - source-grounding policy.
+- CORS is now explicit `GET`, `POST`, `OPTIONS` with only `authorization`, `content-type`, and `x-request-id` headers. In provider auth mode, CORS has no local default origins unless `WEFELLA_ALLOWED_ORIGINS` is configured.
+- The async FastAPI task registry can now persist to a local JSON file with `WEFELLA_TASK_REGISTRY_PATH`; default remains in-memory.
+- Completed chat results now include `result.facade.sourceGrounding` with source-pointer count, workflow, evidence status, blocker, approval/proposal status, and pass/fail summary.
+- Optional `WEFELLA_ENFORCE_SOURCE_GROUNDING=1` now fails a facade task when a healthcare answer has neither source pointers nor a precise blocker/approval state.
+- `/mvp` now understands the new FastAPI error-envelope shape and shows readable errors instead of raw objects.
+- `/mvp` visible phase label is now Phase 9G while preserving the Phase 9F live-loop panel behavior.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `python3 -m unittest project.tests.test_fastapi_facade -v` passed with 18 tests, 16 passed and 2 expected live-gated skips.
+- `npm run test:facade` passed with 18 tests, 16 passed and 2 expected live-gated skips.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 18 tests against the running Node runtime.
+- `node --check src/app/mvp.js` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- FastAPI health proof at `http://127.0.0.1:8000/api/health` returned:
+  - version `0.1.0-phase9g-facade-hardening`,
+  - Node runtime connected,
+  - local auth metadata,
+  - production-safe local CORS metadata,
+  - in-memory task registry,
+  - rate limit enabled at 120/minute,
+  - source grounding not enforced by default.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - user-facing MVP loaded,
+  - FastAPI facade controls were present,
+  - OpenClaw/portal controls were present,
+  - Check Facade reported `FastAPI 0.1.0-phase9g-facade-hardening · reachable and connected to Node`,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase9g_mvp_facade_health.png`.
+
+Next step:
+- Phase 9H should add deployment and observability readiness without changing the product runtime: environment examples, production notes, optional trace export hooks, CI-friendly smoke commands, and a clear operator runbook for FastAPI plus Node/LangGraph/OpenClaw.
+
+## Phase 9H Deployment And Observability Readiness - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase9h-deployment-observability`.
+- Added `GET /api/readiness` with safe deployment checks for:
+  - Node runtime connectivity,
+  - auth posture,
+  - CORS production safety,
+  - task registry state,
+  - rate-limit status,
+  - source-grounding enforcement,
+  - observability export/tracing posture.
+- Added optional JSONL task observability export through `WEFELLA_OBSERVABILITY_EVENTS_PATH`.
+- Observability events record task id, user/session hashes, message hash, message length, task status, and source-grounding summary; they do not record raw user ids, raw user messages, or raw portal text.
+- Added `project/api/smoke.py` and `npm run smoke:facade` for a running FastAPI deployment smoke check.
+- Added `docs/DEPLOYMENT_OBSERVABILITY.md` with local service startup, smoke commands, deployment envs, readiness semantics, OpenClaw live gates, and remaining deployment gaps.
+- Expanded `.env.example` with provider auth, CORS, rate-limit, task registry, source-grounding, smoke, and observability settings.
+- Validation-error envelopes now omit raw Pydantic input values and keep only location, message, and type.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `npm run test:facade` passed with 22 tests, 20 passed and 2 expected live-gated skips.
+- `npm run smoke:facade` passed against the restarted Phase 9H FastAPI facade:
+  - health returned `0.1.0-phase9h-deployment-observability`,
+  - Node runtime was connected,
+  - readiness returned `ready`,
+  - unauthorized chat returned the standard `unauthorized` error envelope with the caller-provided request id.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 22 tests against the running Node runtime.
+- `node --check src/app/mvp.js` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - visible page label is `Phase 9H`,
+  - FastAPI facade controls are present,
+  - OpenClaw/portal controls are present,
+  - Check Facade reported `FastAPI 0.1.0-phase9h-deployment-observability · reachable and connected to Node`,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase9h_mvp_facade_health.png`.
+
+Next step:
+- Reassess the broad `docs/goal_final_system.md` acceptance matrix and choose the next missing final-system area. The largest unimplemented areas remain user document upload/extraction, operator/research APIs, background evidence pipeline, MockWorker/Hermes worker modes, RBAC, and the final PASS/FAIL/BLOCKED report.
+
+## Phase 10A User Document Upload And Local Extraction - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10a-document-upload-extraction`.
+- Added authenticated `POST /api/uploads` with:
+  - allowed content types for text, markdown, CSV, PDF, PNG, and JPEG,
+  - configurable local storage through `WEFELLA_UPLOAD_STORE_PATH`,
+  - configurable size limit through `WEFELLA_UPLOAD_MAX_BYTES`,
+  - local SHA-256 file hash,
+  - user-bound upload ownership.
+- Added authenticated `GET /api/uploads/{upload_id}/extraction`.
+- Added `project/api/uploads.py` as a real local extraction harness:
+  - UTF-8 text extraction for text-like files,
+  - optional `pypdf` extraction for PDFs,
+  - optional Tesseract CLI extraction for images,
+  - fail-closed blocker states when an extraction runtime is missing or unreadable,
+  - redacted safe text preview,
+  - structured field extraction for document type, amounts, dates, claim number, member-id last4, deductible, copay, coinsurance, out-of-pocket, and payer hints,
+  - source snippets without raw direct identifiers.
+- Added upload metadata to `/api/health` and upload readiness to `/api/readiness`.
+- Added upload/extraction controls to `/mvp`:
+  - file picker,
+  - document kind selector,
+  - `Upload + Extract` action,
+  - extraction status,
+  - structured fields,
+  - redacted preview.
+- Added `.env.example` settings for the upload store and size limit.
+- Added `pypdf` to `project/requirements.txt` for PDF extraction in prepared environments.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `node --check src/app/mvp.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 26 tests, 24 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 123 tests total, 121 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 26 tests against the running Node runtime.
+- Restarted FastAPI and `npm run smoke:facade` passed:
+  - health returned `0.1.0-phase10a-document-upload-extraction`,
+  - Node runtime was connected,
+  - readiness returned `ready`,
+  - upload readiness was `true`.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - upload controls rendered,
+  - Check Facade worked,
+  - Start Session worked,
+  - visible facade version was reachable,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype_phase10a_mvp_upload_ui.png`.
+- Live API proof against the running FastAPI facade uploaded a real text benefits sample:
+  - returned `status: stored`,
+  - extraction returned `completed`,
+  - extracted document type, amount, date, member-id last4, deductible, and out-of-pocket fields,
+  - redacted email and SSN in the safe preview,
+  - extraction retrieval by upload id matched.
+
+Current limits:
+- This slice proves upload and extraction, but it does not yet connect uploaded document evidence into the LangGraph chat answer, Graphiti retain, or OpenClaw worker loop.
+- PDF and image support are real harness paths, but depend on runtime availability of `pypdf` and Tesseract. Missing runtimes return blockers rather than fake extraction.
+- Uploaded files are stored locally under `data/wefella-uploads` by default, which is git-ignored.
+
+Next step:
+- Phase 10B should connect uploaded document extractions to the chat/orchestration path: let the user ask a benefits/claim question about an uploaded document, feed only safe extracted fields/source spans into LangGraph, create source pointers/citations for the uploaded document, and optionally retain a safe Graphiti memory summary.
+
+## Phase 10B Uploaded Document Grounded Chat - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10b-uploaded-document-grounded-chat`.
+- `POST /api/chat` now accepts `uploaded_document_ids` and resolves only documents owned by the authenticated JWT subject.
+- FastAPI sends safe uploaded document extraction packets to the Node/LangGraph runtime:
+  - upload id,
+  - filename,
+  - content type,
+  - SHA-256,
+  - extraction status/method/confidence,
+  - structured fields,
+  - source spans,
+  - blockers,
+  - redacted safe preview only.
+- LangGraph now has an uploaded-document evidence path:
+  - detects attached uploaded documents,
+  - records `uploaded_document_context`,
+  - creates `uploaded_document_extractions` source pointers,
+  - audits `uploaded_document_extraction_observed`,
+  - publishes evidence status events,
+  - composes a sourced answer without OpenClaw worker dispatch.
+- The final answer can cite the stored uploaded extraction and list extracted insurance fields without dumping raw document text.
+- `/mvp` now includes an `Ask About Upload` action that routes through the same FastAPI chat task path.
+
+What was tested:
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/app/mvp.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/uploaded-document-chat.test.mjs` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 27 tests, 25 passed and 2 expected live-gated skips.
+- `node --check src/server/server.mjs` passed.
+- `npm run build` passed.
+- `npm run test:local` passed with 124 tests total, 122 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 27 tests against the restarted Node runtime.
+- `npm run smoke:facade` passed against the restarted Phase 10B FastAPI facade:
+  - health returned `0.1.0-phase10b-uploaded-document-grounded-chat`,
+  - Node runtime was connected,
+  - readiness returned `ready`,
+  - uploads readiness was `true`.
+- Live API proof against the running FastAPI facade passed:
+  - created a local authenticated user/session,
+  - uploaded a real text benefits sample,
+  - submitted `/api/chat` with `uploaded_document_ids`,
+  - LangGraph completed `eligibility_benefits_navigation`,
+  - evidence status was `captured_uploaded_document_extraction`,
+  - one source pointer was created,
+  - actions taken were limited to `read_uploaded_document_extraction`.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - visible page label is `Phase 10B`,
+  - FastAPI facade route is active by default,
+  - upload controls and `Ask About Upload` render,
+  - local sign-in works through FastAPI,
+  - Send routes through FastAPI and returns a completed LangGraph answer with pending approval proof,
+  - screenshot proof saved at `/tmp/workerprototype-openclaw-phase10b-mvp-proof.png`.
+
+Current limits:
+- Direct Node `/api/chat` can accept uploaded document packets, but the public upload-id resolution happens in FastAPI. That keeps upload ownership enforcement at the facade boundary.
+- Uploaded document grounding does not execute OpenClaw. It is a separate read-only evidence path for user-supplied documents.
+- Product memory still needs a stronger explicit assertion that the uploaded-document answer retains only safe summaries/source pointers in Graphiti, not raw extraction text.
+
+Next step:
+- Phase 10C should add the user-facing citation/source details for uploaded documents and assert Graphiti safe retain/recall from a document-grounded chat across sessions. Keep `/mvp` as the user app and `/` as the operator proof console.
+
+## Phase 10C Uploaded Document Citations And Graphiti Recall - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10c-citations-memory-recall`.
+- Uploaded-document source pointers now carry richer citation metadata:
+  - `kind: uploaded_document_extraction`,
+  - display label,
+  - content type,
+  - byte size,
+  - SHA-256,
+  - extraction method/hash,
+  - page count,
+  - structured evidence fields,
+  - source spans/snippets.
+- Product-memory safe episode construction now normalizes both array and object-shaped evidence fields.
+- Product-memory safe episodes sanitize uploaded-document evidence fields and citation snippets before Graphiti retain.
+- `/mvp` now renders:
+  - citation/source detail cards,
+  - uploaded-document field confidence,
+  - source spans,
+  - Graphiti retain/recall status,
+  - recalled facts when present.
+- `/mvp` visible phase label is now Phase 10C and the proof panel is `Source + Memory Loop`.
+- Extended the real Graphiti/FalkorDB test to retain an uploaded-document source pointer in one session and recall it in a later session.
+
+What was tested:
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/concierge/productMemory.mjs` passed.
+- `node --check src/app/mvp.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/uploaded-document-chat.test.mjs` passed.
+- `node --test src/tests/product-memory-contract.test.mjs` passed with 4 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 27 tests, 25 passed and 2 expected live-gated skips.
+- `npm run test:memory:graphiti` passed with 2 real Graphiti/FalkorDB tests:
+  - schema retain/recall proof,
+  - uploaded-document source pointer retained in one session and recalled in another.
+- `node --check src/server/server.mjs` passed.
+- `npm run build` passed.
+- `npm run test:local` initially exposed a product-memory sanitizer regression for object-shaped portal evidence fields; after fixing normalization, the two failing portal tests passed and the full rerun passed with 125 tests total, 123 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted Node and FastAPI services.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 27 tests against the restarted Node runtime.
+- `npm run smoke:facade` passed against the restarted Phase 10C FastAPI facade:
+  - health returned `0.1.0-phase10c-citations-memory-recall`,
+  - Node runtime was connected,
+  - readiness returned `ready`,
+  - uploads readiness was `true`.
+- Live HTTP proof against the running FastAPI facade passed:
+  - created a local authenticated user/session,
+  - uploaded a real text benefits sample,
+  - submitted `/api/chat` with `uploaded_document_ids`,
+  - LangGraph completed `eligibility_benefits_navigation`,
+  - evidence status was `captured_uploaded_document_extraction`,
+  - source pointer kind was `uploaded_document_extraction`,
+  - citation metadata included 16 fields and 5 source spans,
+  - Graphiti retain returned an episode UUID and recall returned 5 facts.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - visible page label is `Phase 10C`,
+  - `Source + Memory Loop` proof panel renders,
+  - upload controls and `Ask About Upload` render,
+  - FastAPI-first sign-in works,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype-openclaw-phase10c-mvp-source-memory.png`.
+
+Current limits:
+- Browser proof verified the Phase 10C UI and sign-in surface; the dynamic uploaded-document citation run was proven through the live FastAPI HTTP path because the in-app browser automation surface did not provide a reliable file-picker upload path.
+- The source/citation cards are implemented in `/mvp`; `/` already exposes deeper operator proof, but it can still be improved for uploaded-document-specific source spans later.
+
+Next step:
+- Phase 10D should continue from the final-system goal rather than widen workflows: likely session history/feedback or the first operator/research API slice, depending on whether the next priority is user-facing continuity or operator dashboard completeness.
+
+## Phase 10D Session History, Feedback, And Export - 2026-06-01
+
+What was built:
+- Added `src/concierge/sessionContinuity.mjs` as the continuity layer for user-facing session resume/proof:
+  - owner-bound session history,
+  - latest LangGraph state/source pointers,
+  - feedback persistence,
+  - Markdown session export.
+- Added `feedback_items` to the local SQLite schema.
+- Node now exposes:
+  - `GET /api/sessions/:sessionId` for protected session history,
+  - `GET /api/sessions/:sessionId/export` for Markdown export,
+  - `POST /api/feedback` for answer/session feedback.
+- FastAPI facade version is now `0.1.0-phase10d-session-feedback-export`.
+- FastAPI now proxies protected continuity endpoints:
+  - `GET /api/sessions/{session_id}`,
+  - `GET /api/sessions/{session_id}/export`,
+  - `POST /api/feedback`.
+- `/mvp` now renders a continuity panel with:
+  - `Load History`,
+  - `Export Answer`,
+  - feedback note,
+  - `Useful` and `Needs Follow-Up`,
+  - last messages,
+  - source-pointer count,
+  - feedback status,
+  - export status.
+- Feedback comments and exported session content are identifier-masked before persistence/return.
+- Operator `traceForSession` now includes `feedbackItems`.
+- `npm run test:local` now includes `src/tests/session-continuity.test.mjs`.
+
+What was tested:
+- `node --check src/concierge/sessionContinuity.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/mvp.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/session-continuity.test.mjs` passed with 2 tests.
+- `node --test src/tests/uploaded-document-chat.test.mjs` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 8 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 29 tests, 27 passed and 2 expected live-gated skips.
+- Combined focused Node/UI run passed with 11 tests.
+- `npm run build` passed.
+- `npm run test:local` passed after adding the new continuity file into the script, with 127 tests total, 125 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted Node and FastAPI services.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 29 tests against the restarted Node runtime.
+- `npm run smoke:facade` passed against FastAPI version `0.1.0-phase10d-session-feedback-export`.
+- Live HTTP proof against the running FastAPI facade passed:
+  - created a local authenticated user/session,
+  - uploaded a text benefits document,
+  - submitted `/api/chat` with `uploaded_document_ids`,
+  - LangGraph completed `eligibility_benefits_navigation`,
+  - evidence status was `captured_uploaded_document_extraction`,
+  - session history returned 2 messages and 1 source pointer,
+  - feedback was recorded as `useful`,
+  - export returned `text/markdown` with `Latest Answer` and `Checklist`.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - Phase 10D and `History + Feedback` controls rendered,
+  - FastAPI-first sign-in worked,
+  - Send completed a LangGraph/FastAPI chat run,
+  - Load History showed the session messages,
+  - Useful feedback recorded,
+  - Export Answer completed,
+  - browser console had 0 errors.
+- Screenshot proof saved at `/tmp/workerprototype-openclaw-phase10d-continuity.png`.
+
+Current limits:
+- Export is Markdown text returned by the runtime and downloaded by the browser; it is not yet a durable server-side artifact store.
+- The browser proof used a proposal-only benefits chat for the UI continuity branch; the live HTTP proof separately covered uploaded-document source-pointer history/feedback/export through the same FastAPI facade.
+
+Next step:
+- After Phase 10D, the next highest-value gap is likely the first operator/research dashboard API slice or RBAC/MockWorker mode from the final-system goal, while preserving the original MVP runtime.
+
+## Phase 10E Operator Research API And Dashboard Foundation - 2026-06-01
+
+What was built:
+- Added `src/concierge/researchOps.mjs` as the first operator/research control plane over the existing Node/LangGraph runtime.
+- Added `research_runs` and `research_run_events` tables plus `knowledge_sources` review/run metadata columns.
+- Node now exposes operator research endpoints for:
+  - KPI summary,
+  - source listing/proposal/review/update,
+  - manual research run queueing,
+  - run detail/events,
+  - cancel and retry.
+- FastAPI facade version is now `0.1.0-phase10e-operator-research-api`.
+- FastAPI proxies the research endpoints behind JWT auth and binds `actorUserId` to the authenticated subject.
+- `/` now has a Phase 10E Operator Research Console with:
+  - Load KPIs,
+  - Load Sources,
+  - Load Runs,
+  - Start Manual Run,
+  - source proposal fields,
+  - source approve/reject/run controls,
+  - run open/cancel/retry controls.
+- The research API creates real queue/audit records. It does not scrape, crawl, call a model, or dispatch OpenClaw yet.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 2 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 31 tests, 29 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- Focused Phase 10E/UI rerun passed with 11 tests.
+- `npm run test:local` passed on the final patched state with 130 tests total, 128 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted Node and FastAPI services.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 31 tests against the running Node runtime.
+- `npm run smoke:facade` passed against FastAPI version `0.1.0-phase10e-operator-research-api`.
+- Live HTTP proof through FastAPI passed:
+  - created a local authenticated operator/user session,
+  - read research KPIs,
+  - proposed a unique source,
+  - approved the source,
+  - queued a manual research run,
+  - read run detail/events,
+  - cancelled the run,
+  - retried the run with `retryOfRunId` linked to the original run.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Phase 10E console rendered,
+  - Load Sources showed real source cards,
+  - Start Manual Run created a queued run and event,
+  - a UI bug where source arrays were mistaken for KPI payloads was found and fixed,
+  - screenshot proofs saved at `/tmp/workerprototype-openclaw-phase10e-operator-research.png` and `/tmp/workerprototype-openclaw-phase10e-research-run-detail.png`.
+
+Current limits:
+- Research runs are queue/control records only; the next phase must attach them to real deterministic fetch/scrape/OpenClaw worker execution.
+- FastAPI protects research endpoints with JWT subject binding, but full role-based operator/admin RBAC is still pending.
+- Direct Node research routes remain local operator/runtime routes and are not a production authorization boundary.
+
+Next step:
+- Phase 10F should add role/RBAC separation and a real research execution loop decision: either attach manual research runs to a safe deterministic fetch/scrape worker, add MockWorker/Hermes mode for non-live demos, or produce the final PASS/FAIL/BLOCKED report if the remaining operator/research execution gates are not yet ready.
+
+## Phase 10F Operator/Admin RBAC For Research Facade Routes - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10f-rbac-operator-routes`.
+- `project/api/auth.py` now normalizes roles from provider-friendly JWT claims:
+  - `roles`,
+  - `role`,
+  - `groups`,
+  - `permissions`,
+  - `scope`,
+  - `scp`.
+- Local facade session tokens remain user-scoped by default and do not gain operator access.
+- FastAPI `/api/research/*` routes now require `operator` or `admin`.
+- User-facing routes still use normal authenticated-user access.
+- `/api/health` exposes RBAC metadata without exposing secrets.
+- `.env.example` documents the operator/admin role requirement and supported role claims.
+
+What was tested:
+- `python3 -m compileall -q project` passed.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 31 tests, 29 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 130 tests total, 128 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted local Node and FastAPI services in tmux session `workerprototype_openclaw_phase10f`.
+- FastAPI health reported version `0.1.0-phase10f-rbac-operator-routes`, Node runtime healthy, RBAC enabled, and supported role claims.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 31 tests against the running Node runtime.
+- `npm run smoke:facade` passed against FastAPI version `0.1.0-phase10f-rbac-operator-routes`.
+- Live HTTP RBAC proof against `/api/research/kpis` passed:
+  - plain user token returned 403 `Operator role required.`
+  - operator token returned 200
+  - admin scope token returned 200
+
+Current limits:
+- Research runs are still queued/audited control records only; no deterministic fetch/scrape/OpenClaw research execution is attached yet.
+- Direct Node research routes remain local runtime/operator routes and are not the production authorization boundary.
+- Production identity-provider integration still needs real issuer/audience/role-claim configuration outside this local harness.
+
+Next step:
+- Phase 10G should attach the queued research-run contract to a real gated execution path, or deliberately add MockWorker/Hermes mode for non-live demos before the final PASS/FAIL/BLOCKED report.
+
+## Phase 10G Approved Research Run Execution And Worker Status - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10g-research-execution`.
+- Added `research_artifacts` to the local schema and health counts.
+- `src/concierge/researchOps.mjs` now supports:
+  - `GET /api/research/worker-status` contract metadata,
+  - deterministic approved-source fetch execution,
+  - explicit MockWorker fallback execution,
+  - artifact file persistence under `data/research-artifacts` by default,
+  - artifact database rows with source/run pointers, title, URL, hashes, safe preview, citation status, and metadata,
+  - execution started/completed/failed events,
+  - execution audit rows with hashes and no raw source text.
+- Node exposes `POST /api/research/runs/{run_id}/execute`.
+- FastAPI proxies `GET /api/research/worker-status` and `POST /api/research/runs/{run_id}/execute` behind operator/admin RBAC.
+- `/` operator dashboard now shows:
+  - Phase 10G label,
+  - Worker Status button,
+  - deterministic fetch status,
+  - MockWorker fallback status,
+  - feature-gated OpenClaw/Hermes research modes,
+  - Execute Fetch and MockWorker run controls,
+  - artifact cards with safe preview and hashes.
+- `.env.example` documents `BRAINSTY_RESEARCH_WORKER_MODE`, `BRAINSTY_RESEARCH_ARTIFACT_DIR`, and `BRAINSTY_RESEARCH_FETCH_MAX_BYTES`.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 4 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 31 tests, 29 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 132 tests total, 130 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted Node and FastAPI in tmux session `workerprototype_openclaw_phase10g`.
+- Node health reported `research_artifacts` count.
+- FastAPI health reported version `0.1.0-phase10g-research-execution`, Node runtime healthy, and RBAC enabled.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 31 tests.
+- `npm run smoke:facade` passed.
+- Live HTTP proof through FastAPI passed:
+  - operator token loaded worker status,
+  - proposed and approved a local HTTP fixture source,
+  - queued a manual research run,
+  - executed deterministic fetch,
+  - stored one artifact,
+  - returned `research_run_execution_completed`,
+  - returned redacted safe preview with `[redacted-email]` and masked SSN pointer.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Phase 10G Operator Research Console rendered,
+  - Worker Status panel rendered deterministic fetch, MockWorker, and feature-gated OpenClaw/Hermes,
+  - 0 console errors,
+  - screenshot saved at `/tmp/workerprototype-openclaw-phase10g-research-worker-status.png`.
+
+Current limits:
+- Deterministic fetch artifacts are `extracted_pending_review`; they are not yet trusted retrieval evidence.
+- MockWorker artifacts are explicitly `mock_worker_untrusted` and must not be used for trusted user healthcare answers.
+- OpenClaw and Hermes research-worker execution are still feature-gated future modes.
+- No nightly scheduler, embeddings/indexing, evidence search API, citation closure queue, or operator NL proposal gate is implemented in this phase.
+
+Next step:
+- Phase 10H should make approved research artifacts useful without over-trusting them: add search/evidence/citation-review APIs over reviewed artifacts, or add the operator natural-language proposal gate for write actions.
+
+## Phase 10H Research Citation Review And Trusted Evidence Search - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10h-citation-review`.
+- Research operations version is now `2026-06-01.phase10h-citation-review.v1`.
+- Added review-gated artifact lifecycle over existing `research_artifacts`:
+  - `extracted_pending_review`,
+  - `trusted_retrieval_approved`,
+  - `quarantined`,
+  - `mock_worker_untrusted`.
+- Added Node APIs:
+  - `GET /api/research/artifacts`,
+  - `POST /api/research/artifacts/{artifact_id}/review`,
+  - `GET /api/research/search`,
+  - `GET /api/research/evidence`.
+- Added FastAPI operator/admin-protected proxies for those APIs.
+- Trusted evidence search defaults to reviewed artifacts only. Pending artifacts can be counted and shown, but are not returned as trusted retrieval results unless explicitly requested by review/status filters.
+- MockWorker artifacts cannot be approved for trusted retrieval.
+- Artifact review writes run events and audit rows with hashes and redacted review reason handling; raw source text is not placed in audit.
+- `/` operator dashboard now shows Phase 10H controls:
+  - Review Artifacts,
+  - Search Evidence,
+  - pending artifact cards,
+  - Approve Citation / Quarantine actions,
+  - trusted evidence search result cards,
+  - KPI counts for trusted, pending, quarantined, and mock-untrusted artifacts.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 5 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 31 tests, 29 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 133 tests total, 131 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted Node and FastAPI in tmux session `workerprototype_openclaw_phase10h`.
+- FastAPI health reported version `0.1.0-phase10h-citation-review`.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 31 tests.
+- `npm run smoke:facade` passed.
+- Live HTTP proof through FastAPI passed:
+  - operator token proposed and approved a local HTTP fixture source,
+  - manual research run queued,
+  - deterministic fetch completed,
+  - artifact started as `extracted_pending_review`,
+  - search before review returned `pending_review_only` with 0 trusted results,
+  - artifact review approval returned `trusted_retrieval_approved`,
+  - search after review returned `trusted_evidence_found` with the approved artifact id.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Phase 10H Operator Research Console rendered,
+  - Search Evidence displayed trusted search status/results,
+  - Review Artifacts displayed pending review cards with Approve Citation and Quarantine actions,
+  - 0 console errors,
+  - screenshot saved at `/tmp/workerprototype-openclaw-phase10h-citation-review.png`.
+
+Current limits:
+- Phase 10H does not add embeddings or semantic vector retrieval. Search is deterministic over reviewed safe previews, titles, and source URLs.
+- Phase 10H does not wire research artifacts into user-facing healthcare answers yet; it creates the operator-reviewed evidence/search gate needed before doing that safely.
+- Nightly scheduler, operator natural-language write proposals, OpenClaw/Hermes research-worker execution, and embedding/reindex routes remain future phases.
+
+Next step:
+- Choose the next narrow final-system gate:
+  - wire reviewed research evidence into grounded user answers,
+  - add operator natural-language proposal/write-action gate,
+  - or add scheduled research automation over approved sources.
+
+## Phase 10I Trusted Research Evidence In User Answers - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10i-research-grounded-answers`.
+- LangGraph runner version is now `2026-06-01.langgraph-runner.phase10i-trusted-research-grounding.v1`.
+- LangGraph now searches reviewed research artifacts when a healthcare question does not have an approved portal/document evidence observation in the current run.
+- Only `trusted_retrieval_approved` artifacts become user-facing research source pointers by default.
+- Pending-review matches create a blocker state instead of a sourced answer.
+- Missing trusted evidence creates a precise refusal/escalation response instead of a scripted answer.
+- Research source pointers use `research_artifacts/{artifactId}` with citation status, source URL, content/extraction hashes, reviewed snippet, confidence, and score.
+- User-facing responses now disclose that they are based on operator-reviewed research evidence and list the source pointers used.
+- Pending artifacts, MockWorker output, raw document dumps, payer contact, form submission, credential entry, medical advice, and account changes are explicitly excluded from this answer path.
+- `/mvp` and `/` labels were updated to show Phase 10I proof surfaces.
+
+What was tested:
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/langgraph-runner.test.mjs` passed with 12 tests.
+- `node --test src/tests/runtime-collapse.test.mjs src/tests/runtime-events.test.mjs src/tests/llm-orchestration-decision.test.mjs` passed with 10 tests.
+- `node --test src/tests/uploaded-document-chat.test.mjs src/tests/session-continuity.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 12 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 31 tests, 29 passed and 2 expected live-gated skips.
+- `node --test src/tests/langgraph-runner.test.mjs src/tests/runtime-collapse.test.mjs src/tests/research-ops.test.mjs src/tests/uploaded-document-chat.test.mjs` passed with 19 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 135 tests total, 133 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- After the UI label update, `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests and `npm run build` passed again.
+- Restarted Node and FastAPI in tmux session `workerprototype_openclaw_phase10i`.
+- FastAPI health reported version `0.1.0-phase10i-research-grounded-answers`.
+- `WEFELLA_TEST_NODE_LIVE=1 npm run test:facade` passed with 31 tests.
+- `npm run smoke:facade` passed against the Phase 10I FastAPI facade.
+- Live FastAPI proof passed:
+  - operator token proposed and approved a local fixture source,
+  - manual research run queued,
+  - deterministic fetch completed,
+  - artifact was approved for `trusted_retrieval_approved`,
+  - trusted search returned the exact reviewed artifact,
+  - user local auth created a session,
+  - `/api/chat` through FastAPI returned `captured_trusted_research_evidence`,
+  - the final answer cited `research_artifacts/research_artifact_27f8e2f2-744a-4459-8186-a54b5ec1f131`,
+  - the fixture email was redacted.
+- Browser proof at `http://127.0.0.1:4173/mvp` passed:
+  - Phase 10I label and `Trusted Research Answers` panel rendered,
+  - user signed in through the FastAPI route,
+  - chat answer displayed operator-reviewed research evidence,
+  - source pointer/citation cards rendered,
+  - no console errors,
+  - screenshot saved at `/tmp/workerprototype-openclaw-phase10i-research-grounded-answer.png`.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Phase 10I Operator Research Console rendered,
+  - Search Evidence and Review Artifacts controls remained visible,
+  - no console errors,
+  - screenshots saved at `/tmp/workerprototype-openclaw-phase10i-operator-dashboard.png`, `/tmp/workerprototype-openclaw-phase10i-mvp-labels.png`, and `/tmp/workerprototype-openclaw-phase10i-dashboard-labels.png`.
+
+Current limits:
+- Search remains deterministic over reviewed safe previews, titles, and source URLs; no embeddings or semantic vector retrieval yet.
+- The user-facing answer path uses reviewed research artifacts, uploaded document source pointers, or approved portal evidence, but it does not yet run a claims-specific research endpoint or graph endpoint.
+- Nightly/scheduled research automation, operator natural-language write proposals, OpenClaw research-worker execution, Hermes dispatch, and embedding/reindex routes remain future phases.
+- The old local SQLite artifact/history data can affect ranking when broad terms match multiple trusted artifacts; exact/unique evidence queries correctly return the intended artifact first.
+
+Next step:
+- Phase 10J should add the next narrow final-system gate. Best candidates are:
+  - operator natural-language proposal/write-action gate for source/run/review operations,
+  - scheduled research automation over approved sources,
+  - or embeddings/reindexing over reviewed artifacts if semantic retrieval becomes the highest-value blocker.
+
+## Phase 10J Operator Natural-Language Proposal Gate - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10j-operator-proposal-gate`.
+- Added `operator_tool_proposals` as the local proposal/audit table for operator assistant write requests.
+- Added `src/concierge/operatorAssistant.mjs` with a fixed registry of operator tools.
+- Read-only operator requests execute immediately through registered research tools only:
+  - KPIs,
+  - worker status,
+  - source/run/artifact listing,
+  - run detail,
+  - trusted evidence search.
+- Write/action requests become proposal-only records with:
+  - tool key,
+  - risk level,
+  - expected effect,
+  - argument hash,
+  - message hash/preview,
+  - approval requirement,
+  - `actionsTaken: []`,
+  - status `pending_approval`.
+- Approval/rejection endpoints execute exactly one approved proposal or reject it with no target mutation.
+- Added Node routes:
+  - `GET /api/operator/tools`,
+  - `GET /api/operator/proposals`,
+  - `POST /api/operator/assistant`,
+  - `POST /api/operator/proposals/{proposal_id}/approve`,
+  - `POST /api/operator/proposals/{proposal_id}/reject`.
+- Added FastAPI operator/admin-protected proxies for the same routes with actor binding.
+- `/` now exposes the Phase 10J operator assistant UI:
+  - assistant tool registry,
+  - plain-English operator request box,
+  - read-only tool result rendering,
+  - proposal cards,
+  - approve/reject proposal buttons.
+
+What was tested:
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/operator-assistant.test.mjs` passed with 5 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `node --test src/tests/database.test.mjs` passed.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 140 tests total, 138 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted the local Node app at `http://127.0.0.1:4173/` after the stale API process returned 404 for the new route.
+- Browser proof at `http://127.0.0.1:4173/` passed:
+  - Phase 10J Operator Research Console rendered,
+  - Assistant Tools loaded 7 read tools and 9 gated write tools,
+  - Run Assistant executed read-only `research.searchEvidence`,
+  - a local proof proposal rendered as `research.proposeSource`,
+  - proposal card showed approve/reject controls and `actionsTaken: []`,
+  - screenshots saved at `/tmp/workerprototype-openclaw-phase10j-visible-proposal-card.png` and `/tmp/workerprototype-openclaw-phase10j-full-dashboard.png`.
+
+Current limits:
+- The operator assistant uses a curated deterministic parser over a fixed tool registry. It is not yet an LLM planner.
+- Approved proposal execution is local to the current Node research control plane; OpenClaw/Hermes research dispatch is still feature-gated.
+- The browser proof created one local pending proposal record for `research.proposeSource` as proof, but did not approve it or mutate `knowledge_sources`.
+- Embeddings/semantic retrieval, scheduled automation, live OpenClaw research-worker dispatch, Hermes dispatch, and production provider-auth wiring remain future phases.
+
+Next step:
+- Phase 10K should choose the next narrow final-system gate:
+  - scheduled/cron research automation over approved sources,
+  - semantic embeddings/reindexing over reviewed artifacts,
+  - or OpenClaw/Hermes research-worker dispatch behind the same proposal and audit boundaries.
+
+## Phase 10K Scheduled Research Automation - 2026-06-01
+
+What was built:
+- FastAPI facade version is now `0.1.0-phase10k-scheduled-research`.
+- Research operations version is now `2026-06-01.phase10k-scheduled-research.v1`.
+- Added `research_schedules` as the scheduler contract table with:
+  - schedule key,
+  - actor,
+  - optional approved source binding,
+  - schedule label,
+  - interval hours,
+  - workflow/topic/query,
+  - worker mode,
+  - status,
+  - approval status,
+  - next run time,
+  - last run/status,
+  - run count,
+  - metadata.
+- Added scheduler operations:
+  - list schedules,
+  - create approved schedule,
+  - pause schedule,
+  - resume schedule,
+  - run due schedules.
+- Due scheduler ticks only create runs for active approved schedules and approved/active sources.
+- Due scheduler ticks queue `scheduled_research_run` records by default; execution remains a separate worker action unless explicitly requested.
+- Scheduler writes audit events:
+  - `research_schedule_created`,
+  - `research_schedule_tick_run_created`,
+  - `research_schedule_paused`,
+  - `research_schedule_resumed`,
+  - `research_schedule_blocked`.
+- Added Node routes:
+  - `GET /api/research/schedules`,
+  - `POST /api/research/schedules/tick`.
+- Added FastAPI operator/admin-protected proxies for the same routes with actor binding.
+- Extended the operator assistant registry:
+  - read tool `research.listSchedules`,
+  - gated write tools `research.createSchedule`, `research.pauseSchedule`, `research.resumeSchedule`, and `research.runDueSchedules`.
+- `/` now exposes Phase 10K schedule controls:
+  - Load Schedules,
+  - Run Due,
+  - schedule cards,
+  - Scheduled Research Tick proof card.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 6 tests.
+- `node --test src/tests/operator-assistant.test.mjs` passed with 6 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `node --test src/tests/database.test.mjs` passed.
+- `python3 -m compileall -q project` passed.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 142 tests total, 140 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted the local Node app at `http://127.0.0.1:4173/`.
+- Browser proof at `/` passed:
+  - Phase 10K controls rendered,
+  - a proof source was approved,
+  - a schedule was created only after an operator proposal was approved,
+  - Load Schedules rendered the active approved schedule,
+  - Run Due queued one scheduled research run,
+  - screenshot saved at `/tmp/workerprototype-openclaw-phase10k-scheduled-research-visible.png`.
+
+Current limits:
+- Phase 10K provides an explicit scheduler tick endpoint and persisted schedules, not a daemonized cron loop.
+- The due tick queues runs by default. Fetch/MockWorker/OpenClaw/Hermes execution remains a separate worker action.
+- Schedule creation/pause/resume/run-due are registry-bound proposal tools for operator assistant use, but legacy direct research write endpoints still exist for existing operator controls.
+- Semantic embeddings/reindexing, graph endpoints, OpenClaw/Hermes research dispatch, and production provider-auth deployment proof remain future phases.
+
+Next step:
+- Phase 10L should choose the next final-system gate:
+  - audit log API/dashboard (`GET /api/audit`) to close H22/D24,
+  - semantic embeddings/reindexing over reviewed artifacts,
+  - or OpenClaw/Hermes research-worker dispatch behind schedule/proposal/audit controls.
+
+## Phase 10L Audit Log API And Operator Dashboard - 2026-06-01
+
+What was built:
+- Added audit log API version `2026-06-01.phase10l-audit-log-api.v1`.
+- Added `listAuditEvents` and `verifyAuditChains` over the existing hash-chained `audit_events` table.
+- Audit log responses include:
+  - event id,
+  - session id,
+  - event type,
+  - action kind,
+  - created timestamp,
+  - event hash,
+  - previous event hash,
+  - details hash,
+  - chain version,
+  - redacted/truncated details preview,
+  - event-type counts,
+  - pagination,
+  - visible-chain verification,
+  - safety metadata showing raw details are not returned.
+- Added Node route `GET /api/audit`.
+- Added FastAPI route `GET /api/audit` behind operator/admin RBAC and authenticated actor binding.
+- Updated FastAPI facade version to `0.1.0-phase10l-audit-log-api`.
+- Updated `/` operator dashboard to Phase 10L with:
+  - Audit Log button,
+  - audit prefix filter,
+  - chain status summary,
+  - event type counts,
+  - event cards with safe previews and hashes.
+
+What was tested:
+- `node --check src/concierge/audit.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/audit-integrity.test.mjs` passed with 2 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 143 tests total, 141 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted the local Node app at `http://127.0.0.1:4173/`.
+- Browser proof at `/` passed:
+  - Phase 10L rendered in the operator research console,
+  - Audit Log control was present,
+  - audit prefix defaulted to `research`,
+  - Audit Log returned 25 redacted audit events,
+  - UI status showed `25 audit events · chain valid`,
+  - Audit Log card showed `raw details hidden`, event hashes, and details hashes,
+  - screenshot files saved at `/tmp/workerprototype-openclaw-phase10l-audit-log.png` and `/tmp/workerprototype-openclaw-phase10l-audit-log-full.png`.
+
+Current limits:
+- The audit API is a safe operator listing surface, not a raw audit export.
+- It verifies visible chains and sampled chains from the current page; full historical verification can still be run through the existing audit integrity utilities.
+- It does not yet add a separate immutable object-store export or Postgres-backed pagination.
+
+Next step:
+- Phase 10M should likely add either:
+  - semantic embeddings/reindexing over reviewed artifacts, if retrieval quality becomes the next blocker,
+  - or OpenClaw/Hermes research-worker dispatch behind the existing proposal/schedule/audit controls, if adaptive worker value is the next MVP proof target.
+
+## Phase 10M Embedding Route And Trusted Evidence Reindex - 2026-06-01
+
+What was built:
+- Added research embedding route/index version `2026-06-01.phase10m-embedding-route-reindex.v1`.
+- Added schema tables:
+  - `research_embedding_routes`,
+  - `research_embedding_jobs`,
+  - `research_embedding_index`.
+- Added a persisted default embedding route:
+  - provider `local_tfidf`,
+  - model `local-tfidf-v1`,
+  - dimensions from `BRAINSTY_RESEARCH_EMBEDDING_DIMENSIONS` or `64`.
+- Added optional OpenAI route selection metadata:
+  - `BRAINSTY_RESEARCH_EMBEDDING_PROVIDER`,
+  - `BRAINSTY_RESEARCH_OPENAI_EMBEDDING_MODEL`,
+  - `BRAINSTY_RESEARCH_OPENAI_EMBEDDING_DIMENSIONS`.
+- Added local deterministic embedding vectors over reviewed safe previews, titles, and URLs.
+- Reindexing indexes only `trusted_retrieval_approved` research artifacts.
+- Pending, quarantined, and MockWorker artifacts are not written to the trusted embedding index.
+- Reindex jobs fail safely on route/vector dimension mismatch and preserve existing active index rows unless an explicit force reindex succeeds.
+- Search now reports whether the selected embedding route contributed to ranking and returns lexical plus embedding scores.
+- Added Node routes:
+  - `GET /api/research/embeddings/status`,
+  - `POST /api/research/embeddings/route`,
+  - `POST /api/research/embeddings/reindex`.
+- Added FastAPI operator/admin-protected proxies for the same routes with actor binding.
+- Extended the operator assistant registry:
+  - read tool `research.getEmbeddingStatus`,
+  - gated write tools `research.chooseEmbeddingRoute` and `research.reindexEmbeddings`.
+- `/` now exposes Phase 10M embedding controls:
+  - Embedding Status,
+  - Reindex Embeddings,
+  - provider/dimension route controls,
+  - embedding score fields in trusted evidence search results.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 8 tests.
+- `node --test src/tests/operator-assistant.test.mjs` passed with 7 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 9 tests.
+- `node --test src/tests/research-ops.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 17 tests.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 146 tests total, 144 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted the local Node app at `http://127.0.0.1:4173/`.
+- Browser proof at `/` passed:
+  - Phase 10M controls rendered,
+  - Embedding Status showed `local_tfidf`, 3 trusted artifacts, 3 indexed, and 0 stale after reindex,
+  - Reindex Embeddings completed with 3 indexed artifacts,
+  - UI showed `approved evidence only`,
+  - actions showed `research_embedding_vectors_written`,
+  - screenshot saved at `data/phase10m-embedding-dashboard-proof.png`.
+
+Current limits:
+- The default route is a deterministic local lexical-vector backend, not a deep semantic model.
+- OpenAI embedding route selection is supported, but live OpenAI embedding reindex requires `OPENAI_API_KEY` and fails safely when it is absent.
+- The index stores vectors over safe previews/source metadata only, not raw artifact files.
+- Reindexing is explicit from API/UI/operator proposal tooling; no automatic reindex daemon is running.
+
+Next step:
+- Phase 10N should likely add OpenClaw/Hermes research-worker dispatch behind the existing source approval, proposal, schedule, audit, and trusted retrieval gates.
+- A smaller alternative is to add explicit operator controls for forced route migration/reindex if the next test needs OpenAI embeddings before adaptive workers.
+
+## Phase 10N Adaptive Research Worker Dispatch - 2026-06-01
+
+What was built:
+- Added research operations version `2026-06-01.phase10n-adaptive-worker-dispatch.v1`.
+- Added `openclaw` and `hermes` worker modes to the existing research execution contract.
+- Kept adaptive workers disabled by default behind explicit feature flags:
+  - `BRAINSTY_RESEARCH_OPENCLAW_ENABLED=1`,
+  - `BRAINSTY_RESEARCH_HERMES_ENABLED=1`.
+- Added typed worker task envelope `brainstyworkers.research_worker_task.v1` with:
+  - approved source id/key/url/title/status,
+  - workflow/topic/query,
+  - approved-source-only controls,
+  - read-only allowed actions,
+  - disallowed credential, auth-bypass, form-submit, payer-contact, external-message, record-change, medical-advice, and raw private dump actions,
+  - required pending-review result lifecycle.
+- Added real adapter command bindings:
+  - OpenClaw via `openclaw --profile brainstyworkers agent --local ... --json`,
+  - Hermes via `hermes --oneshot ...`.
+- Adaptive dispatch now requires both an approved source/run and `approvedWorkerDispatch=true`.
+- Adaptive worker output must return structured JSON; unstructured output fails closed with a failed run and audit proof.
+- Successful OpenClaw/Hermes worker output creates `openclaw_research_worker_result` or `hermes_research_worker_result` artifacts with citation status `extracted_pending_review`.
+- Adaptive worker artifacts are not trusted retrieval evidence until the existing artifact review gate approves them.
+- Added `research_worker_dispatch_requested` run events and audit rows with source URL hash, worker mode, task id, allowed/disallowed action lists, and no raw source text.
+- Extended `/api/research/worker-status` with typed envelope, approval gate, adapter, feature flag, and review-required metadata.
+- Extended `/` run cards with OpenClaw and Hermes execution controls; the frontend sends `approvedWorkerDispatch=true` only for adaptive worker buttons.
+- Extended FastAPI facade tests to prove adaptive worker dispatch flags are forwarded through the protected public API path.
+
+What was tested so far:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 9 tests.
+- `node --test src/tests/operator-assistant.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 16 tests.
+- `node --test src/tests/research-ops.test.mjs src/tests/operator-assistant.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 25 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 147 tests total, 145 passed, 0 failed, and 2 expected live-gated official OpenClaw tests skipped.
+- Restarted the local Node app at `http://127.0.0.1:4173/`.
+- API proof for `GET /api/research/worker-status` returned:
+  - version `2026-06-01.phase10n-adaptive-worker-dispatch.v1`,
+  - OpenClaw adapter `official_openclaw_cli_agent`,
+  - Hermes adapter `hermes_cli_oneshot`,
+  - typed envelope `brainstyworkers.research_worker_task.v1`,
+  - approval gate `approvedWorkerDispatch=true plus approved source/run`,
+  - `trustedRetrieval: false` and `artifactReviewRequired: true`.
+- Browser proof at `/` passed:
+  - Phase 10N label rendered,
+  - Worker Status showed feature-gated OpenClaw/Hermes bounded to approved read-only sources,
+  - queued run cards rendered OpenClaw and Hermes buttons alongside Fetch/MockWorker,
+  - screenshot saved at `data/phase10n-adaptive-worker-dashboard-proof.png`.
+
+Current limits:
+- OpenClaw/Hermes worker modes are real adapter paths but remain disabled unless the operator explicitly enables the corresponding environment flag.
+- Focused tests use injected command runners so the local suite does not require live OpenClaw/Hermes credentials.
+- Worker output is still pending review, not trusted retrieval; this is intentional and preserves the citation/reindex boundary.
+- Live OpenClaw/Hermes research-worker proof still needs an enabled worker environment and external model/tool credentials.
+
+Next step:
+- After 10N, the next likely final-system gap is the research graph endpoint, a quality judge/claim-level citation closure, production queue/backoff for adaptive workers, or a final PASS/FAIL/BLOCKED matrix over `docs/goal_final_system.md`.
+
+## Phase 10O Research Evidence Graph API - 2026-06-01
+
+What was built:
+- Added research operations version `2026-06-01.phase10o-research-graph.v1`.
+- Added operator assistant version `2026-06-01.phase10o-research-graph-proposals.v1`.
+- Updated FastAPI facade version to `0.1.0-phase10o-research-graph`.
+- Added `research_graph_builds` to the local schema and migration path.
+- Added metadata-only graph generation over:
+  - `knowledge_sources`,
+  - `research_runs`,
+  - `research_artifacts`,
+  - `research_embedding_routes`,
+  - `research_embedding_jobs`,
+  - `research_embedding_index`,
+  - `research_schedules`.
+- Added graph node types for sources, workflows, runs, artifacts, embedding routes/jobs, and schedules.
+- Added graph edge types for source/run, run/artifact, source/artifact, artifact/embedding-route, embedding-job/artifact, schedule/source, schedule/run, and workflow relationships.
+- Added graph safety behavior:
+  - no raw artifact text returned,
+  - no raw safe text previews returned,
+  - no artifact file contents returned,
+  - graph URL metadata uses host/hash fields,
+  - pending artifacts remain pending-only and do not become trusted retrieval evidence.
+- Added Node endpoints:
+  - `GET /api/research/graph`,
+  - `POST /api/research/graph/build`.
+- `POST /api/research/graph/build` persists node count, edge count, graph hash, graph JSON, safety JSON, actor id, status, and audit event id.
+- Added hash-chained `research_graph_build_completed` and failure audit events.
+- Added FastAPI protected operator/admin proxies for both graph endpoints.
+- Added operator assistant tools:
+  - read-only `research.getGraph`,
+  - proposal-gated `research.buildGraph`.
+- Added `/` operator dashboard graph controls and rendering for node/edge counts, node types, edge examples, latest build, safety, and actions taken.
+- Updated build-check and UI contract tests for Phase 10O.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --check src/server/build-check.mjs` passed.
+- `node --test src/tests/research-ops.test.mjs src/tests/operator-assistant.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 27/27 tests.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 149 tests total, 147 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- API proof for `GET /api/research/graph` returned version `2026-06-01.phase10o-research-graph.v1`, `status=ready`, 34 nodes, 54 edges, 3 trusted artifacts, 1 pending artifact, 11 approved sources, and metadata-only safety flags.
+- API proof for `POST /api/research/graph/build` persisted completed build `research_graph_build_a04e83ad-e6cd-4838-a16a-fc418a31214e` with graph hash `2200d9be77fa4035c90a044c6aa756f468c75585aac9d5b2147ec357f2a5f88a` and audit event `audit_720e3667-c823-445f-b19a-20864d086609`.
+- Browser proof at `http://127.0.0.1:4173/` confirmed the operator dashboard renders `Research Evidence Graph`, graph controls, node/edge counts, latest completed build, safety JSON, action proof, and edge examples.
+- Browser `Build Graph` proof created completed build `research_graph_build_88e9cd5f-9316-4a9e-b2cf-d28d8e8f3825` with audit event `audit_be3046c2-9568-4c81-986e-8fd3baf400f9`.
+- Browser proof screenshot: `artifacts/phase10o-research-graph-browser-proof.png`.
+
+Current limits:
+- The graph is a local metadata graph, not Neo4j/Graphiti graph storage.
+- Graph build is synchronous for the local MVP. A durable queue can call the same build contract later.
+- The graph is not a quality judge; it shows relationships and safety metadata but does not yet score individual answer claims.
+- Graph responses intentionally hide raw artifact text and raw safe previews, so operators must open artifact review/search views for reviewed snippets.
+
+Next step:
+- Phase 10O is locally proven.
+- Next phase should likely be Phase 10P quality judge/claim-level citation closure before broadening worker execution.
+
+## Phase 10P Claim-Level Citation Closure Judge - 2026-06-01
+
+What was built:
+- Added research operations version `2026-06-01.phase10p-claim-citation-closure.v1`.
+- Added operator assistant version `2026-06-01.phase10p-claim-citation-closure-proposals.v1`.
+- Updated FastAPI facade version to `0.1.0-phase10p-claim-citation-closure`.
+- Added `research_claim_evaluations` to the local schema and migration path.
+- Added a labels-only citation closure evaluator that:
+  - extracts factual/domain claims from safe answer previews,
+  - compares claims only against `trusted_retrieval_approved` research artifacts,
+  - labels claims as `supported`, `low_confidence`, or `unsupported`,
+  - returns metadata-only citation pointers for trusted reviewed artifacts,
+  - fails citation closure when any claim is unsupported or low confidence,
+  - writes no new evidence and never promotes pending artifacts.
+- Added stop-word filtering to the research scorer so common words do not create false weak support.
+- Added Node endpoints:
+  - `GET /api/research/citation-closure`,
+  - `POST /api/research/citation-closure/evaluate`.
+- Added FastAPI protected operator/admin proxies for both citation-closure endpoints.
+- Added hash-chained `research_claim_citation_closure_evaluated` audit events.
+- Added operator assistant tools:
+  - read-only `research.listCitationClosure`,
+  - proposal-gated `research.evaluateCitationClosure`.
+- Added `/` operator dashboard controls and rendering for:
+  - latest evaluation status/verdict,
+  - claim counts and labels,
+  - citation pointer artifact ids,
+  - safety flags,
+  - actions taken,
+  - audit proof.
+
+What was tested:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/concierge/operatorAssistant.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --check src/server/build-check.mjs` passed.
+- `node --test src/tests/research-ops.test.mjs src/tests/operator-assistant.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 29/29 tests.
+- `npm run build` passed.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run test:local` passed with 151 tests total, 149 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- API proof for `POST /api/research/citation-closure/evaluate` returned a persisted evaluation, trusted citation pointers, labels-only safety flags, and audit event `research_claim_citation_closure_evaluated`.
+- API proof for `GET /api/research/citation-closure` returned latest evaluation `research_claim_evaluation_f515ea47-df54-49d0-8334-c8ee69da032e` with:
+  - `status=citation_closure_failed`,
+  - `verdict=unsupported_claims_found`,
+  - 2 claims,
+  - 1 supported,
+  - 1 unsupported,
+  - audit event `audit_a190bf89-86a1-4752-9d4e-eb5f61ef6d4a`.
+- Browser proof at `http://127.0.0.1:4173/` confirmed:
+  - Phase 10P label rendered,
+  - `Judge Citations` produced a Claim Citation Closure result,
+  - supported and unsupported claim labels rendered,
+  - citation artifact ids rendered for the supported claim,
+  - labels-only safety and action proof rendered.
+- Browser proof screenshot: `artifacts/phase10p-citation-closure-browser-proof.png`.
+
+Current limits:
+- The judge is deterministic lexical scoring over approved research artifacts; it is not yet an LLM-as-judge or embedding-grounded entailment model.
+- Claim extraction intentionally stays conservative and domain-focused for the local MVP.
+- The judge writes labels, scores, hashes, and metadata pointers only. It does not repair the answer automatically yet.
+- Citation closure currently runs synchronously through the local API; production can later run it through a queue.
+
+Next step:
+- Phase 10P is locally proven.
+- Next, produce the final PASS/FAIL/BLOCKED matrix over `docs/goal_final_system.md` before choosing production queue/backoff or broader real-source UX hardening.
+
+## Phase 10Q Final-System Verification Matrix - 2026-06-01
+
+What was built:
+- Added `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md`.
+- Converted every explicit final-system checklist id into a PASS / FAIL / BLOCKED row:
+  - A1-A22 user dashboard,
+  - B1-B8 user API,
+  - C1-C32 operator dashboard,
+  - D1-D24 operator API,
+  - E1-E11 background/evidence pipeline,
+  - F1-F4 worker adapters,
+  - G1-G7 security/safety,
+  - H1-H24 minimum "system is real" gate.
+- Added `src/tests/final-system-verification-report.test.mjs`.
+- Updated `npm run test:local` to include the report coverage test.
+- Updated `npm run build` so the build guard requires:
+  - the final report file,
+  - the goal file,
+  - the final report coverage test,
+  - visible remaining failure/blocker categories.
+
+What the report says now:
+- The final system is not complete.
+- 112 requirement rows are currently `PASSING`.
+- 2 requirement rows are `BLOCKED BY EXTERNAL DEPENDENCY`:
+  - live OpenClaw worker proof,
+  - live Hermes worker proof.
+- 18 requirement rows are `FAILING / NEEDS FIX`.
+- The highest-priority failing areas are:
+  - urgent/emergency safe escalation and durable human handoff,
+  - Chat/Split/Guided/Bento mode preservation and typed AI2UI block contract,
+  - research knowledge-base PDF upload/extraction,
+  - research analytics and budget/kill-switch,
+  - broader cost/prescription/procedure/provider journeys.
+
+What was tested:
+- `node --check src/tests/final-system-verification-report.test.mjs` passed.
+- `node --test src/tests/final-system-verification-report.test.mjs` passed with 2/2 tests.
+- `npm run build` passed with the Phase 10Q report guard.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run test:local` passed with 153 tests total, 151 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+
+Current limits:
+- Phase 10Q intentionally does not mark the active goal complete.
+- The report is a closeout control surface, not a product feature.
+- Full `npm run test:local` should be rerun after this report/test addition before commit or PR.
+
+Next step:
+- Phase 10R should implement urgent/emergency safe escalation and durable human handoff records, because that is the top remaining user-facing safety gap.
+
+## Phase 10R Urgent/Emergency Human Handoff - 2026-06-01
+
+What was built:
+- Added urgent/emergency detection to `src/concierge/policy.mjs` for emergency-service, breathing/chest-pain, stroke/unconscious, self-harm/overdose, and severe-bleeding/pain signals.
+- Routed urgent prompts through `urgent_emergency_escalation` and `human_approval_escalation` in the structured intent classifier.
+- Added `src/concierge/humanHandoffs.mjs` and durable `human_handoff_items` storage.
+- LangGraph now creates a `human_handoff_items` row, an `urgent_human_handoff` `agent_tasks` row, a hash-chained `human_handoff_created` audit event, and a safe immediate user response.
+- Urgent runs explicitly bypass OpenClaw envelopes/proposals, browser evidence observation, payer contact, credential handling, form submission, external messages, and GPT calls.
+- Added `GET /api/handoffs` in Node and the FastAPI facade.
+- Added handoff visibility to `traceForSession`, session continuity, `/mvp`, and `/` operator proof.
+- Updated local memory retention so urgent/safety prompts become blocked/escalated policy pointers instead of reusable raw prompt-recall text.
+- Updated `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md` so A19, A20, and H10 are now `PASSING`.
+
+What was tested:
+- `node --check src/concierge/policy.mjs && node --check src/concierge/humanHandoffs.mjs && node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/server/server.mjs && node --check src/app/mvp.js && node --check src/app/app.js` passed.
+- `python3 -m py_compile project/api/main.py project/api/models.py project/api/node_client.py` passed.
+- `node --test src/tests/policy.test.mjs src/tests/structured-intent-classifier.test.mjs src/tests/langgraph-runner.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 36/36 tests.
+- `node --test src/tests/database.test.mjs src/tests/session-continuity.test.mjs src/tests/final-system-verification-report.test.mjs` passed with 5/5 tests.
+- `npm run test:facade` passed with 32 tests, 30 passed and 2 expected live-gated skips.
+- `npm run build` passed with the urgent handoff schema/build guard.
+- `npm run test:local` passed with 157 tests total, 155 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser proof at `http://127.0.0.1:4173/mvp` and `http://127.0.0.1:4173/`:
+  - `/mvp` loaded the Phase 10R Handoff panel and started local session `session_4509a3c4-1082-4ef3-b5f4-3d9ffa0673db` through the visible UI.
+  - A same-session urgent run created `handoff_c97f2738-b795-4953-bfed-4b95946c0998`, `task_a6fc5c94-34c7-4b8a-965c-19ea2f855d1f`, `workflow=human_approval_escalation`, `routeReason=urgent_emergency_handoff_required`, `workflowOutcome=urgent_handoff_created`, `model=skipped_urgent_emergency_escalation`, and `openclaw=false`.
+  - The `/` operator dashboard rendered the Human Handoff card with `open · urgent`, `urgent_emergency`, the same session id, task id, summary, and audit id `audit_0414ffc7-562d-4320-8bf3-f128913d39a7`.
+  - The operator trace showed `rawUserInputReturned=false`, `rawUserInputStored=false`, `openclawExecutedByHandoff=false`, and `externalActionTakenByHandoff=false`.
+  - Browser-plugin screenshot capture timed out on `Page.captureScreenshot`, and macOS `screencapture` was unavailable in this sandbox (`could not create image from display`), so no screenshot artifact was saved for Phase 10R.
+
+Current limits:
+- Phase 10R does not complete the active goal.
+
+## Phase 10S Typed AI2UI Blocks And MVP Modes - 2026-06-01
+
+Slice name:
+- Typed AI2UI block contract plus state-preserving `/mvp` Chat/Split/Guided/Bento modes.
+
+Files changed:
+- `src/concierge/ai2uiBlocks.mjs`
+- `src/concierge/langgraphRunner.mjs`
+- `src/server/server.mjs`
+- `src/server/build-check.mjs`
+- `src/app/mvp.html`
+- `src/app/mvp.js`
+- `src/app/mvp.css`
+- `src/tests/ai2ui-blocks.test.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `src/tests/langgraph-runner.test.mjs`
+- `package.json`
+- `project/api/main.py`
+- `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md`
+- `docs/goal_final_system.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DECISIONS.md`
+- `brainstyworkers_ai_concierge_prompt.md`
+
+Implemented:
+- Added `brainstyworkers.ai2ui.blocks.v1` as a typed backend response contract.
+- Added safe block normalization with an `unknown` fallback so unsupported future block types render as warning cards instead of breaking the MVP.
+- LangGraph now attaches typed blocks after product-memory retain, so the response includes real answer, workflow, approval, worker, citation, memory, handoff, safety, and next-step state.
+- `POST /api/chat` returns `ai2uiBlocks` at the top level and in `graphRun.state.ai2ui_blocks`.
+- `/mvp` now exposes Chat, Split, Guided, and Bento presentation modes.
+- Mode switching is state-preserving: it stores the selected mode in localStorage and re-renders the current session/run without creating a new session, rerunning LangGraph, consuming approvals, dispatching workers, or modifying memory.
+- Split mode keeps the older detailed citation/memory proof panels while all modes use the typed block renderer.
+- FastAPI facade version is now `0.1.0-phase10s-ai2ui-modes`.
+- LangGraph runner version is now `2026-06-01.langgraph-runner.phase10s-ai2ui-modes.v1`.
+
+Verification commands:
+- `node --check src/concierge/ai2uiBlocks.mjs`
+- `node --check src/concierge/langgraphRunner.mjs`
+- `node --check src/app/mvp.js`
+- `node --check src/server/build-check.mjs`
+- `node --test src/tests/ai2ui-blocks.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/langgraph-runner.test.mjs`
+- `npm run build`
+- `npm run test:facade`
+- `npm run test:local`
+- Browser proof at `http://127.0.0.1:4173/mvp`
+
+Verification result:
+- Syntax checks passed.
+- Focused Phase 10S tests passed:
+  - 24 tests total,
+  - 24 passed,
+  - 0 failed.
+- `npm run build` passed.
+- `npm run test:facade` passed:
+  - 32 tests total,
+  - 30 passed,
+  - 2 expected live-gated skips,
+  - 0 failed.
+- `npm run test:local` passed:
+  - 159 tests total,
+  - 157 passed,
+  - 2 expected live-gated official OpenClaw skips,
+  - 0 failed.
+- Browser proof passed after restarting the Node server with refreshed code:
+  - URL: `http://127.0.0.1:4173/mvp`,
+  - title: `Brainstyworkers Concierge MVP`,
+  - modes checked: Chat, Guided, Bento, Split,
+  - all modes rendered typed AI2UI blocks,
+  - the same session id was preserved across modes: `session_cc33e568-4612-4b88-bd35-29d06e8220d5`,
+  - console error count: 0,
+  - screenshot saved at `artifacts/phase10s-ai2ui-modes-browser-proof.png`.
+
+What the user can try locally:
+- Open `http://127.0.0.1:4173/mvp`.
+- Start or resume a session.
+- Run the Benefits workflow or another supported question.
+- Switch among Chat, Split, Guided, and Bento from the top bar.
+- Confirm the same session, latest answer, approvals, source pointers, handoffs, memory state, and operator proof link remain intact across modes.
+
+Known risks or gaps:
+- Phase 10S closes A6/A7 only; it does not complete the active final-system goal.
+- Remaining high-priority gaps are production scheduled-worker/cron proof, research PDF upload/extraction, analytics, budget/kill-switch enforcement, expanded review queues, and broader domain journey completion.
+- The handoff queue is visible and durable, but operator assignment/closure workflow remains a later hardening task.
+- Next highest-priority gaps are typed AI2UI blocks, Chat/Split/Guided/Bento UI mode preservation, production schedule execution, research PDF ingestion, and analytics/budget kill-switch controls.
+
+Next step:
+- Phase 10S should implement typed AI2UI blocks and state-preserving MVP UI modes before adding broader workflow breadth.
+
+## Phase 10T Research Scheduler Daemon Proof - 2026-06-01
+
+Status: Implemented and verified locally on 2026-06-01.
+
+Changed files:
+- `src/concierge/researchScheduler.mjs`
+- `src/concierge/schema.mjs`
+- `src/concierge/database.mjs`
+- `src/server/server.mjs`
+- `src/server/build-check.mjs`
+- `src/app/index.html`
+- `src/app/app.js`
+- `src/tests/research-scheduler.test.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `project/api/main.py`
+- `project/tests/test_fastapi_facade.py`
+- `package.json`
+- `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md`
+- `docs/goal_final_system.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DECISIONS.md`
+- `brainstyworkers_ai_concierge_prompt.md`
+
+Implemented:
+- Added an env-gated research scheduler daemon around the existing approved-schedule due-tick contract.
+- Added persisted daemon state in `research_scheduler_daemon_state`.
+- Node creates the daemon on startup and auto-starts only when `BRAINSTY_RESEARCH_SCHEDULER_ENABLED=1`.
+- Daemon ticks call `runDueResearchSchedules`, so approved schedules and approved/active sources remain the source of truth.
+- Default daemon behavior queues `scheduled_research_run` records and does not silently execute workers.
+- Daemon start/tick/overlap/failure events are published to `runtime_events`.
+- Daemon tick completion, overlap skip, and failure are hash-chain audit visible.
+- Added a same-process overlap guard to prevent duplicate interval ticks.
+- Added Node and FastAPI routes for scheduler daemon status and tick.
+- Added operator dashboard controls/cards for daemon process state, cadence, due count, last tick, actions, overlap count, and safety.
+- Added tests for daemon tick proof, disabled status, startup scan, and overlap guard.
+
+Verification:
+- `node --check src/concierge/researchScheduler.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m compileall -q project` passed.
+- `node --test src/tests/research-scheduler.test.mjs src/tests/research-ops.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 24/24 tests.
+- `npm run build` passed.
+- `npm run test:facade` passed with 32 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 163 total, 161 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser/API proof at `http://127.0.0.1:4173/` passed:
+  - scheduler daemon status button present,
+  - daemon tick button present,
+  - process state showed `running`,
+  - one due scheduled run was queued,
+  - approved-schedule-only safety was visible,
+  - console error count was 0,
+  - screenshot saved at `artifacts/phase10t-research-scheduler-daemon-browser-proof.png`.
+- Graceful shutdown proof passed after adding the server signal handler:
+  - scheduler-enabled server received `SIGINT`,
+  - daemon stop ran before listener close,
+  - process exited with code 0,
+  - no listener remained on port 4173.
+
+Known risks or gaps:
+- The local daemon uses an in-process interval and overlap guard. Production should run it under the chosen process manager/scheduler and move concurrency control to Postgres or a durable queue.
+- Adaptive OpenClaw/Hermes scheduled dispatch remains feature-gated and approval-bound.
+- The active final-system goal remains incomplete. Next high-priority gaps are research PDF upload/extraction, analytics and budget/kill-switch controls, expanded review queues, and broader journey/entity extraction.
+
+## Phase 10U Dynamic Skill Server - 2026-06-02
+
+Status: Implemented and verified locally.
+
+Changed files:
+- `src/concierge/dynamicSkillServer.mjs`
+- `src/concierge/langgraphRunner.mjs`
+- `src/concierge/llmOrchestrationDecision.mjs`
+- `src/server/server.mjs`
+- `src/server/build-check.mjs`
+- `src/tests/dynamic-skill-server.test.mjs`
+- `src/tests/langgraph-runner.test.mjs`
+- `src/tests/memory-harness.test.mjs`
+- `src/tests/research-ops.test.mjs`
+- `openclaw/skills/insurance-plan-aetna-temporary/SKILL.md`
+- `openclaw/skills/insurance-plan-aetna-temporary/skill.json`
+- `openclaw/skills/insurance-plan-aetna-temporary/skill-server.json`
+- `openclaw/skills/claim-journey-temporary/SKILL.md`
+- `openclaw/skills/claim-journey-temporary/skill.json`
+- `openclaw/skills/claim-journey-temporary/skill-server.json`
+- `package.json`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DECISIONS.md`
+
+Implemented:
+- Added a LangGraph-compatible dynamic skill server that reads editable `skill-server.json` files.
+- Added temporary Aetna insurance-specific and claim journey-specific skill artifacts.
+- Added allowlisted runtime mounts for memory/session/database context.
+- Rejected arbitrary SQL from generated skill files by allowing only named database query keys.
+- Added `dynamic_skill_context` to LangGraph shared state.
+- Added `skill_resolver` node after workflow routing and before workflow execution.
+- Added pre-LLM dynamic skill hints so GPT orchestration can consider available insurance and journey skills.
+- Added `GET /api/dynamic-skills` and `POST /api/dynamic-skills/resolve`.
+- Added build-check and unit coverage for the dynamic skill server.
+
+Expected proof:
+- Aetna benefits questions select `insurance_plan_aetna_temporary`.
+- Claim questions select `claim_journey_temporary`.
+- Account-specific portal evidence still uses `insurance_portal_browser` as the execution skill.
+- Resolver output includes success estimates, data needed, runtime variables, required OpenClaw tasks, search engines, APIs, and mounted context.
+- No worker execution, credential entry, payer contact, external message, form submission, record change, or medical advice is added by this phase.
+
+Verification:
+- `node --check src/concierge/dynamicSkillServer.mjs` passed.
+- `node --check src/concierge/langgraphRunner.mjs` passed.
+- `node --check src/concierge/llmOrchestrationDecision.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/server/build-check.mjs` passed.
+- `node --check src/tests/dynamic-skill-server.test.mjs` passed.
+- `node --check src/tests/langgraph-runner.test.mjs` passed.
+- `node --check src/tests/research-ops.test.mjs` passed.
+- `node --check src/tests/memory-harness.test.mjs` passed.
+- `node --test src/tests/dynamic-skill-server.test.mjs` passed with 6/6 tests.
+- `node --test src/tests/langgraph-runner.test.mjs` passed with 13/13 tests.
+- `node --test src/tests/research-ops.test.mjs` passed with 11/11 tests.
+- `node --test src/tests/memory-harness.test.mjs` passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 169 total tests, 167 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- The first sandboxed `npm run test:local` attempt failed only because local API tests could not bind `127.0.0.1` inside the sandbox and because two research fixtures used localhost HTTP helpers that triggered a Node 24 native callback assertion. The confirmation run passed after moving those fixtures to injected deterministic fetches and rerunning the suite with localhost permission.
+
+Known risks or gaps:
+- The temporary Aetna and claim skills are sketches, not citation-closed production plan skills.
+- The next skill-generation phase should create plan-specific `insurance_plan_*` packages from evidence bundles and enforce citation-backed deterministic tools.
+- One older memory harness test still depends on previously captured real Aetna data for the cross-session memory proof. The claim-heartbeat test was isolated in a temporary store to avoid shared local backlog state.
+
+## Phase 10V Dynamic Skill UI Exposure - 2026-06-03
+
+Status: Implemented and verified locally.
+
+Changed files:
+- `src/app/app.js`
+- `src/app/styles.css`
+- `src/app/mvp.html`
+- `src/app/mvp.js`
+- `src/app/mvp.css`
+- `src/server/server.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `src/tests/openclaw-api.test.mjs`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Added dynamic skill proof rendering to `/mvp`.
+- Added a `/mvp` sequence step for skill resolution.
+- Added selected insurance, journey, and execution skill display.
+- Added success estimate, missing data, required OpenClaw tasks, required search, and required APIs to the MVP surface.
+- Added the same dynamic skill proof to the `/` operator workflow proof.
+- Added dynamic skill proof to the OpenClaw envelope validation panel.
+- Returned `dynamicSkillContext` from `POST /api/openclaw/skills/insurance_portal_browser/validate-envelope`.
+- Added UI/API contract assertions for the new proof surfaces.
+
+Verification:
+- `node --check src/app/app.js` passed.
+- `node --check src/app/mvp.js` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/tests/chat-ui-contract.test.mjs` passed.
+- `node --check src/tests/openclaw-api.test.mjs` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/dynamic-skill-server.test.mjs` passed with 15/15 tests.
+- `node --test src/tests/openclaw-api.test.mjs` passed with 1/1 test.
+- `npm run build` passed.
+- Browser proof on `/mvp` passed after a deterministic claim workflow:
+  - skill step showed `insurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser`,
+  - dynamic skill panel showed success estimate `0.96`,
+  - missing data and required worker tasks were visible,
+  - worker tasks included `insurance_portal_browser.read_only_claims_observation`.
+- Browser proof on `/` passed after `Validate Envelope`:
+  - skill status was `validated_proposal_not_executed · task recorded`,
+  - dynamic skill panel showed Aetna, claim journey, execution skill, missing data, worker tasks, search, APIs, and generator-edit constraints.
+
+Known risks or gaps:
+- UI now exposes dynamic skill resolution, but the temporary skill content is still sketch-level and should be replaced by citation-closed plan-specific skill packages.
+- The dynamic skill card is proof-oriented. A later UX polish pass should decide how much of it belongs in the ordinary patient view versus an expandable advanced/proof view.
