@@ -63,6 +63,16 @@ import {
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisode } from "../concierge/productMemory.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
+import {
+  startScreencast,
+  stopScreencast,
+  subscribeBrowserFrames,
+  requestTakeover,
+  grantTakeover,
+  relayHumanInput,
+  endTakeover,
+  describeTakeover
+} from "../concierge/browserStreamController.mjs";
 import { classifyOfficialOpenClawLiveReadiness } from "../concierge/openclawLiveReadiness.mjs";
 import {
   READ_ONLY_DOCUMENT_ALLOWED_ACTION,
@@ -216,6 +226,104 @@ async function handleApi(req, res, url) {
       sendSse(res, event);
     });
     req.on("close", unsubscribe);
+    return;
+  }
+
+  // --- Phase 11: live remote-browser view + supervised mobile takeover ---------
+  // Live screencast frames (in-memory pub/sub; never persisted). A dedicated stream
+  // separate from /api/runtime/events/stream so high-frequency frames don't write rows.
+  if (req.method === "GET" && url.pathname === "/api/runtime/browser/frames/stream") {
+    const sessionId = url.searchParams.get("sessionId") ?? null;
+    const userId = url.searchParams.get("userId") ?? null;
+    const streamKey = `${userId ?? "anon"}::${sessionId ?? "default"}`;
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive"
+    });
+    sendSse(res, { eventType: "browser.frames.opened", sessionId, userId, createdAt: new Date().toISOString() });
+    // keep-alive comment ping so idle proxies don't drop the stream
+    const heartbeat = setInterval(() => res.write(": ping\n\n"), 15000);
+    const unsubscribe = subscribeBrowserFrames(streamKey, (frame) => sendSse(res, { eventType: "browser.frame", ...frame }));
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/screencast/start") {
+    const body = await readJson(req);
+    if (!body.sessionId) {
+      sendJson(res, 400, { ok: false, error: "sessionId is required." });
+      return;
+    }
+    sendJson(res, 200, await startScreencast({ store, sessionId: body.sessionId, userId: body.userId ?? null, targetUrl: body.targetUrl ?? null, options: body.options ?? {} }));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/screencast/stop") {
+    const body = await readJson(req);
+    sendJson(res, 200, await stopScreencast({ store, sessionId: body.sessionId ?? null, userId: body.userId ?? null }));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/takeover/request") {
+    const body = await readJson(req);
+    if (!body.sessionId) {
+      sendJson(res, 400, { ok: false, error: "sessionId is required." });
+      return;
+    }
+    sendJson(res, 200, await requestTakeover({ store, sessionId: body.sessionId, userId: body.userId ?? null, reason: body.reason ?? null, host: body.host ?? null }));
+    return;
+  }
+
+  // Granting mints the human-only relay token. This endpoint represents the user's
+  // explicit "yes, hand me the keyboard" decision; the agent has no path to it.
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/takeover/grant") {
+    const body = await readJson(req);
+    if (!body.takeoverId || !body.sessionId) {
+      sendJson(res, 400, { ok: false, error: "takeoverId and sessionId are required." });
+      return;
+    }
+    sendJson(res, 200, await grantTakeover({ store, takeoverId: body.takeoverId, sessionId: body.sessionId, userId: body.userId ?? null, approvedBy: body.approvedBy ?? "user" }));
+    return;
+  }
+
+  // Human keystroke/pointer relay. origin is forced to "human" here — this server route
+  // is only reachable from the user's UI; the autonomous worker never calls it.
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/takeover/input") {
+    const body = await readJson(req);
+    if (!body.takeoverId || !body.grantToken || !body.input) {
+      sendJson(res, 400, { ok: false, error: "takeoverId, grantToken, and input are required." });
+      return;
+    }
+    const result = await relayHumanInput({
+      store,
+      takeoverId: body.takeoverId,
+      grantToken: body.grantToken,
+      origin: "human",
+      input: body.input,
+      sessionId: body.sessionId ?? null,
+      userId: body.userId ?? null
+    });
+    sendJson(res, result.ok ? 200 : 409, result);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/browser/takeover/end") {
+    const body = await readJson(req);
+    if (!body.takeoverId) {
+      sendJson(res, 400, { ok: false, error: "takeoverId is required." });
+      return;
+    }
+    sendJson(res, 200, await endTakeover({ store, takeoverId: body.takeoverId, reason: body.reason ?? "user_returned_control" }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/runtime/browser/takeover/status") {
+    const takeoverId = url.searchParams.get("takeoverId");
+    sendJson(res, 200, { ok: true, takeover: takeoverId ? describeTakeover(takeoverId) : null });
     return;
   }
 
