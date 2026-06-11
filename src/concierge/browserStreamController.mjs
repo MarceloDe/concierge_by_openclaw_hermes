@@ -220,6 +220,13 @@ export async function startScreencast({
   });
 
   await client.send("Page.enable");
+  // Chromium only screencasts the foregrounded tab; bring the streamed page to front
+  // so frames actually flow (no-op if it is already active).
+  try {
+    await client.send("Page.bringToFront");
+  } catch {
+    // some targets reject bringToFront; screencast still works if the tab is visible
+  }
   await client.send("Page.startScreencast", { ...SCREENCAST_DEFAULTS, ...options });
 
   if (store) {
