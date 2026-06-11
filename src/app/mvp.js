@@ -1,3 +1,5 @@
+import { mountRemoteBrowser } from "./remoteBrowser.js";
+
 const DEFAULT_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 const READ_ONLY_SCOPE = "read_only_observation";
 const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
@@ -467,6 +469,21 @@ function updateSession(enrollment) {
     ? `Signed in · ${state.session.id}`
     : "Not signed in";
   if (state.session?.id) startEventStream(state.session.id, state.user?.id);
+  if (state.session?.id) mountWorkerBrowser();
+}
+
+// Mount the live worker-browser widget once per session. The /api/runtime/browser/*
+// routes are served same-origin by the Node runtime (where /mvp is served), so apiBase
+// is empty regardless of the chat backend toggle.
+function mountWorkerBrowser() {
+  const mount = document.getElementById("remoteBrowserMount");
+  const panel = document.getElementById("workerBrowserPanel");
+  if (!mount || !panel) return;
+  if (state.remoteBrowserSession === state.session.id) return;
+  state.remoteBrowser?.destroy?.();
+  state.remoteBrowser = mountRemoteBrowser(mount, { sessionId: state.session.id, userId: state.user?.id ?? null, apiBase: "" });
+  state.remoteBrowserSession = state.session.id;
+  panel.hidden = false;
 }
 
 function updateLatestRun(result) {
@@ -1413,6 +1430,23 @@ function appendRuntimeEvent(event) {
   state.runtimeEvents.push(event);
   state.runtimeEvents = state.runtimeEvents.slice(-80);
   renderTimeline();
+  maybeHighlightWorkerBrowser(event);
+}
+
+// When the worker reports a login / 2FA / captcha wall, draw attention to the live
+// worker-browser panel so the user can take over and clear it themselves.
+function maybeHighlightWorkerBrowser(event) {
+  const panel = document.getElementById("workerBrowserPanel");
+  if (!panel || panel.hidden) return;
+  const blob = JSON.stringify(event ?? {}).toLowerCase();
+  const wall = /(login|sign[\s-]?in|2fa|passkey|captcha|password|credential|authenticate)/.test(blob);
+  const workerish = /(worker|evidence|browser|portal|openclaw)/.test(blob);
+  if (wall && workerish) {
+    panel.classList.add("is-attention");
+    const hint = document.getElementById("workerBrowserHint");
+    if (hint) hint.textContent = "The portal needs a login, 2FA, or captcha. Tap Start live view, then Take over to enter it yourself — the assistant never types your credentials.";
+    panel.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 async function loadRuntimeEvents() {

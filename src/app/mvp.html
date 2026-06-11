@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Brainstyworkers Concierge MVP</title>
     <link rel="stylesheet" href="/mvp.css" />
+    <style>
+      /* Phase 11 remote-browser widget (scoped) */
+      .worker-browser-panel.is-attention { outline: 2px solid #f59e0b; outline-offset: 2px; }
+      .remote-browser { display: flex; flex-direction: column; gap: 8px; }
+      .remote-browser__bar { display: flex; align-items: center; justify-content: space-between; }
+      .remote-browser__badge { font-size: .72rem; font-weight: 700; color: #0b0e14; background: #f59e0b; padding: 2px 8px; border-radius: 999px; }
+      .remote-browser__stage { background: #000; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden; display: flex; }
+      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; touch-action: none; user-select: none; }
+      .remote-browser__stage.is-live-control { outline: 2px solid #f59e0b; outline-offset: -2px; }
+      .remote-browser__controls, .remote-browser__relay { display: flex; gap: 8px; flex-wrap: wrap; }
+      .remote-browser__relay input { flex: 1; padding: 10px; font-size: 16px; border-radius: 8px; }
+      .remote-browser__status { font-size: .76rem; opacity: .8; margin: 2px 0 0; }
+    </style>
   </head>
   <body>
     <main class="mvp-shell">
@@ -209,6 +222,15 @@
               <h2>Gate</h2>
             </div>
             <div id="approvalPanel" class="approval-panel">No pending worker proposal yet.</div>
+          </section>
+
+          <section class="panel worker-browser-panel" id="workerBrowserPanel" hidden>
+            <div class="panel-heading">
+              <p class="eyebrow">Live</p>
+              <h2>Worker Browser</h2>
+            </div>
+            <p class="status-text" id="workerBrowserHint">Watch the worker browser. If the portal asks for a password, 2FA, or captcha, take over and type it yourself — the assistant never enters credentials.</p>
+            <div id="remoteBrowserMount"></div>
           </section>
 
           <section class="panel continuity-panel">
