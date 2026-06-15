@@ -65,6 +65,27 @@ test("official OpenClaw live readiness asks user to navigate away from public ma
   assert.match(live.nextAction, /benefits|coverage|eligibility|claims/i);
 });
 
+test("official OpenClaw live readiness rejects unrelated offsite tabs", () => {
+  const live = classifyOfficialOpenClawLiveReadiness(
+    baseReadiness({
+      tabs: {
+        currentTab: {
+          id: "tab_example",
+          title: "Example Domain",
+          url: "https://example.com/",
+          active: true
+        },
+        items: [],
+        count: 1
+      }
+    })
+  );
+  assert.equal(live.status, "portal_page_required");
+  assert.equal(live.readyForReadOnlyObservation, false);
+  assert.equal(live.userActionRequired, true);
+  assert.match(live.nextAction, /benefits|coverage|eligibility|claims/i);
+});
+
 test("official OpenClaw live readiness marks member portal pages ready for read-only approval", () => {
   const live = classifyOfficialOpenClawLiveReadiness(
     baseReadiness({

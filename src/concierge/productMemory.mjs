@@ -7,6 +7,7 @@ import { recordOutboundPayloadObservation } from "./outboundPayloadObservability
 import { loadLocalEnvOnce } from "./secrets.mjs";
 
 export const PRODUCT_MEMORY_CONTRACT_VERSION = "2026-05-27.graphiti-product-memory.v1";
+export const PRODUCT_MEMORY_REPLAY_QUEUE_VERSION = "2026-06-15.product-memory-replay-queue.v1";
 const BRIDGE_PATH = resolve("tools/graphiti/graphiti_bridge.py");
 const PYTHON_PATH = resolve(".venv-graphiti/bin/python");
 
@@ -131,12 +132,242 @@ function disabledResult(action) {
   };
 }
 
-export async function getProductMemoryStatus({ requireEnabled = false, store = null, sessionId = null, user = null } = {}) {
+export async function getProductMemoryReplayQueueSummary(store) {
+  if (!store) {
+    return {
+      queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+      available: false,
+      pending: 0,
+      retryableFailed: 0,
+      running: 0,
+      completed: 0,
+      failed: 0
+    };
+  }
+  const rows = await store.all(`
+    SELECT status, COUNT(*) AS count
+    FROM product_memory_replay_queue
+    GROUP BY status
+    ORDER BY status ASC;
+  `);
+  const summary = Object.fromEntries(rows.map((row) => [row.status, Number(row.count ?? 0)]));
+  const oldest = await store.get(`
+    SELECT id, created_at, next_attempt_at, last_error
+    FROM product_memory_replay_queue
+    WHERE status IN ('queued', 'retryable_failed', 'running')
+    ORDER BY created_at ASC
+    LIMIT 1;
+  `);
+  return {
+    queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+    available: true,
+    pending: summary.queued ?? 0,
+    retryableFailed: summary.retryable_failed ?? 0,
+    running: summary.running ?? 0,
+    completed: summary.completed ?? 0,
+    failed: summary.failed ?? 0,
+    oldestPending: oldest ?? null
+  };
+}
+
+export async function listProductMemoryReplayQueue(store, { status = null, limit = 25 } = {}) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 25));
+  const params = [];
+  const statusClause = status ? "WHERE status = ?" : "";
+  if (status) params.push(String(status));
+  params.push(safeLimit);
+  const rows = await store.all(`
+    SELECT id, user_id, session_id, adapter, action, status, attempts, max_attempts, source_pointer_count,
+           first_error, last_error, next_attempt_at, last_attempt_at, completed_at, created_at, updated_at
+    FROM product_memory_replay_queue
+    ${statusClause}
+    ORDER BY created_at ASC
+    LIMIT ?;
+  `, params);
+  return rows;
+}
+
+function replayBackoffIso(attempts) {
+  const minutes = Math.min(60, Math.max(1, Number(attempts) || 1) * 5);
+  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
+}
+
+export async function enqueueProductMemoryRetainReplay(store, { user, session, retainPayload, episodeBody, error, repairPlan }) {
+  if (!store || !user?.id || !session?.id || !retainPayload) return null;
+  const now = nowIso();
+  const item = {
+    id: `pm_replay_${crypto.randomUUID()}`,
+    user_id: user.id,
+    session_id: session.id,
+    adapter: "graphiti",
+    action: "retain",
+    status: "queued",
+    attempts: 0,
+    max_attempts: 3,
+    source_pointer_count: episodeBody?.sourcePointers?.length ?? 0,
+    payload_json: JSON.stringify({
+      queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+      payload: retainPayload,
+      episodePreview: {
+        workflow: episodeBody?.workflow ?? null,
+        workflowOutcome: episodeBody?.workflowOutcome ?? null,
+        sourcePointerCount: episodeBody?.sourcePointers?.length ?? 0,
+        rawPortalTextStored: false,
+        directIdentifiersMasked: true
+      },
+      repairPlan
+    }),
+    result_json: "{}",
+    first_error: String(error?.message ?? error ?? "Graphiti retain failed."),
+    last_error: String(error?.message ?? error ?? "Graphiti retain failed."),
+    next_attempt_at: now,
+    last_attempt_at: null,
+    completed_at: null,
+    created_at: now,
+    updated_at: now
+  };
+  await store.insert("product_memory_replay_queue", item);
+  await audit(store, session.id, "product_memory_retain_queued_for_replay", {
+    provider: "zep_graphiti",
+    queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+    queueItemId: item.id,
+    sourcePointerCount: item.source_pointer_count,
+    retryable: Boolean(repairPlan?.retryable),
+    nextAttemptAt: item.next_attempt_at,
+    rawPortalTextStored: false,
+    cortexProductMemory: false
+  });
+  return {
+    id: item.id,
+    status: item.status,
+    nextAttemptAt: item.next_attempt_at,
+    sourcePointerCount: item.source_pointer_count,
+    queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION
+  };
+}
+
+export async function replayQueuedProductMemoryRetains(store, { limit = 5, user = null } = {}) {
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   if (!config.enabled) {
+    return {
+      ok: false,
+      status: "disabled_by_env",
+      adapter: "graphiti",
+      replayed: 0,
+      failed: 0,
+      message: "Set BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti to replay queued product memory retains."
+    };
+  }
+  const now = nowIso();
+  const safeLimit = Math.max(1, Math.min(25, Number(limit) || 5));
+  const rows = await store.all(`
+    SELECT *
+    FROM product_memory_replay_queue
+    WHERE action = 'retain'
+      AND status IN ('queued', 'retryable_failed')
+      AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+    ORDER BY created_at ASC
+    LIMIT ?;
+  `, [now, safeLimit]);
+  const results = [];
+  for (const row of rows) {
+    const attempts = Number(row.attempts ?? 0) + 1;
+    const startedAt = nowIso();
+    await store.update(
+      "product_memory_replay_queue",
+      {
+        status: "running",
+        attempts,
+        last_attempt_at: startedAt,
+        updated_at: startedAt
+      },
+      { id: row.id }
+    );
+    const envelope = parseJson(row.payload_json, {});
+    try {
+      const result = await callGraphitiBridge(envelope.payload, {
+        observability: {
+          store,
+          sessionId: row.session_id,
+          payloadType: "graphiti_replay_retain",
+          user,
+          policyMode: "product_memory_replay_retain_observe_only"
+        }
+      });
+      const completedAt = nowIso();
+      await store.update(
+        "product_memory_replay_queue",
+        {
+          status: "completed",
+          result_json: JSON.stringify({
+            ok: true,
+            episodeUuid: result.episodeUuid ?? null,
+            backend: result.backend ?? null,
+            groupId: result.groupId ?? null
+          }),
+          last_error: null,
+          completed_at: completedAt,
+          updated_at: completedAt
+        },
+        { id: row.id }
+      );
+      await audit(store, row.session_id, "product_memory_replay_completed_graphiti", {
+        provider: "zep_graphiti",
+        queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+        queueItemId: row.id,
+        attempts,
+        episodeUuid: result.episodeUuid ?? null,
+        sourcePointerCount: row.source_pointer_count
+      });
+      results.push({ id: row.id, status: "completed", episodeUuid: result.episodeUuid ?? null });
+    } catch (error) {
+      const retryable = isRetryableGraphitiRetainError(error);
+      const exhausted = attempts >= Number(row.max_attempts ?? 3);
+      const failedAt = nowIso();
+      const status = retryable && !exhausted ? "retryable_failed" : "failed";
+      await store.update(
+        "product_memory_replay_queue",
+        {
+          status,
+          last_error: error.message,
+          next_attempt_at: status === "retryable_failed" ? replayBackoffIso(attempts) : null,
+          updated_at: failedAt
+        },
+        { id: row.id }
+      );
+      await audit(store, row.session_id, "product_memory_replay_failed_graphiti", {
+        provider: "zep_graphiti",
+        queueVersion: PRODUCT_MEMORY_REPLAY_QUEUE_VERSION,
+        queueItemId: row.id,
+        attempts,
+        status,
+        retryable,
+        exhausted,
+        error: error.message
+      });
+      results.push({ id: row.id, status, error: error.message });
+    }
+  }
+  return {
+    ok: true,
+    status: "replay_finished",
+    adapter: "graphiti",
+    attempted: rows.length,
+    replayed: results.filter((item) => item.status === "completed").length,
+    failed: results.filter((item) => item.status !== "completed").length,
+    results,
+    queue: await getProductMemoryReplayQueueSummary(store)
+  };
+}
+
+export async function getProductMemoryStatus({ requireEnabled = false, store = null, sessionId = null, user = null } = {}) {
+  await loadLocalEnvOnce();
+  const config = getProductMemoryConfig();
+  const replayQueue = await getProductMemoryReplayQueueSummary(store);
+  if (!config.enabled) {
     if (requireEnabled) throw new Error("Product memory is disabled. Set BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti.");
-    return { ...disabledResult("status"), config };
+    return { ...disabledResult("status"), config, replayQueue };
   }
   const status = await callGraphitiBridge(
     { action: "status", groupId: config.groupId },
@@ -153,7 +384,7 @@ export async function getProductMemoryStatus({ requireEnabled = false, store = n
         : null
     }
   );
-  return { ...status, adapter: "graphiti", enabled: true, config };
+  return { ...status, adapter: "graphiti", enabled: true, config, replayQueue };
 }
 
 export async function recallProductMemoryForRequest({ store = null, user, session, userInput, contextPacket, limit = 5 }) {
@@ -438,11 +669,22 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
         repairPlan.retryError = retryError.message;
       }
     }
+    const queuedReplay = repairPlan.retryable
+      ? await enqueueProductMemoryRetainReplay(store, {
+          user,
+          session,
+          retainPayload,
+          episodeBody,
+          error: repairPlan.retryError ?? error,
+          repairPlan
+        })
+      : null;
     await audit(store, session.id, "product_memory_retain_failed_graphiti", {
       provider: "zep_graphiti",
       contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
       error: error.message,
-      repairPlan
+      repairPlan,
+      queuedReplay
     });
     return {
       ok: false,
@@ -453,7 +695,8 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
       retainAttempts: repairPlan.attemptedRetry ? 2 : 1,
       error: repairPlan.retryError ?? error.message,
       firstError: error.message,
-      repairPlan
+      repairPlan,
+      queuedReplay
     };
   }
 }

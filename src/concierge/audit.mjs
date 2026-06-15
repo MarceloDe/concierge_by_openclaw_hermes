@@ -5,13 +5,6 @@ import { maskDirectIdentifiers } from "./modelPayloadPolicy.mjs";
 export const AUDIT_CHAIN_VERSION = "2026-05-27.audit-chain.v1";
 export const AUDIT_LOG_API_VERSION = "2026-06-01.phase10l-audit-log-api.v1";
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function eventHashMaterial(row) {
   return JSON.stringify({
     id: row.id,
@@ -48,6 +41,10 @@ function truthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 }
 
+function escapeLike(value) {
+  return String(value ?? "").replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
 function redactAuditPreview(value) {
   return maskDirectIdentifiers(String(value ?? ""), {})
     .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[redacted-email]")
@@ -81,18 +78,38 @@ function auditActionKind(eventType) {
 
 function auditWhereClause(filters = {}) {
   const clauses = [];
+  const params = [];
   const sessionId = filters.sessionId ?? null;
-  if (sessionId) clauses.push(`session_id = ${sql(sessionId)}`);
-  else if (truthy(filters.rootOnly)) clauses.push("session_id IS NULL");
-  if (filters.eventType) clauses.push(`event_type = ${sql(filters.eventType)}`);
-  if (filters.eventPrefix) clauses.push(`event_type LIKE ${sql(`${filters.eventPrefix}%`)}`);
-  if (filters.since) clauses.push(`created_at >= ${sql(filters.since)}`);
-  if (filters.until) clauses.push(`created_at <= ${sql(filters.until)}`);
-  if (filters.query) {
-    const pattern = `%${String(filters.query).replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
-    clauses.push(`(id LIKE ${sql(pattern)} ESCAPE '\\' OR event_type LIKE ${sql(pattern)} ESCAPE '\\' OR session_id LIKE ${sql(pattern)} ESCAPE '\\')`);
+  if (sessionId) {
+    clauses.push("session_id = ?");
+    params.push(sessionId);
   }
-  return clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  else if (truthy(filters.rootOnly)) clauses.push("session_id IS NULL");
+  if (filters.eventType) {
+    clauses.push("event_type = ?");
+    params.push(filters.eventType);
+  }
+  if (filters.eventPrefix) {
+    clauses.push("event_type LIKE ? ESCAPE '\\'");
+    params.push(`${escapeLike(filters.eventPrefix)}%`);
+  }
+  if (filters.since) {
+    clauses.push("created_at >= ?");
+    params.push(filters.since);
+  }
+  if (filters.until) {
+    clauses.push("created_at <= ?");
+    params.push(filters.until);
+  }
+  if (filters.query) {
+    const pattern = `%${escapeLike(filters.query)}%`;
+    clauses.push("(id LIKE ? ESCAPE '\\' OR event_type LIKE ? ESCAPE '\\' OR session_id LIKE ? ESCAPE '\\')");
+    params.push(pattern, pattern, pattern);
+  }
+  return {
+    sql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    params
+  };
 }
 
 function normalizeAuditRow(row) {
@@ -112,9 +129,9 @@ function normalizeAuditRow(row) {
 }
 
 async function latestHash(store, sessionId) {
-  const row = await store.get(
-    `SELECT event_hash FROM audit_events WHERE ${sessionId ? `session_id = ${sql(sessionId)}` : "session_id IS NULL"} AND event_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1;`
-  );
+  const row = sessionId
+    ? await store.get("SELECT event_hash FROM audit_events WHERE session_id = ? AND event_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1;", [sessionId])
+    : await store.get("SELECT event_hash FROM audit_events WHERE session_id IS NULL AND event_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1;");
   return row?.event_hash ?? null;
 }
 
@@ -134,9 +151,9 @@ export async function audit(store, sessionId, eventType, details) {
 }
 
 export async function verifyAuditChain(store, { sessionId = null } = {}) {
-  const rows = await store.all(
-    `SELECT rowid, * FROM audit_events WHERE ${sessionId ? `session_id = ${sql(sessionId)}` : "session_id IS NULL"} ORDER BY rowid ASC;`
-  );
+  const rows = sessionId
+    ? await store.all("SELECT rowid, * FROM audit_events WHERE session_id = ? ORDER BY rowid ASC;", [sessionId])
+    : await store.all("SELECT rowid, * FROM audit_events WHERE session_id IS NULL ORDER BY rowid ASC;");
   const issues = [];
   let previousHash = null;
   let hashedCount = 0;
@@ -208,11 +225,13 @@ export async function listAuditEvents(store, filters = {}) {
   const offset = clampOffset(filters.offset);
   const where = auditWhereClause(filters);
   const rows = await store.all(
-    `SELECT * FROM audit_events ${where} ORDER BY created_at DESC, rowid DESC LIMIT ${limit} OFFSET ${offset};`
+    `SELECT * FROM audit_events ${where.sql} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?;`,
+    [...where.params, limit, offset]
   );
-  const countRow = await store.get(`SELECT COUNT(*) AS count FROM audit_events ${where};`);
+  const countRow = await store.get(`SELECT COUNT(*) AS count FROM audit_events ${where.sql};`, where.params);
   const typeRows = await store.all(
-    `SELECT event_type, COUNT(*) AS count FROM audit_events ${where} GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT 20;`
+    `SELECT event_type, COUNT(*) AS count FROM audit_events ${where.sql} GROUP BY event_type ORDER BY count DESC, event_type ASC LIMIT ?;`,
+    [...where.params, 20]
   );
   const visibleSessionIds = [...new Set(rows.map((row) => row.session_id ?? null))].slice(0, 20);
   const chain = await verifyAuditChains(store, {

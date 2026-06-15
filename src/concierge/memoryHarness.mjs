@@ -7,13 +7,6 @@ import { loadWorkflowArchitecture } from "./workflowArchitecture.mjs";
 
 const DEFAULT_HEARTBEAT_MINUTES = 60;
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function parseJson(value, fallback) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -62,27 +55,32 @@ function compactScheduledJobPayload(payload = {}) {
 
 async function getLatestPortalAccount(store, userId) {
   return store.get(
-    `SELECT * FROM portal_accounts WHERE user_id = ${sql(userId)} ORDER BY created_at DESC LIMIT 1;`
+    "SELECT * FROM portal_accounts WHERE user_id = ? ORDER BY created_at DESC LIMIT 1;",
+    [userId]
   );
 }
 
 async function getRecentSessions(store, userId, limit = 5) {
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 5));
   return store.all(
     `SELECT id, channel, langgraph_thread_id, title, current_step, last_intent, state_version, status, last_active_at, created_at
      FROM sessions
-     WHERE user_id = ${sql(userId)}
+     WHERE user_id = ?
      ORDER BY COALESCE(last_active_at, created_at) DESC
-     LIMIT ${Number(limit)};`
+     LIMIT ?;`,
+    [userId, safeLimit]
   );
 }
 
 async function getRecentMemoryItems(store, userId, limit = 12) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 12));
   const rows = await store.all(
     `SELECT *
      FROM memory_items
-     WHERE user_id = ${sql(userId)}
+     WHERE user_id = ?
      ORDER BY created_at DESC
-     LIMIT ${Number(limit)};`
+     LIMIT ?;`,
+    [userId, safeLimit]
   );
   return rows.map((row) => {
     const { metadata_json, ...rest } = row;
@@ -94,12 +92,14 @@ async function getRecentMemoryItems(store, userId, limit = 12) {
 }
 
 async function getOpenTasks(store, userId, limit = 10) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
   const rows = await store.all(
     `SELECT *
      FROM agent_tasks
-     WHERE user_id = ${sql(userId)} AND status IN ('open', 'pending_integration', 'pending_approval')
+     WHERE user_id = ? AND status IN ('open', 'pending_integration', 'pending_approval')
      ORDER BY COALESCE(due_at, created_at) ASC
-     LIMIT ${Number(limit)};`
+     LIMIT ?;`,
+    [userId, safeLimit]
   );
   return rows.map((row) => {
     const { metadata_json, ...rest } = row;
@@ -111,12 +111,14 @@ async function getOpenTasks(store, userId, limit = 10) {
 }
 
 async function getScheduledJobs(store, userId, limit = 10) {
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 10));
   const rows = await store.all(
     `SELECT *
      FROM scheduled_jobs
-     WHERE user_id = ${sql(userId)} AND status IN ('active', 'blocked_integration', 'pending_approval')
+     WHERE user_id = ? AND status IN ('active', 'blocked_integration', 'pending_approval')
      ORDER BY COALESCE(next_run_at, created_at) ASC
-     LIMIT ${Number(limit)};`
+     LIMIT ?;`,
+    [userId, safeLimit]
   );
   return rows.map((row) => {
     const { payload_json, ...rest } = row;
@@ -128,12 +130,14 @@ async function getScheduledJobs(store, userId, limit = 10) {
 }
 
 async function getLatestStructuredPointers(store, userId, limit = 8) {
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 8));
   const snapshots = await store.all(
     `SELECT id, session_id, portal_account_id, source_url, summary, created_at
      FROM eligibility_snapshots
-     WHERE user_id = ${sql(userId)}
+     WHERE user_id = ?
      ORDER BY created_at DESC
-     LIMIT ${Number(limit)};`
+     LIMIT ?;`,
+    [userId, safeLimit]
   );
   const pointers = [];
   for (const snapshot of snapshots) {
@@ -145,11 +149,10 @@ async function getLatestStructuredPointers(store, userId, limit = 8) {
       summary: snapshot.summary,
       createdAt: snapshot.created_at
     });
-    const snapshotId = sql(snapshot.id);
     const [balances, claims, authorizations] = await Promise.all([
-      store.all(`SELECT id, balance_type, label, source, created_at FROM coverage_balances WHERE snapshot_id = ${snapshotId} ORDER BY created_at DESC LIMIT 3;`),
-      store.all(`SELECT id, description, service_date, source, created_at FROM claim_items WHERE snapshot_id = ${snapshotId} ORDER BY created_at DESC LIMIT 3;`),
-      store.all(`SELECT id, provider_or_facility, service_date, status, source, created_at FROM prior_authorizations WHERE snapshot_id = ${snapshotId} ORDER BY created_at DESC LIMIT 3;`)
+      store.all("SELECT id, balance_type, label, source, created_at FROM coverage_balances WHERE snapshot_id = ? ORDER BY created_at DESC LIMIT 3;", [snapshot.id]),
+      store.all("SELECT id, description, service_date, source, created_at FROM claim_items WHERE snapshot_id = ? ORDER BY created_at DESC LIMIT 3;", [snapshot.id]),
+      store.all("SELECT id, provider_or_facility, service_date, status, source, created_at FROM prior_authorizations WHERE snapshot_id = ? ORDER BY created_at DESC LIMIT 3;", [snapshot.id])
     ]);
     for (const row of balances) {
       pointers.push({
@@ -182,7 +185,7 @@ async function getLatestStructuredPointers(store, userId, limit = 8) {
       });
     }
   }
-  return pointers.slice(0, limit * 3);
+  return pointers.slice(0, safeLimit * 3);
 }
 
 async function findUser(store, { userId, email }) {
@@ -248,11 +251,12 @@ export async function ensureOpenClawInstance(store, user) {
 async function upsertMemoryItem(store, item) {
   const existing = await store.get(
     `SELECT * FROM memory_items
-     WHERE user_id = ${sql(item.user_id)}
-       AND source_table = ${sql(item.source_table)}
-       AND source_id = ${sql(item.source_id)}
-       AND memory_type = ${sql(item.memory_type)}
-     LIMIT 1;`
+     WHERE user_id = ?
+       AND source_table = ?
+       AND source_id = ?
+       AND memory_type = ?
+     LIMIT 1;`,
+    [item.user_id, item.source_table, item.source_id, item.memory_type]
   );
   const updatedAt = nowIso();
   if (existing) {
@@ -291,16 +295,18 @@ export async function retainMemoryFromSession(store, { user, session, reason = "
     store.all(
       `SELECT id, source_url, summary, created_at
        FROM eligibility_snapshots
-       WHERE user_id = ${sql(user.id)} AND session_id = ${sql(session.id)}
+       WHERE user_id = ? AND session_id = ?
        ORDER BY created_at DESC
-       LIMIT 3;`
+       LIMIT 3;`,
+      [user.id, session.id]
     ),
     store.get(
       `SELECT id, content, created_at
        FROM conversation_messages
-       WHERE session_id = ${sql(session.id)} AND role = 'user'
+       WHERE session_id = ? AND role = 'user'
        ORDER BY created_at DESC
-       LIMIT 1;`
+       LIMIT 1;`,
+      [session.id]
     )
   ]);
 
@@ -623,14 +629,17 @@ export async function buildContextPacket(store, { user, session = null, channel 
 }
 
 async function createScheduledJob(store, { user, session, jobType, scheduleLabel, nextRunAt, requiresIntegration, approvalStatus, payload }) {
+  const sessionClause = session?.id ? "session_id = ?" : "session_id IS NULL";
+  const params = session?.id ? [user.id, session.id, jobType] : [user.id, jobType];
   const existing = await store.get(
     `SELECT *
      FROM scheduled_jobs
-     WHERE user_id = ${sql(user.id)}
-       AND session_id = ${sql(session?.id ?? null)}
-       AND job_type = ${sql(jobType)}
+     WHERE user_id = ?
+       AND ${sessionClause}
+       AND job_type = ?
        AND status IN ('active', 'blocked_integration', 'pending_approval')
-     LIMIT 1;`
+     LIMIT 1;`,
+    params
   );
   if (existing) return existing;
   const createdAt = nowIso();
@@ -659,12 +668,13 @@ async function createTask(store, { user, session, taskType, status, priority, de
   const existing = await store.get(
     `SELECT *
      FROM agent_tasks
-     WHERE user_id = ${sql(user.id)}
-       AND task_type = ${sql(taskType)}
-       AND source_table = ${sql(sourceTable)}
-       AND source_id = ${sql(sourceId)}
+     WHERE user_id = ?
+       AND task_type = ?
+       AND source_table = ?
+       AND source_id = ?
        AND status IN ('open', 'pending_integration', 'pending_approval')
-     LIMIT 1;`
+     LIMIT 1;`,
+    [user.id, taskType, sourceTable, sourceId]
   );
   if (existing) return existing;
   const createdAt = nowIso();
@@ -818,10 +828,11 @@ async function getDueJobs(store, userId, now) {
   const rows = await store.all(
     `SELECT *
      FROM scheduled_jobs
-     WHERE user_id = ${sql(userId)}
+     WHERE user_id = ?
        AND status IN ('active', 'blocked_integration', 'pending_approval')
-       AND (next_run_at IS NULL OR next_run_at <= ${sql(now)})
-     ORDER BY COALESCE(next_run_at, created_at) ASC;`
+       AND (next_run_at IS NULL OR next_run_at <= ?)
+     ORDER BY COALESCE(next_run_at, created_at) ASC;`,
+    [userId, now]
   );
   return rows.map((row) => ({
     ...row,
@@ -937,10 +948,10 @@ export async function listHarnessState(store, { userId, email }) {
     ensureOpenClawInstance(store, user),
     getOpenTasks(store, user.id, 50),
     getScheduledJobs(store, user.id, 50),
-    store.all(`SELECT * FROM agent_outbox WHERE user_id = ${sql(user.id)} ORDER BY created_at DESC LIMIT 50;`),
+    store.all("SELECT * FROM agent_outbox WHERE user_id = ? ORDER BY created_at DESC LIMIT 50;", [user.id]),
     getRecentMemoryItems(store, user.id, 50),
-    store.all(`SELECT id, packet_type, channel, session_id, created_at FROM context_packets WHERE user_id = ${sql(user.id)} ORDER BY created_at DESC LIMIT 20;`),
-    store.all(`SELECT * FROM memory_harness_runs WHERE user_id = ${sql(user.id)} ORDER BY created_at DESC LIMIT 20;`)
+    store.all("SELECT id, packet_type, channel, session_id, created_at FROM context_packets WHERE user_id = ? ORDER BY created_at DESC LIMIT 20;", [user.id]),
+    store.all("SELECT * FROM memory_harness_runs WHERE user_id = ? ORDER BY created_at DESC LIMIT 20;", [user.id])
   ]);
   return {
     user,

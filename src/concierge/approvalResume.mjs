@@ -12,12 +12,6 @@ import { OPENCLAW_PROPOSAL_TASK_TYPE } from "./openclawSkillInvocation.mjs";
 export const READ_ONLY_APPROVAL_GATE = "openclaw_read_only_observation";
 export const READ_ONLY_ALLOWED_ACTION = "read_only_observation";
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function parseJson(value, fallback = {}) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -172,9 +166,10 @@ export async function consumeReadOnlyObservationApproval(
   const gateType = approvalScope === READ_ONLY_DOCUMENT_APPROVAL_SCOPE ? READ_ONLY_DOCUMENT_APPROVAL_GATE : READ_ONLY_APPROVAL_GATE;
   const rows = await store.all(
     `SELECT * FROM approval_gates
-     WHERE session_id = ${sql(sessionId)}
-       AND gate_type = ${sql(gateType)}
-     ORDER BY created_at DESC;`
+     WHERE session_id = ?
+       AND gate_type = ?
+     ORDER BY created_at DESC;`,
+    [sessionId, gateType]
   );
   const gate = rows.find((row) => parseJson(row.details).approvalToken === approvalToken);
   if (!gate) {

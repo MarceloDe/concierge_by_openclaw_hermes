@@ -105,6 +105,7 @@ export function validateOpenClawEnvelopeAgainstSkill(envelope, artifact, options
   const issues = [];
   const warnings = [];
   const manifest = artifact?.manifest ?? {};
+  const skillKey = artifact?.skillKey ?? manifest.skill_key ?? DEFAULT_OPENCLAW_SKILL_KEY;
   const skillValidation = artifact?.validation ?? { valid: false, issues: ["Skill artifact was not validated."] };
   const requiredInputs = requiredInputMap(envelope, options);
   const blockedActions = collectBlockedActions(envelope);
@@ -116,16 +117,13 @@ export function validateOpenClawEnvelopeAgainstSkill(envelope, artifact, options
   if (!skillValidation.valid) {
     issues.push(...skillValidation.issues.map((issue) => `Skill artifact invalid: ${issue}`));
   }
-  if (artifact?.skillKey !== DEFAULT_OPENCLAW_SKILL_KEY || manifest.skill_key !== DEFAULT_OPENCLAW_SKILL_KEY) {
-    issues.push("Only the repo-scoped insurance_portal_browser skill may be proposed in this slice.");
-  }
   if (envelope?.envelope_type !== "openclaw_channel_task") {
     issues.push("Envelope type must be openclaw_channel_task.");
   }
   for (const input of manifest.inputs?.required ?? []) {
     if (!requiredInputs[input]) issues.push(`Missing required OpenClaw skill input: ${input}.`);
   }
-  if (requiredInputs.workflow_key && !allowedWorkflows.includes(requiredInputs.workflow_key)) {
+  if (requiredInputs.workflow_key && allowedWorkflows.length > 0 && !allowedWorkflows.includes(requiredInputs.workflow_key)) {
     issues.push(`Workflow ${requiredInputs.workflow_key} is not allowed by ${manifest.skill_key}.`);
   }
   if (envelope?.approval_policy?.credential_entry !== "user_only") {
@@ -161,14 +159,14 @@ export function validateOpenClawEnvelopeAgainstSkill(envelope, artifact, options
 
   return {
     version: OPENCLAW_SKILL_INVOCATION_VERSION,
-    skillKey: DEFAULT_OPENCLAW_SKILL_KEY,
+    skillKey,
     executionMode: "proposal_only",
     valid: issues.length === 0,
     status: issues.length === 0 ? "validated_proposal_not_executed" : "blocked_proposal_not_executed",
     issues,
     warnings: [...warnings, ...(skillValidation.warnings ?? [])],
     requiredInputs,
-    workflowAllowed: requiredInputs.workflow_key ? allowedWorkflows.includes(requiredInputs.workflow_key) : false,
+    workflowAllowed: requiredInputs.workflow_key ? allowedWorkflows.length === 0 || allowedWorkflows.includes(requiredInputs.workflow_key) : false,
     blockedActions,
     approvalGates,
     approvalsRequired,

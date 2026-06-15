@@ -1,4 +1,5 @@
 export const TABLES = [
+  "schema_migrations",
   "users",
   "user_consents",
   "portal_accounts",
@@ -10,6 +11,7 @@ export const TABLES = [
   "runtime_hook_subscriptions",
   "runtime_hook_deliveries",
   "memory_items",
+  "product_memory_replay_queue",
   "context_packets",
   "openclaw_instances",
   "agent_tasks",
@@ -55,6 +57,13 @@ export const TABLES = [
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  migration_key TEXT NOT NULL UNIQUE,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  applied_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -203,6 +212,29 @@ CREATE TABLE IF NOT EXISTS memory_items (
   last_verified_at TEXT,
   temporal_metadata_json TEXT NOT NULL DEFAULT '{}',
   confidence REAL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS product_memory_replay_queue (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  adapter TEXT NOT NULL,
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  source_pointer_count INTEGER NOT NULL DEFAULT 0,
+  payload_json TEXT NOT NULL,
+  result_json TEXT NOT NULL DEFAULT '{}',
+  first_error TEXT,
+  last_error TEXT,
+  next_attempt_at TEXT,
+  last_attempt_at TEXT,
+  completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id),

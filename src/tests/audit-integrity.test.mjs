@@ -55,3 +55,39 @@ test("audit log API lists redacted hash-backed events and verifies visible chain
   assert.match(text, /\[redacted-email\]/);
   assert.match(text, /\[redacted-phone\]/);
 });
+
+test("audit log API binds hostile filter values and escapes wildcard queries", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "brainsty-audit-filter-"));
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+
+  await audit(store, null, "research_source_proposed", { value: "first" });
+  await audit(store, null, "research_source_reviewed", { value: "second" });
+  await audit(store, null, "literal_percent_event", { value: "third" });
+
+  const hostilePrefix = await listAuditEvents(store, {
+    eventPrefix: "research%' OR 1=1 --",
+    limit: 10
+  });
+  assert.equal(hostilePrefix.pagination.returned, 0);
+  assert.equal(hostilePrefix.pagination.total, 0);
+  assert.equal(hostilePrefix.chain.valid, true);
+
+  const hostileSession = await listAuditEvents(store, {
+    sessionId: "missing_session' OR 1=1 --",
+    limit: 10
+  });
+  assert.equal(hostileSession.pagination.returned, 0);
+  assert.equal(hostileSession.pagination.total, 0);
+  assert.equal(hostileSession.chain.valid, true);
+
+  const wildcardQuery = await listAuditEvents(store, { query: "%", limit: 10 });
+  assert.equal(wildcardQuery.pagination.returned, 0);
+  assert.equal(wildcardQuery.pagination.total, 0);
+
+  const normalPrefix = await listAuditEvents(store, { eventPrefix: "research", limit: 10 });
+  assert.equal(normalPrefix.pagination.returned, 2);
+  assert.deepEqual(
+    normalPrefix.events.map((event) => event.eventType).sort(),
+    ["research_source_proposed", "research_source_reviewed"]
+  );
+});

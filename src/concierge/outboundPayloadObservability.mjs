@@ -30,8 +30,8 @@ export function classifyOutboundPayload(payload, { user = {}, payloadType, desti
   const serializedPayload = safeStringify(payload);
   const containsDirectIdentifier = directIdentifierPatterns(user).some((pattern) => pattern.test(serializedPayload));
   const containsSourcePointers =
-    inspectKeys(payload, (key) => ["sourcePointers", "source_pointers", "dbPointers", "db_pointers"].includes(key)) ||
-    /\b(sourcePointers|source_pointers|dbPointers|db_pointers)\b/.test(serializedPayload) ||
+    inspectKeys(payload, (key) => ["sourcePointers", "source_pointers", "allowed_source_pointers", "dbPointers", "db_pointers"].includes(key)) ||
+    /\b(sourcePointers|source_pointers|allowed_source_pointers|dbPointers|db_pointers)\b/.test(serializedPayload) ||
     /\b(eligibility_snapshots|coverage_balances|claim_items|prior_authorizations|extraction_artifacts|memory_items)\/[A-Za-z0-9_-]+/.test(serializedPayload);
   const containsPortalText = inspectKeys(payload, (key, value) => {
     const normalized = key.toLowerCase();

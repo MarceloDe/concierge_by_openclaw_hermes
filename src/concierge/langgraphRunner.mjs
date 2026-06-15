@@ -32,6 +32,8 @@ import { loadOpenClawSkillArtifact } from "./openclawSkillArtifacts.mjs";
 import { recordOpenClawSkillInvocationProposal, validateOpenClawEnvelopeAgainstSkill } from "./openclawSkillInvocation.mjs";
 import { runOfficialOpenClawReadOnlyObservation } from "./openclawOfficialRuntime.mjs";
 import { buildLangGraphOpenClawWorkerPlan } from "./openclawWorkerContract.mjs";
+import { loadOpenClawSkillRegistry } from "./openclaw/skillRegistry.mjs";
+import { buildOpenClawBoundedTaskProposal } from "./openclaw/workerPolicy.mjs";
 import { recallProductMemoryForRequest, retainProductMemoryFromGraphRun } from "./productMemory.mjs";
 import { searchResearchEvidence } from "./researchOps.mjs";
 import { resolveDynamicSkillContext } from "./dynamicSkillServer.mjs";
@@ -40,6 +42,9 @@ import {
   normalizeLlmOrchestrationDecision,
   shouldUseLlmDecision
 } from "./llmOrchestrationDecision.mjs";
+import { buildDeterministicStructuredReasoning } from "./intelligence/structuredIntentReasoner.mjs";
+import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
+import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -56,6 +61,25 @@ function field(defaultValue = null) {
   return Annotation({
     reducer: (_, value) => value,
     default: () => defaultValue
+  });
+}
+
+function appendArrayField() {
+  return Annotation({
+    reducer: (left, value) => {
+      const current = Array.isArray(left) ? left : [];
+      const next = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];
+      if (Array.isArray(value) && value.length === 0) return [];
+      return [...current, ...next];
+    },
+    default: () => []
+  });
+}
+
+function mergeObjectField(defaultValue = {}) {
+  return Annotation({
+    reducer: (left, value) => ({ ...(left ?? {}), ...(value ?? {}) }),
+    default: () => ({ ...defaultValue })
   });
 }
 
@@ -83,32 +107,40 @@ const BrainstyState = Annotation.Root({
   openclaw_envelope: field(null),
   openclaw_skill_validation: field(null),
   openclaw_worker_plan: field(null),
+  openclaw_task_proposal: field(null),
   openclaw_skill_proposal: field(null),
   worker_continuation: field(null),
   human_handoff: field(null),
   approval_resume: field(null),
   evidence_observation: field(null),
+  sourced_answer: field(null),
   research_evidence: field(null),
   uploaded_document_context: field(null),
   browser_result: field(null),
   eligibility_result: field(null),
   portal_scan: field(null),
-  source_pointers: field([]),
-  tool_calls: field([]),
-  tool_results: field([]),
+  source_pointers: appendArrayField(),
+  tool_calls: appendArrayField(),
+  tool_results: appendArrayField(),
   model_invocation: field(null),
   final_response: field(null),
-  ai2ui_blocks: field([]),
+  ai2ui_blocks: appendArrayField(),
+  journey_decisions: appendArrayField(),
+  answer_claims: appendArrayField(),
   should_remember: field(false),
   memory_summary: field(null),
   memory_type: field(null),
   workflow_outcome: field(null),
-  safety: field({}),
-  proof: field([])
+  safety: mergeObjectField({}),
+  proof: appendArrayField()
 });
 
 function appendProof(state, step, details = {}) {
-  return [...(state.proof ?? []), { step, at: nowIso(), ...details }];
+  return [{ step, at: nowIso(), ...details }];
+}
+
+function mergeProof(state, step, details = {}) {
+  return [...(state.proof ?? []), ...appendProof(state, step, details)];
 }
 
 function refusalForIntent(intent) {
@@ -632,17 +664,32 @@ async function recallContextNode(state) {
 }
 
 async function structuredIntentNode(state) {
-  const structuredIntent = classifyHealthcareIntent({
+  const curatedIntent = classifyHealthcareIntent({
     message: state.user_input,
     policyResult: state.policy_result,
     contextPacket: state.context_packet
   });
+  const reasoning = buildDeterministicStructuredReasoning({
+    message: state.user_input,
+    policyResult: state.policy_result,
+    curatedIntent,
+    contextPacket: state.context_packet
+  });
+  const journeyPlan = planJourneyFromIntent(reasoning);
+  const structuredIntent = {
+    ...curatedIntent,
+    reasoning,
+    primary_intent: reasoning.primary_intent,
+    candidate_journeys: reasoning.candidate_journeys
+  };
   return {
     structured_intent: structuredIntent,
+    journey_decisions: [journeyPlan],
     proof: appendProof(state, "structured_intent_classifier", {
       classifier: structuredIntent.classifier,
       intent: structuredIntent.intent,
       workflow: structuredIntent.workflow,
+      journey: reasoning.primary_intent,
       confidence: structuredIntent.confidence,
       refusalOrEscalationFlag: structuredIntent.refusalOrEscalationFlag,
       missingEvidence: structuredIntent.missingEvidence
@@ -830,6 +877,13 @@ async function llmOrchestrationDecisionNode(state) {
 
 async function workflowRouterNode(state) {
   if (state.policy_result?.urgentEscalationRequired || state.intent === WORKFLOWS.URGENT_HUMAN_HANDOFF) {
+    const structuredIntent =
+      state.structured_intent ??
+      classifyHealthcareIntent({
+        message: state.user_input,
+        policyResult: state.policy_result,
+        contextPacket: state.context_packet
+      });
     const store = activeStores.get(state.session_id);
     const user = userFromContext(state.context_packet) ?? { id: state.user_id };
     const session = sessionFromState(state);
@@ -866,9 +920,27 @@ async function workflowRouterNode(state) {
     }
     return {
       workflow: "human_approval_escalation",
+      structured_intent: structuredIntent,
       workflow_route: route,
       route_reason: "urgent_emergency_handoff_required",
       human_handoff: handoff,
+      evidence_observation: {
+        status: "skipped",
+        reason: "urgent_emergency_handoff_required",
+        actionsTaken: []
+      },
+      llm_orchestration_decision: state.llm_orchestration_decision ?? {
+        mode: "skipped_urgent_emergency_escalation",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: "human_approval_escalation",
+        confidence: 0,
+        rationale: "Urgent or emergency content routes directly to safe handoff before external LLM decisioning.",
+        issues: ["urgent_emergency_escalation"],
+        warnings: []
+      },
       final_response: composeUrgentEscalationResponse(handoff?.handoff),
       should_remember: false,
       memory_summary: `Urgent/emergency human handoff ${handoff?.handoff?.id ?? "not_persisted"} created for session ${state.session_id}.`,
@@ -887,10 +959,30 @@ async function workflowRouterNode(state) {
 
   const refusal = refusalForIntent(state.intent);
   if (refusal) {
+    const structuredIntent =
+      state.structured_intent ??
+      classifyHealthcareIntent({
+        message: state.user_input,
+        policyResult: state.policy_result,
+        contextPacket: state.context_packet
+      });
     return {
       workflow: state.intent,
+      structured_intent: structuredIntent,
       workflow_route: null,
       route_reason: "blocked_by_input_policy",
+      llm_orchestration_decision: state.llm_orchestration_decision ?? {
+        mode: "skipped_policy_refusal",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "Deterministic safety policy blocked the request before external LLM decisioning.",
+        issues: ["deterministic_policy_refusal"],
+        warnings: []
+      },
       final_response: refusal,
       workflow_outcome: "blocked",
       proof: appendProof(state, "workflow_router", { route: state.intent, reason: "blocked_by_input_policy" })
@@ -948,6 +1040,66 @@ async function workflowRouterNode(state) {
   };
 }
 
+async function maybeComposeLiveSourcedAnswer(state, deterministicAnswer) {
+  if (!(state.source_pointers?.length > 0)) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "skipped_no_source_pointers",
+        valid: false
+      },
+      answerClaims: []
+    };
+  }
+  if (state.raw_message?.useLiveModel === false) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "explicitly_disabled_by_request",
+        valid: false
+      },
+      answerClaims: []
+    };
+  }
+  const store = activeStores.get(state.session_id);
+  const user = userFromContext(state.context_packet);
+  try {
+    const composed = await composeSourcedAnswerWithOpenAI({
+      state,
+      deterministicAnswer,
+      store,
+      sessionId: state.session_id,
+      user
+    });
+    if (!composed.valid) {
+      return {
+        finalResponse: deterministicAnswer,
+        sourcedAnswer: composed,
+        answerClaims: []
+      };
+    }
+    return {
+      finalResponse: composed.finalResponse,
+      sourcedAnswer: composed,
+      answerClaims: composed.answer.claims.map((claim) => ({
+        ...claim,
+        composerMode: composed.mode,
+        workflow: state.workflow
+      }))
+    };
+  } catch (error) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "openai_sourced_answer_failed",
+        valid: false,
+        issues: [error.message]
+      },
+      answerClaims: []
+    };
+  }
+}
+
 async function skillResolverNode(state) {
   if (state.final_response) {
     return {
@@ -978,17 +1130,31 @@ async function workflowExecutorNode(state) {
     };
   }
   const envelope = toOpenClawChannelEnvelope(state.context_packet, state.raw_message);
-  const skillArtifact = await loadOpenClawSkillArtifact("insurance_portal_browser");
+  const registry = await loadOpenClawSkillRegistry();
+  const executionSkillKey = state.dynamic_skill_context?.selected?.executionSkillKey ?? "insurance_portal_browser";
+  const skillArtifact = await loadOpenClawSkillArtifact(executionSkillKey);
   const validation = validateOpenClawEnvelopeAgainstSkill(envelope, skillArtifact, {
     workflowKey: state.workflow
   });
   const workerPlan = buildLangGraphOpenClawWorkerPlan(envelope, validation);
+  const boundedTaskProposal = buildOpenClawBoundedTaskProposal({
+    registry,
+    dynamicSkillContext: state.dynamic_skill_context,
+    workflow: state.workflow,
+    task: {
+      action: state.dynamic_skill_context?.requiredOpenClawTasks?.[0] ?? "read_only_observation",
+      goal: state.user_input,
+      description: summarizeRoute(state.workflow_route)
+    }
+  });
   const toolCall = {
     tool: "openclaw_channel_envelope",
     status: "prepared_not_executed",
     workflow: state.workflow,
     approvalPolicy: envelope.approval_policy,
     skillKey: validation.skillKey,
+    routedOpenClawSkills: boundedTaskProposal.routedSkills,
+    selectedExecutor: boundedTaskProposal.selectedExecutor,
     executionMode: validation.executionMode,
     dynamicSkillContext: state.dynamic_skill_context
       ? {
@@ -1004,6 +1170,7 @@ async function workflowExecutorNode(state) {
     openclaw_envelope: envelope,
     openclaw_skill_validation: validation,
     openclaw_worker_plan: workerPlan,
+    openclaw_task_proposal: boundedTaskProposal,
     tool_calls: [toolCall],
     tool_results: [
       {
@@ -1015,6 +1182,7 @@ async function workflowExecutorNode(state) {
         fallbackPath: validation.fallbackPath,
         actionsTaken: [],
         approvalsRequired: validation.approvalsRequired,
+        boundedTaskProposal,
         workerPlan: {
           planId: workerPlan.planId,
           status: workerPlan.status,
@@ -1028,6 +1196,9 @@ async function workflowExecutorNode(state) {
     proof: appendProof(state, "workflow_executor", {
       workflow: state.workflow,
       dynamicSkillSelected: state.dynamic_skill_context?.selected ?? null,
+      openclawRoutedSkillCount: boundedTaskProposal.routedSkills.length,
+      openclawSelectedExecutor: boundedTaskProposal.selectedExecutor?.executorKey ?? null,
+      openclawTaskProposalStatus: boundedTaskProposal.status,
       openclawEnvelopePrepared: true,
       openclawSkillValidated: true,
       openclawSkillValid: validation.valid,
@@ -2312,9 +2483,12 @@ async function composeResponseNode(state) {
   if (
     ["captured_uploaded_document_extraction", "blocked_uploaded_document_extraction"].includes(state.evidence_observation?.status)
   ) {
-    const finalResponse = composeUploadedDocumentResponse(state, routeSummary);
+    const deterministicResponse = composeUploadedDocumentResponse(state, routeSummary);
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: state.source_pointers?.length > 0,
       memory_summary: state.source_pointers?.length
         ? `LangGraph answered from uploaded document extraction for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`
@@ -2329,9 +2503,12 @@ async function composeResponseNode(state) {
     };
   }
   if (state.evidence_observation?.status === "captured_trusted_research_evidence") {
-    const finalResponse = composeTrustedResearchEvidenceResponse(state, routeSummary);
+    const deterministicResponse = composeTrustedResearchEvidenceResponse(state, routeSummary);
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: state.source_pointers?.length > 0,
       memory_summary: `LangGraph answered from reviewed research evidence for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "trusted_research_evidence_event",
@@ -2367,7 +2544,7 @@ async function composeResponseNode(state) {
     portal &&
     state.browser_result
   ) {
-    const finalResponse = composeResponse({
+    const deterministicResponse = composeResponse({
       user,
       portal,
       policyResult: state.policy_result,
@@ -2377,8 +2554,11 @@ async function composeResponseNode(state) {
       sourcePointers: state.source_pointers,
       evidenceObservation: state.evidence_observation
     });
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: true,
       memory_summary: `LangGraph captured read-only evidence for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "evidence_capture_event",
@@ -2390,15 +2570,18 @@ async function composeResponseNode(state) {
     };
   }
   if (state.evidence_observation?.status === "captured_multi_page_scan") {
-    const finalResponse = [
+    const deterministicResponse = [
       `LangGraph routed this request to ${state.workflow} and captured ${state.portal_scan?.pageRows?.length ?? 0} read-only portal page snapshot(s).`,
       `Source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       `The OpenClaw task envelope was prepared, validated as ${state.openclaw_skill_validation?.status ?? "not_validated"}, and not executed in this slice.`,
       "No payer API, external message, credential entry, medical advice, or irreversible portal action was performed.",
       "This answer was composed inside the LangGraph product runtime."
     ].join("\n\n");
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: true,
       memory_summary: `LangGraph captured a read-only portal scan for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "evidence_capture_event",
@@ -2570,6 +2753,10 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
       payload: {
         planId: state.openclaw_worker_plan?.planId ?? null,
         dispatchStatus: state.openclaw_worker_plan?.dispatchStatus ?? null,
+        taskProposalStatus: state.openclaw_task_proposal?.status ?? null,
+        selectedSkill: state.openclaw_task_proposal?.selectedSkill?.skillKey ?? null,
+        selectedExecutor: state.openclaw_task_proposal?.selectedExecutor?.executorKey ?? null,
+        routedSkills: state.openclaw_task_proposal?.routedSkills?.map((skill) => skill.skillKey) ?? [],
         workerJobIds: (state.openclaw_worker_plan?.workerJobs ?? []).map((job) => job.jobId),
         mayCreateSubtasks: state.openclaw_worker_plan?.workerJobs?.[0]?.deterministicControls?.workerMayCreateSubtasks ?? null,
         progressEverySeconds: state.openclaw_worker_plan?.workerJobs?.[0]?.progressProtocol?.reportEverySeconds ?? null
@@ -2643,17 +2830,73 @@ export function createBrainstyLangGraph() {
     .addNode("compose_response", composeResponseNode)
     .addNode("maybe_model", maybeModelNode)
     .addEdge(START, "input_policy")
-    .addEdge("input_policy", "recall_context")
+    .addConditionalEdges("input_policy", routeAfterInputPolicy, {
+      workflow_router: "workflow_router",
+      recall_context: "recall_context"
+    })
     .addEdge("recall_context", "classify_intent")
     .addEdge("classify_intent", "llm_decision")
     .addEdge("llm_decision", "workflow_router")
-    .addEdge("workflow_router", "skill_resolver")
+    .addConditionalEdges("workflow_router", routeAfterWorkflowRouter, {
+      compose_response: "compose_response",
+      skill_resolver: "skill_resolver"
+    })
     .addEdge("skill_resolver", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
-    .addEdge("observe_evidence", "compose_response")
+    .addConditionalEdges("observe_evidence", routeAfterEvidenceObservation, {
+      compose_response: "compose_response"
+    })
     .addEdge("compose_response", "maybe_model")
     .addEdge("maybe_model", END)
     .compile({ checkpointer });
+}
+
+export function routeAfterInputPolicy(state) {
+  if (state.policy_result?.urgentEscalationRequired || state.policy_result?.allowed === false) return "workflow_router";
+  return "recall_context";
+}
+
+export function routeAfterWorkflowRouter(state) {
+  if (state.policy_result?.urgentEscalationRequired || state.policy_result?.allowed === false) return "compose_response";
+  if (refusalForIntent(state.intent)) return "compose_response";
+  if (["urgent_handoff_created", "blocked"].includes(state.workflow_outcome)) return "compose_response";
+  return state.final_response ? "compose_response" : "skill_resolver";
+}
+
+export function routeAfterEvidenceObservation() {
+  return "compose_response";
+}
+
+export function describeBrainstyLangGraphTopology() {
+  return {
+    version: LANGGRAPH_RUNNER_VERSION,
+    conditionalEdges: [
+      {
+        from: "input_policy",
+        cases: ["workflow_router", "recall_context"],
+        proves: ["refusal", "urgent_handoff", "safe_continue"]
+      },
+      {
+        from: "workflow_router",
+        cases: ["compose_response", "skill_resolver"],
+        proves: ["policy_response", "approval_pending", "journey_execution"]
+      },
+      {
+        from: "observe_evidence",
+        cases: ["compose_response"],
+        proves: ["evidence_blocked", "evidence_found", "answer_composition"]
+      }
+    ],
+    linearEdges: [
+      ["recall_context", "classify_intent"],
+      ["classify_intent", "llm_decision"],
+      ["llm_decision", "workflow_router"],
+      ["skill_resolver", "workflow_executor"],
+      ["workflow_executor", "observe_evidence"],
+      ["compose_response", "maybe_model"]
+    ],
+    finalResponseBranchingMechanism: "policy_and_workflow_state_first_with_final_response_backward_compatibility"
+  };
 }
 
 const graph = createBrainstyLangGraph();
@@ -2717,6 +2960,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclaw_envelope: null,
     openclaw_skill_validation: null,
     openclaw_worker_plan: null,
+    openclaw_task_proposal: null,
     openclaw_skill_proposal: null,
     worker_continuation: null,
     human_handoff: null,
@@ -2766,10 +3010,11 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       contextPacketId: context.row.id,
       envelope: state.openclaw_envelope,
       validation: state.openclaw_skill_validation,
-      workerPlan: state.openclaw_worker_plan
+      workerPlan: state.openclaw_worker_plan,
+      taskProposal: state.openclaw_task_proposal
     });
     state.openclaw_skill_proposal = proposal;
-    state.proof = appendProof(state, "openclaw_skill_invocation_proposal", {
+    state.proof = mergeProof(state, "openclaw_skill_invocation_proposal", {
       taskId: proposal.task.id,
       auditEventId: proposal.auditEvent.id,
       executionMode: proposal.executionMode,
@@ -2787,6 +3032,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclawEnvelopePrepared: Boolean(state.openclaw_envelope),
     openclawSkillValidated: Boolean(state.openclaw_skill_validation),
     openclawWorkerPlanPrepared: Boolean(state.openclaw_worker_plan),
+    openclawTaskProposalPrepared: Boolean(state.openclaw_task_proposal),
     openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
     humanHandoffId: state.human_handoff?.handoff?.id ?? null,
     humanHandoffTaskId: state.human_handoff?.handoff?.taskId ?? state.human_handoff?.task?.id ?? null,
@@ -2807,6 +3053,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
         openclawEnvelopePrepared: Boolean(state.openclaw_envelope),
         openclawSkillValidated: Boolean(state.openclaw_skill_validation),
         openclawWorkerPlanPrepared: Boolean(state.openclaw_worker_plan),
+        openclawTaskProposalPrepared: Boolean(state.openclaw_task_proposal),
         openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
         humanHandoff: state.human_handoff?.handoff ?? null,
         modelInvocationMode: state.model_invocation?.mode
@@ -2844,7 +3091,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     localMemoryItems: retainedMemory
   });
   state.product_memory_retain = productMemoryRetain;
-  state.proof = appendProof(state, "product_memory_retain", {
+  state.proof = mergeProof(state, "product_memory_retain", {
     adapter: productMemoryRetain.adapter,
     enabled: productMemoryRetain.enabled,
     retained: productMemoryRetain.retained,
@@ -2857,7 +3104,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       retain: productMemoryRetain
     }
   });
-  state.proof = appendProof(state, "ai2ui_blocks_prepared", {
+  state.proof = mergeProof(state, "ai2ui_blocks_prepared", {
     version: state.ai2ui_blocks[0]?.version ?? null,
     blockCount: state.ai2ui_blocks.length,
     blockTypes: state.ai2ui_blocks.map((block) => block.type)

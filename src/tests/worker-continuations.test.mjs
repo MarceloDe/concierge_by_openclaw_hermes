@@ -72,6 +72,33 @@ test("worker continuation persists async follow-up with task/session/user/scope 
   assert.ok(audit);
 });
 
+test("worker continuation listing binds hostile-looking filters literally", async () => {
+  const store = await createStore();
+  const { user, session, proposal, taskId } = await proposalFixture(store);
+  const created = await createWorkerContinuation(store, {
+    taskId,
+    sessionId: session.id,
+    userId: user.id,
+    correlationId: `${proposal.state.graph_trace_id}' OR 1=1 --`,
+    reason: "Worker needs a longer read-only portal check."
+  });
+
+  const hostileSession = await listWorkerContinuations(store, {
+    sessionId: `${session.id}' OR 1=1 --`,
+    limit: "1 OR 1=1"
+  });
+  const hostileStatus = await listWorkerContinuations(store, {
+    userId: user.id,
+    status: "pending_async_followup' OR 1=1 --"
+  });
+  const valid = await listWorkerContinuations(store, { sessionId: session.id, userId: user.id });
+
+  assert.equal(hostileSession.length, 0);
+  assert.equal(hostileStatus.length, 0);
+  assert.equal(valid.length, 1);
+  assert.equal(valid[0].id, created.continuation.id);
+});
+
 test("worker continuation can request status continuation and then cancel without worker actions", async () => {
   const store = await createStore();
   const { user, session, taskId } = await proposalFixture(store);

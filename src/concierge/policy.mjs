@@ -45,6 +45,8 @@ const PROMPT_INJECTION_PATTERNS = [
 
 const HEALTHCARE_DOMAIN_PATTERNS = [
   /\b(aetna|insurance|payer|portal|eligibility|benefit|coverage|deductible|claim|claims|prior auth|authorization|appeal|denial|eob|member id|plan|copay|coinsurance|out[- ]of[- ]pocket)\b/i,
+  /\b(sbc|summary of benefits|eoc|evidence of coverage|plan document|id card|mri|imaging)\b/i,
+  /\b(cms|icd[- ]?10|cpt|hcpcs|clinical policy|coverage policy|medical policy)\b/i,
   /\b(enroll|session|thread|heartbeat|memory|openclaw|langchain|langgraph|hindsight|browser|chrome|remote debugger)\b/i,
   /\b(doctor|provider|facility|pharmacy|prescription|medical bill|health plan|healthcare|health care)\b/i,
   /\b(they said no|insurance said no|payer said no|fight it|fight this)\b/i

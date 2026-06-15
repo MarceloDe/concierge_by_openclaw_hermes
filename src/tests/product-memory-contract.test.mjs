@@ -1,9 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { SqliteStore } from "../concierge/database.mjs";
+import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildProductMemoryRetainRepairPlan,
   buildSafeProductMemoryEpisode,
+  enqueueProductMemoryRetainReplay,
   getProductMemoryConfig,
+  getProductMemoryReplayQueueSummary,
   isRetryableGraphitiRetainError
 } from "../concierge/productMemory.mjs";
 
@@ -166,4 +173,75 @@ test("product memory retain repair plan distinguishes runtime failures from poli
   assert.equal(policyPlan.retryable, false);
   assert.equal(policyPlan.status, "manual_repair_required");
   assert.match(policyPlan.nextAction, /payload policy/);
+});
+
+test("product memory replay queue durably stores retryable retain failures", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "brainsty-product-memory-queue-"));
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const enrollment = await enrollDefaultMember(store, {
+    name: "Replay Queue User",
+    email: "replay-queue@example.com",
+    payer: "Aetna",
+    portalUrl: "https://www.aetna.com/"
+  });
+  const episode = buildSafeProductMemoryEpisode({
+    user: enrollment.user,
+    session: enrollment.session,
+    state: {
+      context_packet: { user: enrollment.user },
+      workflow: "eligibility_benefits_navigation",
+      workflow_outcome: "evidence_captured",
+      evidence_observation: { status: "captured_visible_page" },
+      source_pointers: [
+        {
+          table: "eligibility_snapshots",
+          id: "snap_queue",
+          summary: "Replay Queue User deductible source pointer"
+        }
+      ],
+      memory_summary: "Replay Queue User captured benefits evidence from eligibility_snapshots/snap_queue."
+    },
+    localMemoryItems: []
+  });
+  const repairPlan = buildProductMemoryRetainRepairPlan("Graphiti bridge failed with exit 1: connection refused", {
+    sourcePointerCount: episode.sourcePointers.length,
+    attempt: 1
+  });
+  const queued = await enqueueProductMemoryRetainReplay(store, {
+    user: enrollment.user,
+    session: enrollment.session,
+    retainPayload: {
+      action: "retain",
+      groupId: "brainstyworkers_test",
+      name: "queued safe retain",
+      episodeBody: episode,
+      source: "json",
+      sourceDescription: "queued safe product memory retain",
+      referenceTime: "2026-06-15T12:00:00.000Z"
+    },
+    episodeBody: episode,
+    error: new Error("Graphiti bridge failed with exit 1: connection refused"),
+    repairPlan
+  });
+
+  assert.equal(queued.status, "queued");
+  assert.equal(queued.sourcePointerCount, 1);
+  const summary = await getProductMemoryReplayQueueSummary(store);
+  assert.equal(summary.pending, 1);
+  assert.equal(summary.available, true);
+  assert.equal(summary.oldestPending.id, queued.id);
+
+  const row = await store.findOne("product_memory_replay_queue", { id: queued.id });
+  assert.equal(row.status, "queued");
+  assert.equal(row.user_id, enrollment.user.id);
+  assert.equal(row.session_id, enrollment.session.id);
+  assert.equal(row.source_pointer_count, 1);
+  assert.doesNotMatch(row.payload_json, /Replay Queue User|replay-queue@example\.com/);
+  assert.match(row.payload_json, /eligibility_snapshots\\?":\\?"snap_queue|eligibility_snapshots/);
+
+  const auditRow = await store.findOne("audit_events", {
+    session_id: enrollment.session.id,
+    event_type: "product_memory_retain_queued_for_replay"
+  });
+  assert.ok(auditRow?.event_hash);
 });

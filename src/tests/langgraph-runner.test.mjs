@@ -93,6 +93,13 @@ test("LangGraph runner routes an insurance request and prepares OpenClaw envelop
   assert.equal(result.state.openclaw_worker_plan.workerJobs[0].deterministicControls.workerMayCreateSubtasks, true);
   assert.equal(result.state.openclaw_worker_plan.workerJobs[0].progressProtocol.reportEverySeconds, 30);
   assert.equal(result.state.openclaw_worker_plan.workerJobs[0].worker.profile, "brainstyworkers");
+  assert.equal(result.state.openclaw_task_proposal.contract, "brainstyworkers.openclaw.bounded_task_proposal.v1");
+  assert.equal(result.state.openclaw_task_proposal.selectedSkill.skillKey, "insurance_portal_browser");
+  assert.equal(result.state.openclaw_task_proposal.selectedExecutor.executorKey, "read_only_browser");
+  assert.equal(result.state.openclaw_task_proposal.openClawMayChooseJourney, false);
+  assert.equal(result.state.openclaw_task_proposal.openClawMayProposeSubtasks, true);
+  assert.equal(result.state.openclaw_task_proposal.openClawMayExecuteWriteActions, false);
+  assert.ok(result.state.openclaw_task_proposal.routedSkills.length >= 3);
   assert.equal(result.state.openclaw_skill_proposal.task.task_type, "openclaw_skill_invocation_proposal");
   assert.equal(result.state.openclaw_skill_proposal.task.status, "pending_approval");
   assert.equal(result.state.model_invocation.mode, "not_requested");

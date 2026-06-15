@@ -1,12 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { getOpenClawRegistrySkill, loadOpenClawSkillRegistry } from "./openclaw/skillRegistry.mjs";
 
 export const OPENCLAW_SKILL_ARTIFACTS_VERSION = "2026-05-26.openclaw-skill-artifacts.v1";
 
 const DEFAULT_SKILL_ROOT = resolve("openclaw/skills");
-const SKILL_PATHS = {
-  insurance_portal_browser: "insurance-portal-browser"
-};
 
 function hasEvery(value, required) {
   return Array.isArray(value) && required.every((item) => value.includes(item));
@@ -137,38 +134,41 @@ export function validateOpenClawSkillArtifact(artifact) {
 }
 
 export async function loadOpenClawSkillArtifact(skillKey = "insurance_portal_browser", options = {}) {
-  const relative = SKILL_PATHS[skillKey];
-  if (!relative) throw new Error(`Unknown OpenClaw skill artifact: ${skillKey}`);
-
   const root = options.root ? resolve(options.root) : DEFAULT_SKILL_ROOT;
-  const skillDir = resolve(root, relative);
-  const manifestPath = resolve(skillDir, "skill.json");
-  const skillPath = resolve(skillDir, "SKILL.md");
-  const [manifestText, skillMd] = await Promise.all([
-    readFile(manifestPath, "utf8"),
-    readFile(skillPath, "utf8")
-  ]);
-  const manifest = JSON.parse(manifestText);
+  const registered = await getOpenClawRegistrySkill(skillKey, { root });
+  if (!registered) throw new Error(`Unknown OpenClaw skill artifact: ${skillKey}`);
+  const manifest = registered.manifest ?? registered.serverManifest;
   const artifact = {
     version: OPENCLAW_SKILL_ARTIFACTS_VERSION,
     skillKey,
-    skillDir,
-    manifestPath,
-    skillPath,
+    skillDir: registered.dir,
+    manifestPath: registered.hasSkillJson ? resolve(registered.dir, "skill.json") : resolve(registered.dir, "skill-server.json"),
+    skillPath: resolve(registered.dir, "SKILL.md"),
     manifest,
-    skillMd
+    skillMd: registered.skillMd,
+    registryValidation: registered.validation
   };
   return {
     ...artifact,
-    validation: validateOpenClawSkillArtifact(artifact)
+    validation:
+      skillKey === "insurance_portal_browser"
+        ? validateOpenClawSkillArtifact(artifact)
+        : {
+            valid: registered.validation.valid,
+            issues: registered.validation.issues,
+            warnings: registered.validation.warnings,
+            checked: {
+              manifest: Boolean(registered.manifest || registered.serverManifest),
+              skillMd: Boolean(registered.skillMd),
+              genericRegistrySkill: true
+            }
+          }
   };
 }
 
 export async function listOpenClawSkillArtifacts(options = {}) {
-  const artifacts = [];
-  for (const skillKey of Object.keys(SKILL_PATHS)) {
-    artifacts.push(await loadOpenClawSkillArtifact(skillKey, options));
-  }
+  const registry = await loadOpenClawSkillRegistry(options);
+  const artifacts = await Promise.all(registry.skills.map((skill) => loadOpenClawSkillArtifact(skill.skillKey, options)));
   return {
     version: OPENCLAW_SKILL_ARTIFACTS_VERSION,
     artifacts

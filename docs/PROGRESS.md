@@ -5903,3 +5903,410 @@ Verification:
 Known risks or gaps:
 - UI now exposes dynamic skill resolution, but the temporary skill content is still sketch-level and should be replaced by citation-closed plan-specific skill packages.
 - The dynamic skill card is proof-oriented. A later UX polish pass should decide how much of it belongs in the ordinary patient view versus an expandable advanced/proof view.
+
+## OpenClaw Node Communication and Skill Verification - 2026-06-13
+
+Status: Implemented guardrail fix and verified locally.
+
+Changed files:
+- `src/concierge/openclawLiveReadiness.mjs`
+- `src/tests/openclaw-live-readiness.test.mjs`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Verified the official OpenClaw CLI is installed and reachable as `OpenClaw 2026.6.5`.
+- Verified the dedicated Brainstyworkers OpenClaw profile configuration resolves to:
+  - profile `brainstyworkers`
+  - state dir `/Users/mfelix/.openclaw-brainstyworkers`
+  - workspace `/Users/mfelix/.openclaw-brainstyworkers/workspace-brainstyworkers`
+  - agent `brainstyworkers-insurance-browser`
+  - browser profile `openclaw`
+  - CDP browser on `http://127.0.0.1:19800`
+- Verified profile readiness checks are true for config, workspace skill, agent, skill, browser automation, OCR local, personal-skill exclusion, browser enabled, and dedicated browser profile.
+- Found and fixed a readiness fail-open bug: an unrelated offsite current tab such as `https://example.com/` was previously classified as ready for read-only approval.
+- The live readiness classifier now requires a known member portal host or member/benefit/coverage/claims-like portal page before read-only approval can proceed.
+- Added a regression test proving unrelated offsite tabs return `portal_page_required` with `readyForReadOnlyObservation=false`.
+
+Verification:
+- `openclaw --version` passed and returned `OpenClaw 2026.6.5 (5181e4f)`.
+- Official OpenClaw readiness probe passed at the profile/browser layer and reported the current tab as `Example Domain` on `https://example.com/`.
+- After the fix, the readiness classifier correctly returned `portal_page_required`, `readyForReadOnlyObservation=false`, and a user action to navigate to a benefits, coverage, eligibility, or claims page.
+- `node --test src/tests/openclaw-live-readiness.test.mjs` passed with 8/8 tests.
+- `node --test src/tests/openclaw-skill-artifacts.test.mjs src/tests/openclaw-skill-invocation.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/openclaw-live-readiness.test.mjs src/tests/openclaw-official-runtime.test.mjs src/tests/dynamic-skill-server.test.mjs src/tests/worker-continuations.test.mjs src/tests/browser-takeover-safety.test.mjs` passed with 42 total tests, 40 passed, 0 failed, and 2 explicit live-gated OpenClaw skips.
+- `npm run build` passed.
+- `npm run test:local` passed after the guardrail fix with 176 total tests, 174 passed, 0 failed, and 2 explicit live-gated OpenClaw skips.
+- `npm run test:live` passed with 1/1 live OpenAI model test and no skipped tests.
+- `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 node --test --test-name-pattern "public payer marketing" src/tests/openclaw-official-runtime.test.mjs` passed with 1/1 live official OpenClaw test and no skipped tests. This exercised the official browser worker path and confirmed public Aetna marketing content fails closed without creating source pointers or healthcare evidence.
+- Post-run official OpenClaw readiness probe reported:
+  - profile/browser ready,
+  - CDP browser running,
+  - current tab `Health Insurance Plans | Aetna` at `https://www.aetna.com/`,
+  - readiness classification `portal_page_required`,
+  - `readyForReadOnlyObservation=false`.
+
+Known risks or gaps:
+- The official OpenClaw profile and browser are running, but the current tab is not an authenticated payer/member portal page. Live authenticated current-tab dispatch remains gated until the user manually opens and authenticates the Aetna/member portal in the dedicated OpenClaw browser profile.
+- The two skipped OpenClaw tests are correctly blocked by explicit preconditions:
+  - set `BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1` after the dedicated gateway is running,
+  - set `BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1` after an authenticated approved member portal tab is open.
+- No mocked OpenClaw dispatch, no mocked LLM call, no credential entry, no payer contact, no external message, no form submission, and no irreversible portal action were used as proof.
+
+## Browser GUI and User Takeover Verification - 2026-06-15
+
+Status: Implemented health fix and verified live remote-browser GUI.
+
+Changed files:
+- `src/server/server.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `docs/PROGRESS.md`
+
+Context confirmation:
+- Repo status was inspected before coding.
+- Cortex project context was loaded for `workerprototype_openclaw`.
+- Cortex returned core project/user protocol only and no recent implementation notes; current repo state remained authoritative.
+- Cortex boundary remains project memory only, not product/user memory.
+
+Implemented:
+- Fixed `/api/health` so Graphiti/FalkorDB downtime is reported as degraded product-memory status instead of crashing the whole health endpoint.
+- Added static UI contract coverage for the standalone remote-browser page and embedded `/mvp` worker-browser panel.
+- Confirmed the remote-browser GUI includes:
+  - live frame stream connection,
+  - start live view action,
+  - takeover request,
+  - explicit user grant,
+  - human-only input relay,
+  - return-control action,
+  - copy stating the assistant never enters credentials.
+
+Live verification:
+- Restarted the local app at `http://127.0.0.1:4173`.
+- `GET /api/health` returned HTTP 200 with `productMemory.status=degraded` while Graphiti/FalkorDB was unavailable on `localhost:6380`.
+- Started the dedicated official OpenClaw browser profile:
+  - `openclaw --profile brainstyworkers browser --browser-profile openclaw start`
+  - result: browser running.
+- Opened a safe non-PHI test page:
+  - `openclaw --profile brainstyworkers browser --browser-profile openclaw open https://example.com`
+- Verified `GET /remote-browser.html` and `GET /remoteBrowser.js` return HTTP 200.
+- Verified `POST /api/runtime/browser/screencast/start` succeeds with:
+  - `status=browser_screencast_started`
+  - `targetUrl=https://example.com/`
+- Verified `GET /api/runtime/browser/frames/stream` emits `browser.frame` events after screencast starts.
+- Verified takeover flow through the same endpoints used by the GUI:
+  - request: `interactive_takeover_pending_approval`
+  - grant: `interactive_takeover_active`
+  - relay test text: `interactive_takeover_input_relayed`
+  - end: `interactive_takeover_ended`
+  - audit-safe aggregate counts only: `{ key: 0, text: 1, mouse: 0, scroll: 0 }`
+- The relay proof used only synthetic text `ui-test-no-secret`; no credential, PHI, payer action, form submission, or external message was sent.
+
+Verification commands:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/browser-takeover-safety.test.mjs src/tests/openclaw-api.test.mjs src/tests/openclaw-live-readiness.test.mjs` passed with 25/25 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 177 total tests, 175 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Known risks or gaps:
+- The GUI is proven against a safe `https://example.com/` OpenClaw browser tab. Authenticated Aetna/member portal source-pointer proof remains gated until the user manually signs in and leaves an approved member portal page open.
+- Product memory is correctly visible as degraded when Graphiti/FalkorDB is down; this does not prove Graphiti/FalkorDB is healthy.
+
+## Next-Level Intelligence Loop Slice 1 - 2026-06-15
+
+Status: Implemented and verified the first broad intelligence/automation slice.
+
+Implemented:
+- Added a multi-journey structured intent contract covering benefits/eligibility, claims/EOB, prior authorization, denial/appeal, provider/network, pharmacy/formulary, document review, cost estimate, urgent handoff, and trusted research.
+- Added LLM/hybrid structured intent reasoning inside the outbound-payload observation path, with strict validation and deterministic safe fallback only for clearly safe unavailable-model cases.
+- Added a source-caged LLM answer composer that receives source pointers, structured facts, and advisory memory, then validates every substantive claim against source pointer IDs before rendering `final_response`.
+- Added LangGraph conditional routing after input policy and workflow routing, plus typed append/merge reducers for accumulating proof, tool calls, source pointers, worker results, runtime events, policy flags, journey decisions, and answer claims.
+- Added an OpenClaw skill registry, executor registry, gateway client, profile readiness module, and worker policy module so multiple skills can be discovered and bounded without editing hardcoded artifact lists.
+- Hardened SQL helper entry points with table/column allowlists and identifier validation. Full replacement of shell-backed sqlite with a bound-parameter Node SQLite adapter remains open.
+- Added a retention sweeper for expired runtime state and memory tombstoning.
+- Added required package scripts for journey, graph topology, OpenClaw skill registry, DB safety, PHI, retention, egress, and live LLM intent/composition/journey tests.
+
+Verification:
+- `npm run build` passed.
+- `npm run test:local` passed with 187 total tests, 185 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- `npm run test:graph:topology` passed.
+- `npm run test:journeys` passed.
+- `npm run test:openclaw:skills` passed.
+- `npm run test:egress` passed.
+- `npm run test:llm:composition` passed with a real OpenAI model call after network approval.
+- `npm run test:llm:intent` passed with real OpenAI model calls after network approval.
+- `npm run test:llm:journeys` passed with real OpenAI model calls after network approval.
+- Local API health returned HTTP 200 at `http://127.0.0.1:4173/api/health` with OpenAI configured and product memory visibly degraded because Graphiti/FalkorDB was unavailable.
+- Static MVP endpoints returned HTTP 200 for `/`, `/mvp`, and `/remote-browser.html`.
+- In-app Browser visual proof loaded `http://127.0.0.1:4173/mvp`, showing the Brainstyworkers Concierge UI, Marcelo Felix local auth fields, live GPT decisioning toggle, workflow controls, upload controls, portal worker controls, and chat input.
+- In-app Browser remote-control proof clicked the `Guided` tab and the screenshot/DOM state confirmed `Guided` became the selected view.
+
+Score decision:
+- This slice passes its local intelligence, live-LLM, OpenClaw registry, API, and GUI proof gates.
+- The full `/goal #general` is not complete yet because Graphiti/FalkorDB product memory is degraded, full better-sqlite3 or production DB migration is not done, remote push is not done, WhatsApp/Telegram/email OpenClaw gateway skills are not implemented, and authenticated Aetna portal proof remains gated by user login state.
+
+Known risks or gaps:
+- Product memory health is observable but not fully available until Graphiti/FalkorDB is running and replay/retain failure handling is broadened.
+- Database safety is improved but still not production-complete because legacy raw SQL and sqlite shell execution remain.
+- PHI-at-rest encryption and full retention acceptance are still partial.
+- LangSmith trace compatibility is prepared only at the architecture/test level, not fully wired as a live trace exporter.
+- OpenClaw skill discovery is generic, but official messaging gateways and native channel skills for WhatsApp, Telegram, and email remain future slices.
+- Authenticated payer/member portal extraction was not performed in this slice; no credential entry, payer contact, form submission, or irreversible portal action was executed.
+
+## Next-Level Intelligence Loop Slice 2 - Product Memory Replay Queue - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Added durable `product_memory_replay_queue` storage for retryable Graphiti/Zep product-memory retain failures.
+- Failed retryable retains now enqueue safe source-pointer retain payloads for later replay instead of relying only on transient repair-plan metadata.
+- Product-memory status now includes replay queue health so degraded memory is visible as actionable backlog.
+- Added `GET /api/product-memory/replay-queue` for local queue inspection.
+- Added `POST /api/product-memory/replay` to replay queued retains through the same observed Graphiti payload path when the product-memory adapter is enabled.
+- Replay attempts write hash-chained audit events for queued, completed, and failed replay states.
+- Policy/manual payload failures remain manual-repair items and are not silently retried as if they were runtime downtime.
+
+Verification:
+- `node --check src/concierge/productMemory.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- Focused product-memory/database tests passed with 7/7 tests.
+- Focused API/product-memory tests passed outside the sandbox after local server binding was allowed: 6 passed, 2 Graphiti-live tests skipped with explicit FalkorDB precondition.
+- `npm run build` passed.
+- `npm run test:local` passed with 189 total tests, 187 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice improves the product-memory score by adding visible degraded-mode backlog and replay mechanics.
+- The full product-memory requirement is still not 100% complete because actual replay into Graphiti/FalkorDB was not live-proven in this run; `npm run test:memory:graphiti` still requires FalkorDB/Graphiti live preconditions.
+
+Known risks or gaps:
+- Full product-memory completion still needs a running Graphiti/FalkorDB service and a replay proof that queued items move to `completed`.
+- The queue stores safe source-pointer retain payloads; it intentionally does not store raw portal text or direct identifiers.
+- Production should eventually move this queue to the production DB/queue backend with transactional leases and worker concurrency controls.
+
+## Next-Level Intelligence Loop Slice 3 - Native SQLite Store And Migration Ledger - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Replaced the store's per-query `sqlite3` CLI shell-out path with a persistent native `node:sqlite` `DatabaseSync` connection.
+- Removed `child_process` usage from `src/concierge/database.mjs`.
+- Added `schema_migrations` as a migration ledger table.
+- Added `DATABASE_ADAPTER_VERSION=2026-06-15.node-sqlite-bound-store.v1`.
+- Changed high-level `insert`, `update`, `findOne`, and `list` helpers to use bound parameters for values while preserving identifier allowlists for table and column names.
+- Added an explicit `transaction(callback)` helper using `BEGIN IMMEDIATE`, `COMMIT`, and `ROLLBACK`.
+- Kept the public async store API stable so existing LangGraph, OpenClaw, memory, audit, research, and UI code paths continue to use the same store object.
+- Updated browser takeover tests to create real user/session rows instead of placeholder IDs; native SQLite now enforces foreign keys consistently.
+
+Verification:
+- `node --check src/concierge/database.mjs` passed.
+- Focused DB/audit/concurrency tests passed with 7/7 tests.
+- `npm run test:db:safety` passed with 3/3 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 191 total tests, 189 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice materially improves the database architecture score by removing shell-backed sqlite execution from the central store and adding bound helper methods plus a migration ledger.
+- The full database production target is still not complete because many legacy raw SQL call sites remain and production deployment still needs a stronger database/queue story such as Postgres or a hardened SQLite lease model.
+
+Known risks or gaps:
+- Raw SQL strings still exist at call sites that use `store.get()` and `store.all()` directly; this slice removes shell execution and hardens high-level helpers but does not rewrite every query to parameter binding.
+- `node:sqlite` is local-process storage; production concurrency still needs database-level leases, transactional worker claims, and deployment-specific durability.
+
+## Next-Level Intelligence Loop Slice 4 - Bound Query Cleanup For Recent Safety Paths - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Migrated product-memory replay queue inspection and due-replay selection to bound query parameters, including bound `LIMIT` values.
+- Migrated the retention sweeper's expiration scans to bound query parameters.
+- Migrated `/api/review/latest` structured extraction lookups to bound query parameters instead of manual quote escaping.
+- Added DB safety coverage proving raw `store.get()` and `store.all()` support bound value parameters for hostile-looking values.
+- Confirmed the touched product-memory, retention, server review, and DB-safety files no longer use manual `replaceAll` SQL quote escaping.
+
+Verification:
+- `node --check src/concierge/productMemory.mjs` passed.
+- `node --check src/concierge/retentionPolicy.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `npm run test:db:safety` passed with 4/4 tests.
+- Focused product-memory API/contract and retention tests passed with 7/7 tests after local server binding was allowed for the API test.
+- `npm run build` passed.
+- `npm run test:local` passed with 192 total tests, 190 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice reduces the raw-SQL risk in recently added memory/retention/API surfaces and makes the migration path explicit for remaining legacy raw SQL callers.
+- The full database production target remains incomplete until the older modules are migrated away from manual SQL interpolation or isolated behind reviewed query helpers.
+
+Known risks or gaps:
+- Older modules such as audit, session, memory harness, research, and operator helpers still contain hand-built SQL. Many values are generated IDs or already escaped, but they remain technical debt against the production-grade database target.
+- Production worker concurrency still needs leases or a production database backend.
+
+## Next-Level Intelligence Loop Slice 5 - Bound Audit Log Queries - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Migrated audit hash lookup, audit-chain verification, and audit log filter queries to bound query parameters.
+- Replaced audit filter string interpolation with a parameterized where-builder for `sessionId`, `eventType`, `eventPrefix`, `since`, `until`, and free-text query.
+- Escaped `LIKE` wildcard characters so user-entered `%` and `_` remain literal in audit log searches unless the code intentionally adds the event-prefix suffix wildcard.
+- Added audit tests for hostile-looking event-prefix and session filters, literal wildcard search behavior, and normal prefix filtering.
+
+Verification:
+- `node --check src/concierge/audit.mjs` passed.
+- Focused audit/DB/browser takeover tests passed with 13/13 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 193 total tests, 191 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice reduces database risk on the audit API, which is a core proof and operator-readiness surface.
+- The full database target remains incomplete until the remaining session, memory harness, research, operator, and worker query modules are either bound or isolated behind reviewed helpers.
+
+Known risks or gaps:
+- Audit writes were already using high-level insert helpers; this slice focused on read/filter/query paths.
+- Remaining raw SQL technical debt should continue module-by-module to avoid a destabilizing all-at-once rewrite.
+
+## Next-Level Intelligence Loop Slice 6 - Bound Session Runtime Queries - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Migrated `resolveManagedSession` latest-session lookup to bound query parameters.
+- Migrated `listManagedSessions` email/user filtering and `LIMIT` to bound query parameters.
+- Removed unused manual SQL quote helper from `sessionContinuity`.
+- Added session-manager tests proving hostile-looking email and user-id filters do not broaden session listing.
+- Added resume-latest regression coverage to preserve LangGraph stateful session behavior.
+- Confirmed `sessionManager`, `sessionContinuity`, and the session-manager tests no longer contain manual `replaceAll` SQL quote escaping.
+
+Verification:
+- `node --check src/concierge/sessionManager.mjs` passed.
+- `node --check src/concierge/sessionContinuity.mjs` passed.
+- Focused session/continuity/DB tests passed with 11/11 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 195 total tests, 193 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice hardens the session runtime path that carries LangGraph state, checkpointing, and user continuity.
+- The full database target remains incomplete because memory harness, research/operator, worker, and some legacy engine paths still contain hand-built SQL.
+
+Known risks or gaps:
+- Session continuity itself mostly used high-level helpers already; this slice primarily removed dead manual-quote code there and hardened session listing/resume queries.
+- Remaining raw SQL migration should continue by subsystem, with memory harness and research/operator paths next.
+
+## Next-Level Intelligence Loop Slice 7 - Bound Memory Harness Queries - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Removed the memory harness manual SQL quote helper.
+- Migrated context-building queries for portal accounts, recent sessions, memory items, open tasks, scheduled jobs, structured source pointers, context packets, outbox, and harness runs to bound query parameters.
+- Migrated memory-retention and follow-up planning lookups to bound parameters, including hostile-looking source IDs and nullable session job matching.
+- Clamped caller-provided query limits before binding them.
+- Added a memory harness regression proving hostile-looking user IDs do not broaden user lookup, hostile-looking claim/source IDs remain literal values, duplicate follow-up planning stays idempotent for those literal values, and cross-user retained memory is not leaked into another user's harness state.
+
+Verification:
+- `node --check src/concierge/memoryHarness.mjs` passed.
+- Focused memory-harness and DB-safety tests passed with 7/7 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 196 total tests, 194 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice hardens the prompt-context and heartbeat harness path that injects session, memory, task, and scheduled-job data into LangGraph/OpenClaw context packets.
+- It improves the database architecture and memory safety scores without changing OpenClaw authority boundaries or model behavior.
+
+Known risks or gaps:
+- Research/operator/worker continuation and some legacy engine query paths still need the same bound-parameter migration.
+- Product-memory production readiness still depends on a real Graphiti/FalkorDB deployment or another approved product-memory adapter with health, replay, and egress enforcement.
+
+## Next-Level Intelligence Loop Slice 8 - Bound Approval And Worker Continuation Queries - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Removed manual SQL quote helpers from the approval-resume and worker-continuation modules.
+- Migrated approval-token lookup to bound query parameters while preserving session/gate-type binding and single-use consumption behavior.
+- Migrated worker latest-event lookup and continuation listing filters to bound query parameters.
+- Added safe limit clamping for continuation listing.
+- Added approval regression coverage proving hostile-looking session IDs are treated literally and cannot consume an approval token from the real session.
+- Added worker continuation regression coverage proving hostile-looking session/status filters do not broaden listing results.
+
+Verification:
+- `node --check src/concierge/approvalResume.mjs` passed.
+- `node --check src/concierge/workerContinuations.mjs` passed.
+- Focused approval/worker-continuation/DB tests passed with 14/14 tests after local test-server binding was allowed for the approval API test.
+- `npm run build` passed.
+- `npm run test:local` passed with 198 total tests, 196 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- This slice strengthens the approval and continuation boundary that protects OpenClaw read-only execution, approval consumption, async worker status, and user/session/task binding.
+- It improves approval/audit scaffolding and database hardening without broadening browser automation or adding new external actions.
+
+Known risks or gaps:
+- Research/operator scheduler/query modules, runtime events, document candidate approval, workflow architecture, and some legacy engine/test query paths still contain raw SQL or manual quote helpers.
+- Production-grade database readiness still needs continued module-by-module binding plus deployment-level concurrency/lease decisions.
+
+## Live LLM Regression Proof After Native SQLite - 2026-06-15
+
+Status: Fixed test precondition and verified with real OpenAI calls.
+
+Implemented:
+- Updated the live LLM sourced-answer composition test to create a real enrolled user/session before composing, so outbound payload observation and audit writes satisfy native SQLite foreign-key enforcement.
+- No model calls were mocked and no deterministic template was counted as live LLM proof.
+
+Verification:
+- Initial live LLM intent and journey runs were blocked by sandbox DNS for `api.openai.com`; rerunning with network approval resolved the precondition.
+- Initial live LLM composition run exposed the real foreign-key setup bug described above; after the fix, it passed.
+- `npm run test:llm:composition` passed with 1/1 live OpenAI model test.
+- `npm run test:llm:intent` passed with 1/1 live OpenAI model test.
+- `npm run test:llm:journeys` passed with 1/1 live OpenAI model test.
+
+Known risks or gaps:
+- These live tests prove the current real-model harness, not Graphiti/FalkorDB health or authenticated OpenClaw portal dispatch.
+- Network access is still an external precondition for live LLM proof in the local sandbox.
+
+## Complemented Plan Cycle - OpenClaw Automation, Sourced Answers, And Hardening - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Added registry-driven OpenClaw bounded task proposal construction using selected insurance, journey, and execution skills.
+- Added executor selection/validation around the selected registry skill and task action.
+- Removed the single-skill assumption from OpenClaw skill-envelope validation while preserving manifest workflow, approval, blocked-action, and required-input checks.
+- Integrated the bounded proposal into the LangGraph workflow executor proof, lifecycle events, and exported state.
+- Made sourced LLM answer composition the preferred evidence-backed path when source pointers exist and live model use is not explicitly disabled.
+- Kept deterministic fallback for no source pointers, missing model key, explicit offline mode, or strict validator failure.
+- Added a conditional evidence-observation route so graph topology proof covers evidence blocked, evidence found, and answer composition before final response.
+- Added retention audit proof for expired sessions, expired worker continuations, and expired memory tombstones.
+- Tuned live intent instructions so urgent health language routes to human handoff without being mislabeled as a prohibited action request.
+
+Verification:
+- `npm run test:openclaw:skills` passed with 11/11 tests.
+- `npm run test:llm:composition` passed with 1/1 live OpenAI model test after network approval.
+- `npm run test:llm:intent` passed with 1/1 live OpenAI model test after network approval.
+- `npm run test:llm:journeys` passed with 1/1 live OpenAI model test after network approval.
+- `npm run test:journeys` passed with 8/8 tests.
+- `npm run test:db:safety` passed with 4/4 tests.
+- `npm run test:phi` passed with 1/1 tests.
+- `npm run test:retention` passed with 1/1 tests.
+- `npm run test:egress` passed with 4/4 tests.
+- `npm run test:graph:topology` passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 200 total tests, 198 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+
+Score decision:
+- Strong browser automation MVP: unchanged by this slice; existing read-only readiness and fail-closed browser tests remain green.
+- PHI process and treatments: improved through retained egress/PHI gates; still not a real treatment or clinical advice system.
+- Strong approval/audit scaffolding: improved through bounded proposal proof and retention audit proof.
+- Strong LLM orchestration: improved; live intent, journey, and sourced composition gates are green.
+- Strong product memory: unchanged in production readiness; Graphiti/FalkorDB deployment remains an external acceptance item.
+- Full multi-journey design: improved through registry-routed insurance, claim journey, and Aetna plan skill proof.
+- Production-grade intelligence architecture: improved through sourced composer preference, validator veto, and topology proof.
+- Local and remote pushed: local verified only; no commit or remote push was requested or performed in this cycle.
+- GUI/OCR/browser proof: not rerun because this cycle changed backend graph, policy, retention, and tests rather than UI/browser controls.
+- API readiness: unchanged except safer graph/runtime proof payloads.
+- Database product-ready architecture: improved through retention proof and earlier bound-parameter work; remaining raw SQL cleanup continues module by module.
+- Data injection for MVP multi-journey test: existing local journey and dynamic-skill tests remain green.
+- LangChain/LangSmith traceability: unchanged.
+- OpenClaw gateway/skills: improved through registry-routed multi-skill bounded proposals.
+- OpenClaw connected to remote browser: unchanged; live authenticated OpenClaw remains gated by external profile/browser state.
+- OpenClaw native skills availability: improved for registry-discovered official skills, still subject to actual installed skill artifacts and executor readiness.
+
+Known risks or gaps:
+- Authenticated remote browser/OCR proof still needs a live signed-in approved portal tab and explicit user approval before read-only worker dispatch.
+- Product memory full score still requires real Graphiti/FalkorDB health, replay, and degraded-mode production proof.
+- Remaining raw SQL sites should continue moving to bound parameters.
+- No external/write action execution was enabled; this remains intentionally blocked until a separate approval contract exists.

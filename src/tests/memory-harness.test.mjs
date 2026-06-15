@@ -106,3 +106,79 @@ test("claim submission event creates approval-gated heartbeat jobs without sendi
   assert.ok(heartbeat.pendingActions.some((action) => action.action === "request_integration_setup"));
   assert.equal(heartbeat.contextPacket.packet.safety.externalMessaging, "requires_explicit_approval_gate");
 });
+
+test("memory harness uses bound parameters for hostile-looking user and source identifiers", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store, {
+    email: "memory-bind-one@example.test",
+    name: "Memory Bind One"
+  });
+  const other = await enrollDefaultMember(store, {
+    email: "memory-bind-two@example.test",
+    name: "Memory Bind Two"
+  });
+  const time = nowIso();
+  await store.insert("memory_items", {
+    id: createId("mem"),
+    user_id: other.user.id,
+    session_id: other.session.id,
+    memory_scope: "semantic",
+    memory_type: "cross_user_secret",
+    content: "OTHER USER SECRET SHOULD NOT APPEAR",
+    metadata_json: "{}",
+    source_table: "manual_fixture",
+    source_id: "other_user",
+    source_url: null,
+    sensitivity: "test_phi",
+    retention_policy: "test_only",
+    adapter_status: "fixture",
+    occurred_at: time,
+    valid_from_at: time,
+    valid_until_at: null,
+    last_verified_at: time,
+    temporal_metadata_json: "{}",
+    confidence: 1,
+    created_at: time,
+    updated_at: time
+  });
+
+  await assert.rejects(
+    () => getMemoryContextForUser(store, { userId: `${user.id}' OR 1=1 --` }),
+    /User not found/
+  );
+
+  const hostileClaimId = "claim_x' OR 1=1 --";
+  const firstPlan = await planTaskFollowups(store, {
+    user,
+    session,
+    eventType: "claim_submitted",
+    payload: {
+      sourceTable: "claim_items",
+      sourceId: hostileClaimId,
+      claimId: hostileClaimId
+    }
+  });
+  const secondPlan = await planTaskFollowups(store, {
+    user,
+    session,
+    eventType: "claim_submitted",
+    payload: {
+      sourceTable: "claim_items",
+      sourceId: hostileClaimId,
+      claimId: hostileClaimId
+    }
+  });
+  const tasks = await store.all("SELECT * FROM agent_tasks WHERE user_id = ? AND source_id = ? ORDER BY created_at ASC;", [
+    user.id,
+    hostileClaimId
+  ]);
+  const state = await listHarnessState(store, { userId: user.id });
+
+  assert.equal(tasks.length, 2);
+  assert.deepEqual(
+    firstPlan.planned.filter((item) => item.type === "task").map((item) => item.id),
+    secondPlan.planned.filter((item) => item.type === "task").map((item) => item.id)
+  );
+  assert.ok(state.tasks.every((task) => task.user_id === user.id));
+  assert.doesNotMatch(JSON.stringify(state), /OTHER USER SECRET SHOULD NOT APPEAR/);
+});

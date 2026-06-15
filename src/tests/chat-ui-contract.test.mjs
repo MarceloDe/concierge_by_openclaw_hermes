@@ -8,6 +8,8 @@ const appCss = await readFile(new URL("../app/styles.css", import.meta.url), "ut
 const mvpHtml = await readFile(new URL("../app/mvp.html", import.meta.url), "utf8");
 const mvpJs = await readFile(new URL("../app/mvp.js", import.meta.url), "utf8");
 const mvpCss = await readFile(new URL("../app/mvp.css", import.meta.url), "utf8");
+const remoteBrowserHtml = await readFile(new URL("../app/remote-browser.html", import.meta.url), "utf8");
+const remoteBrowserJs = await readFile(new URL("../app/remoteBrowser.js", import.meta.url), "utf8");
 
 test("chat MVP surface exposes guided auth, portal readiness, and runtime timeline", () => {
   assert.match(indexHtml, /id="chatJourney"/);
@@ -121,6 +123,25 @@ test("chat MVP exposes async worker continuation controls without worker actions
   assert.match(appJs, /officialOpenClawMultiPage/);
   assert.match(appJs, /Actions taken/);
   assert.match(appJs, /read_only_observation/);
+});
+
+test("remote browser GUI exposes live view and human takeover controls", () => {
+  assert.match(remoteBrowserHtml, /Worker browser — watch &amp; take over/);
+  assert.match(remoteBrowserHtml, /mountRemoteBrowser/);
+  assert.match(remoteBrowserHtml, /The assistant runs the portal read-only and never types your credentials/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/frames\/stream/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/screencast\/start/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/takeover\/request/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/takeover\/grant/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/takeover\/input/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/takeover\/end/);
+  assert.match(remoteBrowserJs, /approvedBy: "user"/);
+  assert.match(remoteBrowserJs, /placeholder="Tap the page, then type here \(password \/ captcha\)"/);
+  assert.match(mvpHtml, /id="workerBrowserPanel"/);
+  assert.match(mvpHtml, /id="remoteBrowserMount"/);
+  assert.match(mvpJs, /mountWorkerBrowser/);
+  assert.match(mvpJs, /maybeHighlightWorkerBrowser/);
+  assert.match(mvpJs, /The portal needs a login, 2FA, or captcha/);
 });
 
 test("chat MVP closes completed worker continuations and suppresses stale portal prompts", () => {

@@ -61,7 +61,14 @@ import {
   runOperatorAssistant
 } from "../concierge/operatorAssistant.mjs";
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
-import { getProductMemoryStatus, probeProductMemory, suppressProductMemoryEpisode } from "../concierge/productMemory.mjs";
+import {
+  getProductMemoryStatus,
+  getProductMemoryReplayQueueSummary,
+  listProductMemoryReplayQueue,
+  probeProductMemory,
+  replayQueuedProductMemoryRetains,
+  suppressProductMemoryEpisode
+} from "../concierge/productMemory.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
   startScreencast,
@@ -137,6 +144,25 @@ function sendSse(res, event) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+async function safeProductMemoryStatus() {
+  try {
+    return {
+      ...(await getProductMemoryStatus({ store })),
+      config: undefined
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      action: "status",
+      adapter: process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER ?? "disabled",
+      enabled: process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER === "graphiti",
+      status: "degraded",
+      error: error.message,
+      replayQueue: await getProductMemoryReplayQueueSummary(store).catch(() => null)
+    };
+  }
+}
+
 async function serveStatic(req, res) {
   const path = new URL(req.url, "http://localhost").pathname;
   const fileName = path === "/" ? "index.html" : path === "/mvp" ? "mvp.html" : path.slice(1);
@@ -162,10 +188,7 @@ async function handleApi(req, res, url) {
         configured: getOpenAiConfig().configured,
         model: getOpenAiConfig().model
       },
-      productMemory: {
-        ...(await getProductMemoryStatus()),
-        config: undefined
-      }
+      productMemory: await safeProductMemoryStatus()
     });
     return;
   }
@@ -795,6 +818,28 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/product-memory/status") {
     sendJson(res, 200, await getProductMemoryStatus({ store }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/product-memory/replay-queue") {
+    sendJson(res, 200, {
+      items: await listProductMemoryReplayQueue(store, {
+        status: url.searchParams.get("status") ?? null,
+        limit: Number(url.searchParams.get("limit") ?? 25)
+      })
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/product-memory/replay") {
+    const body = await readJson(req);
+    sendJson(
+      res,
+      200,
+      await replayQueuedProductMemoryRetains(store, {
+        limit: Number(body.limit ?? 5)
+      })
+    );
     return;
   }
 
@@ -1606,13 +1651,12 @@ async function handleApi(req, res, url) {
       sendJson(res, 404, { error: "No extraction snapshot exists yet." });
       return;
     }
-    const snapshotId = snapshot.id.replaceAll("'", "''");
     sendJson(res, 200, {
       snapshot,
-      coverageBalances: await store.all(`SELECT * FROM coverage_balances WHERE snapshot_id = '${snapshotId}' ORDER BY created_at ASC;`),
-      claims: await store.all(`SELECT * FROM claim_items WHERE snapshot_id = '${snapshotId}' ORDER BY created_at ASC;`),
-      priorAuthorizations: await store.all(`SELECT * FROM prior_authorizations WHERE snapshot_id = '${snapshotId}' ORDER BY created_at ASC;`),
-      extractionReviews: await store.all(`SELECT * FROM extraction_reviews WHERE snapshot_id = '${snapshotId}' ORDER BY created_at ASC;`)
+      coverageBalances: await store.all("SELECT * FROM coverage_balances WHERE snapshot_id = ? ORDER BY created_at ASC;", [snapshot.id]),
+      claims: await store.all("SELECT * FROM claim_items WHERE snapshot_id = ? ORDER BY created_at ASC;", [snapshot.id]),
+      priorAuthorizations: await store.all("SELECT * FROM prior_authorizations WHERE snapshot_id = ? ORDER BY created_at ASC;", [snapshot.id]),
+      extractionReviews: await store.all("SELECT * FROM extraction_reviews WHERE snapshot_id = ? ORDER BY created_at ASC;", [snapshot.id])
     });
     return;
   }

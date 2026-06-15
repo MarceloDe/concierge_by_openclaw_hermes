@@ -13,13 +13,6 @@ export class SessionContinuityError extends Error {
   }
 }
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function parseJson(value, fallback) {
   try {
     return value ? JSON.parse(value) : fallback;

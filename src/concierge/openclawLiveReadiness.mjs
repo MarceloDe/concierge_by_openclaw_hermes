@@ -79,6 +79,10 @@ function looksLikePublicMarketingPage(tab = {}) {
   return PUBLIC_MARKETING_PATH_RE.test(url.pathname);
 }
 
+function looksLikeApprovedPortalTab(tab = {}) {
+  return looksLikeKnownMemberPortalHost(tab) || looksLikeMemberPortal(tab);
+}
+
 function statusDetails(status, tab) {
   if (status === "official_openclaw_profile_not_ready") {
     return {
@@ -131,7 +135,7 @@ export function classifyOfficialOpenClawLiveReadiness(readiness = {}) {
   else if (!browserRunning) status = "official_openclaw_browser_not_running";
   else if (!currentTab?.url) status = "auth_required";
   else if (looksLikeAuthChallenge(currentTab)) status = "auth_or_challenge_required";
-  else if (looksLikePublicMarketingPage(currentTab)) status = "portal_page_required";
+  else if (looksLikePublicMarketingPage(currentTab) || !looksLikeApprovedPortalTab(currentTab)) status = "portal_page_required";
 
   const details = statusDetails(status, currentTab);
   return {

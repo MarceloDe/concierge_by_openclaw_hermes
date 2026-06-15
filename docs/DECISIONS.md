@@ -1663,3 +1663,212 @@ This closes the local MVP E1 proof while preserving the deterministic research c
 
 Cost of changing later:
 Low to medium. A production cron, queue worker, Vercel Cron, systemd/launchd job, or external scheduler can call the same daemon tick contract. High-volume production should move overlap/concurrency guarantees from the in-process guard and shell-out SQLite to Postgres transactions, leases, or a durable queue.
+
+## 2026-06-15 - Put LLM Intelligence Inside A Deterministic Healthcare Harness
+
+Context:
+The consulting loop called for real LLM reasoning and answer composition, but the existing MVP still relied heavily on deterministic route templates and hardcoded OpenClaw skill assumptions. The system needed more intelligence without allowing the model or worker layer to authorize unsafe healthcare actions.
+
+Options considered:
+- Keep deterministic routing and postpone LLM composition.
+- Add direct model calls in graph nodes for speed.
+- Add schema-constrained intent and answer modules behind outbound payload observation, deterministic validators, source-pointer gates, and LangGraph authority.
+
+Decision:
+Slice 1 adds `src/concierge/intelligence/*` for structured intent reasoning, journey planning, and source-caged answer composition. LangGraph keeps deterministic policy authority and conditional routing. OpenClaw gets registry/executor/policy modules so skills are discovered and bounded by capability, approval scope, and blocked actions instead of treated as a single hardcoded browser worker.
+
+Reason:
+This makes the model useful for interpretation and composition while preserving the critical invariants: the LLM cannot authorize unsafe action, cannot invent evidence, cannot bypass payload observation, and cannot turn advisory memory into instructions. LangGraph remains the healthcare journey authority; OpenClaw remains the bounded worker/tool arm.
+
+Cost of changing later:
+Medium. Future work can replace the internal LLM gateway or product memory adapter, but the structured schemas, validators, source-pointer claim cage, and OpenClaw registry contract should remain stable because tests now depend on those safety boundaries.
+
+## 2026-06-15 - Queue Retryable Product-Memory Retain Failures For Replay
+
+Context:
+The architecture requires real temporal product memory through Graphiti/Zep or an equivalent adapter. The runtime already reports Graphiti/FalkorDB degradation, but retryable retain failures could still be lost after being audited. That makes degraded mode visible but not recoverable.
+
+Options considered:
+- Leave retain failures as audit-only repair plans.
+- Treat local SQLite memory as successful product memory when Graphiti is down.
+- Persist safe source-pointer retain payloads in a replay queue and expose queue health through the product-memory API.
+
+Decision:
+Add `product_memory_replay_queue` as a durable fallback for retryable Graphiti retain failures. The queue stores only safe, identifier-masked, source-pointer retain payloads. Status and replay endpoints expose the backlog, and replay uses the same Graphiti bridge plus outbound payload observation path as normal retain.
+
+Reason:
+This preserves the product-memory boundary without pretending degraded Graphiti memory worked. Runtime failures become actionable and replayable; policy failures remain manual-repair items and are not retried automatically.
+
+Cost of changing later:
+Low to medium. A production deployment can move this queue to Postgres, Vercel Queues, Redis, or another durable worker system while keeping the same safe payload contract and replay status semantics.
+
+## 2026-06-15 - Replace Shell-Backed SQLite Store With Native SQLite
+
+Context:
+The consulting plan called out the database layer as a safety/infrastructure gap because the central store shelled out to `sqlite3` for each statement and built SQL strings for high-level helpers. This created hidden failure modes around per-command PRAGMA state, foreign-key enforcement, quoting, and production migration discipline.
+
+Options considered:
+- Keep the CLI-backed store and only add more identifier checks.
+- Install `better-sqlite3`.
+- Use Node's built-in `node:sqlite` runtime and preserve the current async store interface.
+
+Decision:
+Use `node:sqlite` `DatabaseSync` as the local store backend. Keep the public `SqliteStore` methods async for compatibility, but run through a persistent native connection with foreign keys, busy timeout, WAL, bound high-level helpers, explicit transactions, and a `schema_migrations` ledger.
+
+Reason:
+This removes shell execution without adding a dependency or rewriting every runtime module at once. It also makes local tests more production-like: foreign keys are consistently enforced, which caught and fixed placeholder-session browser takeover tests.
+
+Cost of changing later:
+Medium. The store interface can later move to Postgres or a fully parameterized query layer. The next hardening pass should reduce legacy raw `store.get()` and `store.all()` SQL call sites and add lease-based concurrency for production workers.
+
+## 2026-06-15 - Migrate Recent Memory And Retention Queries To Bound Parameters First
+
+Context:
+After the native SQLite migration, the store supports bound parameters, but many legacy modules still pass raw SQL strings to `store.get()` and `store.all()`. Rewriting every query at once would create a large behavioral diff across audit, session, research, memory, and worker subsystems.
+
+Options considered:
+- Leave all raw call sites for a later all-at-once rewrite.
+- Rewrite the entire repo to a new query builder in one pass.
+- Start with recent high-value paths that handle memory replay, retention expiration, and review evidence lookup, then continue module-by-module.
+
+Decision:
+Migrate the recent product-memory replay queue, retention sweeper, and review endpoint queries to bound parameters first. Add DB safety coverage proving raw `store.get()` and `store.all()` can safely bind hostile-looking values.
+
+Reason:
+This keeps the database hardening moving without destabilizing unrelated legacy modules. It also creates a clear pattern for future migrations: preserve the store API, bind every value, and reserve string assembly for reviewed identifiers or static SQL only.
+
+Cost of changing later:
+Low. The remaining raw SQL call sites can be migrated module-by-module using the same parameterized store calls, then eventually folded into stricter query helpers or a production database adapter.
+
+## 2026-06-15 - Parameterize Audit Log Reads Because Audit Is A Proof Surface
+
+Context:
+The audit log API is both an operator surface and a verification surface for approvals, model payloads, worker actions, and safety events. It accepted user-facing filters and still used interpolated SQL even after the store gained native bound-parameter support.
+
+Options considered:
+- Leave audit SQL for a later broad raw-query migration.
+- Replace the audit module with a generic query builder.
+- Parameterize the audit filters in place and add hostile-filter tests.
+
+Decision:
+Parameterize audit hash lookup, chain verification, and list/filter/count/type queries in `src/concierge/audit.mjs`. Escape user-entered `LIKE` wildcards and keep only the intentional event-prefix suffix wildcard.
+
+Reason:
+Audit is too central to leave on manual quote escaping. This change improves security posture without changing the audit event schema or API response shape.
+
+Cost of changing later:
+Low. Future work can move audit reads to stricter query helpers or a production database adapter while preserving the current filter semantics and chain verification contract.
+
+## 2026-06-15 - Parameterize Session Runtime Queries Before Broader Legacy Cleanup
+
+Context:
+LangGraph statefulness depends on session lookup, resume-latest behavior, checkpoints, and session listing. After audit was parameterized, `sessionManager` still had manual SQL quote helpers around user/email filtering.
+
+Options considered:
+- Leave session queries until a full query-builder migration.
+- Rewrite the whole session subsystem.
+- Bind the stateful lookup/listing queries in place while preserving existing session APIs.
+
+Decision:
+Parameterize `resolveManagedSession` latest-session lookup and `listManagedSessions` filters/limit. Remove the unused manual SQL helper from `sessionContinuity`.
+
+Reason:
+This hardens a central runtime path without altering LangGraph thread IDs, checkpoint semantics, session continuity export, or API response shape. It also reduces risk that hostile-looking email/user-id strings could affect session listing behavior.
+
+Cost of changing later:
+Low. The same bound-parameter pattern can be carried into memory harness, worker continuation, research, and operator query modules.
+
+## 2026-06-15 - Parameterize Memory Harness Queries Because Harness Context Becomes Prompt Context
+
+Context:
+The memory harness assembles cross-session context packets for LangGraph and the dedicated OpenClaw arm. It reads memory items, source pointers, tasks, scheduled jobs, outbox proposals, and heartbeat runs. Because this data becomes prompt context and worker context, query broadening or cross-user leakage would be higher impact than an ordinary reporting bug.
+
+Options considered:
+- Leave the harness on manual quote escaping until a full query-builder migration.
+- Rewrite the memory harness around a new persistence abstraction.
+- Parameterize the existing harness queries in place and add hostile-input regression coverage.
+
+Decision:
+Remove the harness-local SQL quote helper and migrate memory-harness reads/deduplication lookups to bound parameters. Keep the existing context packet, heartbeat, and follow-up planning contracts unchanged.
+
+Reason:
+This closes a high-value database safety gap while preserving the already-tested LangGraph/OpenClaw memory injection behavior. The regression explicitly checks hostile-looking user/source identifiers and cross-user memory isolation.
+
+Cost of changing later:
+Low. A future production database adapter can preserve the current query shapes and context packet schema while moving storage to Postgres, a queue-backed worker store, or a stricter typed repository layer.
+
+## 2026-06-15 - Parameterize Approval And Worker Continuation Queries At The Action Boundary
+
+Context:
+The approval-resume and worker-continuation modules enforce single-use approval tokens, user/session/task binding, read-only action scope, and async OpenClaw continuation status. These paths are part of the safety boundary between LangGraph authority and OpenClaw worker execution.
+
+Options considered:
+- Leave manual SQL quote helpers in place until a broad persistence rewrite.
+- Move approval and continuation state to a new repository layer immediately.
+- Parameterize the current queries in place and add hostile-binding regressions.
+
+Decision:
+Remove local SQL quote helpers from `approvalResume` and `workerContinuations`, bind approval-token/session lookups and continuation listing/latest-event queries, and clamp continuation list limits.
+
+Reason:
+This keeps the action boundary stable while reducing query-broadening risk in exactly the code that gates worker execution. The tests now prove hostile-looking session/status values stay literal and do not consume approvals or expose unrelated continuations.
+
+Cost of changing later:
+Low. The same API and state schema can later move into a stricter repository or production database adapter without altering LangGraph/OpenClaw approval semantics.
+
+## 2026-06-15 - Route OpenClaw Through Bounded Registry Proposals Before Worker Execution
+
+Context:
+OpenClaw needs to become a general bounded proposing/solving worker without taking over healthcare journey authority from LangGraph. The implementation already had registry, executor, readiness, gateway, and policy modules, but the graph path still leaned on a single hardcoded browser skill.
+
+Options considered:
+- Keep the insurance browser skill as the only accepted OpenClaw artifact.
+- Let OpenClaw choose journeys and tools directly.
+- Use registry-driven matching to build a bounded task proposal, then keep LangGraph as the workflow authority and approval owner.
+
+Decision:
+OpenClaw now produces a bounded task proposal from the loaded skill registry, dynamic skill context, executor registry, approval state, and readiness state. The proposal can select multiple official skills and an executor, propose subtasks, list required evidence, declare blocked actions, and identify fallbacks, but it cannot choose the healthcare journey or perform write/external actions.
+
+Reason:
+This closes the automation gap without weakening the healthcare safety boundary. Skills can be added through the registry, tests prove insurance portal browser, claim journey, and Aetna plan routing, and executor mismatches or write actions fail closed before worker dispatch.
+
+Cost of changing later:
+Low to moderate. Additional official skills should extend registry metadata and tests rather than editing hardcoded graph modules. A future dispatcher can consume the same proposal contract once explicit approval and action-execution contracts are documented.
+
+## 2026-06-15 - Prefer Sourced LLM Composition When Evidence Exists
+
+Context:
+The project had a strict sourced-answer composer and validator, but the final healthcare answer path still used deterministic text unless the request explicitly asked for a live model. That left evidence-backed answers underusing the LLM composition architecture.
+
+Options considered:
+- Keep deterministic final answers as the default.
+- Always call the model, even without source pointers.
+- Prefer the LLM composer only when source pointers exist and the user has not explicitly disabled live model use, with deterministic fallback for missing credentials or validation failure.
+
+Decision:
+The graph now attempts sourced LLM composition when source pointers are present. The composer still runs through observed OpenAI egress, validates claim/source schema, and falls back deterministically when there are no source pointers, no model key, an explicit `useLiveModel:false`, or validator rejection.
+
+Reason:
+This implements the required `source pointers + structured facts + advisory memory -> LLM sourced composer -> strict validator -> deterministic policy -> final_response` path while preserving local/offline behavior and unsupported-claim vetoes.
+
+Cost of changing later:
+Low. The validator contract and source-pointer schema are stable enough to support more answer types, and the deterministic fallback remains available for offline demos and blocked model calls.
+
+## 2026-06-15 - Treat Retention Sweeper Results As Auditable Acceptance Proof
+
+Context:
+Retention expiration was implemented, but the acceptance gate needed explicit proof that sessions, continuations, and memory expiration actions were recorded for review.
+
+Options considered:
+- Leave retention as silent database mutation.
+- Add a separate reporting table.
+- Emit hash-chained audit events for retention actions while preserving the existing sweeper API.
+
+Decision:
+The retention sweeper now writes audit proof for expired sessions, expired worker continuations, and tombstoned expired memory items.
+
+Reason:
+Retention touches safety, privacy, and product memory. Hash-backed audit events make the cleanup observable without storing raw PHI in the proof surface.
+
+Cost of changing later:
+Low. A production retention job can keep emitting the same audit events while moving scheduling, locking, or purge policy into a dedicated worker.
