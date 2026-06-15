@@ -30,6 +30,9 @@
     "test:facade": "python3 -m unittest project.tests.test_fastapi_facade",
     "smoke:facade": "python3 -m project.api.smoke",
     "graphiti:falkordb": "bash scripts/start-graphiti-falkordb.sh",
+    "docker:config": "docker compose config",
+    "docker:contract": "node scripts/compose-contract.mjs",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {

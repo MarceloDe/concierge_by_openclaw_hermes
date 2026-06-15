@@ -1967,5 +1967,34 @@ Verification loop:
 
 Next cycles:
 - Move the existing static `/mvp` interactions to the PWA route once `/api/v1` reaches parity for approvals, uploads, browser live view, and history.
-- Add Docker compose proof for FastAPI, Node runtime, database, product memory, and sandbox adapter.
+- Add Docker compose proof for FastAPI, Node runtime, database, product memory, and sandbox adapter. Initial connector compose contract is now implemented; full Graphiti-in-container health remains a follow-up.
 - Replace or supplement the local CDP sandbox provider with a hosted remote sandbox/WebRTC provider after provider selection and credentials exist.
+
+## Production Connector Deployment Cycle - 2026-06-15
+
+Goal:
+- Make the server connector stack deployable and testable as separate services without exposing Node internals to remote clients.
+
+Implemented slice:
+- Add a root `compose.yaml` with services for `node-runtime`, `fastapi`, `mobile-pwa`, and `falkordb`.
+- Add `Dockerfile.node`, `Dockerfile.api`, `apps/mobile-next/Dockerfile`, and `.dockerignore`.
+- Keep default public ports at `4173`, `8000`, `3000`, `6380`, and `3001`, with `BRAINSTY_COMPOSE_*` host-port overrides for local smoke tests.
+- Bake the Next.js standalone rewrite to the internal FastAPI service (`http://fastapi:8000`) during the PWA image build.
+- Keep product memory disabled by default in the Node runtime image while wiring FalkorDB service/env for the next Graphiti image-hardening slice.
+- Add `scripts/compose-contract.mjs`, `src/tests/deployment-compose.test.mjs`, and npm scripts `docker:config`, `docker:contract`, and `test:docker:contract`.
+- Extend the dashboard proof endpoint so `/` reports the compose deployment contract and score.
+- Improve the PWA live view so a missing OpenClaw/sandbox frame becomes a clear user-facing blocker instead of a permanent `waiting for frames` state.
+
+Acceptance:
+- `docker compose config` is valid.
+- `docker compose build` succeeds for the three project images.
+- A local compose stack can run with alternate host ports without killing existing dev servers.
+- FastAPI `/api/v1/health` sees `node_runtime_ok=true` through the internal Docker network.
+- The PWA can create a session and task through `/api/v1`.
+- The PWA live view reports the remote-browser/OpenClaw readiness blocker when no sandbox frame is available.
+- The operator dashboard shows `docker_compose_contract=compose_contract_present`.
+
+Remaining follow-up:
+- Install and verify Graphiti/FalkorDB product memory inside the container runtime instead of defaulting to disabled/degraded-safe mode.
+- Add a hosted remote sandbox/WebRTC provider in addition to the local CDP adapter.
+- Add production DB/Postgres and secret-manager profiles.

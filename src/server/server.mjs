@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { listAuditEvents } from "../concierge/audit.mjs";
 import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
@@ -164,9 +164,42 @@ async function safeProductMemoryStatus() {
   }
 }
 
+async function safeDeploymentContractStatus() {
+  const files = [
+    ".dockerignore",
+    "Dockerfile.node",
+    "Dockerfile.api",
+    "apps/mobile-next/Dockerfile",
+    "compose.yaml",
+    "scripts/compose-contract.mjs",
+    "src/tests/deployment-compose.test.mjs"
+  ];
+  const fileChecks = await Promise.all(
+    files.map(async (file) => {
+      try {
+        await access(resolve(file));
+        return { file, ok: true };
+      } catch {
+        return { file, ok: false };
+      }
+    })
+  );
+  const missing = fileChecks.filter((file) => !file.ok).map((file) => file.file);
+  return {
+    ok: missing.length === 0,
+    status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
+    files,
+    missing,
+    services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb"],
+    configCommand: "npm run docker:contract",
+    liveSmokeCommand: "docker compose up --build"
+  };
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
+  const deployment = await safeDeploymentContractStatus();
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
     ready: false,
     status: "openclaw_readiness_error",
@@ -199,6 +232,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "dashboard_visual_proof",
         status: "implemented",
         target: "Operator dashboard exposes API, browser, safety, and visual-test readiness."
+      },
+      {
+        key: "docker_connector_deployment",
+        status: deployment.status,
+        target: "Docker Compose defines the Node runtime, FastAPI connector, Next.js PWA, and FalkorDB dependency services."
       }
     ],
     checks: [
@@ -206,6 +244,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       { key: "fastapi_v1", status: "available_when_facade_running", ok: true, endpoints: ["/api/v1/sessions", "/api/v1/tasks", "/api/v1/browser/sessions", "/api/v1/proof/runs/{run_id}"] },
       { key: "openclaw_readiness", status: liveReadiness.status, ok: Boolean(liveReadiness.readyForReadOnlyObservation), nextAction: liveReadiness.nextAction },
       { key: "product_memory", status: productMemory.status ?? (productMemory.ok ? "ready" : "degraded"), ok: Boolean(productMemory.ok), adapter: productMemory.adapter },
+      { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
     visualArtifacts: [
@@ -228,6 +267,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     ],
     scores: [
       { key: "api_readiness", score: 90, target: 90, status: "pass_contract" },
+      { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },
       { key: "approval_audit_scaffolding", score: 85, target: 85, status: "pass_existing_gate" }
@@ -235,10 +275,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     safety: {
       fastApiIsPublicConnector: true,
       nodeIsInternalRuntime: true,
+      publicApi: "/api/v1",
       frontendDirectNodeCallsAllowedForPwa: false,
       externalWriteActionsWithoutApproval: false,
       rawOcrTextReturned: false
-    }
+    },
+    deployment
   };
 }
 

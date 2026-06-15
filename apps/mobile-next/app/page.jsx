@@ -67,9 +67,13 @@ export default function MobileMvp() {
   const [status, setStatus] = useState("Ready");
   const [error, setError] = useState("");
   const streamAbortRef = useRef(null);
+  const liveTimeoutRef = useRef(null);
 
   useEffect(() => {
-    return () => streamAbortRef.current?.abort();
+    return () => {
+      streamAbortRef.current?.abort();
+      if (liveTimeoutRef.current) clearTimeout(liveTimeoutRef.current);
+    };
   }, []);
 
   async function run(label, action) {
@@ -134,12 +138,18 @@ export default function MobileMvp() {
         provider: "local_cdp"
       });
       setWorker((prev) => ({ ...(prev || {}), browser }));
+      setFrameSrc("");
+      if (!browser?.screencast?.ok && browser?.ocr_caption?.status !== "visual_frame_available") {
+        setLiveStatus(readableBrowserBlocker(browser));
+        return;
+      }
       connectBrowserStream(browser.stream_url, auth.access_token);
     });
   }
 
   async function connectBrowserStream(streamUrl, token) {
     streamAbortRef.current?.abort();
+    if (liveTimeoutRef.current) clearTimeout(liveTimeoutRef.current);
     const controller = new AbortController();
     streamAbortRef.current = controller;
     setLiveStatus("connecting");
@@ -153,6 +163,10 @@ export default function MobileMvp() {
         return;
       }
       setLiveStatus("waiting for frames");
+      liveTimeoutRef.current = setTimeout(() => {
+        setLiveStatus("worker browser unavailable: no visual frame received");
+        controller.abort();
+      }, 4500);
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -167,6 +181,7 @@ export default function MobileMvp() {
           if (parsed.event === "browser.frame" && parsed.data) {
             const frame = JSON.parse(parsed.data);
             if (frame.data) {
+              if (liveTimeoutRef.current) clearTimeout(liveTimeoutRef.current);
               setFrameSrc(`data:${frame.mime || "image/jpeg"};base64,${frame.data}`);
               setLiveStatus("live");
             }
@@ -179,6 +194,13 @@ export default function MobileMvp() {
     } catch (err) {
       if (err.name !== "AbortError") setLiveStatus(`stream error: ${err.message}`);
     }
+  }
+
+  function readableBrowserBlocker(browser) {
+    const readiness = browser?.readiness || {};
+    const statusText = readiness.status || browser?.screencast?.status || "browser_unavailable";
+    const nextAction = readiness.nextAction || "Start the approved remote browser sandbox or dedicated OpenClaw profile, then try Live again.";
+    return `${statusText}: ${nextAction}`;
   }
 
   function parseSseChunk(chunk) {

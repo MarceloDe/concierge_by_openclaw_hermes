@@ -198,6 +198,25 @@ FastAPI facade gate:
 npm run test:facade
 ```
 
+Docker connector contract and local compose smoke:
+
+```bash
+npm run test:docker:contract
+npm run docker:contract
+docker compose up --build
+```
+
+If local ports are already in use, keep the same container topology and override only host bindings:
+
+```bash
+BRAINSTY_COMPOSE_NODE_PORT=4273 \
+BRAINSTY_COMPOSE_API_PORT=8100 \
+BRAINSTY_COMPOSE_MOBILE_PORT=3100 \
+BRAINSTY_COMPOSE_FALKORDB_PORT=6480 \
+BRAINSTY_COMPOSE_FALKORDB_UI_PORT=3101 \
+docker compose up --build
+```
+
 Live OpenClaw tests are environment-gated and should be run only after the dedicated project OpenClaw profile is authenticated and ready:
 
 ```bash
@@ -230,4 +249,3 @@ The MVP is intentionally strict:
 - Healthcare facts need source pointers.
 - Worker execution must be visible in audit/runtime proof.
 - Missing evidence should produce a clear blocker, not a fabricated answer.
-

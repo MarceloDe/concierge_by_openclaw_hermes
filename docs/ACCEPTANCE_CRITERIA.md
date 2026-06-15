@@ -1575,3 +1575,26 @@ Current proof status:
 - Browser proof passed for `/` and `/mvp` on a fresh local server at `http://127.0.0.1:4174`.
 - Browser proof passed for the Next.js PWA at `http://127.0.0.1:3000/` with Session, Ask, Worker, and Live actions; the task completed; the live worker block rendered a `data:image/jpeg` frame; console errors were 0.
 - Latest mobile screenshot: `/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png`.
+
+## Production Connector Docker Acceptance
+
+This slice is acceptable when:
+
+- `compose.yaml` defines separate services for Node runtime, FastAPI connector, Next.js mobile PWA, and FalkorDB.
+- Dockerfiles exist for Node, FastAPI, and the mobile PWA.
+- `.dockerignore` excludes secrets, local databases, build artifacts, `node_modules`, `.next`, `.venv-graphiti`, and local proof artifacts.
+- The Node runtime container binds `HOST=0.0.0.0`, persists app data under `/app/data`, exposes `/api/health`, and includes the deployment proof files used by the dashboard.
+- The FastAPI container talks to Node through `WEFELLA_NODE_RUNTIME_URL=http://node-runtime:4173` and exposes `/api/v1/health`.
+- The mobile PWA container uses the FastAPI service boundary, not Node internals.
+- Host ports can be overridden with `BRAINSTY_COMPOSE_NODE_PORT`, `BRAINSTY_COMPOSE_API_PORT`, `BRAINSTY_COMPOSE_MOBILE_PORT`, `BRAINSTY_COMPOSE_FALKORDB_PORT`, and `BRAINSTY_COMPOSE_FALKORDB_UI_PORT`.
+- `npm run test:docker:contract`, `npm run docker:contract`, `docker compose build`, and a live compose health smoke pass.
+- Visual proof shows the PWA can start a session and task through `/api/v1`, and the Live block shows either a browser frame or a clear remote-browser readiness blocker.
+- The operator dashboard proof panel reports `compose_contract_present` and a passing deployment contract score.
+
+Current proof status:
+
+- Verified on 2026-06-15 with alternate host ports `4273`, `8100`, `3100`, `6480`, and `3101`.
+- Node, FastAPI, and PWA containers reported healthy.
+- FastAPI `/api/v1/health` returned `node_runtime_ok=true`.
+- PWA visual flow passed with Session, Ask, Worker, and Live. Live correctly reported `official_openclaw_profile_not_ready` instead of hanging.
+- Dashboard visual proof reported `docker_compose_contract=compose_contract_present` and `deployment_contract=75 / 75`.

@@ -6390,3 +6390,77 @@ Decision for the next loop:
 - Do not declare full production completion yet.
 - Treat the current local system as a verified server-connector/mobile MVP.
 - Start the next loop at production hardening and deployment proof, not more local UI breadth.
+
+## Production Connector Docker Cycle - 2026-06-15
+
+Status: Implemented and verified with a live local compose smoke.
+
+Implemented:
+- Added `.dockerignore`.
+- Added `Dockerfile.node`, `Dockerfile.api`, and `apps/mobile-next/Dockerfile`.
+- Added root `compose.yaml` with separate `node-runtime`, `fastapi`, `mobile-pwa`, and `falkordb` services.
+- Added host-port overrides for local compose smoke without killing existing servers:
+  - `BRAINSTY_COMPOSE_NODE_PORT`,
+  - `BRAINSTY_COMPOSE_API_PORT`,
+  - `BRAINSTY_COMPOSE_MOBILE_PORT`,
+  - `BRAINSTY_COMPOSE_FALKORDB_PORT`,
+  - `BRAINSTY_COMPOSE_FALKORDB_UI_PORT`.
+- Added `scripts/compose-contract.mjs`, `src/tests/deployment-compose.test.mjs`, and npm scripts:
+  - `docker:config`,
+  - `docker:contract`,
+  - `test:docker:contract`.
+- Extended the Node dashboard proof payload with `docker_compose_contract`, `deployment_contract`, deployment files, services, and score.
+- Fixed the mobile PWA Docker rewrite by baking `BRAINSTY_CONNECTOR_API_BASE=http://fastapi:8000` during the Next build stage.
+- Fixed the Node runtime image so it includes the deployment proof files used by the dashboard.
+- Improved the mobile PWA Live block so a missing OpenClaw/sandbox frame becomes a clear `official_openclaw_profile_not_ready` blocker instead of an indefinite `waiting for frames`.
+
+Verification commands:
+- `node --check scripts/compose-contract.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/server/build-check.mjs` passed.
+- `npm run test:docker:contract` passed with 1/1 test.
+- `node scripts/compose-contract.mjs --static-only` passed.
+- `npm run docker:config` passed.
+- `node scripts/compose-contract.mjs` passed and verified `docker compose config`.
+- `npm run build` passed.
+- `python3 -m compileall -q project` passed.
+- `npm run build` in `apps/mobile-next` passed.
+- `docker compose build` passed for `node-runtime`, `fastapi`, and `mobile-pwa`.
+- `colima start --cpu 2 --memory 4` succeeded.
+- Live compose smoke passed with alternate host ports:
+  - Node: `http://127.0.0.1:4273`,
+  - FastAPI: `http://127.0.0.1:8100`,
+  - PWA: `http://127.0.0.1:3100`,
+  - FalkorDB: `6480`,
+  - FalkorDB UI: `3101`.
+- `docker compose ps` showed Node, FastAPI, and PWA healthy.
+- `GET http://127.0.0.1:8100/api/v1/health` returned `node_runtime_ok=true`.
+- Visual PWA proof passed:
+  - loaded at `http://127.0.0.1:3100/`,
+  - Session button created a session through `/api/v1`,
+  - Ask created a task and reached `approval_pending`,
+  - Worker reported `official_openclaw_profile_not_ready`,
+  - Live showed a clear blocker instead of hanging,
+  - console errors: 0.
+- Visual dashboard proof passed:
+  - loaded at `http://127.0.0.1:4273/`,
+  - Connector proof showed `docker_compose_contract=compose_contract_present`,
+  - deployment score showed `75 / 75`,
+  - console errors: 0.
+
+Visual artifacts:
+- `artifacts/phase11-compose-mobile-pwa-degraded-live-proof.png`
+- `artifacts/phase11-compose-dashboard-proof.png`
+
+Score decision:
+- API readiness: remains passing for the connector API; live compose proves FastAPI-to-Node network health.
+- GUI visual test: passing for the container PWA and container dashboard.
+- Remote browser controls: locally gatewayed, but container proof currently reports `official_openclaw_profile_not_ready`; hosted sandbox/OpenClaw image readiness is still the next dependency.
+- Database product-ready architecture: improved with deployable volumes and service boundaries, but still not production Postgres.
+- Product memory: honest degraded/disabled-safe in compose by default; full Graphiti/FalkorDB in-container proof remains open.
+
+Known risks or gaps:
+- The first Docker Node image does not install or verify Graphiti Python runtime; do not count this as full product-memory production proof.
+- The first compose sandbox path is still local CDP/OpenClaw readiness, not a hosted remote sandbox/WebRTC provider.
+- The compose stack uses local SQLite volumes, not production Postgres/transactional deployment storage.
+- OpenClaw official profile/browser readiness is not available inside the container image yet, so Live correctly shows a blocker rather than a frame.

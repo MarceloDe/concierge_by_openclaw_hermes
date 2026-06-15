@@ -1,0 +1,38 @@
+FROM node:24-bookworm-slim AS deps
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:24-bookworm-slim AS runner
+
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=4173 \
+    BRAINSTY_DB_PATH=/app/data/brainstyworkers.sqlite \
+    BRAINSTY_RESEARCH_ARTIFACT_DIR=/app/data/research-artifacts \
+    BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled
+
+WORKDIR /app
+RUN mkdir -p /app/data && chown -R node:node /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY .dockerignore Dockerfile.node Dockerfile.api compose.yaml ./
+COPY brainstyworkers_ai_concierge_prompt.md README.md ./
+COPY src ./src
+COPY scripts ./scripts
+COPY openclaw ./openclaw
+COPY tools ./tools
+COPY docs ./docs
+COPY project ./project
+COPY apps/mobile-next/Dockerfile ./apps/mobile-next/Dockerfile
+COPY eng.traineddata ./eng.traineddata
+
+USER node
+EXPOSE 4173
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=8 \
+  CMD node -e "fetch('http://127.0.0.1:4173/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["npm", "run", "start"]

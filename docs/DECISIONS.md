@@ -182,6 +182,25 @@ This keeps LangGraph as workflow master while allowing progressively smarter ski
 Cost of changing later:
 Low to medium. Additional generated skills can be added as files. Moving to a database-backed skill registry later will require preserving the `dynamic_skill_context` contract and named mount validation.
 
+## 2026-06-15: First Docker Connector Profile Defaults Product Memory To Disabled-Safe
+
+Context:
+The server connector stack now needs a repeatable Docker topology for the Node runtime, FastAPI facade, Next.js mobile PWA, and memory dependency services. The local product-memory adapter can use Graphiti/FalkorDB, but the current Node runtime image does not yet install the Graphiti Python runtime and OpenAI-backed Graphiti dependencies.
+
+Options considered:
+- Claim full Graphiti/FalkorDB readiness from a compose file only.
+- Build the entire Graphiti Python runtime into the first Node image immediately.
+- Ship a connector compose profile that starts FalkorDB and wires Graphiti environment variables, but defaults the Node product-memory adapter to disabled/degraded-safe until the Graphiti image proof is added.
+
+Decision:
+Use the third option for the first deployment slice. The compose topology includes FalkorDB and Graphiti env wiring, but `BRAINSTY_PRODUCT_MEMORY_ADAPTER` defaults to `disabled`. The dashboard and health proof must say this honestly.
+
+Reason:
+The goal of this slice is remote-app connector deployability, not overstating production memory health. The system remains safe and testable while preserving a clear next step for full Graphiti-in-container proof.
+
+Cost of changing later:
+Low. A follow-up Dockerfile layer or sidecar can install Graphiti dependencies and switch `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` once health, replay, and degraded-mode proof pass in containers.
+
 ## 2026-05-17: Workflow Architecture Registry Before Live LangGraph/OpenClaw
 
 Context:
