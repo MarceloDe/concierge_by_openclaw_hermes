@@ -481,7 +481,12 @@ function mountWorkerBrowser() {
   if (!mount || !panel) return;
   if (state.remoteBrowserSession === state.session.id) return;
   state.remoteBrowser?.destroy?.();
-  state.remoteBrowser = mountRemoteBrowser(mount, { sessionId: state.session.id, userId: state.user?.id ?? null, apiBase: "" });
+  state.remoteBrowser = mountRemoteBrowser(mount, {
+    sessionId: state.session.id,
+    userId: state.user?.id ?? null,
+    apiBase: "",
+    targetUrl: elements.portalUrl.value.trim() || null
+  });
   state.remoteBrowserSession = state.session.id;
   panel.hidden = false;
 }
@@ -1296,11 +1301,22 @@ function renderUploadPanel(upload = state.latestUpload) {
 
 async function uploadDocument() {
   if (!usingFacade()) {
-    throw new Error("Document upload is available through the Wefella FastAPI facade route.");
+    elements.uploadPanel.textContent = "Document upload requires the Wefella FastAPI facade. Start the facade or use the Node route for non-upload MVP testing.";
+    addMessage("system", "Document upload requires the Wefella FastAPI facade. Node / LangGraph runtime remains available for chat and worker testing.");
+    return { ok: false, status: "facade_required" };
+  }
+  const file = elements.documentFile.files?.[0];
+  if (!file) {
+    elements.uploadPanel.textContent = "Choose a document file before running extraction.";
+    addMessage("system", "Choose a document file before running extraction.");
+    return { ok: false, status: "document_file_required" };
   }
   await ensureSession();
-  const file = elements.documentFile.files?.[0];
-  if (!file) throw new Error("Choose a document first.");
+  if (!usingFacade() || !state.facadeAccessToken) {
+    elements.uploadPanel.textContent = "Document upload requires the Wefella FastAPI facade. Start the facade, then try the upload again.";
+    addMessage("system", "Document upload requires the Wefella FastAPI facade. Node / LangGraph runtime remains available for chat and worker testing.");
+    return { ok: false, status: "facade_required" };
+  }
   const contentBase64 = await readFileAsDataUrl(file);
   const payload = await facadeApi("/api/uploads", {
     method: "POST",
@@ -1320,7 +1336,11 @@ async function uploadDocument() {
 }
 
 async function askAboutUploadedDocument() {
-  if (!state.latestUpload?.upload_id) throw new Error("Upload a document first.");
+  if (!state.latestUpload?.upload_id) {
+    elements.uploadPanel.textContent = "Upload and extract a document before asking about it.";
+    addMessage("system", "Upload and extract a document before asking about it.");
+    return { ok: false, status: "uploaded_document_required" };
+  }
   const message = `Please explain the uploaded ${state.latestUpload.filename} and cite the stored extraction source pointer.`;
   elements.message.value = message;
   addMessage("user", message);
@@ -1457,7 +1477,27 @@ async function loadRuntimeEvents() {
 }
 
 async function startSession() {
-  if (usingFacade()) return startFacadeSession();
+  if (usingFacade()) {
+    try {
+      return await startFacadeSession();
+    } catch (error) {
+      if (!isFacadeUnavailableError(error)) throw error;
+      elements.backendRoute.value = "node";
+      state.facadeAccessToken = null;
+      state.latestFacadeTask = null;
+      setFacadeStatus("FastAPI facade unavailable; using same-origin Node / LangGraph runtime.");
+      addMessage("system", `FastAPI facade was unavailable (${error.message}). Continuing with the local Node / LangGraph runtime.`);
+      return startNodeSession();
+    }
+  }
+  return startNodeSession();
+}
+
+function isFacadeUnavailableError(error) {
+  return error?.name === "TypeError" || /Failed to fetch|NetworkError|Load failed|Timed out/i.test(error?.message ?? "");
+}
+
+async function startNodeSession() {
   const enrollment = await api("/api/orchestrator/auth-start", {
     method: "POST",
     body: JSON.stringify(memberPayload())
@@ -1797,6 +1837,14 @@ function renderParity(result = state.parityResult) {
     elements.parityPanel.innerHTML = `<p class="danger-line">${escapeHtml(result.message)}</p>`;
     return;
   }
+  if (result.status === "facade_unavailable") {
+    elements.parityPanel.innerHTML = `
+      <p class="danger-line">FastAPI facade unavailable.</p>
+      <p class="status-text">${escapeHtml(result.message)}</p>
+      ${result.node?.sessionId ? `<p class="status-text">Node direct completed for session ${escapeHtml(result.node.sessionId)}.</p>` : ""}
+    `;
+    return;
+  }
   const fieldRows = result.fields
     .map((field) => `
       <div class="parity-row ${field.matched ? "match" : "mismatch"}">
@@ -1848,6 +1896,18 @@ async function runParityCheck() {
     );
     return state.parityResult;
   } catch (error) {
+    if (isFacadeUnavailableError(error)) {
+      state.parityResult = {
+        status: "facade_unavailable",
+        message: `FastAPI facade was unavailable (${error.message}). Node direct remains available for the MVP.`,
+        node: null,
+        facade: null
+      };
+      setFacadeStatus("FastAPI facade unavailable; use Node / LangGraph runtime for local MVP testing.");
+      renderParity();
+      addMessage("system", state.parityResult.message);
+      return state.parityResult;
+    }
     state.parityResult = { status: "error", message: `Parity check failed: ${error.message}` };
     renderParity();
     throw error;
@@ -1993,7 +2053,7 @@ function renderWorkerStatus(payload) {
 }
 
 async function checkWorker() {
-  const payload = await routeApi("/api/openclaw/official/status", { method: "GET", timeoutMs: 60000 });
+  const payload = await api("/api/openclaw/official/status", { method: "GET", timeoutMs: 60000 });
   renderWorkerStatus(payload);
   addMessage("system", `OpenClaw readiness: ${payload.liveReadiness?.status ?? (payload.ready ? "ready" : "not ready")}.`);
   return payload;
@@ -2015,11 +2075,19 @@ async function markPortalReady() {
 }
 
 async function checkFacade() {
-  const payload = await facadeApi("/api/health", { method: "GET", timeoutMs: 15000 });
-  const status = payload.node_runtime_ok ? "reachable and connected to Node" : "reachable but Node runtime is unavailable";
-  setFacadeStatus(`FastAPI ${payload.version} · ${status}`);
-  addMessage("system", `Wefella facade health: ${status}.`);
-  return payload;
+  try {
+    const payload = await facadeApi("/api/health", { method: "GET", timeoutMs: 15000 });
+    const status = payload.node_runtime_ok ? "reachable and connected to Node" : "reachable but Node runtime is unavailable";
+    setFacadeStatus(`FastAPI ${payload.version} · ${status}`);
+    addMessage("system", `Wefella facade health: ${status}.`);
+    return payload;
+  } catch (error) {
+    if (!isFacadeUnavailableError(error)) throw error;
+    const payload = { ok: false, status: "facade_unavailable", error: error.message };
+    setFacadeStatus("FastAPI facade unavailable; use Node / LangGraph runtime for local MVP testing.");
+    addMessage("system", `Wefella FastAPI facade unavailable (${error.message}). Node / LangGraph runtime remains available.`);
+    return payload;
+  }
 }
 
 function activateFacadeRoute() {

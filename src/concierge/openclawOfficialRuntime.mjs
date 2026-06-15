@@ -746,6 +746,40 @@ export async function resolveActivePageCdpTarget({
   };
 }
 
+export async function openOfficialOpenClawBrowserUrl({
+  config = getOfficialOpenClawConfig(),
+  targetUrl
+} = {}) {
+  if (!targetUrl) return { ok: false, status: "official_openclaw_target_url_missing", error: "targetUrl is required." };
+  try {
+    const parsed = new URL(targetUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { ok: false, status: "official_openclaw_target_url_unsupported", error: "Only http and https URLs can be opened." };
+    }
+  } catch {
+    return { ok: false, status: "official_openclaw_target_url_invalid", error: "targetUrl must be a valid URL." };
+  }
+
+  const start = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "start"], { config });
+  if (!start.ok) {
+    return {
+      ok: false,
+      status: "official_openclaw_browser_start_failed",
+      targetUrl,
+      error: start.error ?? start.stderr,
+      commandResults: { start }
+    };
+  }
+  const opened = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "open", targetUrl], { config });
+  return {
+    ok: opened.ok,
+    status: opened.ok ? "official_openclaw_url_opened" : "official_openclaw_open_url_failed",
+    targetUrl: extractOpenedUrl(opened.stdout, targetUrl),
+    error: opened.ok ? null : opened.error ?? opened.stderr,
+    commandResults: { start, opened }
+  };
+}
+
 async function runLocalOcr({ config, imagePath }) {
   const scriptPath = join(config.ocrSkillPath, "scripts", "ocr.js");
   if (!existsSync(scriptPath)) {

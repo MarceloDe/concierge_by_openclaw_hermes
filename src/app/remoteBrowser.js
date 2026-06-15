@@ -19,7 +19,7 @@ async function postJson(url, body) {
   return res.json().catch(() => ({ ok: false, status: "bad_json" }));
 }
 
-export function mountRemoteBrowser(root, { sessionId, userId = null, apiBase = "" } = {}) {
+export function mountRemoteBrowser(root, { sessionId, userId = null, apiBase = "", targetUrl = null } = {}) {
   if (!root) throw new Error("mountRemoteBrowser requires a root element");
   root.innerHTML = TEMPLATE;
   const el = (sel) => root.querySelector(sel);
@@ -65,8 +65,8 @@ export function mountRemoteBrowser(root, { sessionId, userId = null, apiBase = "
 
   startBtn.addEventListener("click", async () => {
     setStatus("Starting live view…");
-    const result = await postJson(API(apiBase, "/api/runtime/browser/screencast/start"), { sessionId, userId });
-    if (!result.ok) { setStatus(`Could not start live view: ${result.status ?? result.error}`); return; }
+    const result = await postJson(API(apiBase, "/api/runtime/browser/screencast/start"), { sessionId, userId, targetUrl });
+    if (!result.ok) { setStatus(liveViewErrorMessage(result)); return; }
     openFrames();
     setStatus(`Live view of ${result.targetUrl ?? "worker browser"} — read-only.`);
     takeoverBtn.hidden = false;
@@ -148,6 +148,17 @@ export function mountRemoteBrowser(root, { sessionId, userId = null, apiBase = "
       if (state.takeoverId) postJson(API(apiBase, "/api/runtime/browser/takeover/end"), { takeoverId: state.takeoverId, reason: "widget_destroyed" });
     }
   };
+}
+
+function liveViewErrorMessage(result) {
+  const status = result.status ?? result.error ?? "unknown_error";
+  if (status === "official_openclaw_cdp_target_missing") {
+    return "Could not start live view: open the portal in the dedicated OpenClaw browser first, then try again.";
+  }
+  if (status === "official_openclaw_browser_status_failed" || status === "official_openclaw_live_view_open_url_failed") {
+    return "Could not start live view: the dedicated OpenClaw browser is not available. Check Worker, then try again.";
+  }
+  return `Could not start live view: ${status}`;
 }
 
 const TEMPLATE = `

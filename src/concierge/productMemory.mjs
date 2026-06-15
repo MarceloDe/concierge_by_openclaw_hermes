@@ -369,22 +369,38 @@ export async function getProductMemoryStatus({ requireEnabled = false, store = n
     if (requireEnabled) throw new Error("Product memory is disabled. Set BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti.");
     return { ...disabledResult("status"), config, replayQueue };
   }
-  const status = await callGraphitiBridge(
-    { action: "status", groupId: config.groupId },
-    {
-      timeoutMs: 60000,
-      observability: store
-        ? {
-            store,
-            sessionId,
-            payloadType: "graphiti_status",
-            user,
-            policyMode: "product_memory_status_observe_only"
-          }
-        : null
-    }
-  );
-  return { ...status, adapter: "graphiti", enabled: true, config, replayQueue };
+  try {
+    const status = await callGraphitiBridge(
+      { action: "status", groupId: config.groupId },
+      {
+        timeoutMs: 60000,
+        observability: store
+          ? {
+              store,
+              sessionId,
+              payloadType: "graphiti_status",
+              user,
+              policyMode: "product_memory_status_observe_only"
+            }
+          : null
+      }
+    );
+    return { ...status, adapter: "graphiti", enabled: true, config, replayQueue };
+  } catch (error) {
+    if (requireEnabled) throw error;
+    return {
+      ok: false,
+      action: "status",
+      adapter: "graphiti",
+      enabled: true,
+      provider: "zep_graphiti",
+      status: "degraded",
+      error: error.message,
+      errorType: error?.name ?? "Error",
+      config,
+      replayQueue
+    };
+  }
 }
 
 export async function recallProductMemoryForRequest({ store = null, user, session, userInput, contextPacket, limit = 5 }) {

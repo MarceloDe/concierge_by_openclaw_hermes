@@ -20,6 +20,25 @@
           </div>
         </header>
 
+        <section class="review-panel connector-proof-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Connector</p>
+              <h2>Server + Mobile Verification</h2>
+            </div>
+            <div class="review-actions">
+              <span id="connectorProofStatus">Not loaded</span>
+              <button id="loadConnectorProof" type="button">Load Connector Proof</button>
+            </div>
+          </div>
+          <div id="connectorProof" class="connector-proof-grid">
+            <article class="connector-card">
+              <h3>Waiting For Proof</h3>
+              <p>FastAPI /api/v1, remote browser sandbox, Next.js mobile PWA, and visual dashboard gates will appear here.</p>
+            </article>
+          </div>
+        </section>
+
         <section class="member-panel">
           <label>
             Name

@@ -3,6 +3,7 @@
 !.env.example
 .DS_Store
 node_modules/
+.next/
 .venv-graphiti/
 __pycache__/
 *.py[cod]

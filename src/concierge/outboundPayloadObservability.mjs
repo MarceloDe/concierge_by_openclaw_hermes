@@ -17,12 +17,13 @@ function inspectKeys(value, predicate) {
 }
 
 function directIdentifierPatterns(user = {}) {
+  const safeUser = user ?? {};
   const patterns = [
     /\b\d{3}-\d{2}-\d{4}\b/,
     /\b(member|subscriber|subscription)\s*(id|number|#|no\.?)?\s*(?:[:#=-]\s*)?(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,}\b/i
   ];
-  if (user.name) patterns.push(new RegExp(String(user.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
-  if (user.email) patterns.push(new RegExp(String(user.email).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  if (safeUser.name) patterns.push(new RegExp(String(safeUser.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  if (safeUser.email) patterns.push(new RegExp(String(safeUser.email).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   return patterns;
 }
 

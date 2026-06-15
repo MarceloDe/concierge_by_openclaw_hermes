@@ -17,6 +17,9 @@ const orchestrator = document.querySelector("#orchestrator");
 const orchestratorStatus = document.querySelector("#orchestratorStatus");
 const phase4 = document.querySelector("#phase4");
 const phase4Status = document.querySelector("#phase4Status");
+const connectorProof = document.querySelector("#connectorProof");
+const connectorProofStatus = document.querySelector("#connectorProofStatus");
+const loadConnectorProofButton = document.querySelector("#loadConnectorProof");
 const researchStatus = document.querySelector("#researchStatus");
 const researchConsole = document.querySelector("#researchConsole");
 const loadHandoffsButton = document.querySelector("#loadHandoffs");
@@ -902,6 +905,59 @@ function setBusy(button, busyText = "Working...") {
   };
 }
 
+function renderConnectorProof(payload) {
+  if (!connectorProof) return;
+  const goals = payload.goals ?? [];
+  const checks = payload.checks ?? [];
+  const scores = payload.scores ?? [];
+  const visuals = payload.visualArtifacts ?? payload.visual_artifacts ?? [];
+  connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
+  connectorProof.innerHTML = `
+    <article class="connector-card wide">
+      <h3>Cycle State</h3>
+      <dl>
+        <dt>Run</dt>
+        <dd>${escapeHtml(payload.runId ?? payload.run_id ?? "server-connector-next-mobile-mvp")}</dd>
+        <dt>Public API</dt>
+        <dd>${escapeHtml(payload.safety?.publicApi ?? "/api/v1")} · frontend direct Node calls ${escapeHtml(payload.safety?.frontendDirectNodeCallsAllowedForPwa ? "allowed" : "blocked")}</dd>
+        <dt>Browser boundary</dt>
+        <dd>${escapeHtml(payload.safety?.rawOcrTextReturned ? "attention: raw OCR returned" : "raw OCR hidden")} · external writes ${escapeHtml(payload.safety?.externalWriteActionsWithoutApproval ? "attention" : "approval-gated")}</dd>
+      </dl>
+    </article>
+    <article class="connector-card">
+      <h3>Goals</h3>
+      <ol>
+        ${goals.map((goal) => `<li><b>${escapeHtml(goal.key)}</b><span>${escapeHtml(goal.status)} · ${escapeHtml(goal.target)}</span></li>`).join("")}
+      </ol>
+    </article>
+    <article class="connector-card">
+      <h3>Checks</h3>
+      <ol>
+        ${checks.map((check) => `<li><b>${escapeHtml(check.key)}</b><span>${escapeHtml(check.status ?? (check.ok ? "ok" : "attention"))}</span></li>`).join("")}
+      </ol>
+    </article>
+    <article class="connector-card">
+      <h3>Scores</h3>
+      <ol>
+        ${scores.map((score) => `<li><b>${escapeHtml(score.key)}</b><span>${escapeHtml(score.score)} / ${escapeHtml(score.target)} · ${escapeHtml(score.status ?? "")}</span></li>`).join("")}
+      </ol>
+    </article>
+    <article class="connector-card wide">
+      <h3>Visual Gates</h3>
+      <ol>
+        ${visuals.map((artifact) => `<li><b>${escapeHtml(artifact.route)}</b><span>${escapeHtml(artifact.status ?? (artifact.required ? "required" : "optional"))} · ${escapeHtml(artifact.proof)}</span></li>`).join("")}
+      </ol>
+    </article>
+  `;
+}
+
+async function loadConnectorProof() {
+  const payload = await api("/api/proof/runs/server-connector-next-mobile-mvp");
+  renderConnectorProof(payload);
+  trace.textContent = JSON.stringify(payload, null, 2);
+  return payload;
+}
+
 function renderReview(tracePayload) {
   const balances = tracePayload.coverageBalances ?? [];
   const claims = tracePayload.claims ?? [];
@@ -1084,7 +1140,7 @@ function renderHarness(payload) {
 }
 
 function renderProductMemory(payload) {
-  const status = payload.status ?? payload;
+  const status = payload.status && typeof payload.status === "object" ? payload.status : payload;
   const retained = payload.retained ?? {};
   const recalled = payload.recalled ?? {};
   const facts = status.facts ?? recalled.facts ?? [];
@@ -3900,6 +3956,18 @@ document.querySelector("#runFlowCases").addEventListener("click", async () => {
   }
 });
 
+loadConnectorProofButton?.addEventListener("click", async () => {
+  const restore = setBusy(loadConnectorProofButton, "Loading...");
+  try {
+    await loadConnectorProof();
+  } catch (error) {
+    connectorProofStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 sessions.addEventListener("click", async (event) => {
   const sessionId = event.target?.dataset?.useSession;
   if (!sessionId) return;
@@ -3942,6 +4010,9 @@ renderJourneyState();
 renderAnswerPanel();
 renderRuntimeTimeline();
 renderLiveWorkerGuide();
+loadConnectorProof().catch((error) => {
+  if (connectorProofStatus) connectorProofStatus.textContent = error.message;
+});
 hydrateOperatorFromQuery();
 addMessage(
   "assistant",

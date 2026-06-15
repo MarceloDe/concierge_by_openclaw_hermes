@@ -22,12 +22,13 @@
 import { createId, nowIso } from "./database.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { audit, approvalGate } from "./audit.mjs";
-import { getOfficialOpenClawConfig, resolveActivePageCdpTarget } from "./openclawOfficialRuntime.mjs";
+import { getOfficialOpenClawConfig, openOfficialOpenClawBrowserUrl, resolveActivePageCdpTarget } from "./openclawOfficialRuntime.mjs";
 
 export const BROWSER_STREAM_VERSION = "2026-06-11.remote-browser-control.v1";
 
 const DEFAULT_TAKEOVER_TTL_MS = 5 * 60 * 1000; // a takeover window is short by design
 const SCREENCAST_DEFAULTS = { format: "jpeg", quality: 60, maxWidth: 1280, maxHeight: 1280, everyNthFrame: 1 };
+const SCREENCAST_FALLBACK_INTERVAL_MS = 2000;
 const ALLOWED_INPUT_KINDS = new Set(["key", "text", "mouse", "scroll"]);
 const ALLOWED_KEY_TYPES = new Set(["keyDown", "keyUp", "rawKeyDown", "char"]);
 const ALLOWED_MOUSE_TYPES = new Set(["mousePressed", "mouseReleased", "mouseMoved", "mouseWheel"]);
@@ -140,8 +141,14 @@ class CdpSessionClient {
 // ---------------------------------------------------------------------------
 export function subscribeBrowserFrames(streamKey, listener) {
   const session = screencastSessions.get(streamKey);
-  if (session) session.frameListeners.add(listener);
-  else pendingFrameListeners(streamKey).add(listener);
+  if (session) {
+    session.frameListeners.add(listener);
+    if (session.lastFrame) {
+      queueMicrotask(() => listener(session.lastFrame));
+    }
+  } else {
+    pendingFrameListeners(streamKey).add(listener);
+  }
   return () => {
     screencastSessions.get(streamKey)?.frameListeners.delete(listener);
     pendingFrameListeners(streamKey).delete(listener);
@@ -156,6 +163,11 @@ function pendingFrameListeners(streamKey) {
 
 function broadcastFrame(streamKey, frame) {
   const session = screencastSessions.get(streamKey);
+  if (session) {
+    session.lastFrame = frame;
+    session.lastFrameAt = frame.capturedAt ?? nowIso();
+    session.frameSource = frame.source ?? session.frameSource ?? "cdp_screencast";
+  }
   const listeners = new Set([...(session?.frameListeners ?? []), ...pendingFrameListeners(streamKey)]);
   for (const listener of listeners) {
     try {
@@ -163,6 +175,34 @@ function broadcastFrame(streamKey, frame) {
     } catch {
       // diagnostic stream — ignore listener faults
     }
+  }
+}
+
+async function captureScreenshotFallbackFrame({ client, session, streamKey, sessionId, userId, options }) {
+  if (session.fallbackInFlight || client.closed) return;
+  if (session.lastFrameAt && Date.now() - Date.parse(session.lastFrameAt) < SCREENCAST_FALLBACK_INTERVAL_MS) return;
+  session.fallbackInFlight = true;
+  try {
+    const format = options.format ?? SCREENCAST_DEFAULTS.format;
+    const params = { format, captureBeyondViewport: false, fromSurface: true };
+    if (format === "jpeg") params.quality = options.quality ?? SCREENCAST_DEFAULTS.quality;
+    const result = await client.send("Page.captureScreenshot", params);
+    if (!result?.data) return;
+    broadcastFrame(streamKey, {
+      version: BROWSER_STREAM_VERSION,
+      kind: "browser.frame",
+      source: "cdp_screenshot_fallback",
+      sessionId,
+      userId,
+      mime: `image/${format}`,
+      data: result.data,
+      metadata: session.lastMetadata ?? null,
+      capturedAt: nowIso()
+    });
+  } catch (error) {
+    session.lastFallbackError = error.message;
+  } finally {
+    session.fallbackInFlight = false;
   }
 }
 
@@ -181,7 +221,15 @@ export async function startScreencast({
   if (screencastSessions.has(streamKey)) {
     return { ok: true, status: "browser_screencast_already_running", streamKey };
   }
-  const target = await resolveActivePageCdpTarget({ config, targetUrl });
+  let target = await resolveActivePageCdpTarget({ config, targetUrl });
+  let openedTarget = null;
+  if (!target.ok && target.status === "official_openclaw_cdp_target_missing" && targetUrl) {
+    openedTarget = await openOfficialOpenClawBrowserUrl({ config, targetUrl });
+    if (!openedTarget.ok) {
+      return { ok: false, status: "official_openclaw_live_view_open_url_failed", error: openedTarget.error, openedTarget };
+    }
+    target = await resolveActivePageCdpTarget({ config, targetUrl });
+  }
   if (!target.ok) {
     return { ok: false, status: target.status, error: target.error };
   }
@@ -190,6 +238,12 @@ export async function startScreencast({
     client,
     frameListeners: pendingFrameListeners(streamKey),
     lastMetadata: null,
+    lastFrame: null,
+    lastFrameAt: null,
+    frameSource: null,
+    fallbackTimer: null,
+    fallbackInFlight: false,
+    lastFallbackError: null,
     status: "running",
     config,
     targetUrl: target.url,
@@ -204,6 +258,7 @@ export async function startScreencast({
     broadcastFrame(streamKey, {
       version: BROWSER_STREAM_VERSION,
       kind: "browser.frame",
+      source: "cdp_screencast",
       sessionId,
       userId,
       mime: `image/${(options.format ?? SCREENCAST_DEFAULTS.format)}`,
@@ -228,6 +283,10 @@ export async function startScreencast({
     // some targets reject bringToFront; screencast still works if the tab is visible
   }
   await client.send("Page.startScreencast", { ...SCREENCAST_DEFAULTS, ...options });
+  await captureScreenshotFallbackFrame({ client, session, streamKey, sessionId, userId, options });
+  session.fallbackTimer = setInterval(() => {
+    captureScreenshotFallbackFrame({ client, session, streamKey, sessionId, userId, options });
+  }, SCREENCAST_FALLBACK_INTERVAL_MS);
 
   if (store) {
     await publishRuntimeEvent(store, {
@@ -238,7 +297,7 @@ export async function startScreencast({
       payload: { targetUrl: session.targetUrl, streamKey }
     });
   }
-  return { ok: true, status: "browser_screencast_started", streamKey, targetUrl: session.targetUrl };
+  return { ok: true, status: "browser_screencast_started", streamKey, targetUrl: session.targetUrl, openedTarget };
 }
 
 export async function stopScreencast({ store = null, sessionId, userId = null } = {}) {
@@ -250,6 +309,7 @@ export async function stopScreencast({ store = null, sessionId, userId = null } 
   } catch {
     // best effort
   }
+  if (session.fallbackTimer) clearInterval(session.fallbackTimer);
   session.client.close();
   screencastSessions.delete(streamKey);
   if (store) {
@@ -478,6 +538,15 @@ export function describeTakeover(takeoverId) {
 export function screencastStatus(sessionId, userId = null) {
   const session = screencastSessions.get(streamKeyFor(sessionId, userId));
   return session
-    ? { running: true, targetUrl: session.targetUrl, startedAt: session.startedAt, hasMetadata: Boolean(session.lastMetadata) }
+    ? {
+        running: true,
+        targetUrl: session.targetUrl,
+        startedAt: session.startedAt,
+        hasMetadata: Boolean(session.lastMetadata),
+        hasFrame: Boolean(session.lastFrame),
+        lastFrameAt: session.lastFrameAt,
+        frameSource: session.frameSource,
+        lastFallbackError: session.lastFallbackError
+      }
     : { running: false };
 }

@@ -1945,3 +1945,27 @@ See `docs/SLICE_1_PENDING_SPEC.md` for the revised implementation-ready slice.
 - Workflow architecture registry now maps planned user journeys to workflow definitions, required user data, required database pointers, required tools, authoritative sources, OpenClaw skills, route candidates, and journey events before live runtime execution.
 - All new temporal fields use ISO-8601 UTC strings stored as SQLite `TEXT`, compatible with JavaScript `Date.toISOString()`, LangGraph JSON state, and Hindsight-style timestamp payloads.
 - Vercel no longer offers new first-party Vercel Postgres. New Vercel-connected relational storage should use Marketplace Postgres providers such as Neon, Supabase, or Prisma Postgres, with environment variables injected into the project.
+
+## Server Connector + Next Mobile MVP Cycle - 2026-06-15
+
+Goal:
+- Turn the existing local MVP into a server-first connector architecture while preserving the Node/LangGraph/OpenClaw runtime and the `/mvp` compatibility harness.
+
+Implementation slices:
+- Cycle 1 creates FastAPI `/api/v1` as the public remote-app contract for sessions, tasks, task events, approvals, document uploads, OpenClaw readiness, remote browser sessions, browser takeover/input, and proof runs.
+- Cycle 2 scaffolds `apps/mobile-next` as a mobile-first Next.js PWA that only calls `/api/v1` through a connector API client.
+- Cycle 3 introduces a provider-neutral browser sandbox boundary with a local CDP adapter, keeping visual frames, takeover, and input behind FastAPI ownership checks.
+- Cycle 4 expands the existing operator dashboard with a connector verification panel that displays goals, readiness checks, scores, required visual gates, and safety boundaries.
+
+Verification loop:
+- Focused syntax checks for Python, Node server, and dashboard JavaScript.
+- FastAPI facade tests for `/api/v1` session/task/proof/browser/approval contracts.
+- UI contract tests for dashboard proof and Next.js connector-only API usage.
+- `npm run build`.
+- `npm run test:local`.
+- Browser proof on `/`, `/mvp`, the Next.js PWA mobile viewport, the live worker frame block, plus connector proof endpoint proof.
+
+Next cycles:
+- Move the existing static `/mvp` interactions to the PWA route once `/api/v1` reaches parity for approvals, uploads, browser live view, and history.
+- Add Docker compose proof for FastAPI, Node runtime, database, product memory, and sandbox adapter.
+- Replace or supplement the local CDP sandbox provider with a hosted remote sandbox/WebRTC provider after provider selection and credentials exist.

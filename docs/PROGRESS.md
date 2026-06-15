@@ -6310,3 +6310,45 @@ Known risks or gaps:
 - Product memory full score still requires real Graphiti/FalkorDB health, replay, and degraded-mode production proof.
 - Remaining raw SQL sites should continue moving to bound parameters.
 - No external/write action execution was enabled; this remains intentionally blocked until a separate approval contract exists.
+
+## Server Connector + Next Mobile MVP Cycle - 2026-06-15
+
+Status: Implemented and locally verified.
+
+Implemented:
+- Added FastAPI `/api/v1` connector routes for sessions, tasks, task status, task events, approvals, documents, OpenClaw readiness, browser sessions, browser stream, browser input, browser takeover, and proof runs.
+- Added v1 response contracts for task lifecycle status, task proposal, browser session, and proof-run score reporting.
+- Added a provider-neutral browser sandbox boundary with a local CDP adapter that proxies through the existing Node/OpenClaw runtime while preserving bearer-user ownership checks.
+- Added a Next.js mobile PWA scaffold in `apps/mobile-next` with a connector-only API client that rejects non-`/api/v1` paths.
+- Installed and built the Next.js PWA locally, added same-origin `/api/v1` rewrites, and kept browser clients away from direct Node/internal runtime paths.
+- Added task polling, live browser SSE parsing, and a user-facing answer formatter so the PWA shows regular-user results instead of raw operator routing/proof text.
+- Hardened the Node live-browser frame producer with a CDP screenshot fallback and latest-frame replay for late subscribers when native `Page.screencastFrame` events do not arrive.
+- Added a connector verification panel to `/` showing goals, checks, scores, visual gates, and safety boundaries.
+- Kept `/mvp` as the static compatibility harness while the PWA moves toward parity.
+
+Verification:
+- `python3 -m compileall -q project` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 11/11 tests.
+- `npm run test:facade` passed with 34 tests and 2 expected skips.
+- `npm run build` in `apps/mobile-next` passed.
+- `npm audit --audit-level=moderate` in `apps/mobile-next` found 0 vulnerabilities.
+- `npm run build` passed.
+- `npm run test:local` passed with 202 total tests, 200 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Fresh local server proof passed on `http://127.0.0.1:4174`.
+- `GET /api/proof/runs/server-connector-next-mobile-mvp` returned the connector cycle, goals, checks, scores, visual gates, and safety contract.
+- Browser proof for `/` showed the connector verification dashboard with no console errors.
+- Browser proof for `/mvp` showed the static compatibility harness with no console errors.
+- Browser proof for the Next.js PWA at `http://127.0.0.1:3000/` passed at a 390x844 mobile viewport: Session, Ask, Worker, and Live all worked; task status reached `completed`; the answer panel hid raw LangGraph/source-pointer/audit labels; the live worker block rendered a `data:image/jpeg` browser frame; console errors were 0.
+- Direct FastAPI stream proof confirmed `/api/v1/browser/sessions/{browser_session_id}/stream` emits a `browser.frame` event through the v1 connector.
+- Visual screenshots:
+  - `/private/tmp/workerprototype-openclaw-connector-visual/server-connector-dashboard-proof.png`
+  - `/private/tmp/workerprototype-openclaw-connector-visual/server-connector-mvp-compat-proof.png`
+  - `/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png`
+
+Known risks or gaps:
+- The first browser sandbox adapter is local CDP, not a hosted remote sandbox provider.
+- Docker compose proof for FastAPI, Node, database, product memory, and sandbox adapter remains a later cycle.
+- Graphiti/FalkorDB product memory remained degraded on this machine during connector verification and still needs full Docker/remote deployment proof.
+- The live worker frame is visually available, but approval-gated read-only portal evidence still depends on the user keeping an approved authenticated portal page in the dedicated OpenClaw profile.

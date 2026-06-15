@@ -10,6 +10,12 @@ const mvpJs = await readFile(new URL("../app/mvp.js", import.meta.url), "utf8");
 const mvpCss = await readFile(new URL("../app/mvp.css", import.meta.url), "utf8");
 const remoteBrowserHtml = await readFile(new URL("../app/remote-browser.html", import.meta.url), "utf8");
 const remoteBrowserJs = await readFile(new URL("../app/remoteBrowser.js", import.meta.url), "utf8");
+const browserStreamController = await readFile(new URL("../concierge/browserStreamController.mjs", import.meta.url), "utf8");
+const mobilePackageJson = await readFile(new URL("../../apps/mobile-next/package.json", import.meta.url), "utf8");
+const mobileNextConfig = await readFile(new URL("../../apps/mobile-next/next.config.mjs", import.meta.url), "utf8");
+const mobilePage = await readFile(new URL("../../apps/mobile-next/app/page.jsx", import.meta.url), "utf8");
+const mobileApi = await readFile(new URL("../../apps/mobile-next/lib/api.js", import.meta.url), "utf8");
+const mobileCss = await readFile(new URL("../../apps/mobile-next/app/globals.css", import.meta.url), "utf8");
 
 test("chat MVP surface exposes guided auth, portal readiness, and runtime timeline", () => {
   assert.match(indexHtml, /id="chatJourney"/);
@@ -140,6 +146,7 @@ test("remote browser GUI exposes live view and human takeover controls", () => {
   assert.match(mvpHtml, /id="workerBrowserPanel"/);
   assert.match(mvpHtml, /id="remoteBrowserMount"/);
   assert.match(mvpJs, /mountWorkerBrowser/);
+  assert.match(mvpJs, /targetUrl: elements\.portalUrl\.value\.trim\(\) \|\| null/);
   assert.match(mvpJs, /maybeHighlightWorkerBrowser/);
   assert.match(mvpJs, /The portal needs a login, 2FA, or captcha/);
 });
@@ -293,6 +300,45 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appCss, /research-artifact-list/);
 });
 
+test("server connector dashboard and Next mobile PWA expose only the v1 connector contract", () => {
+  assert.match(indexHtml, /Server \+ Mobile Verification/);
+  assert.match(indexHtml, /id="connectorProofStatus"/);
+  assert.match(indexHtml, /id="loadConnectorProof"/);
+  assert.match(indexHtml, /id="connectorProof"/);
+  assert.match(appJs, /loadConnectorProof/);
+  assert.match(appJs, /\/api\/proof\/runs\/server-connector-next-mobile-mvp/);
+  assert.match(appJs, /renderConnectorProof/);
+  assert.match(appCss, /connector-proof-grid/);
+  assert.match(appCss, /connector-card/);
+  assert.match(mobilePackageJson, /"next"/);
+  assert.match(mobileNextConfig, /BRAINSTY_CONNECTOR_API_BASE/);
+  assert.match(mobileNextConfig, /outputFileTracingRoot/);
+  assert.match(mobilePage, /Brainstyworkers/);
+  assert.match(mobilePage, /createBrowserSession/);
+  assert.match(mobilePage, /TASK_FINAL_STATES/);
+  assert.match(mobilePage, /userFacingAnswer/);
+  assert.match(mobilePage, /Benefits answer ready/);
+  assert.match(mobilePage, /connectBrowserStream/);
+  assert.match(mobilePage, /parseSseChunk/);
+  assert.match(mobilePage, /Live worker browser frame/);
+  assert.match(mobilePage, /\/api\/v1 only/);
+  assert.match(mobileApi, /Mobile client may only call \/api\/v1 endpoints/);
+  assert.match(mobileApi, /NEXT_PUBLIC_BRAINSTY_CLIENT_API_BASE/);
+  assert.match(mobileApi, /\/api\/v1\/sessions/);
+  assert.match(mobileApi, /\/api\/v1\/tasks/);
+  assert.match(mobileApi, /\/api\/v1\/openclaw\/readiness/);
+  assert.match(mobileApi, /\/api\/v1\/browser\/sessions/);
+  assert.doesNotMatch(mobileApi, /\/api\/chat/);
+  assert.doesNotMatch(mobileApi, /\/api\/runtime\/browser/);
+  assert.match(mobileCss, /mobile-shell/);
+  assert.match(mobileCss, /step-strip/);
+  assert.match(mobileCss, /answer-copy/);
+  assert.match(mobileCss, /live-stage/);
+  assert.match(browserStreamController, /captureScreenshotFallbackFrame/);
+  assert.match(browserStreamController, /cdp_screenshot_fallback/);
+  assert.match(browserStreamController, /lastFrame/);
+});
+
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {
   assert.match(indexHtml, /href="\/mvp"/);
   assert.match(mvpHtml, /Brainstyworkers Concierge MVP/);
@@ -339,6 +385,10 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpJs, /\/api\/orchestrator\/auth-start/);
   assert.match(mvpJs, /\/api\/chat/);
   assert.match(mvpJs, /\/api\/auth\/local-session/);
+  assert.match(mvpJs, /isFacadeUnavailableError/);
+  assert.match(mvpJs, /FastAPI facade unavailable; using same-origin Node \/ LangGraph runtime/);
+  assert.match(mvpJs, /facade_unavailable/);
+  assert.match(mvpJs, /FastAPI facade unavailable; use Node \/ LangGraph runtime for local MVP testing/);
   assert.match(mvpJs, /\/api\/chat\/stream/);
   assert.match(mvpJs, /facadeChatPayload/);
   assert.match(mvpJs, /streamFacadeTask/);
@@ -361,6 +411,9 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpJs, /\/api\/sessions\/\$\{encodeURIComponent\(state\.session\.id\)\}/);
   assert.match(mvpJs, /\/api\/feedback/);
   assert.match(mvpJs, /\/api\/handoffs/);
+  assert.match(mvpJs, /api\("\/api\/openclaw\/official\/status"/);
+  assert.match(remoteBrowserJs, /\/api\/runtime\/browser\/screencast\/start/);
+  assert.match(remoteBrowserJs, /targetUrl/);
   assert.match(mvpJs, /humanHandoff/);
   assert.match(mvpJs, /Human Handoff/);
   assert.match(mvpJs, /loadSessionHistory/);
@@ -372,6 +425,9 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpJs, /askAboutUploadedDocument/);
   assert.match(mvpJs, /uploaded_document_ids/);
   assert.match(mvpJs, /uploadedDocumentIds/);
+  assert.match(mvpJs, /facade_required/);
+  assert.match(mvpJs, /document_file_required/);
+  assert.match(mvpJs, /uploaded_document_required/);
   assert.match(mvpJs, /readFileAsDataUrl/);
   assert.match(mvpJs, /safe_text_preview/);
   assert.match(mvpJs, /\/api\/openclaw\/official\/status/);

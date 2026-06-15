@@ -1549,3 +1549,29 @@ Each slice must leave reproducible proof:
 - Browser screenshot, API response, or local trace when relevant.
 - Known risks and gaps.
 - Exact local instructions for trying the slice.
+
+## Server Connector + Next Mobile MVP Acceptance
+
+This cycle is acceptable when:
+
+- FastAPI exposes `/api/v1/sessions`, `/api/v1/tasks`, `/api/v1/tasks/{task_id}`, `/api/v1/tasks/{task_id}/events`, `/api/v1/tasks/{task_id}/approvals`, `/api/v1/documents`, `/api/v1/openclaw/readiness`, `/api/v1/browser/sessions`, `/api/v1/browser/sessions/{browser_session_id}/stream`, `/api/v1/browser/sessions/{browser_session_id}/input`, `/api/v1/browser/sessions/{browser_session_id}/takeover`, and `/api/v1/proof/runs/{run_id}`.
+- The v1 connector normalizes task status into `queued`, `running`, `approval_pending`, `evidence_blocked`, `completed`, `refused`, or `failed`.
+- The v1 task status returns connector-safe answer, proposal, source pointer, AI2UI block, event, and error fields.
+- Browser session creation goes through a sandbox provider contract and stores user/session ownership before streaming or input relay.
+- Browser takeover/input remains human-approved and cannot be used across bearer-token users.
+- The Next.js mobile app scaffold calls only `/api/v1` endpoints and contains no direct Node `/api/chat`, `/api/runtime/browser`, database, OpenClaw, or memory calls.
+- The operator dashboard renders connector goals, checks, scores, visual gates, and safety boundaries.
+- Visual success requires screenshots for `/`, `/mvp`, and the mobile PWA, including proof that the PWA live worker block renders a browser frame through `/api/v1`.
+
+Current proof status:
+
+- Syntax checks passed for `project`, `src/server/server.mjs`, and `src/app/app.js`.
+- UI contract tests passed for the dashboard connector panel and Next.js connector-only client.
+- FastAPI facade tests passed with v1 session/task/proof/browser/approval coverage.
+- `npm run build` in `apps/mobile-next` passed.
+- `npm audit --audit-level=moderate` in `apps/mobile-next` found 0 vulnerabilities.
+- `npm run build` passed.
+- `npm run test:local` passed with 202 total tests, 200 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Browser proof passed for `/` and `/mvp` on a fresh local server at `http://127.0.0.1:4174`.
+- Browser proof passed for the Next.js PWA at `http://127.0.0.1:3000/` with Session, Ask, Worker, and Live actions; the task completed; the live worker block rendered a `data:image/jpeg` frame; console errors were 0.
+- Latest mobile screenshot: `/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png`.

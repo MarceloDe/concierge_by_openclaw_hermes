@@ -1872,3 +1872,60 @@ Retention touches safety, privacy, and product memory. Hash-backed audit events 
 
 Cost of changing later:
 Low. A production retention job can keep emitting the same audit events while moving scheduling, locking, or purge policy into a dedicated worker.
+
+## 2026-06-15 - Make FastAPI /api/v1 The Public Connector For Remote Apps
+
+Context:
+The prototype had a strong Node/LangGraph/OpenClaw runtime and a static `/mvp` UI, but remote/mobile apps needed a stable server-only contract that does not expose Node internals, database access, product memory, or raw OpenClaw runtime endpoints.
+
+Options considered:
+- Expose the Node server directly to remote apps.
+- Put a Next.js API backend-for-frontend in front of Node and FastAPI.
+- Promote the existing FastAPI facade into the versioned public connector while leaving Node as the internal orchestration runtime.
+
+Decision:
+Add FastAPI `/api/v1` session, task, document, approval, OpenClaw readiness, browser sandbox, and proof-run routes. Keep Node as the internal LangGraph/OpenClaw runtime and keep existing `/api` routes as compatibility aliases.
+
+Reason:
+FastAPI already owns auth, rate limits, uploads, task registry, source-grounding policy, and connector-safe response models. Using it as the public API gives mobile and future remote apps a stable integration surface without weakening the existing healthcare workflow safety boundary.
+
+Cost of changing later:
+Moderate. A future backend-for-frontend can still call `/api/v1`, but remote clients should not be migrated to direct Node endpoints.
+
+## 2026-06-15 - Introduce A Browser Sandbox Provider Boundary Before Hosted Sandbox Integration
+
+Context:
+The MVP needs a remote-user live worker browser block, but a hosted sandbox provider has not been selected or credentialed. The current local OpenClaw/CDP path already supports read-only frames, readiness, takeover, and input relay.
+
+Options considered:
+- Keep the browser UI wired directly to Node runtime endpoints.
+- Integrate a hosted sandbox immediately.
+- Define the sandbox provider interface now and implement a local CDP adapter first.
+
+Decision:
+Add a provider-neutral FastAPI browser sandbox boundary with a local CDP adapter. Remote clients create browser sessions through `/api/v1/browser/sessions` and then stream/take over/input through v1 browser routes.
+
+Reason:
+This lets the mobile/PWA architecture behave like a remote sandbox while preserving approval gates and current local proof. A hosted provider can replace the adapter later without changing the public API or mobile app.
+
+Cost of changing later:
+Low to moderate. The stream transport may evolve from SSE frames to WebRTC, but ownership checks, takeover states, and safety contract should remain stable.
+
+## 2026-06-15 - Use CDP Screenshot Fallback For Live Worker Frames
+
+Context:
+The FastAPI `/api/v1/browser/sessions/{id}/stream` route could open the Node live-frame SSE stream, and `Page.startScreencast` returned success, but the local Chromium/CDP runtime did not consistently emit `Page.screencastFrame` events. That left the mobile live-worker block stuck on "waiting for frames" even though the browser session existed.
+
+Options considered:
+- Treat missing native screencast frames as a hard browser failure.
+- Move immediately to a hosted sandbox/WebRTC provider.
+- Keep the SSE frame contract and publish periodic in-memory `Page.captureScreenshot` frames whenever native screencast frames are not arriving.
+
+Decision:
+Keep the provider-neutral `/api/v1` browser stream contract and add a Node-side CDP screenshot fallback. The fallback publishes `browser.frame` events through the same in-memory pub/sub, stores no screenshots in the database, and replays the latest in-memory frame to late subscribers.
+
+Reason:
+This makes the regular-user live block visually reliable today while preserving the PHI boundary: frames are transient, not persisted, and all input/takeover paths remain approval-gated. A later hosted sandbox can replace the local CDP adapter without changing the public API or PWA client.
+
+Cost of changing later:
+Low. The frame payload already carries source metadata, so a future WebRTC or hosted streaming provider can replace `cdp_screenshot_fallback` while keeping the API ownership checks and visual proof contract.

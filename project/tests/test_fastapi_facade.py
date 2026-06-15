@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import json
 import os
 import tempfile
@@ -34,6 +35,16 @@ class FakeNodeRuntimeClient:
         self.get_calls.append((path, params or {}))
         if path == "/api/openclaw/official/status":
             return {"ready": True, "liveReadiness": {"status": "ready_for_read_only_approval"}}
+        if path == "/api/runtime/browser/screencast/status":
+            return {
+                "ok": True,
+                "sessionId": (params or {}).get("sessionId"),
+                "userId": (params or {}).get("userId"),
+                "running": True,
+                "hasFrame": True,
+                "lastFrameAt": "2026-06-15T19:30:00Z",
+                "frameSource": "cdp_screenshot_fallback"
+            }
         if path == "/api/runtime/events":
             return {"events": [{"eventType": "facade.proxy.checked", "userId": (params or {}).get("userId")}]}
         if path == "/api/worker-continuations":
@@ -337,6 +348,55 @@ class FakeNodeRuntimeClient:
                 "execute_evidence_observation": body.get("executeEvidenceObservation"),
                 "use_official_openclaw_worker": body.get("useOfficialOpenClawWorker")
             })())
+        if path == "/api/orchestrator/approve":
+            return {
+                "ok": True,
+                "userId": body.get("userId"),
+                "status": "approved",
+                "approvalToken": "approval_token_v1",
+                "approval": {
+                    "taskId": body.get("approvalTaskId") or body.get("taskId"),
+                    "approvalScope": body.get("approvalScope"),
+                    "allowedAction": body.get("allowedAction"),
+                    "actionsTaken": []
+                }
+            }
+        if path == "/api/runtime/browser/screencast/start":
+            return {
+                "ok": True,
+                "status": "screencast_started",
+                "sessionId": body.get("sessionId"),
+                "userId": body.get("userId"),
+                "targetUrl": body.get("targetUrl"),
+                "actionsTaken": ["browser_screencast_started"]
+            }
+        if path == "/api/runtime/browser/takeover/request":
+            return {
+                "ok": True,
+                "status": "interactive_takeover_pending_approval",
+                "takeoverId": "takeover_v1",
+                "sessionId": body.get("sessionId")
+            }
+        if path == "/api/runtime/browser/takeover/grant":
+            return {
+                "ok": True,
+                "status": "interactive_takeover_granted",
+                "takeoverId": body.get("takeoverId"),
+                "grantToken": "grant_token_v1"
+            }
+        if path == "/api/runtime/browser/takeover/input":
+            return {
+                "ok": True,
+                "status": "interactive_takeover_input_relayed",
+                "takeoverId": body.get("takeoverId"),
+                "inputAccepted": True
+            }
+        if path == "/api/runtime/browser/takeover/end":
+            return {
+                "ok": True,
+                "status": "interactive_takeover_ended",
+                "takeoverId": body.get("takeoverId")
+            }
         if path == "/api/feedback":
             return {
                 "ok": True,
@@ -688,6 +748,163 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertTrue(body["checks"]["cors"]["ok"])
         self.assertIn("observability", body["checks"])
         self.assertTrue(body["checks"]["uploads"]["ok"])
+
+    def test_v1_connector_session_task_status_and_proof_contract(self):
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        client = TestClient(app)
+
+        session_response = client.post(
+            "/api/v1/sessions",
+            json={
+                "member": {
+                    "name": "Facade V1 User",
+                    "email": "facade-v1@example.com",
+                    "payer": "Aetna"
+                }
+            }
+        )
+        self.assertEqual(session_response.status_code, 200)
+        session = session_response.json()
+        self.assertEqual(session["public_api_base"], "/api/v1")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+
+        accepted_response = client.post(
+            "/api/v1/tasks",
+            headers=headers,
+            json={
+                "journey": "eligibility_benefits_navigation",
+                "message": "Do I still owe anything before insurance starts paying?",
+                "session_id": session["session_id"],
+                "client_context": {"surface": "next_mobile_pwa"}
+            }
+        )
+        self.assertEqual(accepted_response.status_code, 200)
+        accepted = accepted_response.json()
+        self.assertEqual(accepted["status"], "queued")
+        self.assertEqual(accepted["links"]["self"], f"/api/v1/tasks/{accepted['task_id']}")
+
+        status_response = client.get(f"/api/v1/tasks/{accepted['task_id']}", headers=headers)
+        self.assertEqual(status_response.status_code, 200)
+        status = status_response.json()
+        self.assertEqual(status["status"], "completed")
+        self.assertEqual(status["answer"], "LangGraph routed through the Wefella facade.")
+        self.assertEqual(app.state.node_client.last_chat.user_id, session["user_id"])
+        self.assertEqual(app.state.node_client.last_chat.session_id, session["session_id"])
+
+        proof_response = client.get("/api/v1/proof/runs/server-connector-next-mobile-mvp", headers=headers)
+        self.assertEqual(proof_response.status_code, 200)
+        proof = proof_response.json()
+        self.assertEqual(proof["cycle"], "server_connector_next_mobile_mvp")
+        self.assertTrue(any(goal["key"] == "fastapi_v1_connector" for goal in proof["goals"]))
+        self.assertTrue(any(item["route"] == "/api/v1/browser/sessions/{id}/stream" for item in proof["visual_artifacts"]))
+
+    def test_v1_task_proposal_approval_and_browser_sandbox_routes(self):
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        client = TestClient(app)
+        headers = self.bearer_headers("v1_user")
+        task = asyncio.run(app.state.registry.create(user_id="v1_user", session_id="session_v1"))
+        asyncio.run(app.state.registry.update(
+            task["task_id"],
+            status="completed",
+            result={
+                "finalResponse": "Approval is required before the worker observes the portal.",
+                "graphRun": {
+                    "state": {
+                        "evidence_observation": {"status": "waiting_for_approval"},
+                        "openclaw_task_proposal": {
+                            "selectedSkill": {"skillKey": "insurance_portal_browser"},
+                            "selectedExecutor": {"executorKey": "read_only_browser"},
+                            "proposedSubtasks": ["observe authenticated portal"],
+                            "requiredEvidence": ["source_pointer"],
+                            "blockedActions": ["credential_entry", "form_submission"],
+                            "fallbackPath": ["manual_user_export"],
+                            "terminalOutcome": "not_possible_policy_or_approval_block"
+                        },
+                        "openclaw_worker_plan": {
+                            "workerJobs": [
+                                {
+                                    "approval": {"scope": "read_only_observation"},
+                                    "fallbackPath": ["manual_user_export"],
+                                    "blockedActions": ["credential_entry", "form_submission"]
+                                }
+                            ]
+                        },
+                        "openclaw_skill_proposal": {
+                            "task": {
+                                "id": "approval_task_v1",
+                                "status": "pending_approval",
+                                "approval_scope": "read_only_observation"
+                            }
+                        }
+                    }
+                },
+                "sourcePointers": []
+            },
+            event="runtime_completed"
+        ))
+
+        status_response = client.get(f"/api/v1/tasks/{task['task_id']}", headers=headers)
+        self.assertEqual(status_response.status_code, 200)
+        status = status_response.json()
+        self.assertEqual(status["status"], "approval_pending")
+        self.assertEqual(status["proposal"]["selected_skill"], "insurance_portal_browser")
+        self.assertEqual(status["proposal"]["selected_executor"], "read_only_browser")
+        self.assertIn("credential_entry", status["proposal"]["blocked_actions"])
+
+        approval_response = client.post(
+            f"/api/v1/tasks/{task['task_id']}/approvals",
+            headers=headers,
+            json={"decision": "approved", "scope": "read_only_observation", "action_type": "read_only_observation"}
+        )
+        self.assertEqual(approval_response.status_code, 200)
+        approval = approval_response.json()
+        self.assertEqual(approval["approval_task_id"], "approval_task_v1")
+        self.assertEqual(approval["approvalToken"], "approval_token_v1")
+        self.assertEqual(app.state.node_client.post_calls[-1][0], "/api/orchestrator/approve")
+
+        browser_response = client.post(
+            "/api/v1/browser/sessions",
+            headers=headers,
+            json={"session_id": "session_v1", "target_url": "https://health.aetna.com/", "provider": "local_cdp"}
+        )
+        self.assertEqual(browser_response.status_code, 200)
+        browser = browser_response.json()
+        self.assertEqual(browser["provider"], "local_cdp")
+        self.assertEqual(browser["stream_url"], f"/api/v1/browser/sessions/{browser['browser_session_id']}/stream")
+        self.assertEqual(browser["ocr_caption"]["status"], "visual_frame_available")
+        self.assertEqual(browser["ocr_caption"]["frameSource"], "cdp_screenshot_fallback")
+        self.assertTrue(browser["screencast"]["status_probe"]["hasFrame"])
+        self.assertFalse(browser["ocr_caption"]["rawOcrTextReturned"])
+
+        takeover_response = client.post(
+            f"/api/v1/browser/sessions/{browser['browser_session_id']}/takeover",
+            headers=headers,
+            json={"mode": "request", "reason": "user_password_or_captcha"}
+        )
+        self.assertEqual(takeover_response.status_code, 200)
+        self.assertEqual(takeover_response.json()["takeoverId"], "takeover_v1")
+
+        grant_response = client.post(
+            f"/api/v1/browser/sessions/{browser['browser_session_id']}/takeover",
+            headers=headers,
+            json={"mode": "grant", "takeover_id": "takeover_v1"}
+        )
+        self.assertEqual(grant_response.status_code, 200)
+        self.assertEqual(grant_response.json()["grantToken"], "grant_token_v1")
+
+        input_response = client.post(
+            f"/api/v1/browser/sessions/{browser['browser_session_id']}/input",
+            headers=headers,
+            json={"takeover_id": "takeover_v1", "grant_token": "grant_token_v1", "input": {"type": "key", "key": "Tab"}}
+        )
+        self.assertEqual(input_response.status_code, 200)
+        self.assertTrue(input_response.json()["inputAccepted"])
+
+        stream_response = client.get(browser["stream_url"], headers=headers)
+        self.assertEqual(stream_response.status_code, 200)
+        self.assertIn("runtime.stream.opened", stream_response.text)
 
     def test_upload_requires_bearer_token(self):
         response = self.client.post(

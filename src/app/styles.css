@@ -759,6 +759,67 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.connector-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.connector-card {
+  border: 1px solid #d9e4dd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.connector-card.wide {
+  grid-column: 1 / -1;
+}
+
+.connector-card h3 {
+  margin: 0;
+  color: #123b32;
+  font-size: 15px;
+}
+
+.connector-card dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.connector-card dt,
+.connector-card dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+.connector-card dt,
+.connector-card b {
+  font-weight: 700;
+}
+
+.connector-card dd,
+.connector-card span {
+  color: #44534b;
+  overflow-wrap: anywhere;
+}
+
+.connector-card ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.connector-card li {
+  font-size: 13px;
+}
+
 .portal-pages {
   display: grid;
   grid-template-columns: 1fr;
@@ -1215,6 +1276,7 @@ pre {
 
   .operator-form-grid,
   .operator-assistant-form,
+  .connector-proof-grid,
   .research-grid {
     grid-template-columns: 1fr;
   }

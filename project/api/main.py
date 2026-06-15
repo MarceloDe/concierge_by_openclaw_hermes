@@ -10,8 +10,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .auth import PROVIDER_AUTH_MODES, UserPrincipal, auth_metadata, auth_mode, create_access_token, local_auth_enabled, require_operator, require_user
+from .browser_sandbox import BrowserSandboxError, get_browser_sandbox_provider
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
-from .models import ChatAcceptedResponse, ChatRequest, FeedbackRequest, HealthResponse, LocalSessionAuthRequest, LocalSessionAuthResponse, ReadinessResponse, TaskStatusResponse, UploadExtractionResponse, UploadRequest, UploadResponse
+from .models import (
+    ChatAcceptedResponse,
+    ChatRequest,
+    FeedbackRequest,
+    HealthResponse,
+    LocalSessionAuthRequest,
+    LocalSessionAuthResponse,
+    ReadinessResponse,
+    TaskStatusResponse,
+    UploadExtractionResponse,
+    UploadRequest,
+    UploadResponse,
+    V1ApprovalRequest,
+    V1BrowserInputRequest,
+    V1BrowserSessionRequest,
+    V1BrowserSessionResponse,
+    V1BrowserTakeoverRequest,
+    V1ProofRunResponse,
+    V1SessionRequest,
+    V1SessionResponse,
+    V1TaskAcceptedResponse,
+    V1TaskProposal,
+    V1TaskRequest,
+    V1TaskStatusResponse
+)
 from .node_client import NodeRuntimeClient
 from .observability import observability_metadata, record_chat_task_event
 from .task_registry import TaskRegistry
@@ -57,6 +82,7 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     app.state.node_client = NodeRuntimeClient()
     app.state.rate_limiter = RateLimiter()
     app.state.upload_store = UploadStore()
+    app.state.browser_sessions = {}
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -161,6 +187,197 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
             session_id=session_id,
             enrollment=enrollment
         )
+
+    @app.get("/api/v1/health", response_model=HealthResponse)
+    async def v1_health(request_context: Request) -> HealthResponse:
+        await enforce_rate_limit(app, request_context, scope="health")
+        node_ok = await app.state.node_client.health()
+        return HealthResponse(
+            status="ok",
+            version=VERSION,
+            node_runtime_url=app.state.node_client.base_url,
+            node_runtime_ok=node_ok,
+            auth=auth_metadata(),
+            cors=cors_metadata(),
+            task_registry=await app.state.registry.metadata(),
+            rate_limit=app.state.rate_limiter.metadata(),
+            source_grounding=source_grounding_config(),
+            observability=observability_metadata(),
+            uploads=app.state.upload_store.metadata()
+        )
+
+    @app.get("/api/v1/readiness", response_model=ReadinessResponse)
+    async def v1_readiness(request_context: Request) -> ReadinessResponse:
+        await enforce_rate_limit(app, request_context, scope="readiness")
+        node_ok = await app.state.node_client.health()
+        checks = await readiness_checks(app, node_ok=node_ok)
+        degraded = any(not check.get("ok", False) and check.get("severity") == "error" for check in checks.values())
+        return ReadinessResponse(status="degraded" if degraded else "ready", version=VERSION, checks=checks)
+
+    @app.post("/api/v1/sessions", response_model=V1SessionResponse)
+    async def v1_create_session(request_context: Request, request: V1SessionRequest) -> V1SessionResponse:
+        await enforce_rate_limit(app, request_context, scope="auth")
+        if not local_auth_enabled():
+            raise HTTPException(status_code=403, detail="Local facade auth is disabled.")
+        enrollment = await app.state.node_client.auth_start(
+            LocalSessionAuthRequest(
+                member=request.member,
+                session_id=request.session_id,
+                resume_latest_session=request.resume_latest_session
+            )
+        )
+        user_id = enrollment.get("user", {}).get("id")
+        if not user_id:
+            raise HTTPException(status_code=502, detail="Node runtime did not return a user id.")
+        session_id = enrollment.get("session", {}).get("id")
+        token = create_access_token(str(user_id), expires_in_seconds=LOCAL_AUTH_TOKEN_SECONDS, extra_claims={"auth_mode": "local_v1_connector"})
+        return V1SessionResponse(
+            version=VERSION,
+            access_token=token,
+            expires_in=LOCAL_AUTH_TOKEN_SECONDS,
+            user_id=str(user_id),
+            session_id=session_id,
+            enrollment=enrollment
+        )
+
+    @app.post("/api/v1/tasks", response_model=V1TaskAcceptedResponse)
+    async def v1_create_task(request_context: Request, request: V1TaskRequest, principal: UserPrincipal = Depends(require_user)) -> V1TaskAcceptedResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_tasks")
+        chat_request = chat_request_from_v1_task(request, principal)
+        uploaded_documents = upload_documents_for_chat(app, chat_request, principal)
+        task = await app.state.registry.create(user_id=principal.user_id, session_id=request.session_id)
+        if inline_tasks:
+            await run_chat_task(app, task["task_id"], chat_request, uploaded_documents=uploaded_documents)
+        else:
+            asyncio.create_task(run_chat_task(app, task["task_id"], chat_request, uploaded_documents=uploaded_documents))
+        return V1TaskAcceptedResponse(
+            version=VERSION,
+            task_id=task["task_id"],
+            session_id=request.session_id,
+            status="queued",
+            links=v1_task_links(task["task_id"])
+        )
+
+    @app.get("/api/v1/tasks/{task_id}", response_model=V1TaskStatusResponse)
+    async def v1_task_status(task_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> V1TaskStatusResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_task_status")
+        task = await task_for_user(app, task_id, principal)
+        return v1_task_status_from_registry_task(task)
+
+    @app.get("/api/v1/tasks/{task_id}/events")
+    async def v1_task_events(task_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> StreamingResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_task_events")
+        await task_for_user(app, task_id, principal)
+        return StreamingResponse(task_event_stream(app.state.registry, task_id), media_type="text/event-stream")
+
+    @app.post("/api/v1/tasks/{task_id}/approvals")
+    async def v1_task_approval(task_id: str, request_context: Request, request: V1ApprovalRequest, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_approvals")
+        task = await task_for_user(app, task_id, principal)
+        approval_task_id = request.approval_task_id or approval_task_id_from_task(task)
+        if not approval_task_id:
+            raise HTTPException(status_code=409, detail="Task has no pending approval proposal.")
+        scoped_body = {
+            "taskId": approval_task_id,
+            "approvalTaskId": approval_task_id,
+            "decision": request.decision,
+            "approvalScope": request.scope,
+            "allowedAction": request.action_type,
+            "evidenceSummary": request.evidence_summary,
+            "expiresAt": request.expires_at,
+            "reason": request.reason,
+            "userId": principal.user_id
+        }
+        result = await app.state.node_client.post_json("/api/orchestrator/approve", scoped_body)
+        return {"version": VERSION, "task_id": task_id, "approval_task_id": approval_task_id, **result}
+
+    @app.post("/api/v1/documents", response_model=UploadResponse)
+    async def v1_create_document(request_context: Request, request: UploadRequest, principal: UserPrincipal = Depends(require_user)) -> UploadResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_documents")
+        try:
+            payload = app.state.upload_store.create_upload(user_id=principal.user_id, request=request)
+        except UploadStoreError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+        return UploadResponse(**payload)
+
+    @app.get("/api/v1/openclaw/readiness")
+    async def v1_openclaw_readiness(request_context: Request, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_openclaw_readiness")
+        return await app.state.node_client.get_json("/api/openclaw/official/status")
+
+    @app.post("/api/v1/browser/sessions", response_model=V1BrowserSessionResponse)
+    async def v1_create_browser_session(request_context: Request, request: V1BrowserSessionRequest, principal: UserPrincipal = Depends(require_user)) -> V1BrowserSessionResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser")
+        try:
+            provider = get_browser_sandbox_provider(request.provider)
+            session = await provider.create_session(
+                node_client=app.state.node_client,
+                user_id=principal.user_id,
+                session_id=request.session_id,
+                target_url=request.target_url,
+                options=request.options
+            )
+        except BrowserSandboxError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        app.state.browser_sessions[session["browser_session_id"]] = session
+        return V1BrowserSessionResponse(
+            version=VERSION,
+            browser_session_id=session["browser_session_id"],
+            provider=session["provider"],
+            session_id=session["session_id"],
+            user_id=session["user_id"],
+            stream_url=f"/api/v1/browser/sessions/{session['browser_session_id']}/stream",
+            takeover_state=session["takeover_state"],
+            current_url=session.get("current_url"),
+            current_title=session.get("current_title"),
+            readiness=session.get("readiness") or {},
+            ocr_caption=session.get("ocr_caption") or {},
+            screencast=session.get("screencast") or {}
+        )
+
+    @app.get("/api/v1/browser/sessions/{browser_session_id}/stream")
+    async def v1_browser_stream(browser_session_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> StreamingResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_stream")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        params = {"sessionId": browser_session["session_id"], "userId": principal.user_id}
+        return StreamingResponse(node_stream(app, "/api/runtime/browser/frames/stream", params), media_type="text/event-stream")
+
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/input")
+    async def v1_browser_input(browser_session_id: str, request_context: Request, request: V1BrowserInputRequest, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_input")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        provider = get_browser_sandbox_provider(browser_session["provider"])
+        return await provider.send_input(
+            node_client=app.state.node_client,
+            browser_session=browser_session,
+            takeover_id=request.takeover_id,
+            grant_token=request.grant_token,
+            input_payload=request.input
+        )
+
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/takeover")
+    async def v1_browser_takeover(browser_session_id: str, request_context: Request, request: V1BrowserTakeoverRequest, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_takeover")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        provider = get_browser_sandbox_provider(browser_session["provider"])
+        if request.mode == "request":
+            result = await provider.request_takeover(node_client=app.state.node_client, browser_session=browser_session, reason=request.reason)
+        elif request.mode == "grant":
+            if not request.takeover_id:
+                raise HTTPException(status_code=400, detail="takeover_id is required for grant mode.")
+            result = await provider.grant_takeover(node_client=app.state.node_client, browser_session=browser_session, takeover_id=request.takeover_id, approved_by=request.approved_by)
+        else:
+            if not request.takeover_id:
+                raise HTTPException(status_code=400, detail="takeover_id is required for end mode.")
+            result = await provider.end_takeover(node_client=app.state.node_client, browser_session=browser_session, takeover_id=request.takeover_id)
+        return {"version": VERSION, "browser_session_id": browser_session_id, **result}
+
+    @app.get("/api/v1/proof/runs/{run_id}", response_model=V1ProofRunResponse)
+    async def v1_proof_run(run_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> V1ProofRunResponse:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_proof")
+        node_ok = await app.state.node_client.health()
+        checks = await readiness_checks(app, node_ok=node_ok)
+        return V1ProofRunResponse(**build_connector_proof_run(run_id, checks=checks, actor_user_id=principal.user_id))
 
     @app.post("/api/chat", response_model=ChatAcceptedResponse)
     async def chat(request_context: Request, request: ChatRequest, principal: UserPrincipal = Depends(require_user)) -> ChatAcceptedResponse:
@@ -525,6 +742,215 @@ def safe_uploaded_document_for_langgraph(payload: dict[str, Any]) -> dict[str, A
             "blockers": extraction.get("blockers") if isinstance(extraction.get("blockers"), list) else [],
             "pageCount": extraction.get("page_count"),
             "confidence": extraction.get("confidence")
+        }
+    }
+
+
+def chat_request_from_v1_task(request: V1TaskRequest, principal: UserPrincipal) -> ChatRequest:
+    client_context = request.client_context if isinstance(request.client_context, dict) else {}
+    member = request.member or client_context.get("member") or {}
+    return ChatRequest(
+        message=request.message,
+        user_id=principal.user_id,
+        session_id=request.session_id,
+        member=member,
+        use_live_model=bool(request.use_live_model or client_context.get("useLiveModel")),
+        payload_mode=str(client_context.get("payloadMode") or "phi_allowed_identifier_masked_reasoning"),
+        execute_evidence_observation=bool(request.execute_evidence_observation or client_context.get("executeEvidenceObservation")),
+        require_live_portal_proof=bool(request.require_live_portal_proof or client_context.get("requireLivePortalProof")),
+        use_official_openclaw_worker=bool(request.use_official_openclaw_worker or client_context.get("useOfficialOpenClawWorker")),
+        official_openclaw_use_current_tab=bool(request.official_openclaw_use_current_tab or client_context.get("officialOpenClawUseCurrentTab")),
+        official_openclaw_multi_page=bool(request.official_openclaw_multi_page or client_context.get("officialOpenClawMultiPage")),
+        approval_token=request.approval_token,
+        approval_task_id=request.approval_task_id,
+        worker_continuation_id=request.worker_continuation_id,
+        approval_scope=request.approval_scope,
+        allowed_action=request.allowed_action,
+        uploaded_document_ids=request.evidence_ids
+    )
+
+
+def v1_task_links(task_id: str) -> dict[str, str]:
+    return {
+        "self": f"/api/v1/tasks/{task_id}",
+        "events": f"/api/v1/tasks/{task_id}/events",
+        "approvals": f"/api/v1/tasks/{task_id}/approvals"
+    }
+
+
+def graph_state_from_result(result: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {}
+    graph_run = result.get("graphRun")
+    if isinstance(graph_run, dict) and isinstance(graph_run.get("state"), dict):
+        return graph_run["state"]
+    return {}
+
+
+def source_pointers_from_result(result: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(result, dict):
+        return []
+    pointers = result.get("sourcePointers")
+    if isinstance(pointers, list):
+        return [item for item in pointers if isinstance(item, dict)]
+    state_pointers = graph_state_from_result(result).get("source_pointers")
+    if isinstance(state_pointers, list):
+        return [item for item in state_pointers if isinstance(item, dict)]
+    return []
+
+
+def ai2ui_blocks_from_result(result: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(result, dict):
+        return []
+    blocks = result.get("ai2uiBlocks")
+    if isinstance(blocks, list):
+        return [item for item in blocks if isinstance(item, dict)]
+    state_blocks = graph_state_from_result(result).get("ai2ui_blocks")
+    if isinstance(state_blocks, list):
+        return [item for item in state_blocks if isinstance(item, dict)]
+    return []
+
+
+def v1_task_proposal_from_result(result: dict[str, Any] | None) -> V1TaskProposal | None:
+    state = graph_state_from_result(result)
+    task_proposal = state.get("openclaw_task_proposal") if isinstance(state.get("openclaw_task_proposal"), dict) else {}
+    worker_plan = state.get("openclaw_worker_plan") if isinstance(state.get("openclaw_worker_plan"), dict) else {}
+    skill_proposal = state.get("openclaw_skill_proposal") if isinstance(state.get("openclaw_skill_proposal"), dict) else {}
+    if not task_proposal and not worker_plan and not skill_proposal:
+        return None
+    worker_jobs = worker_plan.get("workerJobs") if isinstance(worker_plan.get("workerJobs"), list) else []
+    first_job = worker_jobs[0] if worker_jobs and isinstance(worker_jobs[0], dict) else {}
+    approval = first_job.get("approval") if isinstance(first_job.get("approval"), dict) else {}
+    selected_skill = task_proposal.get("selectedSkill") if isinstance(task_proposal.get("selectedSkill"), dict) else {}
+    selected_executor = task_proposal.get("selectedExecutor") if isinstance(task_proposal.get("selectedExecutor"), dict) else {}
+    fallback_path = task_proposal.get("fallbackPath") or first_job.get("fallbackPath") or skill_proposal.get("fallbackPath") or []
+    blocked_actions = task_proposal.get("blockedActions") or first_job.get("blockedActions") or []
+    required_evidence = task_proposal.get("requiredEvidence") or first_job.get("requiredEvidence") or []
+    subtasks = task_proposal.get("proposedSubtasks") or first_job.get("subtasks") or first_job.get("steps") or []
+    terminal_outcome = task_proposal.get("terminalOutcome") or first_job.get("terminalOutcome") or skill_proposal.get("terminalOutcome")
+    approval_task = skill_proposal.get("task") if isinstance(skill_proposal.get("task"), dict) else {}
+    return V1TaskProposal(
+        proposed_subtasks=[str(item) for item in subtasks if item is not None],
+        required_evidence=[str(item) for item in required_evidence if item is not None],
+        selected_skill=selected_skill.get("skillKey") or selected_skill.get("key") or first_job.get("skillKey"),
+        selected_executor=selected_executor.get("executorKey") or selected_executor.get("key") or first_job.get("executorKey"),
+        approval_requirement={
+            "required": bool(approval or approval_task),
+            "scope": approval.get("scope") or approval_task.get("approval_scope") or "read_only_observation",
+            "taskId": approval_task.get("id"),
+            "status": approval_task.get("status")
+        },
+        blocked_actions=[str(item) for item in blocked_actions if item is not None],
+        fallback_path=[str(item) for item in fallback_path if item is not None],
+        terminal_outcome=terminal_outcome
+    )
+
+
+def approval_task_id_from_task(task: dict[str, Any]) -> str | None:
+    result = task.get("result") if isinstance(task.get("result"), dict) else None
+    state = graph_state_from_result(result)
+    evidence = state.get("evidence_observation") if isinstance(state.get("evidence_observation"), dict) else {}
+    worker_continuation = evidence.get("workerContinuation") if isinstance(evidence.get("workerContinuation"), dict) else {}
+    if worker_continuation.get("taskId"):
+        return str(worker_continuation["taskId"])
+    skill_proposal = state.get("openclaw_skill_proposal") if isinstance(state.get("openclaw_skill_proposal"), dict) else {}
+    proposal_task = skill_proposal.get("task") if isinstance(skill_proposal.get("task"), dict) else {}
+    if proposal_task.get("id"):
+        return str(proposal_task["id"])
+    return None
+
+
+def v1_lifecycle_status(task: dict[str, Any]) -> str:
+    raw_status = task.get("status")
+    result = task.get("result") if isinstance(task.get("result"), dict) else None
+    state = graph_state_from_result(result)
+    if raw_status in {"queued", "running"}:
+        return raw_status
+    if raw_status == "failed":
+        return "failed"
+    if state.get("urgent_handoff") or state.get("refusal"):
+        return "refused"
+    evidence = state.get("evidence_observation") if isinstance(state.get("evidence_observation"), dict) else {}
+    evidence_status = str(evidence.get("status") or "")
+    if "waiting_for_approval" in evidence_status or "missing_approval" in evidence_status or approval_task_id_from_task(task):
+        if not source_pointers_from_result(result):
+            return "approval_pending"
+    if "blocked" in evidence_status or "not_possible" in evidence_status:
+        if not source_pointers_from_result(result):
+            return "evidence_blocked"
+    return "completed"
+
+
+def v1_task_status_from_registry_task(task: dict[str, Any]) -> V1TaskStatusResponse:
+    result = task.get("result") if isinstance(task.get("result"), dict) else None
+    return V1TaskStatusResponse(
+        version=VERSION,
+        task_id=task["task_id"],
+        session_id=task.get("session_id"),
+        status=v1_lifecycle_status(task),
+        raw_status=str(task.get("status")),
+        answer=result.get("finalResponse") if isinstance(result, dict) else None,
+        proposal=v1_task_proposal_from_result(result),
+        source_pointers=source_pointers_from_result(result),
+        ai2ui_blocks=ai2ui_blocks_from_result(result),
+        events=task.get("events") if isinstance(task.get("events"), list) else [],
+        error=task.get("error"),
+        result=result
+    )
+
+
+def browser_session_for_user(app: FastAPI, browser_session_id: str, principal: UserPrincipal) -> dict[str, Any]:
+    browser_session = app.state.browser_sessions.get(browser_session_id)
+    if not browser_session:
+        raise HTTPException(status_code=404, detail="Browser session not found.")
+    if browser_session.get("user_id") != principal.user_id:
+        raise HTTPException(status_code=403, detail="Browser session does not belong to this user.")
+    return browser_session
+
+
+def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user_id: str) -> dict[str, Any]:
+    node_ready = bool(checks.get("node_runtime", {}).get("ok"))
+    auth_ready = bool(checks.get("auth", {}).get("ok"))
+    cors_ready = bool(checks.get("cors", {}).get("ok"))
+    uploads_ready = bool(checks.get("uploads", {}).get("ok"))
+    status = "passing" if node_ready and auth_ready and cors_ready and uploads_ready else "blocked"
+    return {
+        "version": VERSION,
+        "run_id": run_id,
+        "status": status,
+        "cycle": "server_connector_next_mobile_mvp",
+        "goals": [
+            {"key": "fastapi_v1_connector", "status": "implemented", "target": "FastAPI owns the public remote-app contract."},
+            {"key": "node_internal_runtime", "status": "preserved", "target": "Node remains the LangGraph/OpenClaw runtime."},
+            {"key": "browser_sandbox_interface", "status": "implemented_local_cdp_adapter", "target": "Remote browser sessions flow through a provider-neutral boundary."},
+            {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
+            {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
+        ],
+        "checks": [
+            {"key": "node_runtime", **checks.get("node_runtime", {})},
+            {"key": "auth", **checks.get("auth", {})},
+            {"key": "cors", **checks.get("cors", {})},
+            {"key": "uploads", **checks.get("uploads", {})},
+            {"key": "source_grounding", **checks.get("source_grounding", {})}
+        ],
+        "visual_artifacts": [
+            {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
+            {"route": "/mvp", "required": True, "proof": "legacy static MVP remains available during migration"},
+            {"route": "apps/mobile-next", "required": True, "proof": "Next.js PWA scaffold for mobile visual tests"},
+            {"route": "/api/v1/browser/sessions/{id}/stream", "required": True, "proof": "remote worker live block stream contract"}
+        ],
+        "scores": [
+            {"key": "api_readiness", "score": 90 if node_ready and auth_ready else 50, "target": 90},
+            {"key": "database_product_ready_architecture", "score": 100 if uploads_ready else 75, "target": 100},
+            {"key": "gui_visual_test_required", "score": 0, "target": 100, "status": "must_run_after_server_start"},
+            {"key": "remote_browser_controls", "score": 90 if node_ready else 40, "target": 90}
+        ],
+        "safety": {
+            "actorUserId": actor_user_id,
+            "publicApi": "/api/v1",
+            "frontendDirectNodeCallsAllowed": False,
+            "externalWriteActionsWithoutApproval": False,
+            "rawOcrTextReturned": False
         }
     }
 
