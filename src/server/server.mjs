@@ -172,7 +172,11 @@ async function safeDeploymentContractStatus() {
     "apps/mobile-next/Dockerfile",
     "compose.yaml",
     "scripts/compose-contract.mjs",
-    "src/tests/deployment-compose.test.mjs"
+    "scripts/compose-memory-smoke.mjs",
+    "src/tests/deployment-compose.test.mjs",
+    "src/tests/deployment-graphiti-compose.test.mjs",
+    "tools/graphiti/graphiti_bridge.py",
+    "vendor/getzep-graphiti/pyproject.toml"
   ];
   const fileChecks = await Promise.all(
     files.map(async (file) => {
@@ -185,12 +189,32 @@ async function safeDeploymentContractStatus() {
     })
   );
   const missing = fileChecks.filter((file) => !file.ok).map((file) => file.file);
+  const [nodeDockerfile, composeFile] = await Promise.all([
+    readFile(resolve("Dockerfile.node"), "utf8").catch(() => ""),
+    readFile(resolve("compose.yaml"), "utf8").catch(() => "")
+  ]);
+  const graphitiRuntimeReady = [
+    "python3 -m venv .venv-graphiti",
+    "vendor/getzep-graphiti[falkordb]",
+    "graphiti_core.driver.falkordb_driver"
+  ].every((fragment) => nodeDockerfile.includes(fragment)) &&
+    [
+      "OPENAI_API_KEY: ${OPENAI_API_KEY:-}",
+      "GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}",
+      "GRAPHITI_STORE_RAW_EPISODES: \"0\"",
+      "FALKORDB_HOST: falkordb"
+    ].every((fragment) => composeFile.includes(fragment));
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
     files,
     missing,
     services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb"],
+    graphitiRuntimeReady,
+    graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
+    memorySmokeCommand: "npm run docker:memory:smoke",
+    memoryLiveSmokeCommand:
+      "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke",
     configCommand: "npm run docker:contract",
     liveSmokeCommand: "docker compose up --build"
   };
@@ -200,6 +224,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
   const deployment = await safeDeploymentContractStatus();
+  const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
     ready: false,
     status: "openclaw_readiness_error",
@@ -237,13 +262,31 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "docker_connector_deployment",
         status: deployment.status,
         target: "Docker Compose defines the Node runtime, FastAPI connector, Next.js PWA, and FalkorDB dependency services."
+      },
+      {
+        key: "graphiti_container_product_memory",
+        status: productMemorySchemaReady ? "graphiti_schema_ready" : deployment.graphitiRuntimeStatus,
+        target: "Node connector image can run real Graphiti/FalkorDB product memory when credentials enable the adapter."
       }
     ],
     checks: [
       { key: "node_runtime", status: "ready", ok: true, detail: `db tables ${Object.keys(counts).length}` },
       { key: "fastapi_v1", status: "available_when_facade_running", ok: true, endpoints: ["/api/v1/sessions", "/api/v1/tasks", "/api/v1/browser/sessions", "/api/v1/proof/runs/{run_id}"] },
       { key: "openclaw_readiness", status: liveReadiness.status, ok: Boolean(liveReadiness.readyForReadOnlyObservation), nextAction: liveReadiness.nextAction },
-      { key: "product_memory", status: productMemory.status ?? (productMemory.ok ? "ready" : "degraded"), ok: Boolean(productMemory.ok), adapter: productMemory.adapter },
+      {
+        key: "product_memory",
+        status: productMemorySchemaReady ? "graphiti_schema_ready" : productMemory.status ?? "degraded",
+        ok: productMemorySchemaReady,
+        adapter: productMemory.adapter,
+        safeDegraded: productMemory.status === "disabled_by_env" || productMemory.status === "degraded",
+        replayQueue: productMemory.replayQueue ?? null
+      },
+      {
+        key: "graphiti_container_runtime",
+        status: deployment.graphitiRuntimeStatus,
+        ok: deployment.graphitiRuntimeReady,
+        command: deployment.memorySmokeCommand
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -268,6 +311,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     scores: [
       { key: "api_readiness", score: 90, target: 90, status: "pass_contract" },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
+      {
+        key: "product_memory_deployment",
+        score: productMemorySchemaReady ? 100 : deployment.graphitiRuntimeReady ? 75 : 0,
+        target: 100,
+        status: productMemorySchemaReady
+          ? "pass_graphiti_schema_ready"
+          : deployment.graphitiRuntimeReady
+            ? "runtime_present_enable_graphiti_for_live_schema"
+            : "needs_graphiti_runtime"
+      },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },
       { key: "approval_audit_scaffolding", score: 85, target: 85, status: "pass_existing_gate" }

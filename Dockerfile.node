@@ -14,7 +14,23 @@ ENV NODE_ENV=production \
     BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled
 
 WORKDIR /app
-RUN mkdir -p /app/data && chown -R node:node /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      python3 \
+      python3-pip \
+      python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY vendor/getzep-graphiti ./vendor/getzep-graphiti
+RUN python3 -m venv .venv-graphiti \
+    && .venv-graphiti/bin/python -m pip install --upgrade pip setuptools wheel \
+    && .venv-graphiti/bin/pip install --no-cache-dir -e "vendor/getzep-graphiti[falkordb]" \
+    && .venv-graphiti/bin/python -c "import graphiti_core; import falkordb; from graphiti_core.driver.falkordb_driver import FalkorDriver"
+
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./

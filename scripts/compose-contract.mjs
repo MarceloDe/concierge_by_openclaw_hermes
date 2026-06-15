@@ -13,7 +13,11 @@ const REQUIRED_FILES = [
   "Dockerfile.node",
   "Dockerfile.api",
   "apps/mobile-next/Dockerfile",
-  "compose.yaml"
+  "compose.yaml",
+  "scripts/compose-memory-smoke.mjs",
+  "tools/graphiti/graphiti_bridge.py",
+  "vendor/getzep-graphiti/pyproject.toml",
+  "src/tests/deployment-graphiti-compose.test.mjs"
 ];
 
 const COMPOSE_FRAGMENTS = [
@@ -24,6 +28,9 @@ const COMPOSE_FRAGMENTS = [
   "WEFELLA_NODE_RUNTIME_URL: http://node-runtime:4173",
   "BRAINSTY_CONNECTOR_API_BASE: http://fastapi:8000",
   "BRAINSTY_PRODUCT_MEMORY_ADAPTER: ${BRAINSTY_PRODUCT_MEMORY_ADAPTER:-disabled}",
+  "OPENAI_API_KEY: ${OPENAI_API_KEY:-}",
+  "GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}",
+  "GRAPHITI_EMBEDDING_MODEL: ${GRAPHITI_EMBEDDING_MODEL:-text-embedding-3-small}",
   "FALKORDB_HOST: falkordb",
   "/api/v1/health",
   "/api/health",
@@ -73,7 +80,20 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
   }
 
   for (const [name, body, expected] of [
-    ["Dockerfile.node", nodeDockerfile, ["npm ci --omit=dev", "HOST=0.0.0.0", "USER node", "HEALTHCHECK", "/api/health"]],
+    [
+      "Dockerfile.node",
+      nodeDockerfile,
+      [
+        "npm ci --omit=dev",
+        "HOST=0.0.0.0",
+        "python3 -m venv .venv-graphiti",
+        "vendor/getzep-graphiti[falkordb]",
+        "graphiti_core.driver.falkordb_driver",
+        "USER node",
+        "HEALTHCHECK",
+        "/api/health"
+      ]
+    ],
     ["Dockerfile.api", apiDockerfile, ["python:3.12-slim", "project/requirements.txt", "USER app", "HEALTHCHECK", "/api/v1/health"]],
     ["apps/mobile-next/Dockerfile", mobileDockerfile, ["npm run build", "BRAINSTY_CONNECTOR_API_BASE=http://fastapi:8000", "USER node", "HEALTHCHECK", "server.js"]]
   ]) {
@@ -113,6 +133,13 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
     ok: true,
     files: REQUIRED_FILES,
     services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb"],
+    graphitiRuntime: {
+      dockerfileReady: true,
+      bridge: "tools/graphiti/graphiti_bridge.py",
+      packageSource: "vendor/getzep-graphiti",
+      backend: "falkordb",
+      smokeCommand: "npm run docker:memory:smoke"
+    },
     dockerConfig
   };
 }

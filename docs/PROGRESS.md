@@ -6457,10 +6457,75 @@ Score decision:
 - GUI visual test: passing for the container PWA and container dashboard.
 - Remote browser controls: locally gatewayed, but container proof currently reports `official_openclaw_profile_not_ready`; hosted sandbox/OpenClaw image readiness is still the next dependency.
 - Database product-ready architecture: improved with deployable volumes and service boundaries, but still not production Postgres.
-- Product memory: honest degraded/disabled-safe in compose by default; full Graphiti/FalkorDB in-container proof remains open.
+- Product memory: honest degraded/disabled-safe remains the default startup posture; full Graphiti/FalkorDB in-container proof is now implemented and passes when the adapter is explicitly enabled with credentials.
 
 Known risks or gaps:
-- The first Docker Node image does not install or verify Graphiti Python runtime; do not count this as full product-memory production proof.
+- The Docker Node image now installs and verifies the Graphiti Python runtime. Production managed graph storage and secret-manager profiles are still not implemented.
 - The first compose sandbox path is still local CDP/OpenClaw readiness, not a hosted remote sandbox/WebRTC provider.
 - The compose stack uses local SQLite volumes, not production Postgres/transactional deployment storage.
 - OpenClaw official profile/browser readiness is not available inside the container image yet, so Live correctly shows a blocker rather than a frame.
+
+## Product Memory Container Runtime Cycle - 2026-06-15
+
+Status: Implemented and verified with live Docker compose Graphiti/FalkorDB schema plus retain/recall proof.
+
+Implemented:
+- Updated `Dockerfile.node` to install Python, create `/app/.venv-graphiti`, install `vendor/getzep-graphiti[falkordb]`, and verify `graphiti_core` plus the FalkorDB driver during image build.
+- Kept `BRAINSTY_PRODUCT_MEMORY_ADAPTER` disabled by default, but wired runtime env for explicit Graphiti activation:
+  - `OPENAI_API_KEY`,
+  - `BRAINSTY_OPENAI_BASE_URL`,
+  - `GRAPHITI_OPENAI_BASE_URL`,
+  - `GRAPHITI_LLM_MODEL`,
+  - `GRAPHITI_SMALL_MODEL`,
+  - `GRAPHITI_EMBEDDING_MODEL`,
+  - `GRAPHITI_MAX_COROUTINES`,
+  - `GRAPHITI_STORE_RAW_EPISODES=0`.
+- Made the optional Kuzu import lazy in `tools/graphiti/graphiti_bridge.py` so the FalkorDB-only container path boots without Kuzu.
+- Added `scripts/compose-memory-smoke.mjs` and package script `docker:memory:smoke`.
+- Added `src/tests/deployment-graphiti-compose.test.mjs` and included it in `test:docker:contract`.
+- Extended connector proof with:
+  - `graphiti_container_product_memory`,
+  - `graphiti_container_runtime`,
+  - `product_memory_deployment`.
+- Changed deployment scoring so disabled-safe product memory is not counted as full Graphiti readiness.
+
+Verification commands:
+- `node --check scripts/compose-contract.mjs` passed.
+- `node --check scripts/compose-memory-smoke.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `python3 -m py_compile tools/graphiti/graphiti_bridge.py` passed.
+- `npm run test:docker:contract` passed with 4/4 tests.
+- `npm run docker:contract` passed and verified `docker compose config`.
+- `npm run build` passed.
+- Docker compose rebuilt the Node runtime image with the Graphiti Python runtime.
+- Live Graphiti compose smoke passed:
+  - command: `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke`,
+  - Node health passed,
+  - FastAPI health passed with `nodeRuntimeOk=true`,
+  - product memory reported `adapter=graphiti`, `schemaReady=true`, `backend=falkordb`, `rawEpisodeStorage=false`,
+  - replay queue was empty,
+  - safe probe retained episode `2dccbc76-ee07-419f-bc76-e277015da164`,
+  - recall returned 1 fact,
+  - raw portal text was not stored,
+  - Cortex was not used as product memory.
+- Direct container API proof passed:
+  - `GET http://127.0.0.1:4273/api/product-memory/status` returned `/app/.venv-graphiti/bin/python`, `falkordb:6379`, `schemaReady=true`, and enforced outbound payload observation with no direct identifiers or portal text.
+- Connector proof endpoint reported:
+  - `product_memory=graphiti_schema_ready`,
+  - `graphiti_container_runtime=graphiti_container_runtime_present`,
+  - `product_memory_deployment=100 / 100`.
+
+Visual artifact:
+- `artifacts/phase11-graphiti-container-dashboard-proof.png`
+
+Score decision:
+- Product memory deployment: now passes `100 / 100` for the compose stack when Graphiti is explicitly enabled with credentials.
+- Docker deployment contract: remains passing `75 / 75`.
+- Database product-ready architecture: still not final production-ready because structured app state remains SQLite volumes rather than Postgres/transactional production storage.
+- Remote browser controls: still need hosted/container OpenClaw sandbox readiness beyond the local-CDP adapter.
+
+Known risks or gaps:
+- The Node image now contains Graphiti, but the default compose adapter remains disabled-safe to avoid failing local startup without model credentials.
+- Secrets are passed at runtime, not baked into the image. A production secret manager is still required.
+- FalkorDB is containerized with a local Docker volume; managed graph storage or production backup/restore policy is still pending.
+- OpenClaw official profile/browser readiness remains a blocker inside the compose image.

@@ -1967,7 +1967,7 @@ Verification loop:
 
 Next cycles:
 - Move the existing static `/mvp` interactions to the PWA route once `/api/v1` reaches parity for approvals, uploads, browser live view, and history.
-- Add Docker compose proof for FastAPI, Node runtime, database, product memory, and sandbox adapter. Initial connector compose contract is now implemented; full Graphiti-in-container health remains a follow-up.
+- Keep Docker compose proof current for FastAPI, Node runtime, database, product memory, and sandbox adapter. Initial connector compose contract and full Graphiti-in-container health are now implemented; production Postgres and hosted sandbox remain follow-ups.
 - Replace or supplement the local CDP sandbox provider with a hosted remote sandbox/WebRTC provider after provider selection and credentials exist.
 
 ## Production Connector Deployment Cycle - 2026-06-15
@@ -1995,6 +1995,31 @@ Acceptance:
 - The operator dashboard shows `docker_compose_contract=compose_contract_present`.
 
 Remaining follow-up:
-- Install and verify Graphiti/FalkorDB product memory inside the container runtime instead of defaulting to disabled/degraded-safe mode.
+- Move the compose storage profile from local SQLite/FalkorDB volumes toward a production Postgres/managed memory deployment when provider credentials and retention policy are selected.
 - Add a hosted remote sandbox/WebRTC provider in addition to the local CDP adapter.
 - Add production DB/Postgres and secret-manager profiles.
+
+## Product Memory Container Runtime Cycle - 2026-06-15
+
+Goal:
+- Prove the server connector stack can run real Zep Graphiti/FalkorDB product memory inside Docker instead of only reporting disabled/degraded-safe memory.
+
+Implemented slice:
+- Build the official project-local `vendor/getzep-graphiti` package with FalkorDB extras into the Node runtime image under `/app/.venv-graphiti`.
+- Keep `BRAINSTY_PRODUCT_MEMORY_ADAPTER` disabled by default for safe local startup, but pass `OPENAI_API_KEY`, model selection, FalkorDB host/port, Graphiti group id, and raw-episode disablement through compose when the adapter is explicitly enabled.
+- Make the Kuzu driver import lazy in `tools/graphiti/graphiti_bridge.py` so the FalkorDB container path does not require an unrelated optional Kuzu dependency.
+- Add `scripts/compose-memory-smoke.mjs` and `npm run docker:memory:smoke`.
+- Add `src/tests/deployment-graphiti-compose.test.mjs` and include it in `npm run test:docker:contract`.
+- Extend the dashboard proof payload with `graphiti_container_runtime`, `graphiti_container_product_memory`, and `product_memory_deployment` scoring.
+
+Acceptance:
+- `npm run test:docker:contract` validates Dockerfile, compose env, and smoke-script contracts.
+- `npm run docker:contract` validates `docker compose config`.
+- Docker compose can be rebuilt with `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti`.
+- `BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke` passes against the compose stack.
+- `/api/product-memory/status` reports `adapter=graphiti`, `schemaReady=true`, `backend=falkordb`, and `rawEpisodeStorage=false`.
+- The dashboard proof shows `product_memory_deployment=100 / 100`.
+
+Remaining follow-up:
+- Production storage still uses local compose volumes; Postgres/managed graph storage is still a later production profile.
+- OpenClaw/browser sandbox inside compose still reports the honest dedicated-profile readiness blocker until a hosted sandbox or container-ready OpenClaw profile is added.

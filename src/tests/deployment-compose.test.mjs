@@ -7,5 +7,7 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.ok, true);
   assert.deepEqual(result.services, ["node-runtime", "fastapi", "mobile-pwa", "falkordb"]);
   assert.ok(result.files.includes("compose.yaml"));
+  assert.equal(result.graphitiRuntime.dockerfileReady, true);
+  assert.equal(result.graphitiRuntime.backend, "falkordb");
   assert.equal(result.dockerConfig.checked, false);
 });

@@ -1598,3 +1598,25 @@ Current proof status:
 - FastAPI `/api/v1/health` returned `node_runtime_ok=true`.
 - PWA visual flow passed with Session, Ask, Worker, and Live. Live correctly reported `official_openclaw_profile_not_ready` instead of hanging.
 - Dashboard visual proof reported `docker_compose_contract=compose_contract_present` and `deployment_contract=75 / 75`.
+
+## Product Memory Container Runtime Acceptance
+
+This slice is acceptable when:
+
+- The Node runtime image installs Python, creates `/app/.venv-graphiti`, and installs the project-local official Graphiti package from `vendor/getzep-graphiti` with FalkorDB extras.
+- The Docker image verifies `graphiti_core` and the FalkorDB driver during build.
+- `compose.yaml` passes OpenAI/Graphiti model env vars only through runtime environment and does not copy `.env` or `.env.local` into the image.
+- `GRAPHITI_STORE_RAW_EPISODES` remains `"0"` in compose.
+- `scripts/compose-memory-smoke.mjs` can run in disabled-safe mode or in required-ready mode.
+- Required-ready mode proves Node health, FastAPI-to-Node health, Graphiti schema readiness, FalkorDB backend, raw episode storage disabled, and a safe retain/recall probe.
+- Dashboard proof distinguishes disabled-safe memory from live `graphiti_schema_ready` memory and scores product-memory deployment at `100 / 100` only when schema readiness is true.
+
+Current proof status:
+
+- Verified on 2026-06-15 with the same alternate compose ports `4273`, `8100`, `3100`, `6480`, and `3101`.
+- `npm run test:docker:contract` passed with the Graphiti compose contract included.
+- `npm run docker:contract` passed.
+- `docker compose up -d --build` rebuilt the Node runtime image with the Graphiti Python runtime.
+- `BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke` passed.
+- The smoke reported `adapter=graphiti`, `schemaReady=true`, `backend=falkordb`, `rawEpisodeStorage=false`, replay queue empty, one retained episode, one recalled fact, and `cortexProductMemory=false`.
+- Dashboard visual proof was saved to `artifacts/phase11-graphiti-container-dashboard-proof.png` and showed `product_memory_deployment=100 / 100`.

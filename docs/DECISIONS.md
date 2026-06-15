@@ -201,6 +201,25 @@ The goal of this slice is remote-app connector deployability, not overstating pr
 Cost of changing later:
 Low. A follow-up Dockerfile layer or sidecar can install Graphiti dependencies and switch `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` once health, replay, and degraded-mode proof pass in containers.
 
+## 2026-06-15: Install Graphiti Runtime In The Node Connector Image
+
+Context:
+The first Docker connector slice intentionally shipped with FalkorDB wired but product memory disabled by default. The remaining product-memory deployment gap was proving that the Node runtime container can actually run the official project-local Graphiti package against the compose FalkorDB service, initialize schema, and retain/recall safe source-pointer memory.
+
+Options considered:
+- Keep Graphiti outside Docker and document it as a local-only dependency.
+- Add a separate Graphiti worker sidecar immediately.
+- Install the Graphiti bridge runtime into the Node image while keeping the adapter env-gated.
+
+Decision:
+Use the third option for this slice. The Node image now creates `/app/.venv-graphiti`, installs `vendor/getzep-graphiti[falkordb]`, and verifies the FalkorDB driver during build. Compose still defaults `BRAINSTY_PRODUCT_MEMORY_ADAPTER` to `disabled`, but can be launched with `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` plus model credentials for live schema and retain/recall proof.
+
+Reason:
+The current product runtime is Node/LangGraph calling a Python Graphiti bridge. Baking that bridge into the same internal runtime image is the smallest reliable proof without adding a second worker lifecycle. Keeping the adapter disabled by default preserves safe local startup when credentials are unavailable, while the live smoke prevents disabled-safe memory from being counted as full product-memory readiness.
+
+Cost of changing later:
+Medium. A later production deployment can split Graphiti into a sidecar or managed service, but it should preserve the same adapter boundary, outbound payload observation, source-pointer-only retain payloads, replay queue, and dashboard scoring semantics.
+
 ## 2026-05-17: Workflow Architecture Registry Before Live LangGraph/OpenClaw
 
 Context:

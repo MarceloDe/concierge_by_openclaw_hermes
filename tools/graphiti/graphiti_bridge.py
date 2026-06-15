@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 
 from graphiti_core import Graphiti
 from graphiti_core.driver.falkordb_driver import FalkorDriver
-from graphiti_core.driver.kuzu_driver import KuzuDriver
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.openai_client import OpenAIClient
@@ -50,6 +49,8 @@ def get_group_id(request: dict[str, Any]) -> str | None:
 
 def build_driver(backend: str, request: dict[str, Any]):
     if backend == "kuzu":
+        from graphiti_core.driver.kuzu_driver import KuzuDriver
+
         db_path = request.get("dbPath") or os.environ.get("GRAPHITI_KUZU_DB_PATH") or "data/graphiti-kuzu"
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         return KuzuDriver(db=db_path)

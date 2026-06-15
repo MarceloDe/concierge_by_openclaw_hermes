@@ -32,7 +32,8 @@
     "graphiti:falkordb": "bash scripts/start-graphiti-falkordb.sh",
     "docker:config": "docker compose config",
     "docker:contract": "node scripts/compose-contract.mjs",
-    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs",
+    "docker:memory:smoke": "node scripts/compose-memory-smoke.mjs",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {
