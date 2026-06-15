@@ -6352,3 +6352,41 @@ Known risks or gaps:
 - Docker compose proof for FastAPI, Node, database, product memory, and sandbox adapter remains a later cycle.
 - Graphiti/FalkorDB product memory remained degraded on this machine during connector verification and still needs full Docker/remote deployment proof.
 - The live worker frame is visually available, but approval-gated read-only portal evidence still depends on the user keeping an approved authenticated portal page in the dedicated OpenClaw profile.
+
+## Long-Run Phase Checkpoint - 2026-06-15
+
+Status: The long run is in the production-hardening / remote-application connector phase. The local MVP is no longer only a prototype UI: it now has a FastAPI public connector, a Next.js mobile PWA client, a local-CDP browser sandbox adapter, live worker-frame proof, and dashboard proof. It is not yet a full production deployment because Docker, hosted remote sandbox, deployed Graphiti/FalkorDB, and external channel adapters still need acceptance proof.
+
+Original build-prompt milestone position:
+- Milestone 1, core LangGraph web-chat graph: locally implemented.
+- Milestone 2, product memory retain/recall: locally implemented with Graphiti adapter and degraded/replay behavior, but production Graphiti/FalkorDB health remains pending.
+- Milestone 3, workflow coverage and human approval gates: locally implemented for the MVP healthcare/insurance journeys with approval, refusal, urgent handoff, evidence-blocked, and sourced-answer gates.
+- Milestone 4, multi-channel / remote client deployment: partially implemented. The public FastAPI `/api/v1` connector and Next.js mobile PWA are working; WhatsApp, Telegram, email, voice, and hosted remote browser sandbox remain pending.
+- Milestone 5, production hardening: in progress. Local gates for PHI, egress, retention, DB safety, graph topology, OpenClaw skills, visual UI proof, and audit scaffolding pass; Docker, deployed memory, production DB, LangSmith/LangChain trace readiness, and budget/kill-switch controls still need full proof.
+
+Complemented-plan cycle position:
+- Cycle 1, OpenClaw automation gap: implemented and locally verified.
+- Cycle 2, sourced-answer gap: implemented and locally/live-LLM verified.
+- Cycle 3, safety hardening: partially implemented and locally verified for DB/PHI/retention/egress; remaining work is production/Docker and broader document/screenshot/remote deployment proof.
+- Cycle 4, graph topology proof: implemented and locally verified.
+- Cycle 5, full score decision: local score decision recorded and pushed; incomplete scores remain tied to external deployment dependencies.
+
+Server Connector + Next Mobile MVP cycle position:
+- Cycle 1, public connector API: implemented and tested.
+- Cycle 2, Next.js mobile PWA shell: implemented, built, audited, and visually tested.
+- Cycle 3, remote browser sandbox gateway: implemented with local CDP adapter and live-frame proof.
+- Cycle 4, verification dashboard: implemented with connector proof endpoint and visual score reporting.
+- Current next phase: Cycle 6-style production hardening and remote-app readiness. The next implementation should focus on Docker compose/startup proof, hosted sandbox/WebRTC provider or equivalent remote sandbox, product-memory deployment health, upload/document parity in the PWA, history/approval parity, and production-safe observability/trace configuration.
+
+Latest pushed proof:
+- Project branch: `feature/phase-11-remote-browser-control`.
+- Latest project commit: `cd38788` (`Implement server connector mobile MVP`).
+- Project PR: `https://github.com/MarceloDe/concierge_by_openclaw_hermes/pull/2`.
+- Cortex memory branch: `memory/codex/2026-06-15`.
+- Cortex memory commit: `7887689`.
+- Cortex PR: `https://github.com/MarceloDe/cortex/pull/76`.
+
+Decision for the next loop:
+- Do not declare full production completion yet.
+- Treat the current local system as a verified server-connector/mobile MVP.
+- Start the next loop at production hardening and deployment proof, not more local UI breadth.
