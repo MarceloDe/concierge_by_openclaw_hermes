@@ -1967,3 +1967,22 @@ This makes the regular-user live block visually reliable today while preserving 
 
 Cost of changing later:
 Low. The frame payload already carries source metadata, so a future WebRTC or hosted streaming provider can replace `cdp_screenshot_fallback` while keeping the API ownership checks and visual proof contract.
+
+## 2026-06-15 - Add Postgres Compose Target While Keeping SQLite Runtime
+
+Context:
+The connector stack needed a production-shaped transactional database profile, but the current application storage layer is already stabilized around the native SQLite adapter, bounded parameters, retention tests, and local proof gates. Switching the runtime driver before a Postgres repository adapter and migration suite exists would create a false production-readiness claim.
+
+Options considered:
+- Keep compose on SQLite volumes only until the full Postgres adapter is implemented.
+- Flip `BRAINSTY_DB_DRIVER=postgres` immediately and patch failures as they appear.
+- Add a live Postgres service, init contract, readiness reporting, and smoke tests now while keeping the app runtime on SQLite by default.
+
+Decision:
+Add Postgres as the deployment storage target in Docker Compose and expose it through the dashboard/API storage readiness profile. Keep `BRAINSTY_DB_DRIVER=sqlite` as the default runtime driver and mark `appRuntimeMigratedToPostgres=false` until the adapter and migration tests are implemented.
+
+Reason:
+This gives the project a real containerized Postgres dependency, health check, initialization contract, live write/read smoke, and remote-deployment shape without weakening the proven local runtime. The dashboard can now score database architecture honestly: improved to a live Postgres profile, but still below full production readiness.
+
+Cost of changing later:
+Moderate. The next storage phase must implement the Postgres app-state adapter, migration parity tests, transactional leases/worker claims, and hosted backup/restore proof. The public readiness shape can remain stable while the runtime driver changes behind it.

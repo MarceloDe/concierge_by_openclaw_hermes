@@ -9,6 +9,8 @@ FROM node:24-bookworm-slim AS runner
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4173 \
+    BRAINSTY_DB_DRIVER=sqlite \
+    BRAINSTY_DATABASE_TARGET=postgres \
     BRAINSTY_DB_PATH=/app/data/brainstyworkers.sqlite \
     BRAINSTY_RESEARCH_ARTIFACT_DIR=/app/data/research-artifacts \
     BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled

@@ -313,3 +313,23 @@ Verification:
 - `npm run test:local` passed with 163 total, 161 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser proof on `/` passed: daemon status and daemon tick were visible, one due scheduled run was queued, approved-schedule-only safety was visible, and console error count was 0. Screenshot: `artifacts/phase10t-research-scheduler-daemon-browser-proof.png`.
 - Graceful shutdown proof passed with `BRAINSTY_RESEARCH_SCHEDULER_ENABLED=1`: server received `SIGINT`, stopped services, exited with code 0, and `lsof -nP -iTCP:4173 -sTCP:LISTEN` returned no listener.
+
+## Phase 11 Postgres Storage Deployment Profile Update
+
+Code changes:
+- Added a Postgres service to `compose.yaml` with health check, persistent volume, configurable host port, and init SQL.
+- Added `project/db/postgres-init/001_storage_readiness.sql`.
+- Added `src/concierge/storageReadiness.mjs` and `scripts/storage-contract.mjs`.
+- Added `src/tests/deployment-storage.test.mjs` and included storage proof in `npm run test:docker:contract`.
+- Extended the connector proof dashboard/API with `postgres_storage_profile`, `database_storage`, and `database_product_ready_architecture`.
+
+Verification:
+- `npm run storage:contract` passed.
+- `npm run storage:postgres:smoke` passed against live Docker Postgres.
+- `npm run test:docker:contract` passed with 6/6 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 202 total, 200 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Connector proof reported `storage.status=postgres_live_ready_sqlite_runtime`, `database_product_ready_architecture=85 / 100`, `appRuntimeMigratedToPostgres=false`, and `migrationPending=true`.
+
+Remaining gap:
+- The project now has a live Postgres deployment target, but app-state storage is not fully migrated to Postgres. A future phase must add the Postgres runtime adapter, migration parity tests, transactional worker leases, backup/restore proof, and secret-manager profile before this score can reach `100 / 100`.

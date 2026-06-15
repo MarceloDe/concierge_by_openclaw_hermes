@@ -2023,3 +2023,29 @@ Acceptance:
 Remaining follow-up:
 - Production storage still uses local compose volumes; Postgres/managed graph storage is still a later production profile.
 - OpenClaw/browser sandbox inside compose still reports the honest dedicated-profile readiness blocker until a hosted sandbox or container-ready OpenClaw profile is added.
+
+## Postgres Storage Deployment Profile Cycle - 2026-06-15
+
+Goal:
+- Move the connector stack from "local SQLite-only deployment storage" toward a production-shaped relational database profile without pretending the application runtime has already been migrated.
+
+Implemented slice:
+- Add a `postgres` service to `compose.yaml` with a health check, configurable host port, persistent volume, and initialization SQL under `project/db/postgres-init`.
+- Pass `BRAINSTY_DB_DRIVER`, `BRAINSTY_DATABASE_TARGET`, `BRAINSTY_DATABASE_URL`, and `BRAINSTY_POSTGRES_LIVE_READY` through the Node runtime container.
+- Keep the runtime default on the current bound-parameter SQLite store while making Postgres the explicit deployment target.
+- Add `src/concierge/storageReadiness.mjs` so the dashboard/API can report storage driver, redacted database URL, Postgres compose/live readiness, and migration-pending status.
+- Add `scripts/storage-contract.mjs`, `npm run storage:contract`, and `npm run storage:postgres:smoke`.
+- Add `src/tests/deployment-storage.test.mjs` and include it in `npm run test:docker:contract`.
+- Extend the connector proof payload with `postgres_storage_profile`, `database_storage`, and `database_product_ready_architecture` scoring.
+
+Acceptance:
+- `npm run storage:contract` validates the static Postgres deployment profile.
+- `npm run test:docker:contract` validates compose, Graphiti memory, and storage deployment contracts together.
+- `npm run storage:postgres:smoke` writes and reads the Postgres readiness row through `docker compose exec`.
+- The running dashboard proof reports Postgres compose-ready and live-ready while clearly marking `appRuntimeMigratedToPostgres=false`.
+- `npm run build` and `npm run test:local` remain green after the storage profile is added.
+
+Remaining follow-up:
+- Implement a real Postgres app-state adapter and migration tests before changing `BRAINSTY_DB_DRIVER` from `sqlite` to `postgres`.
+- Add transactional leases/worker claims against the Postgres adapter before using it for concurrent production jobs.
+- Add managed Postgres backup/restore, secret-manager, and retention-operation runbook proof for a hosted deployment.

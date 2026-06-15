@@ -33,7 +33,9 @@
     "docker:config": "docker compose config",
     "docker:contract": "node scripts/compose-contract.mjs",
     "docker:memory:smoke": "node scripts/compose-memory-smoke.mjs",
-    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs",
+    "storage:contract": "node scripts/storage-contract.mjs",
+    "storage:postgres:smoke": "node scripts/storage-contract.mjs --live",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {

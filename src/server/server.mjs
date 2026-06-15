@@ -69,6 +69,7 @@ import {
   replayQueuedProductMemoryRetains,
   suppressProductMemoryEpisode
 } from "../concierge/productMemory.mjs";
+import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
   startScreencast,
@@ -172,9 +173,13 @@ async function safeDeploymentContractStatus() {
     "apps/mobile-next/Dockerfile",
     "compose.yaml",
     "scripts/compose-contract.mjs",
+    "scripts/storage-contract.mjs",
     "scripts/compose-memory-smoke.mjs",
+    "project/db/postgres-init/001_storage_readiness.sql",
+    "src/concierge/storageReadiness.mjs",
     "src/tests/deployment-compose.test.mjs",
     "src/tests/deployment-graphiti-compose.test.mjs",
+    "src/tests/deployment-storage.test.mjs",
     "tools/graphiti/graphiti_bridge.py",
     "vendor/getzep-graphiti/pyproject.toml"
   ];
@@ -204,12 +209,28 @@ async function safeDeploymentContractStatus() {
       "GRAPHITI_STORE_RAW_EPISODES: \"0\"",
       "FALKORDB_HOST: falkordb"
     ].every((fragment) => composeFile.includes(fragment));
+  const postgresRuntimeReady = [
+    "postgres:",
+    "postgres:16-alpine",
+    "POSTGRES_DB: ${BRAINSTY_POSTGRES_DB:-brainstyworkers}",
+    "POSTGRES_USER: ${BRAINSTY_POSTGRES_USER:-brainsty}",
+    "POSTGRES_PASSWORD: ${BRAINSTY_POSTGRES_PASSWORD:-brainsty-dev-only}",
+    "${BRAINSTY_COMPOSE_POSTGRES_PORT:-55432}:5432",
+    "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
+    "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
+    "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
+    "project/db/postgres-init"
+  ].every((fragment) => composeFile.includes(fragment));
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
     files,
     missing,
-    services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb"],
+    services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb", "postgres"],
+    postgresRuntimeReady,
+    postgresRuntimeStatus: postgresRuntimeReady ? "postgres_compose_profile_present" : "postgres_compose_profile_missing",
+    postgresLiveReady: process.env.BRAINSTY_POSTGRES_LIVE_READY === "1",
+    storageSmokeCommand: "npm run storage:postgres:smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -224,6 +245,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
   const deployment = await safeDeploymentContractStatus();
+  const storage = getStorageReadiness({ deployment });
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
     ready: false,
@@ -267,6 +289,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "graphiti_container_product_memory",
         status: productMemorySchemaReady ? "graphiti_schema_ready" : deployment.graphitiRuntimeStatus,
         target: "Node connector image can run real Graphiti/FalkorDB product memory when credentials enable the adapter."
+      },
+      {
+        key: "postgres_storage_profile",
+        status: storage.status,
+        target: "Docker Compose defines a Postgres transactional storage target while the current app runtime remains safely on SQLite until migration tests pass."
       }
     ],
     checks: [
@@ -286,6 +313,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         status: deployment.graphitiRuntimeStatus,
         ok: deployment.graphitiRuntimeReady,
         command: deployment.memorySmokeCommand
+      },
+      {
+        key: "database_storage",
+        status: storage.status,
+        ok: storage.ok,
+        runtimeDriver: storage.runtimeDriver,
+        productionTarget: storage.postgres.target ? "postgres" : "unknown",
+        migrationPending: storage.migrationPending,
+        command: storage.postgres.smokeCommand
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
@@ -321,6 +357,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
             ? "runtime_present_enable_graphiti_for_live_schema"
             : "needs_graphiti_runtime"
       },
+      {
+        key: "database_product_ready_architecture",
+        score: storage.score,
+        target: storage.targetScore,
+        status: storage.postgres.liveReady
+          ? "postgres_live_ready_runtime_migration_pending"
+          : storage.postgres.composeReady
+            ? "postgres_compose_profile_present_runtime_migration_pending"
+            : "needs_postgres_profile"
+      },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },
       { key: "approval_audit_scaffolding", score: 85, target: 85, status: "pass_existing_gate" }
@@ -333,6 +379,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       externalWriteActionsWithoutApproval: false,
       rawOcrTextReturned: false
     },
+    storage,
     deployment
   };
 }
@@ -362,7 +409,8 @@ async function handleApi(req, res, url) {
         configured: getOpenAiConfig().configured,
         model: getOpenAiConfig().model
       },
-      productMemory: await safeProductMemoryStatus()
+      productMemory: await safeProductMemoryStatus(),
+      storage: getStorageReadiness({ deployment: await safeDeploymentContractStatus() })
     });
     return;
   }

@@ -6529,3 +6529,42 @@ Known risks or gaps:
 - Secrets are passed at runtime, not baked into the image. A production secret manager is still required.
 - FalkorDB is containerized with a local Docker volume; managed graph storage or production backup/restore policy is still pending.
 - OpenClaw official profile/browser readiness remains a blocker inside the compose image.
+
+## Postgres Storage Deployment Profile Cycle - 2026-06-15
+
+Status: Implemented and verified as a live Postgres deployment target, with the application runtime intentionally still on the bound-parameter SQLite store until adapter migration tests are added.
+
+Implemented:
+- Added a `postgres` service to `compose.yaml` using `postgres:16-alpine`, a health check, configurable `BRAINSTY_COMPOSE_POSTGRES_PORT`, persistent `postgres_data`, and the init mount `project/db/postgres-init:/docker-entrypoint-initdb.d:ro`.
+- Added `project/db/postgres-init/001_storage_readiness.sql` with the storage readiness table and contract row.
+- Added `src/concierge/storageReadiness.mjs` to report runtime driver, SQLite safety, Postgres target/configuration/live readiness, redacted database URL, migration-pending state, and a storage score.
+- Added `scripts/storage-contract.mjs`, `npm run storage:contract`, and `npm run storage:postgres:smoke`.
+- Added `src/tests/deployment-storage.test.mjs` and included it in `npm run test:docker:contract`.
+- Updated `Dockerfile.node`, `compose.yaml`, `scripts/compose-contract.mjs`, `src/server/build-check.mjs`, and the connector proof endpoint so the dashboard reports `postgres_storage_profile`, `database_storage`, and `database_product_ready_architecture`.
+
+Verification commands:
+- `node --check scripts/storage-contract.mjs` passed.
+- `node --check src/concierge/storageReadiness.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `npm run storage:contract` passed.
+- `npm run storage:postgres:smoke` passed and returned readiness row `brainstyworkers-postgres-live-smoke | 2026-06-15.postgres-storage-profile.v1 | postgres`.
+- `npm run test:docker:contract` passed with 6/6 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 202 tests total, 200 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 npm run docker:memory:smoke` passed after the rebuild.
+- `docker compose ps` showed Postgres, Node, FastAPI, PWA, and FalkorDB running; Postgres, Node, FastAPI, and PWA were healthy.
+- Direct connector proof at `http://127.0.0.1:4273/api/proof/runs/phase11-postgres-storage` reported `storage.status=postgres_live_ready_sqlite_runtime`, `score=85`, `targetScore=100`, `appRuntimeMigratedToPostgres=false`, `migrationPending=true`, and a redacted database URL.
+- Browser dashboard proof at `http://127.0.0.1:4273/?phase=postgres-storage` showed `postgres_storage_profile`, `database_storage`, `database_product_ready_architecture=85 / 100`, `postgres_live_ready_sqlite_runtime`, and `migrationPending=true` with 0 console errors.
+
+Visual artifact:
+- `artifacts/phase11-postgres-storage-dashboard-proof.png`
+
+Score decision:
+- Database product-ready architecture: improved from local-volume-only toward `85 / 100` because compose now contains a live Postgres target and smoke proof.
+- The score does not reach `100 / 100` because application state still runs through the SQLite adapter and the Postgres application adapter/migration tests are not implemented.
+- Product memory container proof remains passing after the rebuild.
+
+Known risks or gaps:
+- `BRAINSTY_DB_DRIVER=postgres` is not yet supported as the default app runtime path.
+- Transactional leases, concurrent worker claims, migration rollback tests, and hosted backup/restore proof are still pending.
+- Production secret-manager integration is still needed before a remote deployment should use real credentials.

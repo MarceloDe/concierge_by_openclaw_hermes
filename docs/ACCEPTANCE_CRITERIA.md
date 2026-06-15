@@ -1620,3 +1620,23 @@ Current proof status:
 - `BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke` passed.
 - The smoke reported `adapter=graphiti`, `schemaReady=true`, `backend=falkordb`, `rawEpisodeStorage=false`, replay queue empty, one retained episode, one recalled fact, and `cortexProductMemory=false`.
 - Dashboard visual proof was saved to `artifacts/phase11-graphiti-container-dashboard-proof.png` and showed `product_memory_deployment=100 / 100`.
+
+## Postgres Storage Deployment Profile Acceptance
+
+This slice is acceptable when:
+
+- `compose.yaml` defines a Postgres service with a health check, persistent data volume, configurable host port, and initialization SQL mount.
+- The Node runtime container receives a redacted/reportable database profile: `BRAINSTY_DB_DRIVER`, `BRAINSTY_DATABASE_TARGET`, `BRAINSTY_DATABASE_URL`, and `BRAINSTY_POSTGRES_LIVE_READY`.
+- The application runtime still defaults to the existing bound-parameter SQLite store until a Postgres adapter and migration tests are implemented.
+- The dashboard/API storage readiness contract reports runtime driver, Postgres target, compose readiness, live smoke readiness, redacted database URL, and migration-pending state.
+- `npm run storage:contract` passes.
+- `npm run storage:postgres:smoke` passes against the running compose stack by writing and reading `brainsty_storage_readiness`.
+- `npm run test:docker:contract`, `npm run build`, and `npm run test:local` remain green.
+
+Current proof status:
+
+- Verified on 2026-06-15 with alternate compose ports `4273`, `8100`, `3100`, `6480`, `3101`, and Postgres host port `55432`.
+- `docker compose ps` showed Postgres, Node, FastAPI, PWA, and FalkorDB running, with Postgres, Node, FastAPI, and PWA healthy.
+- `npm run storage:postgres:smoke` returned `brainstyworkers-postgres-live-smoke`, contract version `2026-06-15.postgres-storage-profile.v1`, and service `postgres`.
+- The connector proof reported `storage.status=postgres_live_ready_sqlite_runtime`, `score=85`, `targetScore=100`, `appRuntimeMigratedToPostgres=false`, and `migrationPending=true`.
+- Browser proof showed the Postgres storage goal, database storage check, database architecture score, live-ready status, and migration-pending state with 0 console errors. Screenshot: `artifacts/phase11-postgres-storage-dashboard-proof.png`.

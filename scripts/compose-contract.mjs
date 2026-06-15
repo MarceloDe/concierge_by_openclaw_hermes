@@ -14,6 +14,10 @@ const REQUIRED_FILES = [
   "Dockerfile.api",
   "apps/mobile-next/Dockerfile",
   "compose.yaml",
+  "scripts/storage-contract.mjs",
+  "project/db/postgres-init/001_storage_readiness.sql",
+  "src/concierge/storageReadiness.mjs",
+  "src/tests/deployment-storage.test.mjs",
   "scripts/compose-memory-smoke.mjs",
   "tools/graphiti/graphiti_bridge.py",
   "vendor/getzep-graphiti/pyproject.toml",
@@ -25,8 +29,14 @@ const COMPOSE_FRAGMENTS = [
   "fastapi:",
   "mobile-pwa:",
   "falkordb:",
+  "postgres:",
+  "postgres:16-alpine",
   "WEFELLA_NODE_RUNTIME_URL: http://node-runtime:4173",
   "BRAINSTY_CONNECTOR_API_BASE: http://fastapi:8000",
+  "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
+  "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
+  "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
+  "BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}",
   "BRAINSTY_PRODUCT_MEMORY_ADAPTER: ${BRAINSTY_PRODUCT_MEMORY_ADAPTER:-disabled}",
   "OPENAI_API_KEY: ${OPENAI_API_KEY:-}",
   "GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}",
@@ -37,7 +47,8 @@ const COMPOSE_FRAGMENTS = [
   "condition: service_healthy",
   "node_runtime_data:",
   "fastapi_data:",
-  "falkordb_data:"
+  "falkordb_data:",
+  "postgres_data:"
 ];
 
 const DOCKERIGNORE_FRAGMENTS = [
@@ -91,7 +102,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
         "graphiti_core.driver.falkordb_driver",
         "USER node",
         "HEALTHCHECK",
-        "/api/health"
+        "/api/health",
+        "BRAINSTY_DB_DRIVER"
       ]
     ],
     ["Dockerfile.api", apiDockerfile, ["python:3.12-slim", "project/requirements.txt", "USER app", "HEALTHCHECK", "/api/v1/health"]],
@@ -117,7 +129,7 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       });
       dockerConfig = {
         checked: true,
-        ok: stdout.includes("node-runtime") && stdout.includes("fastapi") && stdout.includes("mobile-pwa"),
+        ok: stdout.includes("node-runtime") && stdout.includes("fastapi") && stdout.includes("mobile-pwa") && stdout.includes("postgres"),
         error: null
       };
       if (!dockerConfig.ok) {
@@ -132,7 +144,13 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
   return {
     ok: true,
     files: REQUIRED_FILES,
-    services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb"],
+    services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb", "postgres"],
+    storageRuntime: {
+      runtimeDriverDefault: "sqlite",
+      productionTarget: "postgres",
+      composeService: "postgres",
+      smokeCommand: "npm run storage:postgres:smoke"
+    },
     graphitiRuntime: {
       dockerfileReady: true,
       bridge: "tools/graphiti/graphiti_bridge.py",
