@@ -437,3 +437,35 @@ Verification:
 - `npm run test:db:safety` passed with 15/15 tests.
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser proof at `http://127.0.0.1:4196/?phase=postgres-production-profile` showed `postgres_production_profile=postgres_docker_secret_runtime_profile_present`, `database_deployment_profile=100 / 100`, and 0 console errors. Screenshot: `artifacts/phase11-postgres-production-profile-dashboard-proof.jpg`.
+
+## Phase 12 Postgres Profile Live Regression Update
+
+Code changes:
+- Added endpoint-wide Postgres regression smoke and live Docker-secret compose profile smoke commands.
+- Added contract coverage for the new smokes in `npm run test:docker:contract`.
+- Extended the dashboard/API proof payload with `postgres_endpoint_regression` and `postgres_profile_live_smoke`.
+- Updated the Node Docker image context so `compose.postgres.yaml` and safe deployment secret docs are available inside proof surfaces while runtime secrets remain excluded.
+
+Verification:
+- `node --check` passed for the new smoke scripts, compose/storage contracts, server, and build guard.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 12/12 tests.
+- `npm run storage:contract` passed.
+- `npm run build` passed.
+- `node --test src/tests/final-system-verification-report.test.mjs` passed with 2/2 tests.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- `npm run storage:postgres:endpoint-regression-smoke` passed with Node running on Postgres, database score `100 / 100`, deployment profile score `100 / 100`, OpenClaw skill count `3`, auth/session creation, memory context, chat final response, and proposal-only skill-envelope validation.
+- `BRAINSTY_PROFILE_SMOKE_KEEP_STACK=1 npm run storage:postgres:profile-live-smoke` passed with Node, FastAPI, PWA, Postgres, and FalkorDB running through `compose.yaml + compose.postgres.yaml` on isolated ports.
+- The live profile smoke verified Node `/api/health`, dashboard proof, FastAPI `/api/v1/health`, and PWA `/`, with no raw database URL or raw secret-file path leakage.
+- In-app browser visual verification passed for the dashboard and PWA with 0 console errors.
+- Screenshot artifacts:
+  - `artifacts/phase12-postgres-profile-live-dashboard-proof.png`
+  - `artifacts/phase12-postgres-profile-live-pwa-proof.png`
+- The temporary compose project was torn down, volumes removed, runtime secret files deleted, and all temporary ports verified clear.
+
+Score:
+- `database_product_ready_architecture` remains eligible for `100 / 100` when the Postgres runtime, operational gates, secret profile, and default rollout gates are all enabled by proof.
+- `database_deployment_profile` is now live-profile verified at `100 / 100`, not only statically contracted.
+- Remaining production work is hosted secret-manager selection, hosted backup scheduling/restore runbooks, and the broader hosted remote-browser/mobile proof beyond the local CDP adapter.

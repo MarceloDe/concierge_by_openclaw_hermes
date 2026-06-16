@@ -6856,3 +6856,84 @@ Verification so far:
 
 Next proof:
 - Run the profile with a real provider secret file or managed secret mount when deployment credentials are available.
+
+## Phase 12 Postgres Profile Live Regression Update
+
+Status: Implemented, live-smoked, visually verified, and cleaned up.
+
+Slice name:
+- Endpoint-wide Postgres regression and live Docker-secret compose profile proof.
+
+Code changes:
+- Added `scripts/postgres-endpoint-regression-smoke.mjs`.
+- Added `scripts/postgres-production-profile-live-smoke.mjs`.
+- Added `src/tests/postgres-production-profile-live-contract.test.mjs`.
+- Added package scripts:
+  - `storage:postgres:endpoint-regression-smoke`;
+  - `storage:postgres:profile-live-smoke`.
+- Updated compose/storage contracts, server proof payload, build guard, Docker image context, and deployment storage tests.
+- Updated `.dockerignore` so safe deployment secret docs remain available while real runtime secret files stay excluded.
+- Updated `Dockerfile.node` so the Node image contains `compose.postgres.yaml` for dashboard proof.
+
+Verification commands:
+- `node --check scripts/postgres-endpoint-regression-smoke.mjs`
+- `node --check scripts/postgres-production-profile-live-smoke.mjs`
+- `node --check scripts/storage-contract.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/server/build-check.mjs`
+- `node --test src/tests/postgres-production-profile-live-contract.test.mjs src/tests/deployment-compose.test.mjs src/tests/deployment-storage.test.mjs`
+- `npm run test:docker:contract`
+- `npm run storage:contract`
+- `npm run storage:postgres:endpoint-regression-smoke`
+- `BRAINSTY_PROFILE_SMOKE_KEEP_STACK=1 npm run storage:postgres:profile-live-smoke`
+- `npm run build`
+- `node --test src/tests/final-system-verification-report.test.mjs`
+- `npm run test:db:postgres`
+- `npm run test:db:safety`
+- `npm run test:local`
+
+Verification result:
+- Focused syntax checks passed.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 12/12 tests.
+- `npm run storage:contract` passed and reported the new endpoint/live profile commands.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Endpoint regression smoke passed with:
+  - `databaseDriver=postgres`;
+  - adapter `2026-06-16.pg-bound-store-parity.v1`;
+  - `storage.status=postgres_production_ready`;
+  - `database_product_ready_architecture=100 / 100`;
+  - `database_deployment_profile=100 / 100`;
+  - OpenClaw skill count `3`;
+  - chat final response present;
+  - skill-envelope `executionMode=proposal_only` and `actionsTakenCount=0`.
+- Live profile smoke passed with:
+  - isolated compose ports `4296`, `8296`, `3296`, `65432`, `6580`, and `3297`;
+  - Node `/api/health` on Postgres with score `100`;
+  - FastAPI `/api/v1/health` with `nodeRuntimeOk=true`;
+  - PWA `/` status `200`;
+  - no raw database URL, raw secret-file path, or external action leakage.
+- In-app browser dashboard verification passed at `http://127.0.0.1:4296/?phase=postgres-profile-live` with required proof strings present and 0 console errors.
+- In-app browser PWA verification passed at `http://127.0.0.1:3296/` with regular-user Session/Journey/Worker/Evidence/Answer surfaces present and 0 console errors.
+- Screenshot artifacts:
+  - `artifacts/phase12-postgres-profile-live-dashboard-proof.png`
+  - `artifacts/phase12-postgres-profile-live-pwa-proof.png`
+- Cleanup proof:
+  - temporary compose project `brainstyworkers-profile-smoke-1781647680491` was torn down with volumes removed;
+  - `project/deployment/secrets/.runtime` was deleted;
+  - ports `4296`, `8296`, `3296`, `65432`, `6580`, and `3297` were verified clear.
+
+What the user can try locally:
+- Run `npm run storage:postgres:endpoint-regression-smoke` with Docker Postgres available.
+- Run `npm run storage:postgres:profile-live-smoke` to prove the Postgres Docker-secret compose profile end to end.
+- Use `BRAINSTY_PROFILE_SMOKE_KEEP_STACK=1 npm run storage:postgres:profile-live-smoke` when a visual dashboard/PWA proof is needed before automatic teardown.
+
+Known risks or gaps:
+- The smoke uses a local Docker-secret-compatible file, not the hosted deployment's final secret manager.
+- Hosted backup scheduling and operator restore runbooks are still follow-up production work.
+- Base compose still defaults to SQLite for local developer safety until the user explicitly approves changing the general default.

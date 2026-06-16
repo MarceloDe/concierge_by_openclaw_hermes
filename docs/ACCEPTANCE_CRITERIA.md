@@ -1742,3 +1742,27 @@ Current proof status:
 - Browser proof passed at `http://127.0.0.1:4196/?phase=postgres-production-profile` with 0 console errors.
 - Dashboard proof showed `postgres_production_profile=postgres_docker_secret_runtime_profile_present` and `database_deployment_profile=100 / 100`.
 - Screenshot: `artifacts/phase11-postgres-production-profile-dashboard-proof.jpg`.
+
+## Postgres Profile Live Regression Acceptance
+
+This slice is acceptable when:
+
+- The repo contains endpoint-wide and live compose-profile smoke commands for the Postgres Docker-secret runtime profile.
+- The endpoint regression smoke starts Node with Postgres selected and proves health, dashboard proof, OpenClaw skills, auth/session creation, memory context, chat, and skill-envelope validation without unapproved external/write actions.
+- The live profile smoke starts `compose.yaml + compose.postgres.yaml` with a Docker-secret database URL and verifies Node, FastAPI, PWA, Postgres, and dashboard proof readiness.
+- Health/proof artifacts do not write raw database URLs or raw secret-file paths.
+- The operator dashboard shows the endpoint regression gate, live profile smoke gate, Postgres production-ready storage, and `database_deployment_profile=100 / 100`.
+- The mobile PWA loads from the live profile stack and shows the regular-user journey/worker/evidence/answer surface.
+- The temporary compose project and runtime secret directory are removed after visual proof.
+
+Current proof status:
+
+- `npm run storage:postgres:endpoint-regression-smoke` passed against live Docker Postgres.
+- `BRAINSTY_PROFILE_SMOKE_KEEP_STACK=1 npm run storage:postgres:profile-live-smoke` passed with a temporary compose project using ports `4296`, `8296`, `3296`, `65432`, `6580`, and `3297`.
+- The live smoke reported `databaseDriver=postgres`, `storage.status=postgres_production_ready`, `database_product_ready_architecture=100 / 100`, `database_deployment_profile=100 / 100`, FastAPI `nodeRuntimeOk=true`, PWA `/` status `200`, and no raw secret leakage.
+- In-app browser verification passed for the dashboard at `http://127.0.0.1:4296/?phase=postgres-profile-live`; required proof strings were present and console error count was `0`.
+- In-app browser verification passed for the PWA at `http://127.0.0.1:3296/`; regular-user Session, Journey, Worker, Evidence, and Answer surfaces were present and console error count was `0`.
+- Screenshot artifacts:
+  - `artifacts/phase12-postgres-profile-live-dashboard-proof.png`
+  - `artifacts/phase12-postgres-profile-live-pwa-proof.png`
+- The temporary compose project was torn down with volumes removed, `project/deployment/secrets/.runtime` was deleted, and ports `4296`, `8296`, `3296`, `65432`, `6580`, and `3297` were verified clear.

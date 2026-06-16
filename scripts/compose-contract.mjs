@@ -21,6 +21,8 @@ const REQUIRED_FILES = [
   "scripts/postgres-production-readiness-smoke.mjs",
   "scripts/postgres-default-rollout-smoke.mjs",
   "scripts/postgres-production-profile-contract.mjs",
+  "scripts/postgres-endpoint-regression-smoke.mjs",
+  "scripts/postgres-production-profile-live-smoke.mjs",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
   "project/db/postgres-init/001_storage_readiness.sql",
@@ -31,6 +33,7 @@ const REQUIRED_FILES = [
   "src/concierge/storageReadiness.mjs",
   "src/tests/deployment-storage.test.mjs",
   "src/tests/postgres-production-profile-contract.test.mjs",
+  "src/tests/postgres-production-profile-live-contract.test.mjs",
   "src/tests/postgres-production-readiness-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "scripts/compose-memory-smoke.mjs",
@@ -128,7 +131,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
         "USER node",
         "HEALTHCHECK",
         "/api/health",
-        "BRAINSTY_DB_DRIVER"
+        "BRAINSTY_DB_DRIVER",
+        "compose.postgres.yaml"
       ]
     ],
     ["Dockerfile.api", apiDockerfile, ["python:3.12-slim", "project/requirements.txt", "USER app", "HEALTHCHECK", "/api/v1/health"]],
@@ -180,7 +184,9 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
       productionSmokeCommand: "npm run storage:postgres:production-smoke",
       defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
-      productionProfileCommand: "npm run storage:postgres:profile-contract"
+      productionProfileCommand: "npm run storage:postgres:profile-contract",
+      endpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
+      productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke"
     },
     postgresProductionProfile,
     graphitiRuntime: {

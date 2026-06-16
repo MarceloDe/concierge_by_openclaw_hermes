@@ -45,7 +45,7 @@ RUN mkdir -p /app/data && chown -R node:node /app/data
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
-COPY .dockerignore Dockerfile.node Dockerfile.api compose.yaml ./
+COPY .dockerignore Dockerfile.node Dockerfile.api compose.yaml compose.postgres.yaml ./
 COPY brainstyworkers_ai_concierge_prompt.md README.md ./
 COPY src ./src
 COPY scripts ./scripts

@@ -180,6 +180,8 @@ async function safeDeploymentContractStatus() {
     "scripts/postgres-production-readiness-smoke.mjs",
     "scripts/postgres-default-rollout-smoke.mjs",
     "scripts/postgres-production-profile-contract.mjs",
+    "scripts/postgres-endpoint-regression-smoke.mjs",
+    "scripts/postgres-production-profile-live-smoke.mjs",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
     "scripts/compose-memory-smoke.mjs",
@@ -195,6 +197,7 @@ async function safeDeploymentContractStatus() {
     "src/tests/worker-leases.test.mjs",
     "src/tests/postgres-production-readiness-contract.test.mjs",
     "src/tests/postgres-production-profile-contract.test.mjs",
+    "src/tests/postgres-production-profile-live-contract.test.mjs",
     "tools/graphiti/graphiti_bridge.py",
     "vendor/getzep-graphiti/pyproject.toml"
   ];
@@ -282,6 +285,8 @@ async function safeDeploymentContractStatus() {
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
     postgresDefaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
     postgresProductionProfileCommand: "npm run storage:postgres:profile-contract",
+    postgresEndpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
+    postgresProductionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -397,6 +402,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         status: deployment.postgresProductionProfileStatus,
         ok: deployment.postgresProductionProfileReady,
         command: deployment.postgresProductionProfileCommand
+      },
+      {
+        key: "postgres_endpoint_regression",
+        status: "available_smoke_gate",
+        ok: deployment.postgresProductionProfileReady,
+        command: deployment.postgresEndpointRegressionCommand
+      },
+      {
+        key: "postgres_profile_live_smoke",
+        status: "available_live_profile_gate",
+        ok: deployment.postgresProductionProfileReady,
+        command: deployment.postgresProductionProfileLiveCommand
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }

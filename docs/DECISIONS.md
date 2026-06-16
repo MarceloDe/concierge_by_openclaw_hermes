@@ -2062,3 +2062,22 @@ This gives remote applications and deployment operators a concrete server-only c
 
 Cost of changing later:
 Low. A hosted cloud secret manager can replace the Docker secret source, or a provider-specific compose/Helm profile can mount the same `BRAINSTY_DATABASE_URL_FILE` contract, without changing storage readiness or the public connector API.
+
+## 2026-06-16 - Require Live Profile Regression Before Treating Postgres Profile As Deployable
+
+Context:
+The Docker-secret Postgres override proved its static compose contract, but remote applications need confidence that the separated stack actually boots with Postgres selected as the Node runtime and that `/api/v1`, the PWA, dashboard proof, OpenClaw skill routing, session creation, memory context, chat, and skill-envelope validation still work together.
+
+Options considered:
+- Treat the static `compose.postgres.yaml` contract as enough deployment proof.
+- Flip the base compose default from SQLite to Postgres immediately.
+- Add live endpoint and compose-profile smoke gates while preserving SQLite as the safe local default.
+
+Decision:
+Add endpoint-wide Postgres regression and live Docker-secret profile smoke gates. The profile smoke creates a local runtime secret file outside image context, starts the separated stack on isolated ports, verifies Node/FastAPI/PWA/dashboard proof, writes sanitized artifacts, and then tears the stack down after visual proof.
+
+Reason:
+This proves the profile works as a server-only connector without over-claiming hosted production deployment. It also keeps developer startup stable: the base compose file still defaults to SQLite, while operators can explicitly run the Postgres override and must still satisfy evidence gates.
+
+Cost of changing later:
+Low. A managed cloud secret mount, hosted Postgres provider, or orchestration platform can replace the local Docker-secret file while keeping the same `BRAINSTY_DATABASE_URL_FILE`, readiness flags, `/api/v1`, and dashboard proof contract.

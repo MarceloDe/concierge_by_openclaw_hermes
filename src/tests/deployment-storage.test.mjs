@@ -14,6 +14,8 @@ test("storage contract defines a Postgres deployment target while preserving SQL
   assert.equal(result.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
   assert.equal(result.productionSmokeCommand, "npm run storage:postgres:production-smoke");
   assert.equal(result.productionProfileCommand, "npm run storage:postgres:profile-contract");
+  assert.equal(result.endpointRegressionCommand, "npm run storage:postgres:endpoint-regression-smoke");
+  assert.equal(result.productionProfileLiveCommand, "npm run storage:postgres:profile-live-smoke");
   assert.equal(result.appRuntimeMigratedToPostgres, false);
   assert.deepEqual(result.services, ["postgres"]);
   assert.equal(result.livePostgres.checked, false);

@@ -2158,3 +2158,30 @@ Remaining follow-up:
 - Run a real deployment profile startup with a provider secret file or managed secret value instead of the placeholder example.
 - Add hosted backup schedule and restore-runbook automation for the deployment target.
 - Keep local compose on SQLite by default until the user explicitly chooses to flip the general developer default.
+
+## Postgres Profile Live Regression Cycle - 2026-06-16
+
+Goal:
+- Prove the Postgres Docker-secret runtime profile is not only a static compose contract, but can start the separated server connector stack with Postgres selected as the Node application runtime and still pass endpoint, FastAPI, PWA, and dashboard proof gates.
+
+Implemented slice:
+- Add `scripts/postgres-endpoint-regression-smoke.mjs` and `npm run storage:postgres:endpoint-regression-smoke`.
+- Add `scripts/postgres-production-profile-live-smoke.mjs` and `npm run storage:postgres:profile-live-smoke`.
+- Add `src/tests/postgres-production-profile-live-contract.test.mjs` and include it in `npm run test:docker:contract`.
+- Extend compose/storage/build/server contracts so the dashboard proof exposes:
+  - `postgres_endpoint_regression=available_smoke_gate`;
+  - `postgres_profile_live_smoke=available_live_profile_gate`;
+  - `database_deployment_profile=100 / 100` when the Docker-secret profile is present.
+- Update `Dockerfile.node` and `.dockerignore` so the Node image contains `compose.postgres.yaml` and safe secret documentation, while real runtime secret files remain excluded.
+
+Acceptance:
+- `npm run storage:postgres:endpoint-regression-smoke` boots a temporary Node server with `BRAINSTY_DB_DRIVER=postgres`, exercises health, proof, OpenClaw skills, auth/session creation, memory context, chat, and skill-envelope validation, and writes a sanitized artifact.
+- `BRAINSTY_PROFILE_SMOKE_KEEP_STACK=1 npm run storage:postgres:profile-live-smoke` starts a real compose stack with `compose.yaml + compose.postgres.yaml`, a Docker-secret database URL, Node, FastAPI, PWA, Postgres, FalkorDB, and all proof flags enabled by the smoke.
+- The live profile smoke proves Node `/api/health`, dashboard proof, FastAPI `/api/v1/health`, and PWA `/` while avoiding raw database URL or secret path disclosure.
+- Browser proof shows the dashboard profile fields and the mobile PWA user surface.
+- The temporary profile stack is torn down and runtime secret files are removed after proof.
+
+Remaining follow-up:
+- Replace the local smoke-created Docker secret file with the hosted deployment's real secret manager or provider secret mount.
+- Add hosted scheduled backup/restore runbooks beyond the logical smoke.
+- Continue the broader remote-browser/mobile proof work for hosted sandbox providers, production auth, and full regular-user journeys.

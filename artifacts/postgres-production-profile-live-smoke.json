@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "version": "2026-06-16.postgres-production-profile-live.v1",
+  "projectName": "brainstyworkers-profile-smoke-1781647680491",
+  "keptStack": true,
+  "ports": {
+    "node": "4296",
+    "api": "8296",
+    "mobile": "3296",
+    "postgres": "65432",
+    "falkordb": "6580",
+    "falkordbUi": "3297"
+  },
+  "commands": [
+    "docker compose -p brainstyworkers-profile-smoke-1781647680491 -f compose.yaml -f compose.postgres.yaml up -d postgres",
+    "docker compose -p brainstyworkers-profile-smoke-1781647680491 -f compose.yaml -f compose.postgres.yaml up -d --build node-runtime fastapi mobile-pwa"
+  ],
+  "secretFilePathHashes": {
+    "host": "7ca82e7e79aa30e8cfc0607308040f301e2cb7fbc37b24463d6ba0c7f5b666aa",
+    "docker": "b44c7a4539ab4eb22183cf76962c771fa6d63e90a6fb5993427f295fdba41100"
+  },
+  "defaultRollout": {
+    "ok": true,
+    "status": "postgres_default_rollout_rehearsed",
+    "storage": {
+      "status": "postgres_production_ready",
+      "score": 100,
+      "targetScore": 100,
+      "runtimeDriver": "postgres",
+      "fullMigrationReady": true,
+      "migrationPending": false,
+      "defaultRolloutReady": true,
+      "secretProfileReady": true,
+      "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:65432/brainstyworkers?sslmode=disable"
+    },
+    "productionSmoke": {
+      "ok": true,
+      "version": "2026-06-16.postgres-production-readiness.v1",
+      "adapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+      "leaseVersion": "2026-06-16.worker-leases.v1",
+      "driver": "postgres",
+      "endpointParityOk": true,
+      "workerLeaseOk": true,
+      "backupRestoreOk": true,
+      "tableCount": 55,
+      "comparedTables": 17,
+      "countMismatches": []
+    }
+  },
+  "checks": {
+    "nodeHealth": {
+      "databaseDriver": "postgres",
+      "databaseAdapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+      "storageStatus": "postgres_production_ready",
+      "storageScore": 100,
+      "fullMigrationReady": true,
+      "migrationPending": false
+    },
+    "connectorProof": {
+      "status": "cycle_contract_ready",
+      "databaseProductReadyScore": {
+        "key": "database_product_ready_architecture",
+        "score": 100,
+        "target": 100,
+        "status": "postgres_production_ready"
+      },
+      "databaseDeploymentProfileScore": {
+        "key": "database_deployment_profile",
+        "score": 100,
+        "target": 100,
+        "status": "postgres_docker_secret_runtime_profile_present"
+      }
+    },
+    "fastapi": {
+      "status": "ok",
+      "nodeRuntimeOk": true
+    },
+    "mobile": {
+      "ok": true,
+      "status": 200
+    }
+  },
+  "safety": {
+    "dockerSecretSource": true,
+    "rawDatabaseUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "externalActions": false,
+    "productMemoryAdapter": "disabled"
+  }
+}
