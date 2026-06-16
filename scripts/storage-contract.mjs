@@ -3,6 +3,7 @@ import { readFile, access } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { assertPostgresProductionProfileContract } from "./postgres-production-profile-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -20,8 +21,13 @@ const REQUIRED_FILES = [
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
   "scripts/postgres-default-rollout-smoke.mjs",
+  "scripts/postgres-production-profile-contract.mjs",
+  "compose.postgres.yaml",
+  "project/deployment/secrets/README.md",
+  "project/deployment/secrets/database-url.example",
   "src/tests/postgres-store-contract.test.mjs",
   "src/tests/postgres-production-readiness-contract.test.mjs",
+  "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "src/tests/deployment-storage.test.mjs"
 ];
@@ -49,6 +55,14 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
   "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
   "postgres_data:"
+];
+
+const PROFILE_COMPOSE_FRAGMENTS = [
+  "BRAINSTY_DB_DRIVER: postgres",
+  "BRAINSTY_DATABASE_URL_FILE: /run/secrets/brainsty_database_url",
+  "BRAINSTY_DATABASE_SECRET_SOURCE: docker_secret",
+  "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
+  "source: brainsty_database_url"
 ];
 
 function assertIncludes(body, fragments, label) {
@@ -104,8 +118,20 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
   }
   if (missingFiles.length) throw new Error(`Missing storage contract files: ${missingFiles.join(", ")}`);
 
-  const [compose, storageModule, initSql, postgresStore, secretProfile, workerLeases, runtimeSmoke, productionSmoke, defaultRolloutSmoke] = await Promise.all([
+  const [
+    compose,
+    profileCompose,
+    storageModule,
+    initSql,
+    postgresStore,
+    secretProfile,
+    workerLeases,
+    runtimeSmoke,
+    productionSmoke,
+    defaultRolloutSmoke
+  ] = await Promise.all([
     readFile(resolve(REPO_ROOT, "compose.yaml"), "utf8"),
+    readFile(resolve(REPO_ROOT, "compose.postgres.yaml"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/storageReadiness.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "project/db/postgres-init/001_storage_readiness.sql"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/postgresStore.mjs"), "utf8"),
@@ -117,6 +143,7 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
   ]);
 
   assertIncludes(compose, COMPOSE_FRAGMENTS, "compose.yaml");
+  assertIncludes(profileCompose, PROFILE_COMPOSE_FRAGMENTS, "compose.postgres.yaml");
   assertIncludes(
     storageModule,
     [
@@ -150,6 +177,7 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     "postgres-default-rollout-smoke.mjs"
   );
   assertIncludes(initSql, ["brainsty_storage_readiness", STORAGE_CONTRACT_VERSION, "ON CONFLICT"], "Postgres init SQL");
+  const postgresProductionProfile = await assertPostgresProductionProfileContract({ verifyDockerConfig: false });
 
   const livePostgres = verifyLivePostgres
     ? await checkPostgresLive()
@@ -169,10 +197,13 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     postgresAdapterReady: true,
     postgresProductionReadinessReady: true,
     postgresDefaultRolloutReady: true,
+    postgresProductionProfileReady: postgresProductionProfile.ok,
     appRuntimeMigratedToPostgres: false,
     runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     productionSmokeCommand: "npm run storage:postgres:production-smoke",
     defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
+    productionProfileCommand: "npm run storage:postgres:profile-contract",
+    postgresProductionProfile,
     livePostgres
   };
 }

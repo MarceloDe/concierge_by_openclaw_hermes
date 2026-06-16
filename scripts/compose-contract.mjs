@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { assertPostgresProductionProfileContract } from "./postgres-production-profile-contract.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -14,10 +15,14 @@ const REQUIRED_FILES = [
   "Dockerfile.api",
   "apps/mobile-next/Dockerfile",
   "compose.yaml",
+  "compose.postgres.yaml",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
   "scripts/postgres-default-rollout-smoke.mjs",
+  "scripts/postgres-production-profile-contract.mjs",
+  "project/deployment/secrets/README.md",
+  "project/deployment/secrets/database-url.example",
   "project/db/postgres-init/001_storage_readiness.sql",
   "src/concierge/databaseFactory.mjs",
   "src/concierge/databaseSecretProfile.mjs",
@@ -25,6 +30,7 @@ const REQUIRED_FILES = [
   "src/concierge/workerLeases.mjs",
   "src/concierge/storageReadiness.mjs",
   "src/tests/deployment-storage.test.mjs",
+  "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/postgres-production-readiness-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "scripts/compose-memory-smoke.mjs",
@@ -76,7 +82,8 @@ const DOCKERIGNORE_FRAGMENTS = [
   "**/node_modules",
   ".venv-graphiti",
   "data",
-  "artifacts"
+  "artifacts",
+  "project/deployment/secrets"
 ];
 
 export async function assertDeploymentComposeContract({ verifyDockerConfig = false } = {}) {
@@ -137,6 +144,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
     throw new Error("Deployment contract does not visibly preserve the FastAPI-to-Node connector boundary.");
   }
 
+  const postgresProductionProfile = await assertPostgresProductionProfileContract({ verifyDockerConfig: false });
+
   let dockerConfig = { checked: false, ok: null, error: null };
   if (verifyDockerConfig) {
     try {
@@ -170,8 +179,10 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       smokeCommand: "npm run storage:postgres:smoke",
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
       productionSmokeCommand: "npm run storage:postgres:production-smoke",
-      defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke"
+      defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
+      productionProfileCommand: "npm run storage:postgres:profile-contract"
     },
+    postgresProductionProfile,
     graphitiRuntime: {
       dockerfileReady: true,
       bridge: "tools/graphiti/graphiti_bridge.py",

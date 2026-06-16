@@ -1717,3 +1717,28 @@ Current proof status:
 - A temporary server booted on `http://127.0.0.1:4195` with a secret-file backed Postgres URL and all DB gates enabled.
 - The server's `/api/health` and `/api/proof/runs/postgres-default-rollout` reported `database_product_ready_architecture=100 / 100`.
 - Browser proof showed the 100/100 database score with 0 console errors. Screenshot: `artifacts/phase11-postgres-default-rollout-dashboard-proof.png`.
+
+## Postgres Docker-Secret Runtime Profile Acceptance
+
+This slice is acceptable when:
+
+- `compose.postgres.yaml` exists as a dedicated override and base `compose.yaml` still defaults to SQLite.
+- The override selects `BRAINSTY_DB_DRIVER=postgres`, clears direct `BRAINSTY_DATABASE_URL`, and uses `BRAINSTY_DATABASE_URL_FILE=/run/secrets/brainsty_database_url`.
+- The override marks `BRAINSTY_DATABASE_SECRET_SOURCE=docker_secret`.
+- Real database secret files are ignored by Git and excluded from Docker build contexts.
+- The override does not hardcode proof gates to `1`; readiness flags remain environment-controlled and smoke-gated.
+- `npm run storage:postgres:profile-contract` passes.
+- `node scripts/postgres-production-profile-contract.mjs` passes and validates the merged Docker Compose config when Docker is available.
+- `npm run test:docker:contract` includes the production-profile contract tests.
+- The dashboard/API proof includes `postgres_production_profile` and `database_deployment_profile`.
+
+Current proof status:
+
+- `npm run storage:postgres:profile-contract` passed.
+- `node scripts/postgres-production-profile-contract.mjs` passed with `dockerConfig.ok=true`.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 10/10 tests.
+- `npm run storage:contract`, `npm run build`, `npm run test:db:postgres`, `npm run test:db:safety`, and `npm run test:local` passed.
+- Browser proof passed at `http://127.0.0.1:4196/?phase=postgres-production-profile` with 0 console errors.
+- Dashboard proof showed `postgres_production_profile=postgres_docker_secret_runtime_profile_present` and `database_deployment_profile=100 / 100`.
+- Screenshot: `artifacts/phase11-postgres-production-profile-dashboard-proof.jpg`.

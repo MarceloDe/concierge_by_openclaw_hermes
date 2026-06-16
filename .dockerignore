@@ -15,6 +15,7 @@ data
 artifacts
 *.log
 concierge_by_openclaw_hermes
+project/deployment/secrets
 vendor/getzep-graphiti/.git
 vendor/getzep-graphiti/.venv
 vendor/getzep-graphiti/tests

@@ -11,6 +11,10 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.storageRuntime.productionTarget, "postgres");
   assert.equal(result.storageRuntime.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
   assert.equal(result.storageRuntime.productionSmokeCommand, "npm run storage:postgres:production-smoke");
+  assert.equal(result.storageRuntime.productionProfileCommand, "npm run storage:postgres:profile-contract");
+  assert.equal(result.postgresProductionProfile.ok, true);
+  assert.equal(result.postgresProductionProfile.secretSource, "docker_secret");
+  assert.equal(result.postgresProductionProfile.readinessGatesRemainProofControlled, true);
   assert.equal(result.graphitiRuntime.dockerfileReady, true);
   assert.equal(result.graphitiRuntime.backend, "falkordb");
   assert.equal(result.dockerConfig.checked, false);

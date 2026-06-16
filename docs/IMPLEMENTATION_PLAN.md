@@ -2132,3 +2132,29 @@ Remaining follow-up:
 - Replace the local secret-file rehearsal with the hosted deployment's real secret manager or Docker secret mount during actual production rollout.
 - Keep SQLite as the default local developer path until the user explicitly chooses to flip compose defaults.
 - Add hosted scheduled backup/restore runbooks beyond the logical smoke.
+
+## Postgres Docker-Secret Runtime Profile Cycle - 2026-06-16
+
+Goal:
+- Make the server connector stack startable with a dedicated Postgres runtime profile that uses a Docker-secret database URL, while preserving the safe local SQLite default and the existing evidence-based readiness gates.
+
+Implemented slice:
+- Add `compose.postgres.yaml` as an override for `docker compose -f compose.yaml -f compose.postgres.yaml`.
+- The override selects `BRAINSTY_DB_DRIVER=postgres`, clears direct `BRAINSTY_DATABASE_URL`, and mounts `/run/secrets/brainsty_database_url` through the `brainsty_database_url` Docker secret.
+- Add ignored deployment secret placeholders under `project/deployment/secrets/` plus `.gitignore` and `.dockerignore` coverage so real database URLs stay out of Git and image contexts.
+- Add `scripts/postgres-production-profile-contract.mjs` and `npm run storage:postgres:profile-contract`.
+- Include `src/tests/postgres-production-profile-contract.test.mjs` in `npm run test:docker:contract`.
+- Extend storage readiness and the connector proof payload with `postgres.productionProfileReady`, `postgres_production_profile`, and `database_deployment_profile`.
+
+Acceptance:
+- Base `compose.yaml` still defaults to `BRAINSTY_DB_DRIVER=sqlite`.
+- The Postgres override selects the Postgres runtime through `BRAINSTY_DATABASE_URL_FILE=/run/secrets/brainsty_database_url` and `BRAINSTY_DATABASE_SECRET_SOURCE=docker_secret`.
+- The override does not hardcode readiness gates to `1`; runtime, production smoke, worker lease, backup/restore, endpoint parity, secret profile, and default rollout gates remain proof-controlled.
+- `npm run storage:postgres:profile-contract` passes.
+- `node scripts/postgres-production-profile-contract.mjs` validates the merged compose config when Docker is available.
+- `npm run test:docker:contract`, `npm run storage:contract`, `npm run build`, and the dashboard visual proof pass.
+
+Remaining follow-up:
+- Run a real deployment profile startup with a provider secret file or managed secret value instead of the placeholder example.
+- Add hosted backup schedule and restore-runbook automation for the deployment target.
+- Keep local compose on SQLite by default until the user explicitly chooses to flip the general developer default.

@@ -6813,3 +6813,46 @@ Known risks or gaps:
 - The default local compose profile still uses SQLite by default to preserve developer ergonomics.
 - The local proof uses an ephemeral local secret file; production should mount a real Docker secret or managed secret source.
 - Hosted scheduled backup/restore runbooks remain a deployment operations follow-up beyond the logical restore smoke.
+
+## Phase 11 Postgres Docker-Secret Runtime Profile Update
+
+Status: Implemented and visually verified.
+
+Code changes:
+- Added `compose.postgres.yaml` as a Docker Compose override for a Postgres runtime selected through `/run/secrets/brainsty_database_url`.
+- Added ignored deployment secret placeholders under `project/deployment/secrets/`.
+- Added `scripts/postgres-production-profile-contract.mjs`.
+- Added package script `storage:postgres:profile-contract`.
+- Added `src/tests/postgres-production-profile-contract.test.mjs`.
+- Updated compose/storage contracts, storage readiness, build guard, server connector proof payload, `.gitignore`, and `.dockerignore`.
+
+Safety decision:
+- The profile selects the Postgres runtime and Docker-secret source, but does not hardcode proof gates to `1`.
+- Database readiness still reaches `100 / 100` only after runtime, operational, secret-profile, and default-rollout gates are proven.
+- The dashboard now has a separate `database_deployment_profile` score for the existence of the profile.
+
+Verification so far:
+- `node --check scripts/postgres-production-profile-contract.mjs` passed.
+- `node --check scripts/compose-contract.mjs` passed.
+- `node --check scripts/storage-contract.mjs` passed.
+- `node --check src/concierge/storageReadiness.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/server/build-check.mjs` passed.
+- `npm run storage:postgres:profile-contract` passed.
+- `node scripts/postgres-production-profile-contract.mjs` passed and reported `dockerConfig.ok=true`.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 10/10 tests.
+- `npm run storage:contract` passed.
+- `npm run build` passed.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser proof passed at `http://127.0.0.1:4196/?phase=postgres-production-profile` with 0 console errors.
+- Dashboard proof showed:
+  - `postgres_production_profile=postgres_docker_secret_runtime_profile_present`,
+  - `database_deployment_profile=100 / 100`,
+  - `database_product_ready_architecture=75 / 100` on the safe SQLite local default.
+- Screenshot: `artifacts/phase11-postgres-production-profile-dashboard-proof.jpg`.
+
+Next proof:
+- Run the profile with a real provider secret file or managed secret mount when deployment credentials are available.

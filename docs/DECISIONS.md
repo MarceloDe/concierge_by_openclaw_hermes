@@ -2043,3 +2043,22 @@ This makes the final database score meaningful without coupling the local protot
 
 Cost of changing later:
 Low. A hosted secret manager can replace the local secret-file rehearsal by setting `BRAINSTY_DATABASE_SECRET_SOURCE=managed_env` or mounting `BRAINSTY_DATABASE_URL_FILE`; the runtime factory, readiness status, and dashboard fields stay the same.
+
+## 2026-06-16 - Add Docker-Secret Postgres Runtime Profile Without Bypassing Proof Gates
+
+Context:
+The project could already prove a Postgres default rollout in an isolated local smoke, but the compose stack still had no explicit deployment override for a remote/server connector runtime to consume a Docker secret. Simply changing the base compose default to Postgres would make local development fragile, while hardcoding all readiness flags in an override would let operators accidentally claim production readiness without running the smoke gates.
+
+Options considered:
+- Flip base `compose.yaml` from SQLite to Postgres.
+- Add a Postgres override that also sets every readiness flag to `1`.
+- Add a dedicated Postgres Docker-secret override that selects the runtime and secret source, but leaves readiness flags proof-controlled.
+
+Decision:
+Add `compose.postgres.yaml` for Postgres runtime selection through `/run/secrets/brainsty_database_url`. Preserve the SQLite local default in base compose. Keep Postgres live/runtime/prod/lease/backup/endpoint/secret/default-rollout flags environment-controlled with `:-0` defaults, and expose the profile as a separate deployment-profile score in the dashboard.
+
+Reason:
+This gives remote applications and deployment operators a concrete server-only connector profile without weakening the evidence model. The dashboard can say "the Docker-secret profile exists" separately from "the database runtime is fully production ready."
+
+Cost of changing later:
+Low. A hosted cloud secret manager can replace the Docker secret source, or a provider-specific compose/Helm profile can mount the same `BRAINSTY_DATABASE_URL_FILE` contract, without changing storage readiness or the public connector API.

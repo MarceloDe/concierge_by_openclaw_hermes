@@ -10,8 +10,10 @@ test("storage contract defines a Postgres deployment target while preserving SQL
   assert.equal(result.productionTarget, "postgres");
   assert.equal(result.postgresAdapterReady, true);
   assert.equal(result.postgresProductionReadinessReady, true);
+  assert.equal(result.postgresProductionProfileReady, true);
   assert.equal(result.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
   assert.equal(result.productionSmokeCommand, "npm run storage:postgres:production-smoke");
+  assert.equal(result.productionProfileCommand, "npm run storage:postgres:profile-contract");
   assert.equal(result.appRuntimeMigratedToPostgres, false);
   assert.deepEqual(result.services, ["postgres"]);
   assert.equal(result.livePostgres.checked, false);
@@ -88,6 +90,7 @@ test("storage readiness reports production gates without declaring full migratio
   assert.equal(readiness.postgres.backupRestoreReady, true);
   assert.equal(readiness.postgres.endpointParityReady, true);
   assert.equal(readiness.postgres.defaultRolloutReady, true);
+  assert.equal(readiness.postgres.productionProfileReady, false);
   assert.equal(readiness.safety.secretProfileReady, true);
   assert.equal(readiness.appRuntimeMigratedToPostgres, false);
   assert.equal(readiness.fullMigrationReady, false);

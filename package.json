@@ -38,8 +38,9 @@
     "storage:postgres:runtime-smoke": "node scripts/postgres-runtime-smoke.mjs",
     "storage:postgres:production-smoke": "node scripts/postgres-production-readiness-smoke.mjs",
     "storage:postgres:default-rollout-smoke": "node scripts/postgres-default-rollout-smoke.mjs",
+    "storage:postgres:profile-contract": "node scripts/postgres-production-profile-contract.mjs --static-only",
     "test:db:postgres": "node --test src/tests/postgres-store-contract.test.mjs src/tests/postgres-production-readiness-contract.test.mjs src/tests/worker-leases.test.mjs",
-    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs src/tests/postgres-production-profile-contract.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {

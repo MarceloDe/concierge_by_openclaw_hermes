@@ -173,11 +173,15 @@ async function safeDeploymentContractStatus() {
     "Dockerfile.api",
     "apps/mobile-next/Dockerfile",
     "compose.yaml",
+    "compose.postgres.yaml",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
     "scripts/postgres-production-readiness-smoke.mjs",
     "scripts/postgres-default-rollout-smoke.mjs",
+    "scripts/postgres-production-profile-contract.mjs",
+    "project/deployment/secrets/README.md",
+    "project/deployment/secrets/database-url.example",
     "scripts/compose-memory-smoke.mjs",
     "project/db/postgres-init/001_storage_readiness.sql",
     "src/concierge/databaseFactory.mjs",
@@ -190,6 +194,7 @@ async function safeDeploymentContractStatus() {
     "src/tests/deployment-storage.test.mjs",
     "src/tests/worker-leases.test.mjs",
     "src/tests/postgres-production-readiness-contract.test.mjs",
+    "src/tests/postgres-production-profile-contract.test.mjs",
     "tools/graphiti/graphiti_bridge.py",
     "vendor/getzep-graphiti/pyproject.toml"
   ];
@@ -204,9 +209,10 @@ async function safeDeploymentContractStatus() {
     })
   );
   const missing = fileChecks.filter((file) => !file.ok).map((file) => file.file);
-  const [nodeDockerfile, composeFile] = await Promise.all([
+  const [nodeDockerfile, composeFile, postgresProfileFile] = await Promise.all([
     readFile(resolve("Dockerfile.node"), "utf8").catch(() => ""),
-    readFile(resolve("compose.yaml"), "utf8").catch(() => "")
+    readFile(resolve("compose.yaml"), "utf8").catch(() => ""),
+    readFile(resolve("compose.postgres.yaml"), "utf8").catch(() => "")
   ]);
   const graphitiRuntimeReady = [
     "python3 -m venv .venv-graphiti",
@@ -241,6 +247,14 @@ async function safeDeploymentContractStatus() {
     "project/db/postgres-init"
   ].every((fragment) => composeFile.includes(fragment));
   const databaseSecretProfile = evaluateDatabaseSecretProfile(process.env);
+  const postgresProductionProfileReady = [
+    "BRAINSTY_DB_DRIVER: postgres",
+    "BRAINSTY_DATABASE_URL_FILE: /run/secrets/brainsty_database_url",
+    "BRAINSTY_DATABASE_SECRET_SOURCE: docker_secret",
+    "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
+    "source: brainsty_database_url",
+    "file: ${BRAINSTY_DATABASE_URL_SECRET_FILE:-./project/deployment/secrets/database-url.example}"
+  ].every((fragment) => postgresProfileFile.includes(fragment));
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -259,10 +273,15 @@ async function safeDeploymentContractStatus() {
     databaseSecretProfileReady: databaseSecretProfile.ready,
     databaseSecretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
     postgresDefaultRolloutReady: process.env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1",
+    postgresProductionProfileReady,
+    postgresProductionProfileStatus: postgresProductionProfileReady
+      ? "postgres_docker_secret_runtime_profile_present"
+      : "postgres_docker_secret_runtime_profile_missing",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
     postgresDefaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
+    postgresProductionProfileCommand: "npm run storage:postgres:profile-contract",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -327,6 +346,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "postgres_storage_profile",
         status: storage.status,
         target: "Docker Compose defines a Postgres transactional storage target while the current app runtime remains safely on SQLite until migration tests pass."
+      },
+      {
+        key: "postgres_docker_secret_runtime_profile",
+        status: deployment.postgresProductionProfileStatus,
+        target: "A dedicated compose override selects Postgres runtime through a Docker-secret database URL without bypassing proof gates."
       }
     ],
     checks: [
@@ -364,7 +388,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
           backupRestoreReady: storage.postgres.backupRestoreReady,
           secretProfileReady: storage.safety.secretProfileReady,
           defaultRolloutReady: storage.postgres.defaultRolloutReady
-        }
+        },
+        productionProfileReady: storage.postgres.productionProfileReady,
+        productionProfileCommand: storage.postgres.productionProfileCommand
+      },
+      {
+        key: "postgres_production_profile",
+        status: deployment.postgresProductionProfileStatus,
+        ok: deployment.postgresProductionProfileReady,
+        command: deployment.postgresProductionProfileCommand
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
@@ -405,6 +437,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: storage.score,
         target: storage.targetScore,
         status: databaseScoreStatus
+      },
+      {
+        key: "database_deployment_profile",
+        score: deployment.postgresProductionProfileReady ? 100 : 0,
+        target: 100,
+        status: deployment.postgresProductionProfileStatus
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },

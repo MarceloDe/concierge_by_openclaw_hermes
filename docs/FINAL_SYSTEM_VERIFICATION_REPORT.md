@@ -413,3 +413,27 @@ Verification:
 Score:
 - Database product-ready architecture can now report `100 / 100` in an isolated Postgres runtime proof when the secret-profile and default-rollout gates are both true.
 - Compose still defaults to SQLite for local developer safety; production rollout should supply a real Docker secret or managed secret source before flipping defaults broadly.
+
+## Phase 11 Postgres Docker-Secret Runtime Profile Update
+
+Code changes:
+- Added `compose.postgres.yaml` for the deployment profile `docker compose -f compose.yaml -f compose.postgres.yaml`.
+- Added `scripts/postgres-production-profile-contract.mjs` and `npm run storage:postgres:profile-contract`.
+- Added ignored deployment secret placeholders under `project/deployment/secrets/`.
+- Added dashboard/API proof fields `postgres_production_profile` and `database_deployment_profile`.
+
+Safety:
+- Base compose remains SQLite by default.
+- The Postgres override uses `BRAINSTY_DATABASE_URL_FILE=/run/secrets/brainsty_database_url` and `BRAINSTY_DATABASE_SECRET_SOURCE=docker_secret`.
+- Readiness flags remain proof-controlled with `:-0` defaults rather than being hardcoded to pass.
+
+Verification:
+- `npm run storage:postgres:profile-contract` passed.
+- `node scripts/postgres-production-profile-contract.mjs` passed with merged Docker Compose config validation.
+- `npm run test:docker:contract` passed with 10/10 tests.
+- `npm run storage:contract` passed.
+- `npm run build` passed.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser proof at `http://127.0.0.1:4196/?phase=postgres-production-profile` showed `postgres_production_profile=postgres_docker_secret_runtime_profile_present`, `database_deployment_profile=100 / 100`, and 0 console errors. Screenshot: `artifacts/phase11-postgres-production-profile-dashboard-proof.jpg`.

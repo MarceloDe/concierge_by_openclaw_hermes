@@ -12,3 +12,7 @@ data/
 eng.traineddata
 *.log
 concierge_by_openclaw_hermes/
+project/deployment/secrets/*
+!project/deployment/secrets/
+!project/deployment/secrets/README.md
+!project/deployment/secrets/*.example

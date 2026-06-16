@@ -19,6 +19,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
   const postgresEndpointParityReady = Boolean(deployment?.postgresEndpointParityReady ?? env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1");
   const databaseSecretProfileReady = Boolean(deployment?.databaseSecretProfileReady ?? databaseSecretProfile.ready);
   const postgresDefaultRolloutReady = Boolean(deployment?.postgresDefaultRolloutReady ?? env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1");
+  const postgresProductionProfileReady = Boolean(deployment?.postgresProductionProfileReady);
   const sqliteRuntimeReady = runtimeDriver === "sqlite" && DATABASE_ADAPTER_VERSION.includes("node-sqlite-bound-store");
   const postgresRuntimeSelected = runtimeDriver === "postgres";
   const postgresConfigured = Boolean(databaseUrl) || databaseSecretProfile.urlPresent || postgresComposeReady;
@@ -101,6 +102,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       endpointParityReady: postgresEndpointParityReady,
       operationalGatesReady,
       productionGatesReady,
+      productionProfileReady: postgresProductionProfileReady,
       defaultRolloutReady: postgresDefaultRolloutReady,
       redactedUrl: databaseSecretProfile.redactedUrl ?? redactDatabaseUrl(databaseUrl),
       secretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
@@ -108,7 +110,8 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       smokeCommand: "npm run storage:postgres:smoke",
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
       productionSmokeCommand: "npm run storage:postgres:production-smoke",
-      defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke"
+      defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
+      productionProfileCommand: "npm run storage:postgres:profile-contract"
     },
     safety: {
       secretsRedacted: true,
