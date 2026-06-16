@@ -333,3 +333,30 @@ Verification:
 
 Remaining gap:
 - The project now has a live Postgres deployment target, but app-state storage is not fully migrated to Postgres. A future phase must add the Postgres runtime adapter, migration parity tests, transactional worker leases, backup/restore proof, and secret-manager profile before this score can reach `100 / 100`.
+
+## Phase 11 Postgres Runtime Adapter Parity Update
+
+Code changes:
+- Added `pg` and the `src/concierge/postgresStore.mjs` adapter.
+- Added `src/concierge/databaseFactory.mjs` so `BRAINSTY_DB_DRIVER=postgres` selects Postgres explicitly while SQLite remains the default.
+- Added `scripts/postgres-runtime-smoke.mjs`.
+- Added `src/tests/postgres-store-contract.test.mjs` and included it in `npm run test:db:safety`.
+- Updated storage readiness, compose contract, storage contract, server health, and connector proof scoring.
+
+Verification:
+- `npm run test:db:postgres` passed.
+- `npm run test:db:safety` passed.
+- `npm run storage:postgres:runtime-smoke` passed against live Docker Postgres.
+- `npm audit --audit-level=moderate` passed with 0 vulnerabilities after dependency audit fix.
+- `npm run test:docker:contract` passed with 7/7 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 200 tests passing and 2 expected live-gated OpenClaw skips.
+- A temporary server booted with `BRAINSTY_DB_DRIVER=postgres` and `/api/health` reported `databaseDriver=postgres`, `storage.status=postgres_runtime_selected_parity_smoked`, and `score=90`.
+- `/api/proof/runs/postgres-runtime-adapter` reported `database_product_ready_architecture=90 / 100` with `fullMigrationReady=false` and `migrationPending=true`.
+- Rebuilt Docker Compose reported healthy Node, FastAPI, mobile PWA, Postgres, and FalkorDB services.
+- Compose Node health on `http://127.0.0.1:4273/api/health` reported default `databaseDriver=sqlite`, storage status `postgres_adapter_parity_ready_sqlite_default`, runtime smoke ready, and score 90.
+- `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 npm run docker:memory:smoke` passed with Graphiti schema-ready product memory.
+- Browser proof at `http://127.0.0.1:4273/?phase=postgres-runtime-adapter` showed the `database_product_ready_architecture` score at `90 / 100`, the adapter parity status, and runtime migration-pending state. Screenshot: `artifacts/phase11-postgres-runtime-adapter-dashboard-proof.png`.
+
+Remaining gap:
+- Postgres is now a real selectable app-state runtime for core operations, but not yet the default production database. Remaining work includes endpoint-wide query compatibility, database-level worker leases, migration replay/rollback, backup/restore proof, and secret-manager profile.

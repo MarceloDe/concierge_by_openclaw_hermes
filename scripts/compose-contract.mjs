@@ -15,7 +15,10 @@ const REQUIRED_FILES = [
   "apps/mobile-next/Dockerfile",
   "compose.yaml",
   "scripts/storage-contract.mjs",
+  "scripts/postgres-runtime-smoke.mjs",
   "project/db/postgres-init/001_storage_readiness.sql",
+  "src/concierge/databaseFactory.mjs",
+  "src/concierge/postgresStore.mjs",
   "src/concierge/storageReadiness.mjs",
   "src/tests/deployment-storage.test.mjs",
   "scripts/compose-memory-smoke.mjs",
@@ -37,6 +40,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
   "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
   "BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}",
+  "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
   "BRAINSTY_PRODUCT_MEMORY_ADAPTER: ${BRAINSTY_PRODUCT_MEMORY_ADAPTER:-disabled}",
   "OPENAI_API_KEY: ${OPENAI_API_KEY:-}",
   "GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}",
@@ -149,7 +153,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       runtimeDriverDefault: "sqlite",
       productionTarget: "postgres",
       composeService: "postgres",
-      smokeCommand: "npm run storage:postgres:smoke"
+      smokeCommand: "npm run storage:postgres:smoke",
+      runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke"
     },
     graphitiRuntime: {
       dockerfileReady: true,

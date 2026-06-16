@@ -8,6 +8,8 @@ test("storage contract defines a Postgres deployment target while preserving SQL
   assert.equal(result.ok, true);
   assert.equal(result.runtimeDriverDefault, "sqlite");
   assert.equal(result.productionTarget, "postgres");
+  assert.equal(result.postgresAdapterReady, true);
+  assert.equal(result.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
   assert.equal(result.appRuntimeMigratedToPostgres, false);
   assert.deepEqual(result.services, ["postgres"]);
   assert.equal(result.livePostgres.checked, false);
@@ -31,4 +33,27 @@ test("storage readiness redacts database URLs and does not overstate runtime mig
   assert.match(readiness.postgres.redactedUrl, /redacted:redacted@postgres/);
   assert.equal(readiness.sqlite.sqliteShellOut, false);
   assert.equal(readiness.safety.phiSeeded, false);
+});
+
+test("storage readiness reports adapter parity smoke without declaring full migration", () => {
+  const readiness = getStorageReadiness({
+    deployment: {
+      postgresRuntimeReady: true,
+      postgresLiveReady: true,
+      postgresAdapterRuntimeReady: true,
+      postgresRuntimeSmokeReady: true
+    },
+    env: {
+      BRAINSTY_DB_DRIVER: "sqlite",
+      BRAINSTY_DATABASE_TARGET: "postgres",
+      BRAINSTY_DATABASE_URL: "postgresql://brainsty:secret-password@postgres:5432/brainstyworkers?sslmode=disable"
+    }
+  });
+  assert.equal(readiness.status, "postgres_adapter_parity_ready_sqlite_default");
+  assert.equal(readiness.score, 90);
+  assert.equal(readiness.postgres.runtimeSmokeReady, true);
+  assert.equal(readiness.postgres.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
+  assert.equal(readiness.appRuntimeMigratedToPostgres, false);
+  assert.equal(readiness.fullMigrationReady, false);
+  assert.equal(readiness.migrationPending, true);
 });

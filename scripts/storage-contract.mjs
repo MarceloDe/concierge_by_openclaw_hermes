@@ -12,7 +12,11 @@ const STORAGE_CONTRACT_VERSION = "2026-06-15.postgres-storage-profile.v1";
 const REQUIRED_FILES = [
   "compose.yaml",
   "project/db/postgres-init/001_storage_readiness.sql",
+  "src/concierge/databaseFactory.mjs",
+  "src/concierge/postgresStore.mjs",
   "src/concierge/storageReadiness.mjs",
+  "scripts/postgres-runtime-smoke.mjs",
+  "src/tests/postgres-store-contract.test.mjs",
   "src/tests/deployment-storage.test.mjs"
 ];
 
@@ -29,6 +33,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
   "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
   "BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}",
+  "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
   "postgres_data:"
 ];
 
@@ -85,14 +90,18 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
   }
   if (missingFiles.length) throw new Error(`Missing storage contract files: ${missingFiles.join(", ")}`);
 
-  const [compose, storageModule, initSql] = await Promise.all([
+  const [compose, storageModule, initSql, postgresStore, runtimeSmoke] = await Promise.all([
     readFile(resolve(REPO_ROOT, "compose.yaml"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/storageReadiness.mjs"), "utf8"),
-    readFile(resolve(REPO_ROOT, "project/db/postgres-init/001_storage_readiness.sql"), "utf8")
+    readFile(resolve(REPO_ROOT, "project/db/postgres-init/001_storage_readiness.sql"), "utf8"),
+    readFile(resolve(REPO_ROOT, "src/concierge/postgresStore.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "scripts/postgres-runtime-smoke.mjs"), "utf8")
   ]);
 
   assertIncludes(compose, COMPOSE_FRAGMENTS, "compose.yaml");
-  assertIncludes(storageModule, ["DATABASE_ADAPTER_VERSION", "redactDatabaseUrl", "appRuntimeMigratedToPostgres", "sqliteShellOut: false"], "storageReadiness.mjs");
+  assertIncludes(storageModule, ["DATABASE_ADAPTER_VERSION", "POSTGRES_ADAPTER_VERSION", "runtimeSmokeReady", "runtimeSmokeCommand", "fullMigrationReady"], "storageReadiness.mjs");
+  assertIncludes(postgresStore, ["from \"pg\"", "POSTGRES_ADAPTER_VERSION", "toPostgresSql", "BEGIN;", "ROLLBACK;"], "postgresStore.mjs");
+  assertIncludes(runtimeSmoke, ["PostgresStore", "enrollDefaultMember", "checkpointSession", "postgres_runtime_smoke_completed"], "postgres-runtime-smoke.mjs");
   assertIncludes(initSql, ["brainsty_storage_readiness", STORAGE_CONTRACT_VERSION, "ON CONFLICT"], "Postgres init SQL");
 
   const livePostgres = verifyLivePostgres
@@ -110,7 +119,9 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     services: ["postgres"],
     runtimeDriverDefault: "sqlite",
     productionTarget: "postgres",
+    postgresAdapterReady: true,
     appRuntimeMigratedToPostgres: false,
+    runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     livePostgres
   };
 }

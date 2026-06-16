@@ -6568,3 +6568,68 @@ Known risks or gaps:
 - `BRAINSTY_DB_DRIVER=postgres` is not yet supported as the default app runtime path.
 - Transactional leases, concurrent worker claims, migration rollback tests, and hosted backup/restore proof are still pending.
 - Production secret-manager integration is still needed before a remote deployment should use real credentials.
+
+## Postgres Runtime Adapter Parity Cycle - 2026-06-16
+
+Status: Implemented and verified as a selectable Postgres runtime for core application storage operations. SQLite remains the default runtime until endpoint-wide query compatibility, leases, backup/restore, and secret-manager proof are complete.
+
+Implemented:
+- Added `pg` and refreshed the dependency lockfile; `npm audit fix` updated vulnerable transitive `uuid` usage through LangGraph and left `npm audit --audit-level=moderate` clean.
+- Added `src/concierge/postgresStore.mjs` with:
+  - `POSTGRES_ADAPTER_VERSION=2026-06-16.pg-bound-store-parity.v1`,
+  - bound parameter translation from `?` to `$1..$n`,
+  - schema initialization from `SCHEMA_SQL`,
+  - foreign-key-safe table creation ordering,
+  - high-level `insert`, `update`, `findOne`, `list`, `counts`, and `transaction`,
+  - a compatibility shim for existing audit `rowid` query reads.
+- Added `src/concierge/databaseFactory.mjs` so `BRAINSTY_DB_DRIVER=postgres` selects `PostgresStore`, while default runtime remains `SqliteStore`.
+- Updated `src/server/server.mjs` to use the factory and report `databaseDriver` plus `databaseAdapterVersion` from `/api/health`.
+- Added `scripts/postgres-runtime-smoke.mjs` and package scripts:
+  - `storage:postgres:runtime-smoke`,
+  - `test:db:postgres`.
+- Added `src/tests/postgres-store-contract.test.mjs` and included it in `npm run test:db:safety`.
+- Updated compose, storage contract, deployment contract, build guard, storage readiness, and connector proof to report runtime smoke readiness and database score `90 / 100` after adapter parity proof.
+
+Verification commands:
+- `node --check src/concierge/postgresStore.mjs` passed.
+- `node --check src/concierge/databaseFactory.mjs` passed.
+- `node --check scripts/postgres-runtime-smoke.mjs` passed.
+- `node --check src/concierge/storageReadiness.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `npm run test:db:postgres` passed with 3/3 tests.
+- `npm run test:db:safety` passed with 7/7 tests.
+- `npm run storage:contract` passed.
+- `npm run test:docker:contract` passed with 7/7 tests.
+- `npm run storage:postgres:runtime-smoke` passed against live Docker Postgres.
+- `npm audit --audit-level=moderate` passed with 0 vulnerabilities after `npm audit fix`.
+- `npm run build` passed.
+- `npm run test:local` passed with 202 tests total: 200 passed and 2 expected live-gated OpenClaw skips.
+- Temporary server proof passed:
+  - command used `HOST=127.0.0.1 PORT=4193 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=postgresql://brainsty:brainsty-dev-only@127.0.0.1:55432/brainstyworkers?sslmode=disable BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 npm start`,
+  - server booted with `Database driver: postgres`,
+  - `/api/health` returned `databaseDriver=postgres`, adapter `2026-06-16.pg-bound-store-parity.v1`, `storage.status=postgres_runtime_selected_parity_smoked`, `score=90`, `appRuntimeMigratedToPostgres=true`, `fullMigrationReady=false`, `migrationPending=true`,
+  - `/api/proof/runs/postgres-runtime-adapter` returned `database_product_ready_architecture=90 / 100` with status `postgres_adapter_parity_ready_runtime_migration_pending`,
+  - port `4193` was clear after shutdown.
+- Docker Compose proof passed after image rebuild:
+  - `docker compose ps` reported healthy `node-runtime` on `4273`, `fastapi` on `8100`, `mobile-pwa` on `3100`, `postgres` on `55432`, and running `falkordb`.
+  - `http://127.0.0.1:4273/api/health` reported `databaseDriver=sqlite`, storage status `postgres_adapter_parity_ready_sqlite_default`, `score=90`, `postgres.runtimeSmokeReady=true`, and `migrationPending=true`.
+  - `http://127.0.0.1:4273/api/proof/runs/postgres-runtime-adapter` reported the full connector proof with `database_product_ready_architecture=90 / 100`.
+  - `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 npm run docker:memory:smoke` passed with product memory `adapter=graphiti`, `status=graphiti_schema_ready`, and replay queue ready.
+- Browser proof passed at `http://127.0.0.1:4273/?phase=postgres-runtime-adapter`: the dashboard loaded connector proof, displayed `database_product_ready_architecture`, `90 / 100`, `postgres_adapter_parity_ready_sqlite_default`, and runtime smoke/migration-pending proof with 0 console errors. Screenshot: `artifacts/phase11-postgres-runtime-adapter-dashboard-proof.png`.
+
+Live Postgres runtime smoke details:
+- Version: `2026-06-16.postgres-runtime-parity.v1`.
+- Driver: `postgres`.
+- Table count: 54.
+- Core counts after smoke included users, sessions, session checkpoints, audit events, workflow definitions, tool registry rows, and OpenClaw skill rows.
+- Smoke proved schema migration ledger, planned-member enrollment, managed session state, session checkpoint, hash-chain audit write, and transaction rollback.
+- Safety proof reported bound parameters, no SQLite shell-out, no external actions, and no PHI seed.
+
+Score decision:
+- Database product-ready architecture improved from `85 / 100` to `90 / 100`.
+- The score remains below `100 / 100` because Postgres is selectable and parity-smoked for core operations, but not yet the default for every endpoint/worker path and not yet backed by production lease, migration, backup/restore, and secret-manager gates.
+
+Known risks or gaps:
+- Some existing raw SQL paths still contain SQLite-specific assumptions such as `rowid` ordering or manually interpolated values. The adapter handles the audited `rowid` path, but every endpoint path still needs compatibility coverage before defaulting to Postgres.
+- Database-level leases and concurrent worker claims are not implemented yet.
+- Hosted Postgres backup/restore proof and secret-manager profile are still pending.

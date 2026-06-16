@@ -9,6 +9,7 @@ test("deployment compose contract defines connector services and safety boundari
   assert.ok(result.files.includes("compose.yaml"));
   assert.equal(result.storageRuntime.runtimeDriverDefault, "sqlite");
   assert.equal(result.storageRuntime.productionTarget, "postgres");
+  assert.equal(result.storageRuntime.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
   assert.equal(result.graphitiRuntime.dockerfileReady, true);
   assert.equal(result.graphitiRuntime.backend, "falkordb");
   assert.equal(result.dockerConfig.checked, false);

@@ -1640,3 +1640,26 @@ Current proof status:
 - `npm run storage:postgres:smoke` returned `brainstyworkers-postgres-live-smoke`, contract version `2026-06-15.postgres-storage-profile.v1`, and service `postgres`.
 - The connector proof reported `storage.status=postgres_live_ready_sqlite_runtime`, `score=85`, `targetScore=100`, `appRuntimeMigratedToPostgres=false`, and `migrationPending=true`.
 - Browser proof showed the Postgres storage goal, database storage check, database architecture score, live-ready status, and migration-pending state with 0 console errors. Screenshot: `artifacts/phase11-postgres-storage-dashboard-proof.png`.
+
+## Postgres Runtime Adapter Parity Acceptance
+
+This slice is acceptable when:
+
+- The repository contains a real `pg`-based Postgres store adapter rather than shelling out to `psql`.
+- SQLite remains the default runtime unless `BRAINSTY_DB_DRIVER=postgres` is explicitly set.
+- The Postgres adapter supports schema initialization, bound parameters, high-level CRUD helpers, counts, and explicit transactions.
+- Runtime smoke proves enrollment, session checkpointing, audit write, registry seed, and transaction rollback against live Docker Postgres.
+- The dashboard/API storage readiness contract reports Postgres adapter version, runtime smoke readiness, and migration-pending state without claiming full production migration.
+- `npm run test:db:postgres`, `npm run test:db:safety`, `npm run storage:postgres:runtime-smoke`, `npm audit --audit-level=moderate`, `npm run build`, and `npm run test:local` pass.
+
+Current proof status:
+
+- Verified on 2026-06-16 against live Docker Postgres on host port `55432`.
+- `npm run storage:postgres:runtime-smoke` returned `driver=postgres`, adapter `2026-06-16.pg-bound-store-parity.v1`, 54 tables, registry seed rows, session checkpoint state version 2, hash-chain audit event, and `rollbackProved=true`.
+- A temporary server booted on `http://127.0.0.1:4193` with `BRAINSTY_DB_DRIVER=postgres`.
+- That server's `/api/health` reported `databaseDriver=postgres`, `storage.status=postgres_runtime_selected_parity_smoked`, `score=90`, `appRuntimeMigratedToPostgres=true`, `fullMigrationReady=false`, and `migrationPending=true`.
+- The proof endpoint reported `database_product_ready_architecture=90 / 100` with status `postgres_adapter_parity_ready_runtime_migration_pending`.
+- Docker Compose rebuilt successfully and reported healthy Node, FastAPI, mobile PWA, Postgres, and FalkorDB services.
+- Compose Node health on `http://127.0.0.1:4273/api/health` reported `databaseDriver=sqlite`, storage status `postgres_adapter_parity_ready_sqlite_default`, `score=90`, `postgres.runtimeSmokeReady=true`, and `migrationPending=true`.
+- `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 npm run docker:memory:smoke` passed with Graphiti schema-ready product memory.
+- Browser proof at `http://127.0.0.1:4273/?phase=postgres-runtime-adapter` displayed the database architecture score, `90 / 100`, Postgres adapter parity status, runtime smoke proof, and migration-pending state with 0 console errors. Screenshot: `artifacts/phase11-postgres-runtime-adapter-dashboard-proof.png`.

@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { access, readFile } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 import { listAuditEvents } from "../concierge/audit.mjs";
-import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
+import { createDatabaseStore } from "../concierge/databaseFactory.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { normalizeWebChat } from "../concierge/channelAdapter.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
@@ -117,7 +117,7 @@ const MIME = {
   ".json": "application/json; charset=utf-8"
 };
 
-const store = await new SqliteStore(process.env.BRAINSTY_DB_PATH ?? DEFAULT_DB_PATH).initialize();
+const store = await createDatabaseStore(process.env).initialize();
 const researchSchedulerDaemon = createResearchSchedulerDaemon(store);
 await researchSchedulerDaemon.start();
 
@@ -174,8 +174,11 @@ async function safeDeploymentContractStatus() {
     "compose.yaml",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
+    "scripts/postgres-runtime-smoke.mjs",
     "scripts/compose-memory-smoke.mjs",
     "project/db/postgres-init/001_storage_readiness.sql",
+    "src/concierge/databaseFactory.mjs",
+    "src/concierge/postgresStore.mjs",
     "src/concierge/storageReadiness.mjs",
     "src/tests/deployment-compose.test.mjs",
     "src/tests/deployment-graphiti-compose.test.mjs",
@@ -219,6 +222,7 @@ async function safeDeploymentContractStatus() {
     "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
     "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
     "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
+    "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
     "project/db/postgres-init"
   ].every((fragment) => composeFile.includes(fragment));
   return {
@@ -230,7 +234,10 @@ async function safeDeploymentContractStatus() {
     postgresRuntimeReady,
     postgresRuntimeStatus: postgresRuntimeReady ? "postgres_compose_profile_present" : "postgres_compose_profile_missing",
     postgresLiveReady: process.env.BRAINSTY_POSTGRES_LIVE_READY === "1",
+    postgresAdapterRuntimeReady: true,
+    postgresRuntimeSmokeReady: process.env.BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY === "1",
     storageSmokeCommand: "npm run storage:postgres:smoke",
+    postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -321,7 +328,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         runtimeDriver: storage.runtimeDriver,
         productionTarget: storage.postgres.target ? "postgres" : "unknown",
         migrationPending: storage.migrationPending,
-        command: storage.postgres.smokeCommand
+        command: storage.postgres.smokeCommand,
+        runtimeSmokeCommand: storage.postgres.runtimeSmokeCommand
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
@@ -362,7 +370,9 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: storage.score,
         target: storage.targetScore,
         status: storage.postgres.liveReady
-          ? "postgres_live_ready_runtime_migration_pending"
+          ? storage.postgres.runtimeSmokeReady
+            ? "postgres_adapter_parity_ready_runtime_migration_pending"
+            : "postgres_live_ready_runtime_migration_pending"
           : storage.postgres.composeReady
             ? "postgres_compose_profile_present_runtime_migration_pending"
             : "needs_postgres_profile"
@@ -401,6 +411,8 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
     sendJson(res, 200, {
       ok: true,
+      databaseDriver: store.driver ?? "sqlite",
+      databaseAdapterVersion: store.adapterVersion,
       dbPath: store.dbPath,
       counts: await store.counts(),
       langGraphScope: describeLangGraphScope()
@@ -1951,6 +1963,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   server.listen(PORT, HOST, () => {
     console.log(`Brainstyworkers AI Concierge running at http://${HOST}:${PORT}`);
-    console.log(`SQLite database: ${store.dbPath}`);
+    console.log(`Database driver: ${store.driver ?? "sqlite"} ${store.dbPath ? `(${store.dbPath})` : ""}`.trim());
   });
 }

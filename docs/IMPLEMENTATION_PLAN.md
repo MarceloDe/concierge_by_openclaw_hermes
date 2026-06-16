@@ -2049,3 +2049,28 @@ Remaining follow-up:
 - Implement a real Postgres app-state adapter and migration tests before changing `BRAINSTY_DB_DRIVER` from `sqlite` to `postgres`.
 - Add transactional leases/worker claims against the Postgres adapter before using it for concurrent production jobs.
 - Add managed Postgres backup/restore, secret-manager, and retention-operation runbook proof for a hosted deployment.
+
+## Postgres Runtime Adapter Parity Cycle - 2026-06-16
+
+Goal:
+- Make Postgres a real selectable application storage runtime for core app-state operations, while preserving SQLite as the default until endpoint-wide query compatibility, leases, and migration runbooks are complete.
+
+Implemented slice:
+- Add `pg` as the Node Postgres client dependency.
+- Add `src/concierge/postgresStore.mjs` with bound parameters, schema initialization from `SCHEMA_SQL`, Postgres-safe table creation ordering, high-level `insert/update/findOne/list/counts`, transaction rollback support, and a compatibility shim for existing audit `rowid` reads.
+- Add `src/concierge/databaseFactory.mjs` so `BRAINSTY_DB_DRIVER=postgres` explicitly selects the Postgres store and all default paths stay on SQLite.
+- Add `scripts/postgres-runtime-smoke.mjs` and `npm run storage:postgres:runtime-smoke`.
+- Add `src/tests/postgres-store-contract.test.mjs` and include it in `npm run test:db:safety`.
+- Extend compose, storage contracts, build guard, health, and connector proof to report Postgres adapter version, runtime smoke readiness, and `database_product_ready_architecture=90 / 100` when the parity smoke passes.
+
+Acceptance:
+- `npm run test:db:postgres` validates the adapter contract without requiring Docker.
+- `npm run test:db:safety` validates SQLite and Postgres storage safety gates together.
+- `npm run storage:postgres:runtime-smoke` initializes the schema in live Postgres, enrolls a planned member, checkpoints session state, writes hash-chain audit, proves transaction rollback, and reports table counts.
+- A temporary Node server booted with `BRAINSTY_DB_DRIVER=postgres` returns `/api/health` and `/api/proof/runs/*` with the Postgres driver and 90/100 database score.
+- `npm audit --audit-level=moderate`, `npm run build`, `npm run test:docker:contract`, and `npm run test:local` remain green.
+
+Remaining follow-up:
+- Replace or parameterize remaining SQLite-specific raw query fragments across all endpoint paths before making Postgres the default.
+- Add database-level worker leases and concurrent claim tests in Postgres.
+- Add migration replay/rollback, backup/restore proof, managed Postgres configuration, and secret-manager wiring before declaring full production storage readiness.

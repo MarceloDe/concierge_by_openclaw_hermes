@@ -1986,3 +1986,22 @@ This gives the project a real containerized Postgres dependency, health check, i
 
 Cost of changing later:
 Moderate. The next storage phase must implement the Postgres app-state adapter, migration parity tests, transactional leases/worker claims, and hosted backup/restore proof. The public readiness shape can remain stable while the runtime driver changes behind it.
+
+## 2026-06-16 - Add Selectable Postgres Runtime Adapter Before Default Migration
+
+Context:
+The compose stack had a live Postgres service and readiness smoke, but the Node app still had no Postgres client-backed application store. Moving the full server to Postgres in one step would be risky because many historical endpoint paths still contain raw SQL written for SQLite.
+
+Options considered:
+- Keep Postgres as a Docker-only dependency until every raw query is rewritten.
+- Flip the default runtime to Postgres immediately and fix endpoint failures reactively.
+- Add a real `pg`-backed store adapter, make it selectable with `BRAINSTY_DB_DRIVER=postgres`, prove core app-state parity live, and keep SQLite as the default until full compatibility gates exist.
+
+Decision:
+Add `PostgresStore` and a `createDatabaseStore` factory. The server now can boot with `BRAINSTY_DB_DRIVER=postgres`, but compose and local defaults remain SQLite. Storage readiness reports adapter parity smoke separately from full migration and caps database architecture at `90 / 100`.
+
+Reason:
+This closes the fake-adapter gap without overclaiming. The project now proves real schema initialization, enrollment, session checkpointing, audit writes, registry seeding, and rollback through Postgres, while still making the remaining SQLite-specific query work visible.
+
+Cost of changing later:
+Moderate. The next storage phase should add endpoint-wide Postgres compatibility tests, replace remaining raw SQL assumptions, and then add database-level worker leases, backup/restore proof, and secret-manager wiring before moving the default runtime to Postgres.
