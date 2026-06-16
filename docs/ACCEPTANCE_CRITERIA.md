@@ -1686,3 +1686,34 @@ Current proof status:
 - A temporary server booted on `http://127.0.0.1:4194` with `BRAINSTY_DB_DRIVER=postgres` and operational gate flags enabled but `BRAINSTY_DATABASE_SECRET_PROFILE_READY=0`.
 - That server's `/api/health` reported `storage.status=postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, `score=95`, `fullMigrationReady=false`, and `secretProfileReady=false`.
 - Browser proof showed `database_product_ready_architecture=95 / 100` and the secret-profile-pending status with 0 console errors. Screenshot: `artifacts/phase11-postgres-operational-readiness-dashboard-proof.png`.
+
+## Postgres Default Rollout And Secret Profile Acceptance
+
+This slice is acceptable when:
+
+- Runtime Postgres URL resolution supports a secret-backed profile through `BRAINSTY_DATABASE_URL_FILE` or an explicit managed-env source.
+- Health/proof/dashboard surfaces never expose the raw database URL, raw password, or raw secret-file path.
+- Direct `BRAINSTY_DATABASE_URL` without `BRAINSTY_DATABASE_SECRET_SOURCE=managed_env` does not satisfy the secret-profile gate.
+- Storage readiness reports secret-profile and default-rollout gates separately.
+- Database architecture score remains below `100 / 100` when operational gates and secret profile pass but the default rollout smoke is not rehearsed.
+- Database architecture score reaches `100 / 100` only when:
+  - `BRAINSTY_DB_DRIVER=postgres`,
+  - operational Postgres gates are ready,
+  - the database URL is secret-backed,
+  - `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=1`.
+- `npm run storage:postgres:default-rollout-smoke` passes against live Docker Postgres.
+- A temporary server booted with the secret-file backed Postgres runtime reports `storage.status=postgres_production_ready`, `score=100`, `fullMigrationReady=true`, and `migrationPending=false`.
+- Browser proof shows `database_product_ready_architecture=100 / 100`, `secretProfileReady=true`, and `defaultRolloutReady=true`.
+
+Current proof status:
+
+- Verified on 2026-06-16 against live Docker Postgres on host port `55432`.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run storage:postgres:default-rollout-smoke` returned `storage.status=postgres_production_ready`, `score=100`, `fullMigrationReady=true`, `migrationPending=false`, `secretProfileReady=true`, and `defaultRolloutReady=true`.
+- `npm run storage:postgres:production-smoke` still passed after the secret-aware URL resolution change.
+- `npm run build` passed.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- A temporary server booted on `http://127.0.0.1:4195` with a secret-file backed Postgres URL and all DB gates enabled.
+- The server's `/api/health` and `/api/proof/runs/postgres-default-rollout` reported `database_product_ready_architecture=100 / 100`.
+- Browser proof showed the 100/100 database score with 0 console errors. Screenshot: `artifacts/phase11-postgres-default-rollout-dashboard-proof.png`.

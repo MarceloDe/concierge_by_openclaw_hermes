@@ -72,7 +72,8 @@ test("storage readiness reports production gates without declaring full migratio
       postgresWorkerLeaseReady: true,
       postgresBackupRestoreReady: true,
       postgresEndpointParityReady: true,
-      databaseSecretProfileReady: true
+      databaseSecretProfileReady: true,
+      postgresDefaultRolloutReady: true
     },
     env: {
       BRAINSTY_DB_DRIVER: "sqlite",
@@ -86,6 +87,7 @@ test("storage readiness reports production gates without declaring full migratio
   assert.equal(readiness.postgres.workerLeaseReady, true);
   assert.equal(readiness.postgres.backupRestoreReady, true);
   assert.equal(readiness.postgres.endpointParityReady, true);
+  assert.equal(readiness.postgres.defaultRolloutReady, true);
   assert.equal(readiness.safety.secretProfileReady, true);
   assert.equal(readiness.appRuntimeMigratedToPostgres, false);
   assert.equal(readiness.fullMigrationReady, false);

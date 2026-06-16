@@ -70,6 +70,7 @@ import {
   suppressProductMemoryEpisode
 } from "../concierge/productMemory.mjs";
 import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
+import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
   startScreencast,
@@ -176,9 +177,11 @@ async function safeDeploymentContractStatus() {
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
     "scripts/postgres-production-readiness-smoke.mjs",
+    "scripts/postgres-default-rollout-smoke.mjs",
     "scripts/compose-memory-smoke.mjs",
     "project/db/postgres-init/001_storage_readiness.sql",
     "src/concierge/databaseFactory.mjs",
+    "src/concierge/databaseSecretProfile.mjs",
     "src/concierge/postgresStore.mjs",
     "src/concierge/workerLeases.mjs",
     "src/concierge/storageReadiness.mjs",
@@ -232,8 +235,12 @@ async function safeDeploymentContractStatus() {
     "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
     "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
     "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
+    "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
+    "BRAINSTY_DATABASE_SECRET_SOURCE: ${BRAINSTY_DATABASE_SECRET_SOURCE:-direct_env}",
+    "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
     "project/db/postgres-init"
   ].every((fragment) => composeFile.includes(fragment));
+  const databaseSecretProfile = evaluateDatabaseSecretProfile(process.env);
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -249,10 +256,13 @@ async function safeDeploymentContractStatus() {
     postgresWorkerLeaseReady: process.env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1",
     postgresBackupRestoreReady: process.env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1",
     postgresEndpointParityReady: process.env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1",
-    databaseSecretProfileReady: process.env.BRAINSTY_DATABASE_SECRET_PROFILE_READY === "1",
+    databaseSecretProfileReady: databaseSecretProfile.ready,
+    databaseSecretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
+    postgresDefaultRolloutReady: process.env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
+    postgresDefaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -347,11 +357,13 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         command: storage.postgres.smokeCommand,
         runtimeSmokeCommand: storage.postgres.runtimeSmokeCommand,
         productionSmokeCommand: storage.postgres.productionSmokeCommand,
+        defaultRolloutCommand: storage.postgres.defaultRolloutCommand,
         productionGates: {
           endpointParityReady: storage.postgres.endpointParityReady,
           workerLeaseReady: storage.postgres.workerLeaseReady,
           backupRestoreReady: storage.postgres.backupRestoreReady,
-          secretProfileReady: storage.safety.secretProfileReady
+          secretProfileReady: storage.safety.secretProfileReady,
+          defaultRolloutReady: storage.postgres.defaultRolloutReady
         }
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },

@@ -13,11 +13,13 @@ const REQUIRED_FILES = [
   "compose.yaml",
   "project/db/postgres-init/001_storage_readiness.sql",
   "src/concierge/databaseFactory.mjs",
+  "src/concierge/databaseSecretProfile.mjs",
   "src/concierge/postgresStore.mjs",
   "src/concierge/workerLeases.mjs",
   "src/concierge/storageReadiness.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
+  "scripts/postgres-default-rollout-smoke.mjs",
   "src/tests/postgres-store-contract.test.mjs",
   "src/tests/postgres-production-readiness-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
@@ -36,6 +38,8 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
   "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
+  "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
+  "BRAINSTY_DATABASE_SECRET_SOURCE: ${BRAINSTY_DATABASE_SECRET_SOURCE:-direct_env}",
   "BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}",
   "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
   "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
@@ -43,6 +47,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
   "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
+  "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
   "postgres_data:"
 ];
 
@@ -99,14 +104,16 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
   }
   if (missingFiles.length) throw new Error(`Missing storage contract files: ${missingFiles.join(", ")}`);
 
-  const [compose, storageModule, initSql, postgresStore, workerLeases, runtimeSmoke, productionSmoke] = await Promise.all([
+  const [compose, storageModule, initSql, postgresStore, secretProfile, workerLeases, runtimeSmoke, productionSmoke, defaultRolloutSmoke] = await Promise.all([
     readFile(resolve(REPO_ROOT, "compose.yaml"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/storageReadiness.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "project/db/postgres-init/001_storage_readiness.sql"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/postgresStore.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "src/concierge/databaseSecretProfile.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "src/concierge/workerLeases.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "scripts/postgres-runtime-smoke.mjs"), "utf8"),
-    readFile(resolve(REPO_ROOT, "scripts/postgres-production-readiness-smoke.mjs"), "utf8")
+    readFile(resolve(REPO_ROOT, "scripts/postgres-production-readiness-smoke.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "scripts/postgres-default-rollout-smoke.mjs"), "utf8")
   ]);
 
   assertIncludes(compose, COMPOSE_FRAGMENTS, "compose.yaml");
@@ -121,18 +128,26 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
       "backupRestoreReady",
       "endpointParityReady",
       "secretProfileReady",
+      "defaultRolloutReady",
       "productionSmokeCommand",
+      "defaultRolloutCommand",
       "fullMigrationReady"
     ],
     "storageReadiness.mjs"
   );
   assertIncludes(postgresStore, ["from \"pg\"", "POSTGRES_ADAPTER_VERSION", "toPostgresSql", "BEGIN;", "ROLLBACK;"], "postgresStore.mjs");
+  assertIncludes(secretProfile, ["DATABASE_SECRET_PROFILE_VERSION", "BRAINSTY_DATABASE_URL_FILE", "publicDatabaseSecretProfile", "redactDatabaseUrl"], "databaseSecretProfile.mjs");
   assertIncludes(workerLeases, ["WORKER_LEASES_VERSION", "acquireWorkerLease", "heartbeatWorkerLease", "releaseWorkerLease", "expireWorkerLeases"], "workerLeases.mjs");
   assertIncludes(runtimeSmoke, ["PostgresStore", "enrollDefaultMember", "checkpointSession", "postgres_runtime_smoke_completed"], "postgres-runtime-smoke.mjs");
   assertIncludes(
     productionSmoke,
     ["runPostgresProductionReadinessSmoke", "seedEndpointParityPath", "proveWorkerLease", "restoreSnapshot", "temporaryDatabases"],
     "postgres-production-readiness-smoke.mjs"
+  );
+  assertIncludes(
+    defaultRolloutSmoke,
+    ["POSTGRES_DEFAULT_ROLLOUT_SMOKE_VERSION", "runPostgresDefaultRolloutSmoke", "BRAINSTY_DB_DRIVER", "BRAINSTY_DATABASE_URL_FILE"],
+    "postgres-default-rollout-smoke.mjs"
   );
   assertIncludes(initSql, ["brainsty_storage_readiness", STORAGE_CONTRACT_VERSION, "ON CONFLICT"], "Postgres init SQL");
 
@@ -153,9 +168,11 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     productionTarget: "postgres",
     postgresAdapterReady: true,
     postgresProductionReadinessReady: true,
+    postgresDefaultRolloutReady: true,
     appRuntimeMigratedToPostgres: false,
     runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     productionSmokeCommand: "npm run storage:postgres:production-smoke",
+    defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
     livePostgres
   };
 }

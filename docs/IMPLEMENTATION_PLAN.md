@@ -2106,3 +2106,29 @@ Remaining follow-up:
 - Add a real managed-secret or Docker-secret production profile and set `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` only when that profile is proven.
 - Run the full endpoint/browser/mobile regression suite with Postgres as the selected runtime before making Postgres the default.
 - Add hosted backup scheduling/restore runbooks and migration rollback/replay beyond the logical smoke.
+
+## Postgres Default Rollout And Secret Profile Cycle - 2026-06-16
+
+Goal:
+- Close the database architecture gap from operational readiness to a production-shaped default rollout proof: Postgres selected as the runtime, database URL sourced from a secret-backed profile, default-rollout rehearsal complete, and dashboard/API score allowed to reach `100 / 100` only under those gates.
+
+Implemented slice:
+- Add `src/concierge/databaseSecretProfile.mjs` to resolve database URLs from `BRAINSTY_DATABASE_URL_FILE`, `BRAINSTY_DATABASE_SECRET_SOURCE=managed_env`, or other explicit secret-backed sources while returning only redacted/hash metadata to health/proof surfaces.
+- Update `src/concierge/databaseFactory.mjs` so `BRAINSTY_DB_DRIVER=postgres` can boot from the same secret-backed URL resolution path.
+- Add `scripts/postgres-default-rollout-smoke.mjs` and `npm run storage:postgres:default-rollout-smoke`.
+- The default-rollout smoke creates or uses a secret-file backed URL, runs the production readiness smoke, boots the normal Postgres store through the runtime factory, and verifies storage readiness reaches `postgres_production_ready` with score `100 / 100`.
+- Extend storage readiness with `postgres.defaultRolloutReady`, `postgres.defaultRolloutCommand`, and a separate `postgres_runtime_selected_secret_profile_ready_default_rollout_pending` status.
+- Update Docker/compose env contracts with `BRAINSTY_DATABASE_URL_FILE`, `BRAINSTY_DATABASE_SECRET_SOURCE`, and `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY`.
+- Update server connector proof so the dashboard shows secret-profile and default-rollout gates separately.
+
+Acceptance:
+- `npm run test:db:postgres` proves secret-backed profile redaction, 100-only-with-rollout scoring, and 98 default-rollout-pending scoring.
+- `npm run storage:postgres:default-rollout-smoke` passes against live Docker Postgres without printing or writing a raw database URL.
+- A temporary server booted with `BRAINSTY_DB_DRIVER=postgres`, a secret-file URL, and all DB gate flags returns `/api/health` with `storage.status=postgres_production_ready`, `score=100`, `fullMigrationReady=true`, and `migrationPending=false`.
+- The proof dashboard displays `database_product_ready_architecture=100 / 100`, `secretProfileReady=true`, and `defaultRolloutReady=true`.
+- `npm run test:db:safety`, `npm run storage:contract`, `npm run test:docker:contract`, `npm run build`, and `npm run test:local` remain green.
+
+Remaining follow-up:
+- Replace the local secret-file rehearsal with the hosted deployment's real secret manager or Docker secret mount during actual production rollout.
+- Keep SQLite as the default local developer path until the user explicitly chooses to flip compose defaults.
+- Add hosted scheduled backup/restore runbooks beyond the logical smoke.

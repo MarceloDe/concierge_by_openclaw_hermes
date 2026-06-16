@@ -17,8 +17,10 @@ const REQUIRED_FILES = [
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
+  "scripts/postgres-default-rollout-smoke.mjs",
   "project/db/postgres-init/001_storage_readiness.sql",
   "src/concierge/databaseFactory.mjs",
+  "src/concierge/databaseSecretProfile.mjs",
   "src/concierge/postgresStore.mjs",
   "src/concierge/workerLeases.mjs",
   "src/concierge/storageReadiness.mjs",
@@ -43,6 +45,8 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
   "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
+  "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
+  "BRAINSTY_DATABASE_SECRET_SOURCE: ${BRAINSTY_DATABASE_SECRET_SOURCE:-direct_env}",
   "BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}",
   "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
   "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
@@ -50,6 +54,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
   "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
+  "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
   "BRAINSTY_PRODUCT_MEMORY_ADAPTER: ${BRAINSTY_PRODUCT_MEMORY_ADAPTER:-disabled}",
   "OPENAI_API_KEY: ${OPENAI_API_KEY:-}",
   "GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}",
@@ -164,7 +169,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       composeService: "postgres",
       smokeCommand: "npm run storage:postgres:smoke",
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
-      productionSmokeCommand: "npm run storage:postgres:production-smoke"
+      productionSmokeCommand: "npm run storage:postgres:production-smoke",
+      defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke"
     },
     graphitiRuntime: {
       dockerfileReady: true,

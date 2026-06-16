@@ -1,4 +1,5 @@
 import { DEFAULT_DB_PATH, SqliteStore } from "./database.mjs";
+import { getDatabaseUrlFromEnv } from "./databaseSecretProfile.mjs";
 import { DEFAULT_POSTGRES_URL, PostgresStore } from "./postgresStore.mjs";
 
 export function normalizeDatabaseDriver(value) {
@@ -9,7 +10,7 @@ export function normalizeDatabaseDriver(value) {
 export function createDatabaseStore(env = process.env) {
   const driver = normalizeDatabaseDriver(env.BRAINSTY_DB_DRIVER);
   if (driver === "postgres") {
-    return new PostgresStore(env.BRAINSTY_DATABASE_URL || DEFAULT_POSTGRES_URL);
+    return new PostgresStore(getDatabaseUrlFromEnv(env));
   }
   return new SqliteStore(env.BRAINSTY_DB_PATH ?? DEFAULT_DB_PATH);
 }

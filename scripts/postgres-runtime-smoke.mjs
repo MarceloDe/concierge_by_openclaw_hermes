@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { audit } from "../src/concierge/audit.mjs";
 import { createId, nowIso } from "../src/concierge/database.mjs";
+import { getDatabaseUrlFromEnv } from "../src/concierge/databaseSecretProfile.mjs";
 import { DEFAULT_POSTGRES_URL, PostgresStore } from "../src/concierge/postgresStore.mjs";
 import { enrollDefaultMember } from "../src/concierge/enrollment.mjs";
 import { checkpointSession, getManagedSessionState } from "../src/concierge/sessionManager.mjs";
@@ -8,7 +9,8 @@ import { checkpointSession, getManagedSessionState } from "../src/concierge/sess
 const SMOKE_VERSION = "2026-06-16.postgres-runtime-parity.v1";
 
 function smokeUrl(env = process.env) {
-  return env.BRAINSTY_POSTGRES_RUNTIME_SMOKE_URL || env.BRAINSTY_DATABASE_URL?.replace("@postgres:5432/", `@127.0.0.1:${env.BRAINSTY_COMPOSE_POSTGRES_PORT || "55432"}/`) || DEFAULT_POSTGRES_URL;
+  const url = env.BRAINSTY_POSTGRES_RUNTIME_SMOKE_URL || getDatabaseUrlFromEnv(env) || DEFAULT_POSTGRES_URL;
+  return String(url).replace("@postgres:5432/", `@127.0.0.1:${env.BRAINSTY_COMPOSE_POSTGRES_PORT || "55432"}/`);
 }
 
 async function runPostgresRuntimeSmoke({ connectionString = smokeUrl() } = {}) {

@@ -386,3 +386,30 @@ Verification:
 Score:
 - Database product-ready architecture can now report `95 / 100` when operational Postgres gates are enabled.
 - `100 / 100` remains blocked until a real managed-secret or equivalent production secret profile is proven and Postgres runtime rollout/defaulting is complete.
+
+## Phase 11 Postgres Default Rollout And Secret Profile Update
+
+Code changes:
+- Added `src/concierge/databaseSecretProfile.mjs` for secret-backed Postgres URL resolution, redacted URL proof, and hash-only secret metadata.
+- Updated the Postgres runtime factory and live smoke scripts to use the same secret-aware URL path.
+- Added `scripts/postgres-default-rollout-smoke.mjs`.
+- Added package script `storage:postgres:default-rollout-smoke`.
+- Updated storage readiness, compose/storage contracts, Docker env, build guard, server proof payload, and Postgres readiness tests.
+
+Verification:
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run storage:contract` passed.
+- `npm run test:docker:contract` passed with 8/8 tests.
+- `npm run storage:postgres:default-rollout-smoke` passed against live Docker Postgres.
+- `npm run storage:postgres:production-smoke` passed after the secret-aware URL resolution change.
+- `npm run build` passed.
+- `npm run test:local` passed with 210 total tests, 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- A temporary server booted with `BRAINSTY_DB_DRIVER=postgres`, a temporary secret-file database URL, all operational DB gates enabled, and `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=1`.
+- `/api/health` reported `databaseDriver=postgres`, `storage.status=postgres_production_ready`, `score=100`, `fullMigrationReady=true`, `migrationPending=false`, `secretProfileReady=true`, and `defaultRolloutReady=true`.
+- `/api/proof/runs/postgres-default-rollout` reported `database_product_ready_architecture=100 / 100` with all production gates true.
+- Browser proof showed `database_product_ready_architecture=100 / 100 · postgres_production_ready` with 0 console errors. Screenshot: `artifacts/phase11-postgres-default-rollout-dashboard-proof.png`.
+
+Score:
+- Database product-ready architecture can now report `100 / 100` in an isolated Postgres runtime proof when the secret-profile and default-rollout gates are both true.
+- Compose still defaults to SQLite for local developer safety; production rollout should supply a real Docker secret or managed secret source before flipping defaults broadly.

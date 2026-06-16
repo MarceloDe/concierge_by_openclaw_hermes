@@ -6605,7 +6605,7 @@ Verification commands:
 - `npm run build` passed.
 - `npm run test:local` passed with 202 tests total: 200 passed and 2 expected live-gated OpenClaw skips.
 - Temporary server proof passed:
-  - command used `HOST=127.0.0.1 PORT=4193 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=postgresql://brainsty:brainsty-dev-only@127.0.0.1:55432/brainstyworkers?sslmode=disable BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 npm start`,
+  - command used `HOST=127.0.0.1 PORT=4193 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=<redacted local Postgres URL> BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 npm start`,
   - server booted with `Database driver: postgres`,
   - `/api/health` returned `databaseDriver=postgres`, adapter `2026-06-16.pg-bound-store-parity.v1`, `storage.status=postgres_runtime_selected_parity_smoked`, `score=90`, `appRuntimeMigratedToPostgres=true`, `fullMigrationReady=false`, `migrationPending=true`,
   - `/api/proof/runs/postgres-runtime-adapter` returned `database_product_ready_architecture=90 / 100` with status `postgres_adapter_parity_ready_runtime_migration_pending`,
@@ -6672,7 +6672,7 @@ Verification commands:
 - `docker compose ps postgres` reported Postgres running healthy on host port `55432`.
 - `npm run storage:postgres:production-smoke` passed against live Docker Postgres.
 - Temporary server proof passed:
-  - command used `HOST=127.0.0.1 PORT=4194 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=postgresql://brainsty:brainsty-dev-only@127.0.0.1:55432/brainstyworkers?sslmode=disable BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY=1 BRAINSTY_POSTGRES_WORKER_LEASE_READY=1 BRAINSTY_POSTGRES_BACKUP_RESTORE_READY=1 BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY=1 BRAINSTY_DATABASE_SECRET_PROFILE_READY=0 npm start`,
+  - command used `HOST=127.0.0.1 PORT=4194 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=<redacted local Postgres URL> BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY=1 BRAINSTY_POSTGRES_WORKER_LEASE_READY=1 BRAINSTY_POSTGRES_BACKUP_RESTORE_READY=1 BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY=1 BRAINSTY_DATABASE_SECRET_PROFILE_READY=0 npm start`,
   - server booted with `Database driver: postgres`,
   - `/api/health` reported `storage.status=postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, `score=95`, `appRuntimeMigratedToPostgres=true`, `fullMigrationReady=false`, `migrationPending=true`, and `secretProfileReady=false`,
   - `/api/proof/runs/postgres-operational-readiness` reported `database_product_ready_architecture=95 / 100` and the production smoke/worker lease/backup restore/endpoint parity gates,
@@ -6713,3 +6713,103 @@ Known risks or gaps:
 - Full endpoint regression with `BRAINSTY_DB_DRIVER=postgres` is still needed before changing the default runtime.
 - The backup/restore proof is a logical smoke over app rows; production still needs scheduled hosted backup and restore runbooks.
 - Managed-secret/Docker-secret profile is pending and intentionally blocks `100 / 100`.
+
+## Postgres Default Rollout And Secret Profile Cycle - 2026-06-16
+
+Status: Implemented and visually verified. Database product-ready architecture can now score `100 / 100` only when Postgres is the selected runtime, operational Postgres gates pass, a secret-backed database URL profile is ready, and the default-rollout gate is set.
+
+Implemented:
+- Added `src/concierge/databaseSecretProfile.mjs` with:
+  - `DATABASE_SECRET_PROFILE_VERSION=2026-06-16.database-secret-profile.v1`,
+  - secret-backed source detection for `BRAINSTY_DATABASE_URL_FILE`, Docker/local secret files, and explicit managed-env profiles,
+  - redacted URL and hash-only proof fields,
+  - direct raw env URL rejection unless it is explicitly marked as managed env.
+- Updated `src/concierge/databaseFactory.mjs` so the Postgres runtime driver resolves the database URL through the secret profile contract.
+- Added `scripts/postgres-default-rollout-smoke.mjs` and package script `storage:postgres:default-rollout-smoke`.
+- Updated `scripts/postgres-runtime-smoke.mjs` and `scripts/postgres-production-readiness-smoke.mjs` to use the same secret-aware URL resolution path.
+- Updated `src/concierge/storageReadiness.mjs` with:
+  - `postgres.defaultRolloutReady`,
+  - `postgres.defaultRolloutCommand`,
+  - `postgres.secretProfile`,
+  - `safety.databaseSecretProfile`,
+  - status `postgres_runtime_selected_secret_profile_ready_default_rollout_pending`,
+  - status `postgres_secret_profile_ready_sqlite_default_rollout_pending`,
+  - score `98 / 100` for Postgres runtime plus operational and secret gates but no default rollout,
+  - score `100 / 100` only for full Postgres runtime production readiness.
+- Updated compose, Dockerfile, storage contract, compose contract, build guard, server connector proof, and focused DB tests.
+- Added artifacts:
+  - `artifacts/postgres-default-rollout-smoke.json`,
+  - `artifacts/postgres-default-rollout-production-smoke.json`,
+  - `artifacts/phase11-postgres-default-rollout-dashboard-proof.png`.
+
+Verification commands:
+- `node --check src/concierge/databaseSecretProfile.mjs` passed.
+- `node --check src/concierge/storageReadiness.mjs` passed.
+- `node --check src/concierge/databaseFactory.mjs` passed.
+- `node --check scripts/postgres-default-rollout-smoke.mjs` passed.
+- `node --check scripts/postgres-runtime-smoke.mjs` passed.
+- `node --check scripts/postgres-production-readiness-smoke.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check scripts/storage-contract.mjs` passed.
+- `node --check scripts/compose-contract.mjs` passed.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run storage:contract` passed.
+- `npm run test:docker:contract` passed with 8/8 tests.
+- `npm run storage:postgres:default-rollout-smoke` passed against live Docker Postgres.
+- `npm run storage:postgres:production-smoke` passed after the secret-aware URL resolution change.
+- `npm run build` passed.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+
+Default rollout smoke details:
+- Version: `2026-06-16.postgres-default-rollout.v1`.
+- Runtime driver: `postgres`.
+- Runtime adapter: `2026-06-16.pg-bound-store-parity.v1`.
+- Runtime table count: 55.
+- Secret source: `ephemeral_local_secret_file` for the local smoke; health/proof artifacts expose only redacted URL and hashes.
+- Storage status: `postgres_production_ready`.
+- Storage score: `100 / 100`.
+- `fullMigrationReady=true`.
+- `migrationPending=false`.
+- Production smoke summary inside the rollout proof:
+  - endpoint parity ok,
+  - worker lease ok,
+  - backup/restore ok,
+  - 55 tables,
+  - 17 compared non-empty tables,
+  - no count mismatches.
+- Leak check on `artifacts/postgres-default-rollout-smoke.json` and `artifacts/postgres-default-rollout-production-smoke.json` found no raw password, raw secret path, or raw database URL.
+
+Temporary server proof:
+- A temporary server booted on `http://127.0.0.1:4195` with:
+  - `BRAINSTY_DB_DRIVER=postgres`,
+  - `BRAINSTY_DATABASE_URL_FILE=<temporary secret file>`,
+  - `BRAINSTY_DATABASE_SECRET_SOURCE=local_secret_file`,
+  - all Postgres operational gate flags set to `1`,
+  - `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=1`.
+- `/api/health` reported:
+  - `databaseDriver=postgres`,
+  - `storage.status=postgres_production_ready`,
+  - `score=100`,
+  - `fullMigrationReady=true`,
+  - `migrationPending=false`,
+  - `secretProfileReady=true`,
+  - `defaultRolloutReady=true`,
+  - redacted database URL only.
+- `/api/proof/runs/postgres-default-rollout` reported:
+  - `database_product_ready_architecture=100 / 100`,
+  - status `postgres_production_ready`,
+  - production gates endpoint/worker/backup/secret/default all true,
+  - command `npm run storage:postgres:default-rollout-smoke`.
+- Browser dashboard proof passed at `http://127.0.0.1:4195/?phase=postgres-default-rollout` with 0 console errors. Screenshot: `artifacts/phase11-postgres-default-rollout-dashboard-proof.png`.
+- Port `4195` was clear after shutdown.
+
+Score decision:
+- Database product-ready architecture can now reach `100 / 100` in the isolated Postgres runtime + secret profile + default rollout proof.
+- SQLite remains the safe local default in compose until the user chooses to flip defaults.
+- The local smoke proves the architecture and Docker-compatible secret-file path; a hosted deployment must still provide its real secret manager or Docker secret mount.
+
+Known risks or gaps:
+- The default local compose profile still uses SQLite by default to preserve developer ergonomics.
+- The local proof uses an ephemeral local secret file; production should mount a real Docker secret or managed secret source.
+- Hosted scheduled backup/restore runbooks remain a deployment operations follow-up beyond the logical restore smoke.

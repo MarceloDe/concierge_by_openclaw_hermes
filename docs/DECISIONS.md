@@ -2024,3 +2024,22 @@ This gives the project real concurrency and recovery proof without making a fals
 
 Cost of changing later:
 Low. The readiness fields are additive. A future managed-secret/Docker-secret/hosted-secret phase can satisfy the final gate without changing the worker lease or backup/restore contract.
+
+## 2026-06-16 - Require Secret-Backed Postgres Default Rollout Before 100/100
+
+Context:
+The operational Postgres phase proved endpoint parity, worker leases, and logical backup/restore, but it still used local/dev-style database URL handling. A plain `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` flag would be too easy to set accidentally and would let the dashboard claim full database readiness without proving how the runtime actually receives a secret.
+
+Options considered:
+- Treat `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` as enough to unlock `100 / 100`.
+- Require a hosted cloud secret manager immediately before any local proof can pass.
+- Add a provider-neutral secret profile contract now: file/Docker-secret or managed-env source, redacted/hash-only proof, and a separate default-rollout smoke that boots the normal Postgres runtime through that profile.
+
+Decision:
+Add `databaseSecretProfile` URL resolution and a Postgres default-rollout smoke. The database score reaches `100 / 100` only when Postgres is the selected runtime, operational Postgres gates pass, the database URL is secret-backed, and `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=1` is set by the rollout smoke/proven environment.
+
+Reason:
+This makes the final database score meaningful without coupling the local prototype to a specific cloud provider. Docker secrets, local secret files, and managed environment injection can all satisfy the same contract, while direct raw env URLs remain visible as not secret-backed. Health and dashboard responses expose only redacted URL and hashes.
+
+Cost of changing later:
+Low. A hosted secret manager can replace the local secret-file rehearsal by setting `BRAINSTY_DATABASE_SECRET_SOURCE=managed_env` or mounting `BRAINSTY_DATABASE_URL_FILE`; the runtime factory, readiness status, and dashboard fields stay the same.
