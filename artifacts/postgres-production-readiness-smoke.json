@@ -1,0 +1,1007 @@
+{
+  "result": {
+    "ok": true,
+    "version": "2026-06-16.postgres-production-readiness.v1",
+    "adapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+    "leaseVersion": "2026-06-16.worker-leases.v1",
+    "driver": "postgres",
+    "sourceDatabase": "brainsty_prod_source_1781579421119_c3f1abd17d",
+    "restoreDatabase": "brainsty_prod_restore_1781579421119_2fab17b484",
+    "endpointParity": {
+      "ok": true,
+      "userId": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+      "sessionId": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+      "checkpointId": "checkpoint_e3a32271-c02d-4d5b-aa33-e3d6bfcc0793",
+      "approvalGateId": "gate_e678350d-80ae-447f-96e2-40c9eee47b8b",
+      "auditEventId": "audit_2f9edee6-a732-4da1-b2be-e00d5dd625d6",
+      "stateVersion": 2
+    },
+    "workerLease": {
+      "ok": true,
+      "leaseKey": "postgres-production-smoke:6e0af5b6-5315-4ec7-ad06-adbf5d0822bb",
+      "firstAcquired": true,
+      "secondBlockedWhileActive": true,
+      "heartbeatOk": true,
+      "releaseOk": true,
+      "secondAcquiredAfterRelease": true,
+      "finalLease": {
+        "id": "lease_3c77f802-7e09-4f4f-9971-810a0f39a7e9",
+        "lease_key": "postgres-production-smoke:6e0af5b6-5315-4ec7-ad06-adbf5d0822bb",
+        "worker_id": "worker-b",
+        "scope": "postgres_production_readiness",
+        "status": "active",
+        "claim_count": 2,
+        "metadata_json": "{}",
+        "claimed_at": "2026-06-16T03:10:21.494Z",
+        "heartbeat_at": "2026-06-16T03:10:21.494Z",
+        "expires_at": "2026-06-16T03:12:21.494Z",
+        "released_at": null,
+        "created_at": "2026-06-16T03:10:21.491Z",
+        "updated_at": "2026-06-16T03:10:21.494Z"
+      }
+    },
+    "backupRestore": {
+      "ok": true,
+      "artifactPath": "/Users/mfelix/projects/workerprototype_openclaw/artifacts/postgres-production-readiness-smoke.json",
+      "tableCount": 55,
+      "comparedTables": 17,
+      "countMismatches": [],
+      "sourceCounts": {
+        "users": 1,
+        "sessions": 1,
+        "session_checkpoints": 1,
+        "approval_gates": 3,
+        "audit_events": 5,
+        "agent_tasks": 1,
+        "worker_leases": 1,
+        "workflow_definitions": 7,
+        "tool_registry": 15,
+        "openclaw_skills": 3
+      },
+      "restoredCounts": {
+        "users": 1,
+        "sessions": 1,
+        "session_checkpoints": 1,
+        "approval_gates": 3,
+        "audit_events": 5,
+        "agent_tasks": 1,
+        "worker_leases": 1,
+        "workflow_definitions": 7,
+        "tool_registry": 15,
+        "openclaw_skills": 3
+      },
+      "restoredRows": {
+        "user": true,
+        "session": true,
+        "checkpoint": true,
+        "approval": true,
+        "audit": true,
+        "workerLease": true
+      }
+    },
+    "safety": {
+      "boundParameters": true,
+      "sqliteShellOut": false,
+      "externalActions": false,
+      "phiSeeded": false,
+      "temporaryDatabases": true,
+      "rawBackupContainsSmokeDataOnly": true
+    }
+  },
+  "snapshot": {
+    "version": "2026-06-16.postgres-production-readiness.v1",
+    "capturedAt": "2026-06-16T03:10:21.517Z",
+    "tableOrder": [
+      "schema_migrations",
+      "users",
+      "user_consents",
+      "portal_accounts",
+      "sessions",
+      "session_state",
+      "session_checkpoints",
+      "session_events",
+      "runtime_events",
+      "worker_leases",
+      "runtime_hook_subscriptions",
+      "runtime_hook_deliveries",
+      "memory_items",
+      "product_memory_replay_queue",
+      "context_packets",
+      "openclaw_instances",
+      "agent_tasks",
+      "human_handoff_items",
+      "scheduled_jobs",
+      "worker_continuations",
+      "agent_outbox",
+      "memory_harness_runs",
+      "workflow_definitions",
+      "tool_registry",
+      "workflow_tool_requirements",
+      "knowledge_sources",
+      "research_runs",
+      "research_run_events",
+      "research_artifacts",
+      "research_embedding_routes",
+      "research_embedding_jobs",
+      "research_embedding_index",
+      "research_graph_builds",
+      "research_claim_evaluations",
+      "research_schedules",
+      "research_scheduler_daemon_state",
+      "operator_tool_proposals",
+      "openclaw_skills",
+      "workflow_runs",
+      "user_journey_events",
+      "memory_reflections",
+      "conversation_messages",
+      "feedback_items",
+      "browser_runs",
+      "browser_actions",
+      "portal_page_snapshots",
+      "eligibility_snapshots",
+      "benefit_items",
+      "coverage_balances",
+      "claim_items",
+      "prior_authorizations",
+      "extraction_artifacts",
+      "extraction_reviews",
+      "approval_gates",
+      "audit_events"
+    ],
+    "tables": {
+      "schema_migrations": [
+        {
+          "id": "migration_5eba9b31-3213-4524-ba01-67726a366763",
+          "migration_key": "schema:base",
+          "details_json": "{\"adapterVersion\":\"2026-06-16.pg-bound-store-parity.v1\"}",
+          "applied_at": "2026-06-16T03:10:21.281Z"
+        }
+      ],
+      "users": [
+        {
+          "id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "name": "Postgres Production Smoke",
+          "email": "postgres-production-5358cffe@example.test",
+          "created_at": "2026-06-16T03:10:21.466Z"
+        }
+      ],
+      "user_consents": [
+        {
+          "id": "consent_ee674faf-ecbe-4c87-be25-2ead455bba6a",
+          "user_id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "screenshot_policy": "all allowed",
+          "phi_storage_fields": "all fields",
+          "read_only_extraction_approved": 1,
+          "website_actions_approved": 1,
+          "credential_boundary": "User handles passwords, passkeys, SSNs, and 2FA directly in Chrome.",
+          "created_at": "2026-06-16T03:10:21.467Z"
+        }
+      ],
+      "portal_accounts": [
+        {
+          "id": "portal_891ebd8c-290a-4bcf-84f5-fcceecb2fea5",
+          "user_id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "payer": "Aetna",
+          "portal_url": "https://www.aetna.com/",
+          "status": "approved_for_user_authenticated_browser",
+          "created_at": "2026-06-16T03:10:21.469Z"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "user_id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "channel": "local_web_chat",
+          "langgraph_thread_id": "thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2",
+          "title": "Postgres production readiness smoke",
+          "current_step": "postgres_production_readiness_checkpoint",
+          "last_intent": "postgres_production_readiness",
+          "active_workflow_key": null,
+          "journey_stage": null,
+          "last_context_packet_id": null,
+          "state_version": 2,
+          "metadata_json": "{\"source\":\"local_web_chat\",\"langchainStatefulReady\":true}",
+          "status": "active",
+          "last_active_at": "2026-06-16T03:10:21.479Z",
+          "expires_at": "2026-06-16T07:10:21.472Z",
+          "closed_at": null,
+          "created_at": "2026-06-16T03:10:21.472Z"
+        }
+      ],
+      "session_state": [
+        {
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "user_id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "langgraph_thread_id": "thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2",
+          "checkpoint_ns": "brainstyworkers",
+          "state_json": "{\"schemaVersion\":1,\"sessionId\":\"session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef\",\"userId\":\"user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d\",\"channel\":\"local_web_chat\",\"langchain\":{\"configurable\":{\"thread_id\":\"thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2\",\"checkpoint_ns\":\"brainstyworkers\"}},\"memory\":{\"scope\":\"session_only\",\"crossSessionMemory\":false,\"hindsightDeferred\":true},\"portal\":{\"portalAccountId\":\"portal_891ebd8c-290a-4bcf-84f5-fcceecb2fea5\",\"payer\":\"Aetna\",\"portalUrl\":\"https://www.aetna.com/\"},\"workflow\":{\"currentStep\":\"postgres_production_readiness_checkpoint\",\"lastIntent\":\"postgres_production_readiness\",\"latestBrowserRunId\":null,\"latestEligibilitySnapshotId\":null,\"activeWorkflowKey\":\"eligibility\"},\"timestamps\":{\"createdAt\":\"2026-06-16T03:10:21.472Z\",\"updatedAt\":\"2026-06-16T03:10:21.479Z\"},\"storage\":{\"smokeVersion\":\"2026-06-16.postgres-production-readiness.v1\"}}",
+          "state_version": 2,
+          "updated_at": "2026-06-16T03:10:21.479Z"
+        }
+      ],
+      "session_checkpoints": [
+        {
+          "id": "checkpoint_e3a32271-c02d-4d5b-aa33-e3d6bfcc0793",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "langgraph_thread_id": "thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2",
+          "checkpoint_ns": "brainstyworkers",
+          "checkpoint_id": "checkpoint_e3a32271-c02d-4d5b-aa33-e3d6bfcc0793",
+          "parent_checkpoint_id": null,
+          "step_name": "postgres_production_readiness_checkpoint",
+          "state_json": "{\"schemaVersion\":1,\"sessionId\":\"session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef\",\"userId\":\"user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d\",\"channel\":\"local_web_chat\",\"langchain\":{\"configurable\":{\"thread_id\":\"thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2\",\"checkpoint_ns\":\"brainstyworkers\"}},\"memory\":{\"scope\":\"session_only\",\"crossSessionMemory\":false,\"hindsightDeferred\":true},\"portal\":{\"portalAccountId\":\"portal_891ebd8c-290a-4bcf-84f5-fcceecb2fea5\",\"payer\":\"Aetna\",\"portalUrl\":\"https://www.aetna.com/\"},\"workflow\":{\"currentStep\":\"postgres_production_readiness_checkpoint\",\"lastIntent\":\"postgres_production_readiness\",\"latestBrowserRunId\":null,\"latestEligibilitySnapshotId\":null,\"activeWorkflowKey\":\"eligibility\"},\"timestamps\":{\"createdAt\":\"2026-06-16T03:10:21.472Z\",\"updatedAt\":\"2026-06-16T03:10:21.479Z\"},\"storage\":{\"smokeVersion\":\"2026-06-16.postgres-production-readiness.v1\"}}",
+          "metadata_json": "{\"smokeVersion\":\"2026-06-16.postgres-production-readiness.v1\",\"driver\":\"postgres\"}",
+          "created_at": "2026-06-16T03:10:21.479Z"
+        }
+      ],
+      "session_events": [
+        {
+          "id": "sevent_cd5feec1-8965-4090-8902-8bb943898f86",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "session_created",
+          "event_payload": "{\"langgraphThreadId\":\"thread:user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d:5fdd262b-321a-44c2-ae85-afb6374359c2\",\"checkpointNamespace\":\"brainstyworkers\"}",
+          "created_at": "2026-06-16T03:10:21.473Z"
+        },
+        {
+          "id": "sevent_16b21852-c30d-4aff-be4e-d9288b23cae5",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "session_checkpointed",
+          "event_payload": "{\"checkpointId\":\"checkpoint_e3a32271-c02d-4d5b-aa33-e3d6bfcc0793\",\"stepName\":\"postgres_production_readiness_checkpoint\",\"stateVersion\":2}",
+          "created_at": "2026-06-16T03:10:21.481Z"
+        }
+      ],
+      "runtime_events": [],
+      "worker_leases": [
+        {
+          "id": "lease_3c77f802-7e09-4f4f-9971-810a0f39a7e9",
+          "lease_key": "postgres-production-smoke:6e0af5b6-5315-4ec7-ad06-adbf5d0822bb",
+          "worker_id": "worker-b",
+          "scope": "postgres_production_readiness",
+          "status": "active",
+          "claim_count": 2,
+          "metadata_json": "{}",
+          "claimed_at": "2026-06-16T03:10:21.494Z",
+          "heartbeat_at": "2026-06-16T03:10:21.494Z",
+          "expires_at": "2026-06-16T03:12:21.494Z",
+          "released_at": null,
+          "created_at": "2026-06-16T03:10:21.491Z",
+          "updated_at": "2026-06-16T03:10:21.494Z"
+        }
+      ],
+      "runtime_hook_subscriptions": [],
+      "runtime_hook_deliveries": [],
+      "memory_items": [],
+      "product_memory_replay_queue": [],
+      "context_packets": [],
+      "openclaw_instances": [],
+      "agent_tasks": [
+        {
+          "id": "task_4cc00fbd-6bce-4eda-a8ea-6d66925fe12e",
+          "user_id": "user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "workflow_key": "eligibility",
+          "journey_stage": "approval_pending",
+          "task_type": "openclaw_skill_invocation_proposal",
+          "status": "approved_read_only_observation",
+          "priority": "normal",
+          "description": "Postgres production readiness approval parity task.",
+          "source_table": "sessions",
+          "source_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "scheduled_job_id": null,
+          "due_at": null,
+          "metadata_json": "{\"smokeVersion\":\"2026-06-16.postgres-production-readiness.v1\",\"approvalScope\":\"read_only_observation\"}",
+          "created_at": "2026-06-16T03:10:21.482Z",
+          "updated_at": "2026-06-16T03:10:21.483Z"
+        }
+      ],
+      "human_handoff_items": [],
+      "scheduled_jobs": [],
+      "worker_continuations": [],
+      "agent_outbox": [],
+      "memory_harness_runs": [],
+      "workflow_definitions": [
+        {
+          "id": "workflow_definition_905d10fc-27ee-4666-97ea-0447134b6e79",
+          "workflow_key": "eligibility_benefits_navigation",
+          "title": "Eligibility and benefits navigation",
+          "journey_stage": "coverage_understanding",
+          "description": "Confirm plan, eligibility, benefit categories, balances, and source pointers from the payer portal.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\",\"portal_account\"]",
+          "required_data_pointers_json": "[\"portal_accounts\"]",
+          "required_tools_json": "[\"openclaw_authenticated_browser\",\"payer_portal_reader\",\"local_sqlite_memory\"]",
+          "memory_scopes_json": "[\"session\",\"episodic\",\"semantic\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_4864f68e-6dfe-470b-a192-578f34680238",
+          "workflow_key": "claim_status_navigation",
+          "title": "Claim status navigation",
+          "journey_stage": "service_use_claim",
+          "description": "Find claim records, status, dates, patient responsibility, and next payer/member actions.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\",\"portal_account\"]",
+          "required_data_pointers_json": "[\"claim_items\",\"eligibility_snapshots\"]",
+          "required_tools_json": "[\"openclaw_authenticated_browser\",\"payer_portal_reader\",\"local_sqlite_memory\"]",
+          "memory_scopes_json": "[\"episodic\",\"long_term\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_6e499824-5799-4b10-9dc3-66a9ccfc13d2",
+          "workflow_key": "prior_authorization_navigation",
+          "title": "Prior authorization navigation",
+          "journey_stage": "service_authorization",
+          "description": "Review prior authorization status, requirements, payer policy pointers, and approval-gated next steps.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\",\"portal_account\"]",
+          "required_data_pointers_json": "[\"prior_authorizations\",\"eligibility_snapshots\"]",
+          "required_tools_json": "[\"openclaw_authenticated_browser\",\"payer_portal_reader\",\"aetna_cpb_lookup\",\"cms_mcd_lookup\"]",
+          "memory_scopes_json": "[\"episodic\",\"long_term\",\"reflection\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_486f31ad-7883-4f96-b6f3-77d4adebf16d",
+          "workflow_key": "denial_appeal_preparation",
+          "title": "Denial appeal preparation",
+          "journey_stage": "denial_resolution",
+          "description": "Assemble denial facts, policy references, evidence checklist, and approval-gated appeal draft support.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\",\"portal_account\"]",
+          "required_data_pointers_json": "[\"claim_items\",\"eligibility_snapshots\"]",
+          "required_tools_json": "[\"aetna_cpb_lookup\",\"cms_mcd_lookup\",\"cms_icd10_lookup\",\"web_search_authoritative_sources\"]",
+          "memory_scopes_json": "[\"episodic\",\"long_term\",\"reflection\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_fa3fffa8-68c9-4cea-9a16-74bf33e0f8b9",
+          "workflow_key": "payer_portal_read_only_extraction",
+          "title": "Payer portal read-only extraction",
+          "journey_stage": "evidence_capture",
+          "description": "Capture visible payer portal facts, links, screenshots/artifacts, and source pointers without credential entry.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\",\"portal_account\"]",
+          "required_data_pointers_json": "[\"portal_accounts\"]",
+          "required_tools_json": "[\"openclaw_authenticated_browser\",\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\"]",
+          "memory_scopes_json": "[\"session\",\"episodic\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_4d9ed79f-8225-4d3d-8246-c6ddf3a8f62c",
+          "workflow_key": "document_or_trace_review",
+          "title": "Document or trace review",
+          "journey_stage": "evidence_review",
+          "description": "Review uploaded or locally captured artifacts and traces, extract structured evidence, and identify missing data.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\"]",
+          "required_data_pointers_json": "[\"extraction_artifacts\",\"audit_events\"]",
+          "required_tools_json": "[\"local_sqlite_memory\",\"document_trace_parser\"]",
+          "memory_scopes_json": "[\"session\",\"episodic\",\"reflection\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "workflow_definition_cc5dcdd6-26e9-47f9-a5fe-9c0fff665082",
+          "workflow_key": "human_approval_escalation",
+          "title": "Human approval escalation",
+          "journey_stage": "approval_gate",
+          "description": "Pause execution for user approval, missing credentials handled by the user, or high-risk external actions.",
+          "required_user_fields_json": "[\"user.id\",\"user.email\"]",
+          "required_data_pointers_json": "[\"approval_gates\"]",
+          "required_tools_json": "[\"local_sqlite_memory\"]",
+          "memory_scopes_json": "[\"session\",\"episodic\"]",
+          "status": "active",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        }
+      ],
+      "tool_registry": [
+        {
+          "id": "tool_registry_853185be-0853-413c-ab04-8d42387166b5",
+          "tool_key": "openclaw_authenticated_browser",
+          "tool_type": "openclaw_skill",
+          "title": "OpenClaw authenticated browser arm",
+          "risk_level": "high",
+          "integration_status": "adapter_contract_ready",
+          "approval_required": "per_browser_action_scope",
+          "config_json": "{\"boundary\":\"user_authenticated_chrome\",\"noCredentialEntry\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_45bb233c-b23a-4410-b3e8-0c5358405b22",
+          "tool_key": "browser_remote_debugger",
+          "tool_type": "browser_control",
+          "title": "Chrome remote debugger attachment",
+          "risk_level": "high",
+          "integration_status": "enabled_local_when_chrome_debugger_running",
+          "approval_required": "user_opens_and_authenticates_browser",
+          "config_json": "{\"fallbackRank\":1}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_41ba0466-038c-4503-87f9-be322bcd0fc6",
+          "tool_key": "chrome_extension_bridge",
+          "tool_type": "browser_control",
+          "title": "Chrome extension bridge",
+          "risk_level": "high",
+          "integration_status": "fallback_planned",
+          "approval_required": "user_installs_and_keeps_session_open",
+          "config_json": "{\"fallbackRank\":2}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_7a7026d8-7d7c-47ea-b1b0-f8ddfe1e84c2",
+          "tool_key": "mcp_browser_adapter",
+          "tool_type": "browser_control",
+          "title": "MCP browser adapter",
+          "risk_level": "medium",
+          "integration_status": "fallback_planned",
+          "approval_required": "user_approves_tool_connection",
+          "config_json": "{\"fallbackRank\":3}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_0fa62e8d-f284-490a-a129-31a3eb078262",
+          "tool_key": "payer_portal_reader",
+          "tool_type": "extraction",
+          "title": "Payer portal read-only structured extraction",
+          "risk_level": "medium",
+          "integration_status": "enabled_local",
+          "approval_required": "read_only_scope_approval",
+          "config_json": "{\"storesSourcePointers\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_499f3163-6ae0-489e-9688-8005c6d60285",
+          "tool_key": "local_sqlite_memory",
+          "tool_type": "memory",
+          "title": "Local SQLite session and memory harness",
+          "risk_level": "medium",
+          "integration_status": "enabled_local",
+          "approval_required": "local_phi_storage_approval",
+          "config_json": "{\"storesPhi\":true,\"timestampType\":\"iso_8601_utc_text\"}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_7cde71a1-57c5-4f80-8990-ac6390cecc8d",
+          "tool_key": "hindsight_memory_adapter",
+          "tool_type": "memory",
+          "title": "Hindsight temporal memory adapter",
+          "risk_level": "medium",
+          "integration_status": "deferred_until_runtime_approval",
+          "approval_required": "memory_retention_policy_and_api_setup",
+          "config_json": "{\"operations\":[\"recall\",\"retain\",\"reflect\"]}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_20e893a6-e406-429b-a980-db5df9ee5000",
+          "tool_key": "aetna_cpb_lookup",
+          "tool_type": "knowledge_source",
+          "title": "Aetna Clinical Policy Bulletins lookup",
+          "risk_level": "medium",
+          "integration_status": "registry_ready_manual_or_web",
+          "approval_required": "cite_source_and_no_medical_advice",
+          "config_json": "{\"sourceKey\":\"aetna_clinical_policy_bulletins\"}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_aa953b15-fabe-4b4f-b816-44bda6669c90",
+          "tool_key": "cms_icd10_lookup",
+          "tool_type": "knowledge_source",
+          "title": "CMS ICD-10 official files lookup",
+          "risk_level": "medium",
+          "integration_status": "registry_ready_manual_or_web",
+          "approval_required": "cite_source_and_no_coding_advice_as_medical_advice",
+          "config_json": "{\"sourceKey\":\"cms_icd10_files\"}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_1129745d-2dce-42c6-9f60-d5fcd5eefd45",
+          "tool_key": "cms_mcd_lookup",
+          "tool_type": "knowledge_source",
+          "title": "CMS Medicare Coverage Database lookup",
+          "risk_level": "medium",
+          "integration_status": "registry_ready_manual_or_web",
+          "approval_required": "cite_source_and_plan_specific_verification",
+          "config_json": "{\"sourceKey\":\"cms_medicare_coverage_database\"}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_8ed12105-35f0-46e7-a83e-859c4d9ab67c",
+          "tool_key": "web_search_authoritative_sources",
+          "tool_type": "research",
+          "title": "Authoritative web source retrieval",
+          "risk_level": "medium",
+          "integration_status": "available_through_codex_when_requested",
+          "approval_required": "source_citation_required",
+          "config_json": "{\"allowedDomainsFirst\":[\"cms.gov\",\"aetna.com\",\"healthcare.gov\",\"ama-assn.org\"]}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_1f948696-6b54-4a2f-b528-53d09f053398",
+          "tool_key": "document_trace_parser",
+          "tool_type": "extraction",
+          "title": "Document and trace parser",
+          "risk_level": "medium",
+          "integration_status": "enabled_local",
+          "approval_required": "artifact_storage_approval",
+          "config_json": "{\"storesArtifacts\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_3c466513-4253-493d-bb35-d2d46ce7be59",
+          "tool_key": "gmail_inbox_reader",
+          "tool_type": "channel",
+          "title": "Gmail payer-response reader",
+          "risk_level": "high",
+          "integration_status": "deferred_until_user_setup",
+          "approval_required": "user_installs_and_approves_email_scope",
+          "config_json": "{\"externalData\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_c8260a91-2cf9-46d7-9b24-d702f9e9bdac",
+          "tool_key": "whatsapp_sender",
+          "tool_type": "channel",
+          "title": "WhatsApp user notification sender",
+          "risk_level": "high",
+          "integration_status": "deferred_until_user_setup",
+          "approval_required": "explicit_send_approval",
+          "config_json": "{\"externalMessaging\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "tool_registry_6cdbb857-ddf2-4114-8e02-501cf3b4c29b",
+          "tool_key": "vercel_ai_gateway",
+          "tool_type": "model_gateway",
+          "title": "Vercel AI Gateway",
+          "risk_level": "medium",
+          "integration_status": "deferred_until_api_setup",
+          "approval_required": "gateway_credentials_and_spend_policy",
+          "config_json": "{\"modelRouting\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        }
+      ],
+      "workflow_tool_requirements": [
+        {
+          "id": "wtreq_8acaabdd-ead3-4a07-8297-5c49491bb668",
+          "workflow_key": "eligibility_benefits_navigation",
+          "tool_key": "openclaw_authenticated_browser",
+          "required_for": "coverage_understanding",
+          "fallback_tool_keys_json": "[\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_b48401a4-d5a4-4433-a498-794a74d7d0a6",
+          "workflow_key": "eligibility_benefits_navigation",
+          "tool_key": "payer_portal_reader",
+          "required_for": "coverage_understanding",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_61063621-c301-49db-aeeb-d5a1c0c99c71",
+          "workflow_key": "eligibility_benefits_navigation",
+          "tool_key": "local_sqlite_memory",
+          "required_for": "coverage_understanding",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_6ec26178-a4bf-4a80-87c7-cd492e4a6ec7",
+          "workflow_key": "claim_status_navigation",
+          "tool_key": "openclaw_authenticated_browser",
+          "required_for": "service_use_claim",
+          "fallback_tool_keys_json": "[\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_5b235750-7ca1-4c81-8d96-d6d53415d32b",
+          "workflow_key": "claim_status_navigation",
+          "tool_key": "payer_portal_reader",
+          "required_for": "service_use_claim",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_f27c0116-cc4b-41bc-b49e-b09e50e5cc29",
+          "workflow_key": "claim_status_navigation",
+          "tool_key": "local_sqlite_memory",
+          "required_for": "service_use_claim",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_8e88097a-8209-41ee-a754-d10aaad5ade0",
+          "workflow_key": "prior_authorization_navigation",
+          "tool_key": "openclaw_authenticated_browser",
+          "required_for": "service_authorization",
+          "fallback_tool_keys_json": "[\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_a820a42d-c95b-4b11-8b1d-b7672f4eff22",
+          "workflow_key": "prior_authorization_navigation",
+          "tool_key": "payer_portal_reader",
+          "required_for": "service_authorization",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_8ab62ccd-aa5d-4b8b-96b8-f8a49dea3f62",
+          "workflow_key": "prior_authorization_navigation",
+          "tool_key": "aetna_cpb_lookup",
+          "required_for": "service_authorization",
+          "fallback_tool_keys_json": "[\"web_search_authoritative_sources\",\"ask_user_for_plan_document\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_805935ac-1368-43c6-8910-177b88f42022",
+          "workflow_key": "prior_authorization_navigation",
+          "tool_key": "cms_mcd_lookup",
+          "required_for": "service_authorization",
+          "fallback_tool_keys_json": "[\"web_search_authoritative_sources\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_9c537ddf-93ea-4e2b-b93b-485455d8130f",
+          "workflow_key": "denial_appeal_preparation",
+          "tool_key": "aetna_cpb_lookup",
+          "required_for": "denial_resolution",
+          "fallback_tool_keys_json": "[\"web_search_authoritative_sources\",\"ask_user_for_plan_document\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_0f4fc4a4-2d72-4552-80b5-e4d3153b1b83",
+          "workflow_key": "denial_appeal_preparation",
+          "tool_key": "cms_mcd_lookup",
+          "required_for": "denial_resolution",
+          "fallback_tool_keys_json": "[\"web_search_authoritative_sources\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_2bce6852-4fe2-4ea7-a1b6-fae22fa5fbcf",
+          "workflow_key": "denial_appeal_preparation",
+          "tool_key": "cms_icd10_lookup",
+          "required_for": "denial_resolution",
+          "fallback_tool_keys_json": "[\"web_search_authoritative_sources\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_8fb51db2-6b8b-4353-9caf-bee541697ac9",
+          "workflow_key": "denial_appeal_preparation",
+          "tool_key": "web_search_authoritative_sources",
+          "required_for": "denial_resolution",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_88023015-0e08-4071-aa48-96674019f670",
+          "workflow_key": "payer_portal_read_only_extraction",
+          "tool_key": "openclaw_authenticated_browser",
+          "required_for": "evidence_capture",
+          "fallback_tool_keys_json": "[\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\"]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_36785e92-ba67-4414-bd5d-632d3bfe532d",
+          "workflow_key": "payer_portal_read_only_extraction",
+          "tool_key": "browser_remote_debugger",
+          "required_for": "evidence_capture",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_74b87665-f059-40f0-9b3e-796613083840",
+          "workflow_key": "payer_portal_read_only_extraction",
+          "tool_key": "chrome_extension_bridge",
+          "required_for": "evidence_capture",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_aa5c08de-1ba5-45b3-8331-18f20124f108",
+          "workflow_key": "payer_portal_read_only_extraction",
+          "tool_key": "mcp_browser_adapter",
+          "required_for": "evidence_capture",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_e9370cf4-14d7-491c-9664-c393558f6564",
+          "workflow_key": "document_or_trace_review",
+          "tool_key": "local_sqlite_memory",
+          "required_for": "evidence_review",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_96c993b3-addf-49bc-9a89-04c47b4045f6",
+          "workflow_key": "document_or_trace_review",
+          "tool_key": "document_trace_parser",
+          "required_for": "evidence_review",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "wtreq_332dbc0a-aa68-42d3-ae7f-57c6963cd6da",
+          "workflow_key": "human_approval_escalation",
+          "tool_key": "local_sqlite_memory",
+          "required_for": "approval_gate",
+          "fallback_tool_keys_json": "[]",
+          "created_at": "2026-06-16T03:10:21.282Z"
+        }
+      ],
+      "knowledge_sources": [
+        {
+          "id": "knowledge_source_d26070c7-d92b-46d1-8cf1-89cd1649b672",
+          "source_key": "aetna_clinical_policy_bulletins",
+          "title": "Aetna Clinical Policy Bulletins",
+          "source_type": "payer_policy",
+          "authority_level": "payer_primary",
+          "base_url": "https://www.aetna.com/health-care-professionals/clinical-policy-bulletins.html",
+          "workflow_keys_json": "[\"prior_authorization_navigation\",\"denial_appeal_preparation\"]",
+          "refresh_policy": "check_at_task_time_policy_can_change",
+          "access_method": "web_with_source_citation",
+          "status": "active_registry",
+          "priority": 100,
+          "last_run_at": null,
+          "last_status": null,
+          "metadata_json": "{}",
+          "proposed_by": null,
+          "approved_by": null,
+          "reviewed_at": null,
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "knowledge_source_3e254a98-4f9f-4fd1-ac39-b046849ed4fd",
+          "source_key": "cms_icd10_files",
+          "title": "CMS ICD-10 official files",
+          "source_type": "code_set",
+          "authority_level": "federal_primary",
+          "base_url": "https://www.cms.gov/medicare/coding-billing/icd-10-codes",
+          "workflow_keys_json": "[\"denial_appeal_preparation\",\"prior_authorization_navigation\"]",
+          "refresh_policy": "check_effective_date_for_service_or_submission",
+          "access_method": "web_or_downloaded_official_file",
+          "status": "active_registry",
+          "priority": 100,
+          "last_run_at": null,
+          "last_status": null,
+          "metadata_json": "{}",
+          "proposed_by": null,
+          "approved_by": null,
+          "reviewed_at": null,
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "knowledge_source_b70fc4ed-a986-4da6-8b1c-078f8215190e",
+          "source_key": "cms_medicare_coverage_database",
+          "title": "CMS Medicare Coverage Database",
+          "source_type": "coverage_policy",
+          "authority_level": "federal_primary",
+          "base_url": "https://www.cms.gov/medicare/coverage/center",
+          "workflow_keys_json": "[\"prior_authorization_navigation\",\"denial_appeal_preparation\"]",
+          "refresh_policy": "check_at_task_time_and_match_plan_context",
+          "access_method": "web_with_source_citation",
+          "status": "active_registry",
+          "priority": 100,
+          "last_run_at": null,
+          "last_status": null,
+          "metadata_json": "{}",
+          "proposed_by": null,
+          "approved_by": null,
+          "reviewed_at": null,
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "knowledge_source_656c7f56-0f8d-41ef-8bc8-17bd701a2824",
+          "source_key": "cms_cpt_hcpcs_code_list",
+          "title": "CMS CPT/HCPCS Code List",
+          "source_type": "code_set",
+          "authority_level": "federal_primary_with_ama_cpt_license_boundary",
+          "base_url": "https://www.cms.gov/medicare/regulations-guidance/physician-self-referral/list-cpt-hcpcs-codes",
+          "workflow_keys_json": "[\"denial_appeal_preparation\",\"prior_authorization_navigation\",\"claim_status_navigation\"]",
+          "refresh_policy": "annual_or_task_time",
+          "access_method": "web_with_cpt_license_boundary",
+          "status": "active_registry",
+          "priority": 100,
+          "last_run_at": null,
+          "last_status": null,
+          "metadata_json": "{}",
+          "proposed_by": null,
+          "approved_by": null,
+          "reviewed_at": null,
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "knowledge_source_d8a141a4-0aee-496b-adcf-a02e0c830ff3",
+          "source_key": "aetna_member_portal",
+          "title": "Aetna member portal",
+          "source_type": "user_authenticated_payer_portal",
+          "authority_level": "user_account_primary",
+          "base_url": "https://www.aetna.com/",
+          "workflow_keys_json": "[\"eligibility_benefits_navigation\",\"claim_status_navigation\",\"payer_portal_read_only_extraction\"]",
+          "refresh_policy": "read_live_visible_state_when_user_logged_in",
+          "access_method": "user_authenticated_browser_only",
+          "status": "active_registry",
+          "priority": 100,
+          "last_run_at": null,
+          "last_status": null,
+          "metadata_json": "{}",
+          "proposed_by": null,
+          "approved_by": null,
+          "reviewed_at": null,
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        }
+      ],
+      "research_runs": [],
+      "research_run_events": [],
+      "research_artifacts": [],
+      "research_embedding_routes": [],
+      "research_embedding_jobs": [],
+      "research_embedding_index": [],
+      "research_graph_builds": [],
+      "research_claim_evaluations": [],
+      "research_schedules": [],
+      "research_scheduler_daemon_state": [],
+      "operator_tool_proposals": [],
+      "openclaw_skills": [
+        {
+          "id": "openclaw_skill_041e9349-0b5f-45b8-8d1b-a9215d3c4284",
+          "skill_key": "insurance_portal_browser",
+          "title": "Insurance portal browser",
+          "description": "Navigate the user-authenticated payer portal, observe visible state, extract facts with source pointers, and stop before any irreversible action.",
+          "status": "repo_artifact_ready_adapter_execution_gated",
+          "risk_level": "high",
+          "allowed_tools_json": "[\"openclaw_authenticated_browser\",\"openclaw_browser_screenshot\",\"openclaw_visual_ocr\",\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\",\"payer_portal_reader\",\"public_web_search\",\"website_scraper\",\"configured_read_only_api_client\",\"task_scoped_helper_skill\",\"local_os_automation\"]",
+          "fallback_strategy_json": "{\"order\":[\"browser_remote_debugger\",\"chrome_extension_bridge\",\"mcp_browser_adapter\",\"manual_user_export\"],\"stopCondition\":\"credentials_or_irreversible_action_required\",\"artifactPath\":\"openclaw/skills/insurance-portal-browser\",\"requiredCompanionSkills\":[\"browser-automation\",\"ocr-local\"],\"browserControlSubstrate\":\"browser-automation\",\"visualEvidenceSubstrate\":\"ocr-local\",\"adaptiveWorkerPolicy\":\"decompose_subtasks_choose_tools_report_every_30_seconds\",\"workerMemoryLayer\":\"openclaw_worker_heartbeat_memory\"}",
+          "prompt_contract_json": "{\"noCredentialEntry\":true,\"sourcePointersRequired\":true,\"externalActionsRequireApproval\":true,\"browserAutomationRequired\":true,\"visualOcrRequired\":true,\"adaptiveSubtasksAllowed\":true,\"statusSubagentRequired\":true,\"progressReportEverySeconds\":30}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "openclaw_skill_05092ad1-5325-48c4-8bde-1b48ddaf8def",
+          "skill_key": "insurance_knowledge_research",
+          "title": "Insurance knowledge research",
+          "description": "Retrieve payer, CMS, code-set, and authoritative web sources for workflow-specific questions with citation and freshness checks.",
+          "status": "design_ready",
+          "risk_level": "medium",
+          "allowed_tools_json": "[\"aetna_cpb_lookup\",\"cms_icd10_lookup\",\"cms_mcd_lookup\",\"web_search_authoritative_sources\"]",
+          "fallback_strategy_json": "{\"order\":[\"payer_policy_source\",\"cms_source\",\"healthcare.gov_or_state_source\",\"ask_user_for_document\"],\"stopCondition\":\"source_not_current_or_not_applicable_to_plan\"}",
+          "prompt_contract_json": "{\"citeSources\":true,\"noMedicalAdvice\":true,\"noUnsupportedCoverageGuarantees\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        },
+        {
+          "id": "openclaw_skill_1674c3fa-aedc-47f0-b0a5-765e6b493334",
+          "skill_key": "heartbeat_followup_planner",
+          "title": "Heartbeat follow-up planner",
+          "description": "Inspect pending jobs, due dates, open tasks, last context packet, and propose approval-gated next actions.",
+          "status": "enabled_local_harness",
+          "risk_level": "medium",
+          "allowed_tools_json": "[\"local_sqlite_memory\",\"gmail_inbox_reader\",\"whatsapp_sender\",\"openclaw_authenticated_browser\"]",
+          "fallback_strategy_json": "{\"order\":[\"local_sqlite_memory\",\"approval_request_outbox\",\"manual_user_followup\"],\"stopCondition\":\"external_adapter_not_approved\"}",
+          "prompt_contract_json": "{\"inspectAndProposeOnlyByDefault\":true,\"scheduleAwarenessRequired\":true,\"neverSendWithoutApproval\":true}",
+          "created_at": "2026-06-16T03:10:21.282Z",
+          "updated_at": "2026-06-16T03:10:21.282Z"
+        }
+      ],
+      "workflow_runs": [],
+      "user_journey_events": [],
+      "memory_reflections": [],
+      "conversation_messages": [],
+      "feedback_items": [],
+      "browser_runs": [],
+      "browser_actions": [],
+      "portal_page_snapshots": [],
+      "eligibility_snapshots": [],
+      "benefit_items": [],
+      "coverage_balances": [],
+      "claim_items": [],
+      "prior_authorizations": [],
+      "extraction_artifacts": [],
+      "extraction_reviews": [],
+      "approval_gates": [
+        {
+          "id": "gate_bebe53e3-6848-491c-8034-ab9a0a381073",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "gate_type": "local_phi_storage",
+          "decision": "approved",
+          "details": "{\"screenshotPolicy\":\"all allowed\",\"phiStorageFields\":\"all fields\",\"readOnlyExtractionApproved\":true,\"websiteActionsApproved\":true}",
+          "created_at": "2026-06-16T03:10:21.474Z"
+        },
+        {
+          "id": "gate_cbb096a8-e1a8-40bc-89b0-fe869a9b10d7",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "gate_type": "credential_boundary",
+          "decision": "user_controlled",
+          "details": "{\"boundary\":\"User handles passwords, passkeys, SSNs, and 2FA directly in Chrome.\"}",
+          "created_at": "2026-06-16T03:10:21.476Z"
+        },
+        {
+          "id": "gate_e678350d-80ae-447f-96e2-40c9eee47b8b",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "gate_type": "openclaw_read_only_observation",
+          "decision": "approved",
+          "details": "{\"version\":\"2026-05-27.approval-resume.v1\",\"approvalToken\":\"approval_cb92987a-324f-44f1-a890-97c208adbbb8\",\"taskId\":\"task_4cc00fbd-6bce-4eda-a8ea-6d66925fe12e\",\"sessionId\":\"session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef\",\"userId\":\"user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d\",\"workflow\":\"eligibility\",\"approvalScope\":\"read_only_observation\",\"allowedAction\":\"read_only_observation\",\"executionMode\":\"read_only_observation_only\",\"candidateId\":null,\"candidateUrl\":null,\"candidateLabel\":null,\"candidateType\":null,\"expiresAt\":\"2026-06-16T03:25:21.483Z\",\"actionsTaken\":[],\"consumedAt\":null}",
+          "created_at": "2026-06-16T03:10:21.483Z"
+        }
+      ],
+      "audit_events": [
+        {
+          "id": "audit_5425139a-4012-4afc-9bfa-ea310b354121",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "approval_gate",
+          "details": "{\"gateType\":\"local_phi_storage\",\"decision\":\"approved\",\"details\":{\"screenshotPolicy\":\"all allowed\",\"phiStorageFields\":\"all fields\",\"readOnlyExtractionApproved\":true,\"websiteActionsApproved\":true}}",
+          "previous_event_hash": null,
+          "event_hash": "dd656ccb40692b2df0046da0d27600ffad52ce08a657759d2e3f03d320774be9",
+          "chain_version": "2026-05-27.audit-chain.v1",
+          "created_at": "2026-06-16T03:10:21.475Z"
+        },
+        {
+          "id": "audit_3e5b8444-c9fa-4ee1-8d40-3d91cfd962cd",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "approval_gate",
+          "details": "{\"gateType\":\"credential_boundary\",\"decision\":\"user_controlled\",\"details\":{\"boundary\":\"User handles passwords, passkeys, SSNs, and 2FA directly in Chrome.\"}}",
+          "previous_event_hash": "dd656ccb40692b2df0046da0d27600ffad52ce08a657759d2e3f03d320774be9",
+          "event_hash": "4e42b9521a52bd9ec404ee12fc4568751a547247648c411e998d62315dcadf85",
+          "chain_version": "2026-05-27.audit-chain.v1",
+          "created_at": "2026-06-16T03:10:21.477Z"
+        },
+        {
+          "id": "audit_f931885b-5cd2-40d5-9d44-209670c57e85",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "member_enrolled",
+          "details": "{\"userId\":\"user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d\",\"email\":\"postgres-production-5358cffe@example.test\",\"portalUrl\":\"https://www.aetna.com/\",\"payer\":\"Aetna\",\"resumed\":false}",
+          "previous_event_hash": "4e42b9521a52bd9ec404ee12fc4568751a547247648c411e998d62315dcadf85",
+          "event_hash": "a973948872c29d214c1f919f48a4cab374e5625350298c22bcc7fed66a091d84",
+          "chain_version": "2026-05-27.audit-chain.v1",
+          "created_at": "2026-06-16T03:10:21.478Z"
+        },
+        {
+          "id": "audit_f23b247f-9f5e-4915-9893-4e0cd96d5ce1",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "openclaw_read_only_observation_approval_recorded",
+          "details": "{\"gateId\":\"gate_e678350d-80ae-447f-96e2-40c9eee47b8b\",\"taskId\":\"task_4cc00fbd-6bce-4eda-a8ea-6d66925fe12e\",\"sessionId\":\"session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef\",\"userId\":\"user_b6679e2d-ba3d-4914-85f4-8bbc664a5b8d\",\"workflow\":\"eligibility\",\"decision\":\"approved\",\"approvalScope\":\"read_only_observation\",\"allowedAction\":\"read_only_observation\",\"candidateId\":null,\"candidateUrl\":null,\"expiresAt\":\"2026-06-16T03:25:21.483Z\",\"actionsTaken\":[]}",
+          "previous_event_hash": "a973948872c29d214c1f919f48a4cab374e5625350298c22bcc7fed66a091d84",
+          "event_hash": "8221e57810bc402d0f3359ad3f1869c567e91c4c8773efdba585328089ddd48c",
+          "chain_version": "2026-05-27.audit-chain.v1",
+          "created_at": "2026-06-16T03:10:21.484Z"
+        },
+        {
+          "id": "audit_2f9edee6-a732-4da1-b2be-e00d5dd625d6",
+          "session_id": "session_e2f663b7-c86d-4065-a4c5-ecbc46a3d4ef",
+          "event_type": "postgres_production_readiness_completed",
+          "details": "{\"smokeVersion\":\"2026-06-16.postgres-production-readiness.v1\",\"checkpointId\":\"checkpoint_e3a32271-c02d-4d5b-aa33-e3d6bfcc0793\",\"taskId\":\"task_4cc00fbd-6bce-4eda-a8ea-6d66925fe12e\",\"approvalGateId\":\"gate_e678350d-80ae-447f-96e2-40c9eee47b8b\"}",
+          "previous_event_hash": "8221e57810bc402d0f3359ad3f1869c567e91c4c8773efdba585328089ddd48c",
+          "event_hash": "25b490b3ef94c6cc3a8596f8668828e133a64cf9dae04892a0a8ec9bfd492c75",
+          "chain_version": "2026-05-27.audit-chain.v1",
+          "created_at": "2026-06-16T03:10:21.485Z"
+        }
+      ]
+    }
+  }
+}

@@ -6633,3 +6633,83 @@ Known risks or gaps:
 - Some existing raw SQL paths still contain SQLite-specific assumptions such as `rowid` ordering or manually interpolated values. The adapter handles the audited `rowid` path, but every endpoint path still needs compatibility coverage before defaulting to Postgres.
 - Database-level leases and concurrent worker claims are not implemented yet.
 - Hosted Postgres backup/restore proof and secret-manager profile are still pending.
+
+## Postgres Operational Readiness Cycle - 2026-06-16
+
+Status: Implemented and live-smoked as an operational-readiness gate. Database architecture can now score `95 / 100` when endpoint parity, leases, and backup/restore are proven, while `100 / 100` remains blocked on a managed-secret/default-runtime rollout gate.
+
+Implemented:
+- Added `worker_leases` to `src/concierge/schema.mjs` and the table registry.
+- Added `src/concierge/workerLeases.mjs` with:
+  - `WORKER_LEASES_VERSION=2026-06-16.worker-leases.v1`,
+  - atomic acquire with conflict blocking,
+  - heartbeat extension,
+  - owner-only release,
+  - expired lease sweeping.
+- Added `scripts/postgres-production-readiness-smoke.mjs` and package script `storage:postgres:production-smoke`.
+- Added `src/tests/worker-leases.test.mjs`.
+- Added `src/tests/postgres-production-readiness-contract.test.mjs`.
+- Updated `npm run test:db:postgres`, `npm run test:db:safety`, `npm run test:local`, storage contract, compose contract, build guard, Dockerfile, compose env, server proof payload, and storage readiness.
+- Storage readiness now reports:
+  - `postgres.productionSmokeReady`,
+  - `postgres.workerLeaseReady`,
+  - `postgres.backupRestoreReady`,
+  - `postgres.endpointParityReady`,
+  - `postgres.operationalGatesReady`,
+  - `postgres.productionGatesReady`,
+  - `safety.secretProfileReady`.
+
+Verification commands:
+- `node --check src/concierge/workerLeases.mjs` passed.
+- `node --check scripts/postgres-production-readiness-smoke.mjs` passed.
+- `node --check src/concierge/storageReadiness.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `npm run test:db:postgres` passed with 9/9 tests.
+- `npm run test:db:safety` passed with 13/13 tests.
+- `npm run storage:contract` passed.
+- `npm run test:docker:contract` passed with 8/8 tests.
+- `npm run build` passed.
+- `docker compose ps postgres` reported Postgres running healthy on host port `55432`.
+- `npm run storage:postgres:production-smoke` passed against live Docker Postgres.
+- Temporary server proof passed:
+  - command used `HOST=127.0.0.1 PORT=4194 BRAINSTY_DB_DRIVER=postgres BRAINSTY_DATABASE_URL=postgresql://brainsty:brainsty-dev-only@127.0.0.1:55432/brainstyworkers?sslmode=disable BRAINSTY_POSTGRES_LIVE_READY=1 BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1 BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY=1 BRAINSTY_POSTGRES_WORKER_LEASE_READY=1 BRAINSTY_POSTGRES_BACKUP_RESTORE_READY=1 BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY=1 BRAINSTY_DATABASE_SECRET_PROFILE_READY=0 npm start`,
+  - server booted with `Database driver: postgres`,
+  - `/api/health` reported `storage.status=postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, `score=95`, `appRuntimeMigratedToPostgres=true`, `fullMigrationReady=false`, `migrationPending=true`, and `secretProfileReady=false`,
+  - `/api/proof/runs/postgres-operational-readiness` reported `database_product_ready_architecture=95 / 100` and the production smoke/worker lease/backup restore/endpoint parity gates,
+  - port `4194` was clear after shutdown.
+- Browser proof passed at `http://127.0.0.1:4194/?phase=postgres-operational-readiness`: the dashboard loaded connector proof, displayed `database_product_ready_architecture`, `95 / 100`, `postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, and no console errors. Screenshot: `artifacts/phase11-postgres-operational-readiness-dashboard-proof.png`.
+
+Live Postgres production smoke details:
+- Version: `2026-06-16.postgres-production-readiness.v1`.
+- Adapter: `2026-06-16.pg-bound-store-parity.v1`.
+- Lease version: `2026-06-16.worker-leases.v1`.
+- Endpoint parity proof created one user, session, checkpoint, OpenClaw proposal task, approval gate, and hash-chain audit event.
+- Worker lease proof:
+  - first worker acquired,
+  - second worker was blocked while active,
+  - heartbeat succeeded,
+  - owner release succeeded,
+  - second worker acquired after release,
+  - final claim count was 2.
+- Backup/restore proof:
+  - temporary source and restore databases were created and cleaned up,
+  - 55 tables were included in the snapshot contract,
+  - 17 non-empty tables were compared,
+  - no count mismatches were found,
+  - restored user/session/checkpoint/approval/audit/worker-lease rows were present,
+  - smoke-only artifact written to `artifacts/postgres-production-readiness-smoke.json`.
+- Safety proof reported bound parameters, no SQLite shell-out, no external actions, no PHI seed, and temporary databases only.
+
+Score decision:
+- Database product-ready architecture can move from `90 / 100` to `95 / 100` when the operational flags are set:
+  - `BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=1`,
+  - `BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY=1`,
+  - `BRAINSTY_POSTGRES_WORKER_LEASE_READY=1`,
+  - `BRAINSTY_POSTGRES_BACKUP_RESTORE_READY=1`,
+  - `BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY=1`.
+- The score remains below `100 / 100` until a real managed-secret or equivalent production secret profile is proven and `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` is justified.
+
+Known risks or gaps:
+- Full endpoint regression with `BRAINSTY_DB_DRIVER=postgres` is still needed before changing the default runtime.
+- The backup/restore proof is a logical smoke over app rows; production still needs scheduled hosted backup and restore runbooks.
+- Managed-secret/Docker-secret profile is pending and intentionally blocks `100 / 100`.

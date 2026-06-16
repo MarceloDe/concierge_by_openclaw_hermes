@@ -2005,3 +2005,22 @@ This closes the fake-adapter gap without overclaiming. The project now proves re
 
 Cost of changing later:
 Moderate. The next storage phase should add endpoint-wide Postgres compatibility tests, replace remaining raw SQL assumptions, and then add database-level worker leases, backup/restore proof, and secret-manager wiring before moving the default runtime to Postgres.
+
+## 2026-06-16 - Score Postgres Operational Gates Separately From Secret-Managed Production
+
+Context:
+The Postgres runtime adapter can now boot and pass core parity smoke, but database production readiness needs more than a client adapter. The next risks are concurrent worker claims, endpoint-state parity, restore confidence, and credential handling. A local Docker password and env-file URL are useful for development proof but are not a managed-secret profile.
+
+Options considered:
+- Move the database score directly from `90 / 100` to `100 / 100` once leases and backup/restore smoke pass.
+- Keep the score capped at `90 / 100` until every production deployment concern is implemented.
+- Add an intermediate `95 / 100` operational-readiness state for endpoint parity, leases, and backup/restore, and reserve `100 / 100` for Postgres-selected runtime plus a proven managed-secret profile.
+
+Decision:
+Add `worker_leases`, a live Postgres production smoke, backup/restore proof, and explicit storage readiness gates. Report `95 / 100` when operational Postgres gates pass but secret management/default rollout remains pending. Report `100 / 100` only when `BRAINSTY_DB_DRIVER=postgres` and all production gates, including `BRAINSTY_DATABASE_SECRET_PROFILE_READY`, are true.
+
+Reason:
+This gives the project real concurrency and recovery proof without making a false security claim. It keeps the dashboard useful for operators: they can see exactly which database gates are done and which gate still blocks production declaration.
+
+Cost of changing later:
+Low. The readiness fields are additive. A future managed-secret/Docker-secret/hosted-secret phase can satisfy the final gate without changing the worker lease or backup/restore contract.

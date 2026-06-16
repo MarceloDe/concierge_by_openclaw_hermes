@@ -9,7 +9,9 @@ test("storage contract defines a Postgres deployment target while preserving SQL
   assert.equal(result.runtimeDriverDefault, "sqlite");
   assert.equal(result.productionTarget, "postgres");
   assert.equal(result.postgresAdapterReady, true);
+  assert.equal(result.postgresProductionReadinessReady, true);
   assert.equal(result.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
+  assert.equal(result.productionSmokeCommand, "npm run storage:postgres:production-smoke");
   assert.equal(result.appRuntimeMigratedToPostgres, false);
   assert.deepEqual(result.services, ["postgres"]);
   assert.equal(result.livePostgres.checked, false);
@@ -53,6 +55,38 @@ test("storage readiness reports adapter parity smoke without declaring full migr
   assert.equal(readiness.score, 90);
   assert.equal(readiness.postgres.runtimeSmokeReady, true);
   assert.equal(readiness.postgres.runtimeSmokeCommand, "npm run storage:postgres:runtime-smoke");
+  assert.equal(readiness.postgres.productionSmokeReady, false);
+  assert.equal(readiness.appRuntimeMigratedToPostgres, false);
+  assert.equal(readiness.fullMigrationReady, false);
+  assert.equal(readiness.migrationPending, true);
+});
+
+test("storage readiness reports production gates without declaring full migration while SQLite is default", () => {
+  const readiness = getStorageReadiness({
+    deployment: {
+      postgresRuntimeReady: true,
+      postgresLiveReady: true,
+      postgresAdapterRuntimeReady: true,
+      postgresRuntimeSmokeReady: true,
+      postgresProductionSmokeReady: true,
+      postgresWorkerLeaseReady: true,
+      postgresBackupRestoreReady: true,
+      postgresEndpointParityReady: true,
+      databaseSecretProfileReady: true
+    },
+    env: {
+      BRAINSTY_DB_DRIVER: "sqlite",
+      BRAINSTY_DATABASE_TARGET: "postgres",
+      BRAINSTY_DATABASE_URL: "postgresql://brainsty:secret-password@postgres:5432/brainstyworkers?sslmode=disable"
+    }
+  });
+  assert.equal(readiness.status, "postgres_production_gates_ready_sqlite_default");
+  assert.equal(readiness.score, 95);
+  assert.equal(readiness.postgres.productionSmokeReady, true);
+  assert.equal(readiness.postgres.workerLeaseReady, true);
+  assert.equal(readiness.postgres.backupRestoreReady, true);
+  assert.equal(readiness.postgres.endpointParityReady, true);
+  assert.equal(readiness.safety.secretProfileReady, true);
   assert.equal(readiness.appRuntimeMigratedToPostgres, false);
   assert.equal(readiness.fullMigrationReady, false);
   assert.equal(readiness.migrationPending, true);

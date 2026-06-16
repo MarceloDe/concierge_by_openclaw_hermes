@@ -175,14 +175,18 @@ async function safeDeploymentContractStatus() {
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
+    "scripts/postgres-production-readiness-smoke.mjs",
     "scripts/compose-memory-smoke.mjs",
     "project/db/postgres-init/001_storage_readiness.sql",
     "src/concierge/databaseFactory.mjs",
     "src/concierge/postgresStore.mjs",
+    "src/concierge/workerLeases.mjs",
     "src/concierge/storageReadiness.mjs",
     "src/tests/deployment-compose.test.mjs",
     "src/tests/deployment-graphiti-compose.test.mjs",
     "src/tests/deployment-storage.test.mjs",
+    "src/tests/worker-leases.test.mjs",
+    "src/tests/postgres-production-readiness-contract.test.mjs",
     "tools/graphiti/graphiti_bridge.py",
     "vendor/getzep-graphiti/pyproject.toml"
   ];
@@ -223,6 +227,11 @@ async function safeDeploymentContractStatus() {
     "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
     "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
     "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
+    "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
+    "BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}",
+    "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
+    "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
+    "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
     "project/db/postgres-init"
   ].every((fragment) => composeFile.includes(fragment));
   return {
@@ -236,8 +245,14 @@ async function safeDeploymentContractStatus() {
     postgresLiveReady: process.env.BRAINSTY_POSTGRES_LIVE_READY === "1",
     postgresAdapterRuntimeReady: true,
     postgresRuntimeSmokeReady: process.env.BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY === "1",
+    postgresProductionSmokeReady: process.env.BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY === "1",
+    postgresWorkerLeaseReady: process.env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1",
+    postgresBackupRestoreReady: process.env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1",
+    postgresEndpointParityReady: process.env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1",
+    databaseSecretProfileReady: process.env.BRAINSTY_DATABASE_SECRET_PROFILE_READY === "1",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
+    postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -254,6 +269,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const deployment = await safeDeploymentContractStatus();
   const storage = getStorageReadiness({ deployment });
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
+  const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
     ready: false,
     status: "openclaw_readiness_error",
@@ -329,7 +345,14 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionTarget: storage.postgres.target ? "postgres" : "unknown",
         migrationPending: storage.migrationPending,
         command: storage.postgres.smokeCommand,
-        runtimeSmokeCommand: storage.postgres.runtimeSmokeCommand
+        runtimeSmokeCommand: storage.postgres.runtimeSmokeCommand,
+        productionSmokeCommand: storage.postgres.productionSmokeCommand,
+        productionGates: {
+          endpointParityReady: storage.postgres.endpointParityReady,
+          workerLeaseReady: storage.postgres.workerLeaseReady,
+          backupRestoreReady: storage.postgres.backupRestoreReady,
+          secretProfileReady: storage.safety.secretProfileReady
+        }
       },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
@@ -369,13 +392,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "database_product_ready_architecture",
         score: storage.score,
         target: storage.targetScore,
-        status: storage.postgres.liveReady
-          ? storage.postgres.runtimeSmokeReady
-            ? "postgres_adapter_parity_ready_runtime_migration_pending"
-            : "postgres_live_ready_runtime_migration_pending"
-          : storage.postgres.composeReady
-            ? "postgres_compose_profile_present_runtime_migration_pending"
-            : "needs_postgres_profile"
+        status: databaseScoreStatus
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },

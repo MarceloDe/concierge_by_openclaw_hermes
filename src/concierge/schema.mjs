@@ -8,6 +8,7 @@ export const TABLES = [
   "session_checkpoints",
   "session_events",
   "runtime_events",
+  "worker_leases",
   "runtime_hook_subscriptions",
   "runtime_hook_deliveries",
   "memory_items",
@@ -161,6 +162,22 @@ CREATE TABLE IF NOT EXISTS runtime_events (
   created_at TEXT NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS worker_leases (
+  id TEXT PRIMARY KEY,
+  lease_key TEXT NOT NULL UNIQUE,
+  worker_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  status TEXT NOT NULL,
+  claim_count INTEGER NOT NULL DEFAULT 1,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  claimed_at TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  released_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS runtime_hook_subscriptions (

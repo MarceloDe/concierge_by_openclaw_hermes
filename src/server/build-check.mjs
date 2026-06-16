@@ -37,15 +37,19 @@ const requiredFiles = [
   "scripts/compose-contract.mjs",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
+  "scripts/postgres-production-readiness-smoke.mjs",
   "scripts/compose-memory-smoke.mjs",
   "project/db/postgres-init/001_storage_readiness.sql",
   "src/concierge/databaseFactory.mjs",
   "src/concierge/postgresStore.mjs",
+  "src/concierge/workerLeases.mjs",
   "src/concierge/storageReadiness.mjs",
   "src/tests/deployment-compose.test.mjs",
   "src/tests/deployment-graphiti-compose.test.mjs",
   "src/tests/deployment-storage.test.mjs",
   "src/tests/postgres-store-contract.test.mjs",
+  "src/tests/postgres-production-readiness-contract.test.mjs",
+  "src/tests/worker-leases.test.mjs",
   "src/server/server.mjs",
   "src/concierge/engine.mjs",
   "src/concierge/openclawSkillInvocation.mjs",
@@ -134,6 +138,10 @@ if (!SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS audit_events")) {
 
 if (!TABLES.includes("runtime_events") || !TABLES.includes("runtime_hook_subscriptions")) {
   throw new Error("Database schema is missing Phase 8 runtime event/hook tables");
+}
+
+if (!TABLES.includes("worker_leases") || !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS worker_leases")) {
+  throw new Error("Database schema is missing production worker lease table");
 }
 
 if (!TABLES.includes("research_runs") || !TABLES.includes("research_run_events") || !TABLES.includes("research_artifacts") || !TABLES.includes("research_schedules")) {

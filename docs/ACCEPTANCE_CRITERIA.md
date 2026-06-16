@@ -1663,3 +1663,26 @@ Current proof status:
 - Compose Node health on `http://127.0.0.1:4273/api/health` reported `databaseDriver=sqlite`, storage status `postgres_adapter_parity_ready_sqlite_default`, `score=90`, `postgres.runtimeSmokeReady=true`, and `migrationPending=true`.
 - `BRAINSTY_COMPOSE_NODE_PORT=4273 BRAINSTY_COMPOSE_API_PORT=8100 BRAINSTY_EXPECT_GRAPHITI_READY=1 npm run docker:memory:smoke` passed with Graphiti schema-ready product memory.
 - Browser proof at `http://127.0.0.1:4273/?phase=postgres-runtime-adapter` displayed the database architecture score, `90 / 100`, Postgres adapter parity status, runtime smoke proof, and migration-pending state with 0 console errors. Screenshot: `artifacts/phase11-postgres-runtime-adapter-dashboard-proof.png`.
+
+## Postgres Operational Readiness Acceptance
+
+This slice is acceptable when:
+
+- The database schema includes a `worker_leases` table.
+- Worker lease helpers can atomically acquire, block competing active claimants, heartbeat, release, transfer after release, and sweep expired leases.
+- Live Postgres production smoke proves endpoint-state parity, approval/audit/checkpoint writes, worker lease exclusion, and logical backup/restore into a fresh database.
+- Storage readiness reports production smoke, worker lease, backup/restore, endpoint parity, and secret-profile gates separately.
+- Database architecture score reaches `95 / 100` when operational gates pass but the managed-secret/default rollout gate remains pending.
+- Database architecture score reaches `100 / 100` only when Postgres is selected as runtime and the secret profile gate is also proven.
+- `npm run test:db:postgres`, `npm run test:db:safety`, `npm run storage:postgres:production-smoke`, `npm run storage:contract`, `npm run test:docker:contract`, and `npm run build` pass.
+
+Current proof status:
+
+- Verified on 2026-06-16 against live Docker Postgres on host port `55432`.
+- `npm run storage:postgres:production-smoke` returned `ok=true`, adapter `2026-06-16.pg-bound-store-parity.v1`, lease version `2026-06-16.worker-leases.v1`, endpoint parity `ok=true`, worker lease `ok=true`, and backup/restore `ok=true`.
+- The smoke created temporary source and restore databases, proved first worker acquire, second worker block while active, heartbeat, release, second acquire after release, and restored user/session/checkpoint/approval/audit/worker-lease rows.
+- Backup/restore compared 17 non-empty tables, found no count mismatches, and wrote smoke-only artifact `artifacts/postgres-production-readiness-smoke.json`.
+- Current database readiness is expected to report `95 / 100` with `secretProfileReady=false`; it must not report `100 / 100` until the managed-secret profile is proven.
+- A temporary server booted on `http://127.0.0.1:4194` with `BRAINSTY_DB_DRIVER=postgres` and operational gate flags enabled but `BRAINSTY_DATABASE_SECRET_PROFILE_READY=0`.
+- That server's `/api/health` reported `storage.status=postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, `score=95`, `fullMigrationReady=false`, and `secretProfileReady=false`.
+- Browser proof showed `database_product_ready_architecture=95 / 100` and the secret-profile-pending status with 0 console errors. Screenshot: `artifacts/phase11-postgres-operational-readiness-dashboard-proof.png`.

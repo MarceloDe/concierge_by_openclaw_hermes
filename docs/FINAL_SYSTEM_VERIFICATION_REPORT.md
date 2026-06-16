@@ -360,3 +360,29 @@ Verification:
 
 Remaining gap:
 - Postgres is now a real selectable app-state runtime for core operations, but not yet the default production database. Remaining work includes endpoint-wide query compatibility, database-level worker leases, migration replay/rollback, backup/restore proof, and secret-manager profile.
+
+## Phase 11 Postgres Operational Readiness Update
+
+Code changes:
+- Added `worker_leases` to the schema and table registry.
+- Added `src/concierge/workerLeases.mjs`.
+- Added `scripts/postgres-production-readiness-smoke.mjs`.
+- Added `src/tests/worker-leases.test.mjs`.
+- Added `src/tests/postgres-production-readiness-contract.test.mjs`.
+- Updated storage readiness, compose/storage contracts, Docker env, package scripts, build guard, and connector proof fields.
+
+Verification:
+- `npm run test:db:postgres` passed with 9/9 tests.
+- `npm run test:db:safety` passed with 13/13 tests.
+- `npm run storage:contract` passed.
+- `npm run test:docker:contract` passed with 8/8 tests.
+- `npm run build` passed.
+- `npm run storage:postgres:production-smoke` passed against live Docker Postgres.
+- The production smoke proved endpoint-state parity, approval/audit/checkpoint writes, worker lease exclusion, and logical backup/restore into a fresh database.
+- Backup/restore compared 17 non-empty tables with no count mismatches and restored user/session/checkpoint/approval/audit/worker-lease rows.
+- A temporary server booted with `BRAINSTY_DB_DRIVER=postgres` and operational DB gate flags. `/api/health` reported score `95`, status `postgres_runtime_selected_operational_gates_ready_secret_profile_pending`, and `secretProfileReady=false`.
+- Browser proof showed `database_product_ready_architecture=95 / 100` and the secret-profile-pending status. Screenshot: `artifacts/phase11-postgres-operational-readiness-dashboard-proof.png`.
+
+Score:
+- Database product-ready architecture can now report `95 / 100` when operational Postgres gates are enabled.
+- `100 / 100` remains blocked until a real managed-secret or equivalent production secret profile is proven and Postgres runtime rollout/defaulting is complete.

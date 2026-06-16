@@ -2074,3 +2074,35 @@ Remaining follow-up:
 - Replace or parameterize remaining SQLite-specific raw query fragments across all endpoint paths before making Postgres the default.
 - Add database-level worker leases and concurrent claim tests in Postgres.
 - Add migration replay/rollback, backup/restore proof, managed Postgres configuration, and secret-manager wiring before declaring full production storage readiness.
+
+## Postgres Operational Readiness Cycle - 2026-06-16
+
+Goal:
+- Move the database architecture score from adapter parity toward production readiness by proving operational Postgres gates: endpoint-state parity, worker lease exclusion, and backup/restore integrity.
+
+Implemented slice:
+- Add `worker_leases` to the schema and table registry.
+- Add `src/concierge/workerLeases.mjs` with versioned acquire, heartbeat, release, lookup, and expired-lease sweep helpers.
+- Add `scripts/postgres-production-readiness-smoke.mjs` and `npm run storage:postgres:production-smoke`.
+- The production smoke creates temporary source and restore databases on the live Postgres server, seeds app state, creates an approval-compatible OpenClaw proposal task, writes approval/audit/checkpoint state, proves worker lease exclusion, snapshots all tables, restores into a fresh database, and compares restored counts/rows.
+- Extend storage readiness with explicit gates:
+  - runtime smoke,
+  - production smoke,
+  - worker lease,
+  - backup/restore,
+  - endpoint parity,
+  - secret profile.
+- Score `95 / 100` when operational gates pass but the secret-manager/default rollout gate remains pending.
+- Score `100 / 100` only when Postgres is selected as the runtime and the secret profile gate is also ready.
+
+Acceptance:
+- `npm run test:db:postgres` validates Postgres storage, production-readiness contract, and lease behavior.
+- `npm run test:db:safety` includes the new production-readiness gates.
+- `npm run storage:postgres:production-smoke` passes against live Docker Postgres.
+- `npm run storage:contract`, `npm run test:docker:contract`, and `npm run build` remain green.
+- A temporary server can boot with `BRAINSTY_DB_DRIVER=postgres` and operational gate flags, returning database score `95 / 100` with secret profile pending.
+
+Remaining follow-up:
+- Add a real managed-secret or Docker-secret production profile and set `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` only when that profile is proven.
+- Run the full endpoint/browser/mobile regression suite with Postgres as the selected runtime before making Postgres the default.
+- Add hosted backup scheduling/restore runbooks and migration rollback/replay beyond the logical smoke.
