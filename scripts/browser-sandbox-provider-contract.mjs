@@ -13,6 +13,10 @@ const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_se
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
 const DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN";
 
+function configStreamRequiresWebrtc(config) {
+  return ["webrtc", "webrtc_or_sse_frames"].includes(config?.transport?.stream);
+}
+
 function sanitizeConfig(config, configPath) {
   return {
     schemaVersion: config.schemaVersion ?? null,
@@ -518,6 +522,125 @@ export async function runBrowserSandboxProviderLiveVerificationSmoke({
   return result;
 }
 
+export async function runBrowserSandboxProviderWebrtcSignalingSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-webrtc-signaling-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [validation, configText, liveVerification] = await Promise.all([
+    validateBrowserSandboxProviderContract({ configPath }),
+    readFile(resolve(configPath), "utf8"),
+    runBrowserSandboxProviderLiveVerificationSmoke({
+      configPath,
+      selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-live-verification-smoke.json"),
+      env,
+      providerReady,
+      fetchImpl
+    })
+  ]);
+  const config = JSON.parse(configText);
+  const resolver = resolveBrowserSandboxHostedProvider({
+    config,
+    configPath,
+    validation,
+    env,
+    providerReady,
+    provider: env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "hosted_remote"
+  });
+  const signalingGate = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY === "1";
+  const streamRequiresWebrtc = configStreamRequiresWebrtc(config);
+  const canAttemptSignaling = Boolean(
+    validation.ok &&
+    streamRequiresWebrtc &&
+    liveVerification.hostedProviderLiveVerificationReady &&
+    resolver.resolverReady &&
+    signalingGate
+  );
+  const signaling = canAttemptSignaling
+    ? await callSelectedHostedProviderWebrtcSignaling({
+      endpointUrl: env[envNameFromRef(config.endpointRef)],
+      apiToken: env[envNameFromRef(config.auth?.tokenRef ?? DEFAULT_HOSTED_AUTH_TOKEN_REF)],
+      resolver,
+      fetchImpl
+    })
+    : {
+      attempted: false,
+      ok: false,
+      status: streamRequiresWebrtc
+        ? liveVerification.hostedProviderLiveVerificationReady
+          ? "hosted_browser_sandbox_provider_webrtc_signaling_requires_explicit_gate"
+          : "hosted_browser_sandbox_provider_webrtc_signaling_blocked"
+        : "hosted_browser_sandbox_provider_webrtc_signaling_not_required",
+      providerNetworkCalled: false,
+      localHarnessOnly: false
+    };
+  const signalingReady = Boolean(
+    signaling.ok &&
+    signaling.providerNetworkCalled &&
+    signaling.providerLiveConnected &&
+    !signaling.localHarnessOnly
+  );
+  const hostedProviderReady = Boolean(
+    liveVerification.hostedProviderReady &&
+    (!streamRequiresWebrtc || signalingReady)
+  );
+  const result = {
+    ok: Boolean(validation.ok && liveVerification.ok && (!canAttemptSignaling || signaling.ok)),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: signalingReady
+      ? "hosted_browser_sandbox_provider_webrtc_signaling_ready"
+      : signaling.status,
+    hostedProviderWebrtcSignalingReady: signalingReady,
+    hostedProviderLiveVerificationReady: liveVerification.hostedProviderLiveVerificationReady,
+    hostedProviderReady,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    streamRequiresWebrtc,
+    validation,
+    resolver,
+    liveVerification: {
+      status: liveVerification.status,
+      hostedProviderLiveVerificationReady: liveVerification.hostedProviderLiveVerificationReady
+    },
+    signaling,
+    requiredWebrtcProofBeforeHostedReady: [
+      "opaque SDP offer reference sent through public connector",
+      "provider answer reference returned without raw SDP",
+      "provider ICE server references returned without raw credentials",
+      "provider ICE candidate relay accepts opaque candidate references only",
+      "no raw SDP, ICE candidate, frame, OCR, endpoint, token, credential, or portal text is returned"
+    ],
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_webrtc_signaling",
+      scoreKey: "hosted_browser_sandbox_provider_webrtc_signaling",
+      signalingReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY",
+      hostedReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(resolver),
+      ...assertNoSecretLeak(liveVerification),
+      ...assertNoSecretLeak(signaling),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawSdpReturned: Boolean(signaling?.offer?.rawSdpReturned),
+      rawIceCandidateReturned: Boolean(signaling?.iceCandidate?.rawIceCandidateReturned),
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: !hostedProviderReady && resolver.ready
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
 async function callSelectedHostedProviderLiveLifecycle({
   endpointUrl,
   apiToken,
@@ -692,6 +815,122 @@ async function callSelectedHostedProviderLiveLifecycle({
   };
 }
 
+async function callSelectedHostedProviderWebrtcSignaling({
+  endpointUrl,
+  apiToken,
+  resolver,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const request = buildHostedProviderAdapterRequest({
+    providerResolution: resolver,
+    targetUrlRef: "approved-target-url-ref-redacted",
+    options: { webrtcSignaling: true }
+  });
+  const createSession = await callHostedProviderCreateLiveSession({
+    endpointUrl,
+    apiToken,
+    request,
+    fetchImpl
+  });
+  const providerSessionRef = createSession.response?.providerSessionRef;
+  const offer = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/webrtc/offer`,
+    body: {
+      offerRef: "client-sdp-offer-ref-redacted",
+      rawSdpReturned: false,
+      clientCapabilities: {
+        receiveVideo: true,
+        receiveAudio: false,
+        dataChannelInput: true
+      }
+    },
+    fetchImpl
+  });
+  const iceCandidate = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/webrtc/ice-candidate`,
+    body: {
+      candidateRef: "client-ice-candidate-ref-redacted",
+      rawIceCandidateReturned: false
+    },
+    fetchImpl
+  });
+  const teardown = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/teardown`,
+    body: { reason: "webrtc_signaling_verification_complete" },
+    fetchImpl
+  });
+  const serialized = JSON.stringify({
+    offer: offer.response,
+    iceCandidate: iceCandidate.response,
+    teardown: teardown.response
+  });
+  const ok = Boolean(
+    createSession.ok &&
+    createSession.response?.providerLiveConnected === true &&
+    offer.ok &&
+    offer.response?.providerLiveConnected === true &&
+    offer.response?.transport === "webrtc" &&
+    offer.response?.answerRef &&
+    offer.response?.rawSdpReturned === false &&
+    Array.isArray(offer.response?.iceServerRefs) &&
+    offer.response.iceServerRefs.length > 0 &&
+    offer.response?.rawIceCandidateReturned === false &&
+    offer.response?.frameRecordingEnabled === false &&
+    iceCandidate.ok &&
+    iceCandidate.response?.candidateAccepted === true &&
+    iceCandidate.response?.rawIceCandidateReturned === false &&
+    iceCandidate.response?.providerLiveConnected === true &&
+    teardown.ok &&
+    teardown.response?.teardownComplete === true &&
+    !/v=0|candidate:|a=fingerprint|a=ice-ufrag|turn:|stun:|Bearer\s+|token|secret|data:image|member id|subscriber id|password|captcha/i.test(serialized)
+  );
+  return {
+    attempted: true,
+    ok,
+    status: ok
+      ? "hosted_browser_sandbox_provider_webrtc_signaling_verified"
+      : "hosted_browser_sandbox_provider_webrtc_signaling_failed",
+    providerNetworkCalled: true,
+    localHarnessOnly: false,
+    providerLiveConnected: Boolean(createSession.response?.providerLiveConnected),
+    createSession: {
+      ok: createSession.ok,
+      statusCode: createSession.statusCode,
+      responseValidation: createSession.responseValidation,
+      providerLiveConnected: Boolean(createSession.response?.providerLiveConnected)
+    },
+    offer: {
+      ok: offer.ok,
+      statusCode: offer.statusCode,
+      transport: offer.response?.transport ?? null,
+      answerRefPresent: Boolean(offer.response?.answerRef),
+      iceServerRefsPresent: Array.isArray(offer.response?.iceServerRefs) && offer.response.iceServerRefs.length > 0,
+      rawSdpReturned: Boolean(offer.response?.rawSdpReturned),
+      rawIceCandidateReturned: Boolean(offer.response?.rawIceCandidateReturned),
+      providerLiveConnected: Boolean(offer.response?.providerLiveConnected)
+    },
+    iceCandidate: {
+      ok: iceCandidate.ok,
+      statusCode: iceCandidate.statusCode,
+      candidateAccepted: Boolean(iceCandidate.response?.candidateAccepted),
+      rawIceCandidateReturned: Boolean(iceCandidate.response?.rawIceCandidateReturned),
+      providerLiveConnected: Boolean(iceCandidate.response?.providerLiveConnected)
+    },
+    teardown: {
+      ok: teardown.ok,
+      statusCode: teardown.statusCode,
+      teardownComplete: Boolean(teardown.response?.teardownComplete),
+      providerLiveConnected: Boolean(teardown.response?.providerLiveConnected)
+    }
+  };
+}
+
 async function callHostedProviderHealthProbe({
   endpointUrl,
   apiToken,
@@ -815,6 +1054,8 @@ export function resolveBrowserSandboxHostedProvider({
   const authResolved = Boolean(authValue);
   const liveVerified = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED === "1";
   const liveVerificationReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
+  const streamRequiresWebrtc = configStreamRequiresWebrtc(config);
+  const webrtcSignalingReady = !streamRequiresWebrtc || env.WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY === "1";
   const resolverReady = Boolean(
     provider === "hosted_remote" &&
     providerReady &&
@@ -824,7 +1065,7 @@ export function resolveBrowserSandboxHostedProvider({
     endpointResolved &&
     authResolved
   );
-  const ready = Boolean(resolverReady && liveVerified && liveVerificationReady && config?.adapter?.providerLiveConnected === true);
+  const ready = Boolean(resolverReady && liveVerified && liveVerificationReady && webrtcSignalingReady && config?.adapter?.providerLiveConnected === true);
   const status = ready
     ? "hosted_browser_sandbox_provider_ready"
     : resolverReady
@@ -840,6 +1081,8 @@ export function resolveBrowserSandboxHostedProvider({
     authResolved,
     liveVerified,
     liveVerificationReady,
+    streamRequiresWebrtc,
+    webrtcSignalingReady,
     endpointRefKind: refKind(config?.endpointRef),
     authTokenRefKind: refKind(authTokenRef),
     endpointEnvPresent: Boolean(endpointEnvName),

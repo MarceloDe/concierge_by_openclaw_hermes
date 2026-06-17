@@ -7668,3 +7668,61 @@ Known risks or gaps:
 - This phase adds the selected-provider integration path and proof gate, but the local environment still does not include real provider credentials.
 - Real provider endpoint/token/config must stay outside Git and be supplied by the operator.
 - `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider returns live connected proof plus GUI/OCR evidence.
+
+## Phase 24 Hosted Browser Sandbox Provider WebRTC Signaling Update
+
+Status: Implemented, regression-tested, and visually/API proved with the hosted remote score still honestly blocked.
+
+Slice name:
+- Hosted browser sandbox provider WebRTC signaling.
+
+Code changes:
+- Added `scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs` and package script `sandbox:browser:provider-webrtc-signaling`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with WebRTC signaling proof for opaque SDP offer refs, opaque answer refs, and opaque ICE candidate refs.
+- Added `project/deployment/browser-sandbox-provider.webrtc-signaling.example.env` as a non-secret operator template for private provider signaling verification.
+- Extended compose, build, and deployment contract checks with the WebRTC signaling env gate and command.
+- Added FastAPI hosted-provider signaling support at `POST /api/v1/browser/sessions/{browser_session_id}/webrtc/offer`.
+- Tightened WebRTC-capable hosted-provider readiness so `webrtc` and `webrtc_or_sse_frames` configs require `WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY=1`.
+- Exposed `hosted_browser_sandbox_provider_webrtc_signaling` in FastAPI proof and Node dashboard proof.
+- Kept `hosted_remote_browser_sandbox` blocked unless live verification is ready, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set, WebRTC signaling is ready when required, and the private provider config reports `adapter.providerLiveConnected=true`.
+
+Safety decision:
+- Private endpoint, token, and provider runtime JSON remain outside Git.
+- The default verification command is blocked and safe when live provider config is absent.
+- The WebRTC signaling score can prove opaque signaling readiness, but it does not by itself enable the hosted remote browser score.
+- Public route payloads use opaque references and reject raw SDP-looking or raw ICE-looking payloads.
+- Provider endpoint, token, raw SDP, raw ICE candidate, TURN/STUN credential material, raw frame payload, raw OCR text, raw input values, and credential material must not appear in dashboard text or proof artifacts.
+- Provider-backed input remains gated by human-only `interactive_takeover`; Codex does not enter credentials.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m compileall -q project`
+- `npm run sandbox:browser:provider-webrtc-signaling`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade`
+
+Focused verification result:
+- Syntax/compile checks passed.
+- WebRTC signaling smoke reported `hosted_browser_sandbox_provider_webrtc_signaling_blocked`, `hostedProviderWebrtcSignalingReady=false`, `hostedProviderReady=false`, no provider network call, and no raw SDP/ICE/endpoint/token leakage in default safe mode.
+- Focused browser-sandbox/compose contract tests passed with 15/15 tests.
+- FastAPI facade regression passed with 46 tests and 2 expected live-gated skips.
+
+Full verification result:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 31/31 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Dashboard visual/API proof passed on `http://127.0.0.1:4210/?phase=hosted-browser-sandbox-provider-webrtc-signaling`.
+- Browser/API assertion proved `hosted_browser_sandbox_provider_webrtc_signaling` at `100 / 100`, `hosted_browser_sandbox_provider_live_verification` at `100 / 100`, `hosted_remote_browser_sandbox` still at `0 / 100`, and no endpoint/token/raw SDP/raw ICE leakage.
+- Proof artifacts:
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-dashboard-proof.png`
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-visual-proof.json`
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-proof.json`
+  - `artifacts/browser-sandbox-provider-webrtc-signaling-smoke.json`
+
+Known risks or gaps:
+- This phase adds the opaque signaling path and proof gate, but the local environment still does not include real provider credentials.
+- Real provider endpoint/token/config must stay outside Git and be supplied by the operator.
+- `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider returns live connected proof plus GUI/OCR evidence.

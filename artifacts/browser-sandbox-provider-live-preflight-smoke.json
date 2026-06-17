@@ -80,6 +80,8 @@
     "authResolved": false,
     "liveVerified": false,
     "liveVerificationReady": false,
+    "streamRequiresWebrtc": true,
+    "webrtcSignalingReady": false,
     "endpointRefKind": "env",
     "authTokenRefKind": "env",
     "endpointEnvPresent": true,

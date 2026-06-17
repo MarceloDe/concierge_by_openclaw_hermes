@@ -2290,3 +2290,22 @@ This gives remote clients and operators the real integration surface without com
 
 Cost of changing later:
 Moderate but contained. Provider-specific WebRTC signaling, streaming transport details, or secret-manager support can be added behind the provider client and stream proxy without changing the public `/api/v1/browser/*` contract, the proof keys, or the approval boundary.
+
+## 2026-06-17 - Add Opaque WebRTC Signaling Gate Before Hosted Remote Browser Readiness
+
+Context:
+Live verification proves selected-provider lifecycle calls, but WebRTC-capable hosted browser providers still need an explicit signaling path for the remote live block. Raw SDP, ICE candidates, ICE server credentials, provider URLs, or tokens cannot be exposed to remote clients, dashboard text, or proof artifacts.
+
+Options considered:
+- Treat the existing SSE-style stream proxy as enough for WebRTC providers.
+- Add a public route that accepts and returns raw SDP/ICE payloads.
+- Add a provider-backed WebRTC signaling route that accepts opaque offer/candidate references, returns only safe booleans/refs-present metadata, and keeps hosted remote readiness blocked until a real provider is live connected.
+
+Decision:
+Add `npm run sandbox:browser:provider-webrtc-signaling`, a non-secret WebRTC signaling env template, an opaque FastAPI `/api/v1/browser/sessions/{browser_session_id}/webrtc/offer` route, and a separate `hosted_browser_sandbox_provider_webrtc_signaling` proof score. For `webrtc` and `webrtc_or_sse_frames` transports, provider readiness requires the explicit signaling gate, but `hosted_remote_browser_sandbox` remains `0 / 100` until private config proves a real provider live connection plus GUI/OCR evidence.
+
+Reason:
+This creates the missing remote-live-block signaling surface without making the public connector a raw WebRTC credential/SDP transport. It also keeps the score table honest: signaling readiness can be proved independently while production hosted browser readiness remains blocked.
+
+Cost of changing later:
+Low to moderate. Provider-specific WebRTC offer/answer and ICE relay details can be added behind the provider client while preserving the public opaque-ref API, proof keys, redaction policy, and human-only takeover boundary.

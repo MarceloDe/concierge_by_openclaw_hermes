@@ -9,6 +9,7 @@ import {
   runBrowserSandboxProviderSelectionSmoke,
   runBrowserSandboxProviderLivePreflightSmoke,
   runBrowserSandboxProviderLiveVerificationSmoke,
+  runBrowserSandboxProviderWebrtcSignalingSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -173,6 +174,44 @@ test("hosted browser sandbox provider live verification proves selected provider
   assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
   assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
   assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password/i);
+});
+
+test("hosted browser sandbox provider WebRTC signaling uses opaque refs and does not overclaim hosted readiness", async () => {
+  const result = await runBrowserSandboxProviderWebrtcSignalingSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-webrtc-signaling-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: "1"
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderWebrtcSignalingReady, true);
+  assert.equal(result.hostedProviderLiveVerificationReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_webrtc_signaling_ready");
+  assert.equal(result.signaling.providerNetworkCalled, true);
+  assert.equal(result.signaling.localHarnessOnly, false);
+  assert.equal(result.signaling.providerLiveConnected, true);
+  assert.equal(result.signaling.offer.transport, "webrtc");
+  assert.equal(result.signaling.offer.answerRefPresent, true);
+  assert.equal(result.signaling.offer.iceServerRefsPresent, true);
+  assert.equal(result.signaling.offer.rawSdpReturned, false);
+  assert.equal(result.signaling.iceCandidate.candidateAccepted, true);
+  assert.equal(result.signaling.iceCandidate.rawIceCandidateReturned, false);
+  assert.equal(result.safety.rawSdpReturned, false);
+  assert.equal(result.safety.rawIceCandidateReturned, false);
+  assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+  assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  assert.doesNotMatch(serialized, /v=0|candidate:|a=fingerprint|a=ice-ufrag|turn:|stun:|data:image|member id|subscriber id|typed-password/i);
 });
 
 test("hosted browser sandbox provider readiness requires live verification gate even when live verified is set", async () => {
@@ -442,6 +481,26 @@ async function fakeLiveProviderFetch(url, options = {}) {
   }
   if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/input") {
     return json({ status: "input_relayed", inputAccepted: true, rawInputReturned: false, inputValueRedacted: true, providerLiveConnected: true, externalWriteActionsWithoutApproval: false });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/webrtc/offer") {
+    return json({
+      status: "webrtc_signaling_answer_ready",
+      transport: "webrtc",
+      answerRef: "provider-sdp-answer-ref-redacted",
+      iceServerRefs: ["provider-ice-server-ref-redacted"],
+      rawSdpReturned: false,
+      rawIceCandidateReturned: false,
+      frameRecordingEnabled: false,
+      providerLiveConnected: true
+    });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/webrtc/ice-candidate") {
+    return json({
+      status: "webrtc_ice_candidate_relayed",
+      candidateAccepted: true,
+      rawIceCandidateReturned: false,
+      providerLiveConnected: true
+    });
   }
   if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/navigate") {
     return json({ status: "offsite_navigation_blocked", offsiteFailClosed: true, rawTargetUrlReturned: false, providerLiveConnected: true }, 403);

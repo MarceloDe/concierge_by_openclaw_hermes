@@ -747,3 +747,36 @@ Full verification:
 Score decision:
 - `hosted_browser_sandbox_provider_live_verification` can reach `100 / 100` only when the explicit live-verification gate and earlier provider-readiness gates pass.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config and passes GUI/OCR proof.
+
+## Phase 24 Hosted Browser Sandbox Provider WebRTC Signaling Update
+
+Implementation:
+- Added `npm run sandbox:browser:provider-webrtc-signaling`.
+- Added a non-secret WebRTC signaling env template and kept real provider endpoint/token/config outside Git.
+- Added an opaque WebRTC signaling contract covering offer ref, answer ref metadata, and ICE candidate ref relay.
+- Added FastAPI hosted-provider signaling support at `POST /api/v1/browser/sessions/{browser_session_id}/webrtc/offer`.
+- Added a separate `hosted_browser_sandbox_provider_webrtc_signaling` FastAPI and dashboard score.
+- Strengthened WebRTC-capable hosted-provider readiness so `webrtc` and `webrtc_or_sse_frames` transports require the explicit signaling gate.
+- Preserved the human-only `interactive_takeover` approval scope and kept Codex credential entry disallowed.
+
+Focused verification:
+- JS syntax checks passed for provider contract, WebRTC signaling smoke, compose contract, and Node server files.
+- Python compile checks passed for `project`.
+- `npm run sandbox:browser:provider-webrtc-signaling` passed in default blocked mode without provider calls or secret leakage.
+- Focused browser-sandbox/compose contract tests passed with 15/15 tests.
+- FastAPI facade regression passed with 46 tests and 2 expected skips.
+
+Full verification:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 31/31 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected skips.
+- Browser dashboard proof at `http://127.0.0.1:4210/?phase=hosted-browser-sandbox-provider-webrtc-signaling` verified the WebRTC signaling score, live-verification score, hosted remote score, and no endpoint/token/raw SDP/raw ICE leakage.
+- Visual/API artifacts were saved at:
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-dashboard-proof.png`
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-visual-proof.json`
+  - `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-proof.json`
+  - `artifacts/browser-sandbox-provider-webrtc-signaling-smoke.json`
+
+Score decision:
+- `hosted_browser_sandbox_provider_webrtc_signaling` can reach `100 / 100` only when the explicit signaling gate and earlier provider-readiness gates pass.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config and passes GUI/OCR proof.
