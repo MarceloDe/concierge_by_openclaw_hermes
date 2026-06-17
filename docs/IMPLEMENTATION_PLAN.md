@@ -2301,3 +2301,27 @@ Remaining follow-up:
 - Select the hosted browser sandbox provider.
 - Implement the real provider HTTP/WebRTC adapter behind this resolver.
 - Set `adapter.providerLiveConnected=true` only in a private provider config after live proof passes.
+
+## Hosted Browser Sandbox Provider Adapter Contract Cycle - 2026-06-17
+
+Goal:
+- Add the provider-backed adapter request/response boundary behind the resolver, without making a live provider network call or claiming hosted provider readiness.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-adapter-smoke.mjs` and `npm run sandbox:browser:provider-adapter`.
+- Extend the hosted provider contract with a redacted create-session request envelope and strict provider response validator.
+- Require adapter smoke responses to return opaque refs only: provider session ref, stream ref, screenshot ref, OCR/caption ref, takeover state, and safety metadata.
+- Expose `hosted_browser_sandbox_provider_adapter` through FastAPI proof and Node dashboard proof.
+- Keep FastAPI session creation fail-closed when only the adapter contract is ready.
+- Harden the dashboard connector-proof loader so visual tests and regular users cannot get stuck on duplicate proof-load requests.
+
+Acceptance:
+- Adapter smoke proves resolver-ready endpoint/auth state, redacted authorization, no raw provider endpoint, no raw token, no raw frame, no raw OCR text, no external/write actions, and no provider network call.
+- The adapter-contract score can reach `75 / 75`.
+- The resolver score can stay `50 / 50`.
+- The live hosted provider score remains `0 / 100` until a real provider is connected and live-verified.
+
+Remaining follow-up:
+- Replace the deterministic adapter smoke with provider-specific HTTP/WebRTC implementation.
+- Add live provider create-session, stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed tests.
+- Keep the adapter smoke as CI regression even after the live provider exists.

@@ -2176,3 +2176,22 @@ This makes the next real-provider step concrete without committing URLs, tokens,
 
 Cost of changing later:
 Low. A selected provider adapter can consume the same env refs and proof states. If a provider uses mTLS, signed URLs, or a secret manager instead of bearer tokens, the resolver can gain a new secret source while keeping the public `/api/v1/browser/*` contract unchanged.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Adapter Contract Before Live Calls
+
+Context:
+After the resolver could safely prove endpoint/auth refs, the next gap was the provider adapter itself. Jumping straight to a real vendor call would require credentials and might conflate request-shape readiness with live stream/screenshot/takeover proof.
+
+Options considered:
+- Wait for a selected hosted browser provider.
+- Treat resolver readiness as enough adapter readiness.
+- Add a deterministic adapter contract smoke that validates the create-session request/response envelope with redacted refs and no network call.
+
+Decision:
+Add `npm run sandbox:browser:provider-adapter`, a strict redacted provider request/response contract, and a separate `hosted_browser_sandbox_provider_adapter` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+Reason:
+This makes the provider implementation target concrete while preserving truthfulness. The project can now prove endpoint/auth wiring and adapter-envelope readiness without exposing secrets or implying that a real sandbox is connected.
+
+Cost of changing later:
+Low. The real provider client can reuse the request and response validator, swapping the deterministic mock transport for HTTPS/WebRTC calls once credentials and provider-specific endpoints are available.

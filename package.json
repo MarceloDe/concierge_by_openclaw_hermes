@@ -35,6 +35,7 @@
     "sandbox:browser:provider-contract": "node scripts/browser-sandbox-provider-contract.mjs",
     "sandbox:browser:adapter-harness": "node scripts/browser-sandbox-adapter-harness.mjs",
     "sandbox:browser:provider-resolver": "node scripts/browser-sandbox-provider-resolver.mjs",
+    "sandbox:browser:provider-adapter": "node scripts/browser-sandbox-provider-adapter-smoke.mjs",
     "docker:memory:smoke": "node scripts/compose-memory-smoke.mjs",
     "storage:contract": "node scripts/storage-contract.mjs",
     "storage:postgres:smoke": "node scripts/storage-contract.mjs --live",

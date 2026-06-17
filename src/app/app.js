@@ -49,6 +49,7 @@ let runtimeEvents = [];
 let runtimeEventSource = null;
 let runtimeStreamSessionId = null;
 let productSignedIn = false;
+let connectorProofLoadPromise = null;
 
 const MVP_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
@@ -951,11 +952,31 @@ function renderConnectorProof(payload) {
   `;
 }
 
+function renderConnectorProofError(error) {
+  if (connectorProofStatus) connectorProofStatus.textContent = error.message;
+  if (!connectorProof) return;
+  connectorProof.innerHTML = `
+    <article class="connector-card wide">
+      <h3>Proof Load Failed</h3>
+      <p>${escapeHtml(error.message)}</p>
+    </article>
+  `;
+}
+
 async function loadConnectorProof() {
-  const payload = await api("/api/proof/runs/server-connector-next-mobile-mvp");
-  renderConnectorProof(payload);
-  trace.textContent = JSON.stringify(payload, null, 2);
-  return payload;
+  if (connectorProofLoadPromise) return connectorProofLoadPromise;
+  if (connectorProofStatus) connectorProofStatus.textContent = "Loading connector proof...";
+  connectorProofLoadPromise = (async () => {
+    const payload = await api("/api/proof/runs/server-connector-next-mobile-mvp", { timeoutMs: 15000 });
+    renderConnectorProof(payload);
+    trace.textContent = JSON.stringify(payload, null, 2);
+    return payload;
+  })();
+  try {
+    return await connectorProofLoadPromise;
+  } finally {
+    connectorProofLoadPromise = null;
+  }
 }
 
 function renderReview(tracePayload) {
@@ -3962,6 +3983,7 @@ loadConnectorProofButton?.addEventListener("click", async () => {
     await loadConnectorProof();
   } catch (error) {
     connectorProofStatus.textContent = error.message;
+    renderConnectorProofError(error);
     trace.textContent = error.stack ?? error.message;
   } finally {
     restore();
@@ -4011,7 +4033,7 @@ renderAnswerPanel();
 renderRuntimeTimeline();
 renderLiveWorkerGuide();
 loadConnectorProof().catch((error) => {
-  if (connectorProofStatus) connectorProofStatus.textContent = error.message;
+  renderConnectorProofError(error);
 });
 hydrateOperatorFromQuery();
 addMessage(

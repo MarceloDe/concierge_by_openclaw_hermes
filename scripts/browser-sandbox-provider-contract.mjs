@@ -194,6 +194,83 @@ export function resolveBrowserSandboxHostedProvider({
   };
 }
 
+export function buildHostedProviderAdapterRequest({
+  sessionId = "session_adapter_smoke",
+  userId = "user_adapter_smoke",
+  targetUrlRef = "approved-target-url-ref-redacted",
+  options = {},
+  providerResolution = {}
+} = {}) {
+  return {
+    contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    operation: "create_browser_session",
+    method: "POST",
+    endpoint: {
+      endpointResolved: Boolean(providerResolution.endpointResolved),
+      rawEndpointReturned: false
+    },
+    auth: {
+      authResolved: Boolean(providerResolution.authResolved),
+      authorizationHeader: "[redacted]",
+      rawSecretReturned: false
+    },
+    body: {
+      sessionId,
+      userId,
+      targetUrlRef,
+      options,
+      approvalContract: {
+        readOnlyApprovalRequired: true,
+        humanTakeoverApprovalRequired: true,
+        humanInputRelay: "approval_gated_human_only"
+      },
+      safetyContract: {
+        agentCredentialEntryAllowed: false,
+        externalWriteActionsAllowed: false,
+        frameRecordingAllowed: false,
+        rawOcrPersistenceAllowed: false,
+        offsiteFailClosed: true,
+        credentialPagesUserOnly: true
+      },
+      expectedResponseContract: {
+        browserSessionId: "provider_scoped_id",
+        streamRef: "opaque_provider_stream_reference",
+        screenshotRef: "opaque_provider_screenshot_reference",
+        ocrCaptionRef: "opaque_provider_caption_reference",
+        takeoverState: "not_requested"
+      }
+    }
+  };
+}
+
+export function validateHostedProviderAdapterResponse(response) {
+  const failures = [];
+  if (response?.contractVersion !== BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION) failures.push("contract_version_mismatch");
+  if (!response?.providerSessionRef || typeof response.providerSessionRef !== "string") failures.push("provider_session_ref_required");
+  if (response?.providerLiveConnected === true) failures.push("adapter_smoke_must_not_claim_live_connection");
+  if (response?.stream?.rawFrameReturned) failures.push("raw_frame_must_not_be_returned");
+  if (response?.ocrCaption?.rawOcrTextReturned) failures.push("raw_ocr_text_must_not_be_returned");
+  if (response?.takeover?.inputRelay !== "approval_gated_human_only") failures.push("input_relay_must_be_human_only");
+  if (response?.safety?.externalWriteActionsWithoutApproval) failures.push("external_write_actions_without_approval");
+  if (response?.safety?.agentCredentialEntryAllowed) failures.push("agent_credential_entry_allowed");
+  if ((response?.actionsTaken ?? []).length !== 0) failures.push("adapter_smoke_must_not_take_actions");
+  const serialized = JSON.stringify(response ?? {});
+  if (/https?:\/\/[^"\\\s]+/i.test(serialized)) failures.push("raw_provider_url_returned");
+  if (/test-token-that-must-not-leak|Bearer\s+[A-Za-z0-9._-]+/.test(serialized)) failures.push("raw_provider_secret_returned");
+  return {
+    ok: failures.length === 0,
+    failures,
+    safety: {
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: Boolean(response?.stream?.rawFrameReturned),
+      rawOcrTextReturned: Boolean(response?.ocrCaption?.rawOcrTextReturned),
+      externalWriteActionsWithoutApproval: Boolean(response?.safety?.externalWriteActionsWithoutApproval),
+      agentCredentialEntryAllowed: Boolean(response?.safety?.agentCredentialEntryAllowed)
+    }
+  };
+}
+
 export async function validateBrowserSandboxProviderContract({
   configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || DEFAULT_CONFIG_PATH
 } = {}) {
@@ -308,6 +385,84 @@ export async function runBrowserSandboxProviderResolverSmoke({
       providerScoreMayPassOnlyAfterLiveVerified: true
     }
   };
+}
+
+export async function runBrowserSandboxProviderAdapterSmoke({
+  configPath = HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-adapter-smoke.json"),
+  providerReady = true
+} = {}) {
+  const resolver = await runBrowserSandboxProviderContractSmoke({
+    configPath,
+    providerReady,
+    artifactPath
+  });
+  const request = buildHostedProviderAdapterRequest({
+    providerResolution: resolver.hostedProviderResolver
+  });
+  const mockResponse = {
+    contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: "hosted_provider_adapter_contract_ready",
+    providerSessionRef: "provider-session-ref-redacted",
+    providerLiveConnected: false,
+    stream: {
+      transport: "webrtc_or_sse_frames",
+      streamRef: "provider-stream-ref-redacted",
+      rawFrameReturned: false,
+      frameRecordingEnabled: false
+    },
+    screenshot: {
+      screenshotRef: "provider-screenshot-ref-redacted",
+      rawImageReturned: false
+    },
+    ocrCaption: {
+      captionRef: "provider-caption-ref-redacted",
+      rawOcrTextReturned: false
+    },
+    takeover: {
+      state: "not_requested",
+      approvalRequired: true,
+      inputRelay: "approval_gated_human_only"
+    },
+    safety: {
+      agentCredentialEntryAllowed: false,
+      externalWriteActionsWithoutApproval: false,
+      offsiteFailClosed: true,
+      credentialPagesUserOnly: true
+    },
+    actionsTaken: []
+  };
+  const responseValidation = validateHostedProviderAdapterResponse(mockResponse);
+  const adapterContractReady = Boolean(resolver.hostedProviderResolverReady && responseValidation.ok);
+  const result = {
+    ...resolver,
+    ok: Boolean(resolver.ok && responseValidation.ok),
+    status: adapterContractReady
+      ? "hosted_browser_sandbox_provider_adapter_contract_ready"
+      : resolver.status,
+    hostedProviderAdapterReady: adapterContractReady,
+    hostedProviderReady: false,
+    adapterContract: {
+      request,
+      response: mockResponse,
+      responseValidation,
+      providerNetworkCalled: false,
+      providerLiveConnected: false,
+      liveProviderScoreMayPassOnlyAfterLiveVerified: true
+    }
+  };
+  const serialized = JSON.stringify(result);
+  result.safety = {
+    ...result.safety,
+    ...assertNoSecretLeak(result),
+    rawEndpointUrlWritten: /https?:\/\/sandbox-provider\.invalid/i.test(serialized),
+    rawSecretReturned: /test-token-that-must-not-leak/.test(serialized),
+    externalActions: false,
+    agentCredentialEntryAllowed: false
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

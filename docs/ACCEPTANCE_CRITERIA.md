@@ -1984,3 +1984,36 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Headless Chrome dashboard proof at `http://127.0.0.1:4202/?phase=hosted-browser-sandbox-provider-resolver` verified `hosted_browser_sandbox_provider_resolver`, `hosted_browser_sandbox_provider_configured_unverified`, `hosted_remote_browser_sandbox`, and no fake endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase17-hosted-browser-sandbox-provider-resolver-dashboard-proof.png`, `artifacts/phase17-hosted-browser-sandbox-provider-resolver-proof.json`, and `artifacts/browser-sandbox-provider-resolver-smoke.json`.
+
+## Hosted Browser Sandbox Provider Adapter Contract Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider adapter smoke command exists and validates the provider create-session request/response shape.
+- The adapter request contains only redacted authorization and an approved target URL reference, not raw provider endpoint, raw token, or raw portal URL.
+- The adapter response contains only opaque provider refs for session, stream, screenshot, and OCR/caption.
+- The adapter response validator fails closed if the response claims live connection, returns raw frame/OCR text, allows credential entry, allows external writes, or records actions.
+- FastAPI proves the adapter-ready state still cannot create real hosted sessions.
+- Connector proof exposes `hosted_browser_sandbox_provider_adapter` separately from resolver readiness and live hosted provider readiness.
+
+Current proof status:
+
+- Focused JS and Python syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 6/6 tests.
+- Focused FastAPI adapter/resolver tests passed with 2/2 tests.
+- Adapter smoke passed with `hosted_browser_sandbox_provider_adapter_contract_ready`, `hostedProviderAdapterReady=true`, `hostedProviderReady=false`, `providerNetworkCalled=false`, and no fake endpoint/token leak.
+
+Full proof status:
+
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run sandbox:browser:provider-adapter` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 22/22 tests.
+- FastAPI facade regression passed with 39 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- During visual proof, a duplicate-click race in the connector proof panel was found and fixed with a shared in-flight request and visible error recovery.
+- Fresh headless Chrome dashboard proof at `http://127.0.0.1:4203/?phase=hosted-browser-sandbox-provider-adapter` verified `hosted_browser_sandbox_provider_adapter`, `hosted_browser_sandbox_provider_adapter_contract_ready`, `hosted_remote_browser_sandbox`, and no fake endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase18-hosted-browser-sandbox-provider-adapter-dashboard-proof.png`, `artifacts/phase18-hosted-browser-sandbox-provider-adapter-proof.json`, and `artifacts/browser-sandbox-provider-adapter-smoke.json`.

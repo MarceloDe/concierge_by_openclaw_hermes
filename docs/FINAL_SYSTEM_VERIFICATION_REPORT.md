@@ -600,3 +600,24 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_provider_resolver` can reach `50 / 50` when endpoint and auth env refs resolve.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real provider adapter passes live stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+## Phase 18 Hosted Browser Sandbox Provider Adapter Contract Update
+
+Implementation:
+- Added a hosted-provider adapter smoke that validates the create-session request and provider response envelope.
+- Added `npm run sandbox:browser:provider-adapter`.
+- Added a separate `hosted_browser_sandbox_provider_adapter` FastAPI and dashboard score.
+- FastAPI still blocks real hosted session creation when only the adapter contract is ready.
+- Hardened connector proof loading so startup auto-load and manual proof refresh cannot leave the dashboard stuck in a stale `Loading...` state.
+
+Focused verification:
+- JS and Python syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 6/6 tests.
+- Focused FastAPI adapter/resolver tests passed with 2/2 tests.
+- Adapter smoke passed with no provider network call, no raw endpoint, no raw token, no raw frame, no raw OCR text, no external action, and no credential-entry allowance.
+- Full gate passed: provider contract smoke, adapter harness smoke, provider resolver smoke, provider adapter smoke, `npm run build`, final-report coverage, `npm run test:docker:contract` with 22/22 tests, FastAPI facade regression with 39 tests and 2 expected skips, and `npm run test:local` with 210 total tests, 208 passed, 0 failed, and 2 expected skips.
+- Headless Chrome dashboard proof passed with `hosted_browser_sandbox_provider_adapter`, `hosted_browser_sandbox_provider_adapter_contract_ready`, and `hosted_remote_browser_sandbox` visible, and no fake endpoint/token leak.
+
+Score decision:
+- `hosted_browser_sandbox_provider_adapter` can reach `75 / 75` when resolver refs are configured and `WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY=1`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until live provider proof passes.

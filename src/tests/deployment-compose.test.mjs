@@ -22,6 +22,7 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.browserSandbox.adapterHarnessContract, "project/deployment/browser-sandbox-provider.contract-harness.json");
   assert.equal(result.browserSandbox.providerResolverCommand, "npm run sandbox:browser:provider-resolver");
   assert.equal(result.browserSandbox.providerResolverContract, "project/deployment/browser-sandbox-provider.hosted-provider.example.json");
+  assert.equal(result.browserSandbox.providerAdapterCommand, "npm run sandbox:browser:provider-adapter");
   assert.equal(result.browserSandbox.readyEnv, "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY");
   assert.equal(result.postgresProductionProfile.ok, true);
   assert.equal(result.postgresProductionProfile.secretSource, "docker_secret");

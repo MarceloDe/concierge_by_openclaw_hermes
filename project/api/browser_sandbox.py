@@ -242,6 +242,11 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
                     "Hosted browser sandbox provider endpoint and secret are configured, but live provider verification has not passed. "
                     "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1 only after hosted stream, screenshot/OCR, takeover, input, and teardown proof passes."
                 )
+            if contract.get("status") == "hosted_browser_sandbox_provider_adapter_contract_ready":
+                raise BrowserSandboxError(
+                    "Hosted browser sandbox provider adapter contract is ready, but live provider verification has not passed. "
+                    "The adapter smoke does not create real hosted sessions until live stream, screenshot/OCR, takeover, input, and teardown proof passes."
+                )
             raise BrowserSandboxError(
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
@@ -414,10 +419,20 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["liveVerified"]
         and hosted_resolution["providerLiveConnected"]
     )
+    adapter_contract_ready = bool(
+        selected_provider == "hosted_remote"
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY") == "1"
+        and config_ok
+        and non_example_config
+        and adapter_mode == "hosted_provider"
+        and hosted_resolution["resolverReady"]
+        and not provider_ready
+    )
     status = (
         "hosted_browser_sandbox_provider_ready"
         if provider_ready
         else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
+        else "hosted_browser_sandbox_provider_adapter_contract_ready" if adapter_contract_ready
         else "local_cdp_default" if selected_provider == "local_cdp"
         else hosted_resolution["status"] if adapter_mode == "hosted_provider" and config_ok
         else "hosted_browser_sandbox_contract_valid_not_configured" if config_ok
@@ -432,6 +447,7 @@ def describe_browser_sandbox_provider_contract(
         "ready": provider_ready,
         "adapterHarnessReady": adapter_harness_ready,
         "hostedProviderResolverReady": hosted_resolution["resolverReady"],
+        "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderResolver": hosted_resolution,
         "status": status,
         "failures": failures,

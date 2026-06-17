@@ -313,6 +313,12 @@ async function safeDeploymentContractStatus() {
     !hostedBrowserSandboxConfigIsExample &&
     hostedBrowserSandboxAdapterMode === "hosted_provider" &&
     hostedBrowserSandboxProviderResolver.ready;
+  const hostedBrowserSandboxProviderAdapterReady =
+    hostedBrowserSandboxProviderSelected &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY === "1" &&
+    hostedBrowserSandboxAdapterMode === "hosted_provider" &&
+    hostedBrowserSandboxProviderResolver.resolverReady &&
+    !hostedBrowserSandboxProviderReady;
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -342,11 +348,14 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxAdapterHarnessReady,
     hostedBrowserSandboxProviderResolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
     hostedBrowserSandboxProviderResolver,
+    hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderReady,
     hostedBrowserSandboxProviderStatus: hostedBrowserSandboxProviderReady
       ? "hosted_browser_sandbox_provider_ready"
       : hostedBrowserSandboxAdapterHarnessReady
         ? "hosted_browser_sandbox_adapter_harness_ready"
+      : hostedBrowserSandboxProviderAdapterReady
+        ? "hosted_browser_sandbox_provider_adapter_contract_ready"
       : hostedBrowserSandboxProviderResolver.status === "hosted_browser_sandbox_provider_configured_unverified" ||
         hostedBrowserSandboxProviderResolver.status === "hosted_browser_sandbox_provider_missing_endpoint_or_secret"
         ? hostedBrowserSandboxProviderResolver.status
@@ -356,6 +365,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
+    browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
@@ -536,6 +546,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         rawSecretReturned: false
       },
       {
+        key: "hosted_browser_sandbox_provider_adapter",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        ok: deployment.hostedBrowserSandboxProviderAdapterReady,
+        command: deployment.browserSandboxProviderAdapterCommand,
+        providerNetworkCalled: false,
+        providerLiveConnected: false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false
+      },
+      {
         key: "hosted_browser_sandbox_adapter_harness",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxAdapterHarnessReady,
@@ -613,6 +633,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderResolverReady ? 50 : 0,
         target: 50,
         status: deployment.hostedBrowserSandboxProviderResolver?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_adapter",
+        score: deployment.hostedBrowserSandboxProviderAdapterReady ? 75 : 0,
+        target: 75,
+        status: deployment.hostedBrowserSandboxProviderStatus
       },
       {
         key: "hosted_remote_browser_sandbox",

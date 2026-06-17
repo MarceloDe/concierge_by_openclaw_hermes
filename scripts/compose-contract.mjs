@@ -19,6 +19,7 @@ const REQUIRED_FILES = [
   "scripts/browser-sandbox-provider-contract.mjs",
   "scripts/browser-sandbox-adapter-harness.mjs",
   "scripts/browser-sandbox-provider-resolver.mjs",
+  "scripts/browser-sandbox-provider-adapter-smoke.mjs",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
@@ -217,6 +218,7 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       providerContractCommand: "npm run sandbox:browser:provider-contract",
       adapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
       providerResolverCommand: "npm run sandbox:browser:provider-resolver",
+      providerAdapterCommand: "npm run sandbox:browser:provider-adapter",
       readyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY"
     },
     postgresProductionProfile,
