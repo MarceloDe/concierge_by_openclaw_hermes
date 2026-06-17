@@ -1,4 +1,5 @@
 export const TABLES = [
+  "schema_migrations",
   "users",
   "user_consents",
   "portal_accounts",
@@ -7,12 +8,15 @@ export const TABLES = [
   "session_checkpoints",
   "session_events",
   "runtime_events",
+  "worker_leases",
   "runtime_hook_subscriptions",
   "runtime_hook_deliveries",
   "memory_items",
+  "product_memory_replay_queue",
   "context_packets",
   "openclaw_instances",
   "agent_tasks",
+  "human_handoff_items",
   "scheduled_jobs",
   "worker_continuations",
   "agent_outbox",
@@ -21,11 +25,23 @@ export const TABLES = [
   "tool_registry",
   "workflow_tool_requirements",
   "knowledge_sources",
+  "research_runs",
+  "research_run_events",
+  "research_artifacts",
+  "research_embedding_routes",
+  "research_embedding_jobs",
+  "research_embedding_index",
+  "research_graph_builds",
+  "research_claim_evaluations",
+  "research_schedules",
+  "research_scheduler_daemon_state",
+  "operator_tool_proposals",
   "openclaw_skills",
   "workflow_runs",
   "user_journey_events",
   "memory_reflections",
   "conversation_messages",
+  "feedback_items",
   "browser_runs",
   "browser_actions",
   "portal_page_snapshots",
@@ -42,6 +58,13 @@ export const TABLES = [
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id TEXT PRIMARY KEY,
+  migration_key TEXT NOT NULL UNIQUE,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  applied_at TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
@@ -141,6 +164,22 @@ CREATE TABLE IF NOT EXISTS runtime_events (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS worker_leases (
+  id TEXT PRIMARY KEY,
+  lease_key TEXT NOT NULL UNIQUE,
+  worker_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  status TEXT NOT NULL,
+  claim_count INTEGER NOT NULL DEFAULT 1,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  claimed_at TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  released_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS runtime_hook_subscriptions (
   id TEXT PRIMARY KEY,
   user_id TEXT,
@@ -196,6 +235,29 @@ CREATE TABLE IF NOT EXISTS memory_items (
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE IF NOT EXISTS product_memory_replay_queue (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  adapter TEXT NOT NULL,
+  action TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  source_pointer_count INTEGER NOT NULL DEFAULT 0,
+  payload_json TEXT NOT NULL,
+  result_json TEXT NOT NULL DEFAULT '{}',
+  first_error TEXT,
+  last_error TEXT,
+  next_attempt_at TEXT,
+  last_attempt_at TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
 CREATE TABLE IF NOT EXISTS context_packets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -245,6 +307,28 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (session_id) REFERENCES sessions(id),
   FOREIGN KEY (scheduled_job_id) REFERENCES scheduled_jobs(id)
+);
+
+CREATE TABLE IF NOT EXISTS human_handoff_items (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  task_id TEXT,
+  message_id TEXT,
+  handoff_type TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  response_guidance TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  audit_event_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (task_id) REFERENCES agent_tasks(id),
+  FOREIGN KEY (message_id) REFERENCES conversation_messages(id)
 );
 
 CREATE TABLE IF NOT EXISTS scheduled_jobs (
@@ -372,6 +456,228 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
   refresh_policy TEXT NOT NULL,
   access_method TEXT NOT NULL,
   status TEXT NOT NULL,
+  priority INTEGER NOT NULL DEFAULT 100,
+  last_run_at TEXT,
+  last_status TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  proposed_by TEXT,
+  approved_by TEXT,
+  reviewed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_runs (
+  id TEXT PRIMARY KEY,
+  source_id TEXT,
+  source_key TEXT,
+  actor_user_id TEXT,
+  run_type TEXT NOT NULL,
+  workflow_key TEXT,
+  status TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  query_json TEXT NOT NULL DEFAULT '{}',
+  summary TEXT NOT NULL DEFAULT '',
+  retry_of_run_id TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (source_id) REFERENCES knowledge_sources(id),
+  FOREIGN KEY (retry_of_run_id) REFERENCES research_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_run_events (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES research_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_artifacts (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source_id TEXT,
+  artifact_type TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  title TEXT,
+  content_hash TEXT NOT NULL,
+  extraction_hash TEXT NOT NULL,
+  safe_text_preview TEXT NOT NULL DEFAULT '',
+  citation_status TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES research_runs(id),
+  FOREIGN KEY (source_id) REFERENCES knowledge_sources(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_embedding_routes (
+  id TEXT PRIMARY KEY,
+  route_key TEXT NOT NULL UNIQUE,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  dimensions INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  selected_by TEXT,
+  selected_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_embedding_jobs (
+  id TEXT PRIMARY KEY,
+  route_key TEXT NOT NULL,
+  actor_user_id TEXT,
+  job_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  artifact_count INTEGER NOT NULL DEFAULT 0,
+  indexed_count INTEGER NOT NULL DEFAULT 0,
+  skipped_count INTEGER NOT NULL DEFAULT 0,
+  failure_reason TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_embedding_index (
+  id TEXT PRIMARY KEY,
+  artifact_id TEXT NOT NULL,
+  route_key TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  dimensions INTEGER NOT NULL,
+  vector_json TEXT NOT NULL,
+  vector_hash TEXT NOT NULL,
+  text_hash TEXT NOT NULL,
+  source_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  job_id TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (artifact_id) REFERENCES research_artifacts(id),
+  FOREIGN KEY (job_id) REFERENCES research_embedding_jobs(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_graph_builds (
+  id TEXT PRIMARY KEY,
+  actor_user_id TEXT,
+  status TEXT NOT NULL,
+  node_count INTEGER NOT NULL DEFAULT 0,
+  edge_count INTEGER NOT NULL DEFAULT 0,
+  graph_hash TEXT NOT NULL,
+  graph_json TEXT NOT NULL DEFAULT '{}',
+  safety_json TEXT NOT NULL DEFAULT '{}',
+  audit_event_id TEXT,
+  failure_reason TEXT,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_claim_evaluations (
+  id TEXT PRIMARY KEY,
+  actor_user_id TEXT,
+  question_hash TEXT,
+  question_preview TEXT,
+  answer_hash TEXT NOT NULL,
+  answer_preview TEXT NOT NULL,
+  status TEXT NOT NULL,
+  verdict TEXT NOT NULL,
+  claim_count INTEGER NOT NULL DEFAULT 0,
+  supported_count INTEGER NOT NULL DEFAULT 0,
+  unsupported_count INTEGER NOT NULL DEFAULT 0,
+  low_confidence_count INTEGER NOT NULL DEFAULT 0,
+  evaluation_json TEXT NOT NULL DEFAULT '{}',
+  safety_json TEXT NOT NULL DEFAULT '{}',
+  audit_event_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_schedules (
+  id TEXT PRIMARY KEY,
+  schedule_key TEXT NOT NULL UNIQUE,
+  actor_user_id TEXT,
+  source_id TEXT,
+  source_key TEXT,
+  schedule_label TEXT NOT NULL,
+  interval_hours INTEGER NOT NULL,
+  workflow_key TEXT NOT NULL,
+  topic TEXT NOT NULL DEFAULT '',
+  query_json TEXT NOT NULL DEFAULT '{}',
+  worker_mode TEXT NOT NULL DEFAULT 'deterministic_fetch',
+  status TEXT NOT NULL,
+  approval_status TEXT NOT NULL,
+  next_run_at TEXT NOT NULL,
+  last_run_at TEXT,
+  last_run_id TEXT,
+  last_status TEXT,
+  run_count INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (source_id) REFERENCES knowledge_sources(id),
+  FOREIGN KEY (last_run_id) REFERENCES research_runs(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_scheduler_daemon_state (
+  id TEXT PRIMARY KEY,
+  daemon_key TEXT NOT NULL UNIQUE,
+  actor_user_id TEXT,
+  status TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  interval_ms INTEGER NOT NULL,
+  tick_limit INTEGER NOT NULL,
+  execute_due_runs INTEGER NOT NULL DEFAULT 0,
+  approved_worker_dispatch INTEGER NOT NULL DEFAULT 0,
+  worker_mode TEXT,
+  last_tick_at TEXT,
+  last_tick_event_id TEXT,
+  last_success_at TEXT,
+  last_failure_at TEXT,
+  last_error TEXT,
+  last_processed_count INTEGER NOT NULL DEFAULT 0,
+  last_blocked_count INTEGER NOT NULL DEFAULT 0,
+  last_actions_json TEXT NOT NULL DEFAULT '[]',
+  tick_count INTEGER NOT NULL DEFAULT 0,
+  overlap_skipped_count INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (last_tick_event_id) REFERENCES runtime_events(id)
+);
+
+CREATE TABLE IF NOT EXISTS operator_tool_proposals (
+  id TEXT PRIMARY KEY,
+  actor_user_id TEXT,
+  tool_key TEXT NOT NULL,
+  tool_type TEXT NOT NULL,
+  risk_level TEXT NOT NULL,
+  status TEXT NOT NULL,
+  request_message_hash TEXT NOT NULL,
+  request_message_preview TEXT NOT NULL DEFAULT '',
+  args_json TEXT NOT NULL DEFAULT '{}',
+  args_hash TEXT NOT NULL,
+  expected_effect TEXT NOT NULL,
+  approval_required TEXT NOT NULL,
+  result_json TEXT NOT NULL DEFAULT '{}',
+  error_message TEXT,
+  approved_by TEXT,
+  rejected_by TEXT,
+  decided_at TEXT,
+  executed_at TEXT,
+  execution_count INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -446,6 +752,24 @@ CREATE TABLE IF NOT EXISTS conversation_messages (
   content TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS feedback_items (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  message_id TEXT,
+  task_id TEXT,
+  answer_hash TEXT,
+  rating TEXT NOT NULL,
+  comment TEXT NOT NULL DEFAULT '',
+  source_pointer_count INTEGER NOT NULL DEFAULT 0,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (message_id) REFERENCES conversation_messages(id)
 );
 
 CREATE TABLE IF NOT EXISTS browser_runs (

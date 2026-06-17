@@ -65,6 +65,29 @@ function sourcePointerHints(state) {
   }));
 }
 
+function dynamicSkillHints(state) {
+  const context = state.dynamic_skill_context ?? {};
+  return {
+    selected: context.selected ?? {},
+    successEstimate: context.successEstimate ?? {},
+    matches: (context.matches ?? []).slice(0, 8).map((item) => ({
+      skillKey: item.skillKey,
+      skillKind: item.skillKind,
+      title: item.title,
+      fitScore: item.fit?.score ?? 0,
+      successChance: item.success?.chance ?? null,
+      questionsToSolve: item.questionsToSolve ?? [],
+      dataNeeded: item.dataNeeded ?? {},
+      requiredWorkers: item.requiredWorkers ?? {},
+      requiredSearch: item.requiredSearch ?? {},
+      requiredApis: item.requiredApis ?? {}
+    })),
+    requiredOpenClawTasks: context.requiredOpenClawTasks ?? [],
+    requiredSearch: context.requiredSearch ?? [],
+    requiredApis: context.requiredApis ?? []
+  };
+}
+
 export function buildLlmOrchestrationDecisionPayload(state) {
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
@@ -79,6 +102,7 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     curatedClassifier: state.structured_intent,
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
+    dynamicSkills: dynamicSkillHints(state),
     productMemory: {
       adapter: state.product_memory_recall?.adapter ?? "disabled",
       enabled: Boolean(state.product_memory_recall?.enabled),

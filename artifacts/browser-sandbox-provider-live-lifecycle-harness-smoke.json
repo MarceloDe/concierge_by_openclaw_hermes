@@ -1,0 +1,262 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_provider_live_lifecycle_harness_ready",
+  "hostedProviderReady": false,
+  "hostedProviderResolverReady": true,
+  "adapterHarnessReady": false,
+  "hostedProviderResolver": {
+    "status": "hosted_browser_sandbox_provider_configured_unverified",
+    "resolverReady": true,
+    "ready": false,
+    "endpointResolved": true,
+    "authResolved": true,
+    "liveVerified": false,
+    "endpointRefKind": "env",
+    "authTokenRefKind": "env",
+    "endpointEnvPresent": true,
+    "authEnvPresent": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawSecretPathReturned": false
+  },
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+      "provider": "hosted_remote",
+      "environment": "staging",
+      "endpointRefPresent": true,
+      "secretSource": "managed_env",
+      "transport": {
+        "stream": "webrtc_or_sse_frames",
+        "inputRelay": "approval_gated_human_only",
+        "screenshot": "provider_screenshot_api",
+        "ocrCaption": "provider_or_local_ocr"
+      },
+      "adapter": {
+        "mode": "hosted_provider",
+        "providerLiveConnected": false,
+        "contractHarnessOnly": false
+      },
+      "auth": {
+        "tokenRefPresent": true,
+        "tokenRefKind": "env"
+      },
+      "sessionPolicy": {
+        "userScoped": true,
+        "sessionScoped": true,
+        "ephemeralBrowser": true,
+        "maxSessionMinutes": 30,
+        "idleTimeoutMinutes": 5,
+        "recordFrames": false,
+        "persistRawOcrText": false
+      },
+      "approvalPolicy": {
+        "requiresReadOnlyApproval": true,
+        "requiresHumanTakeoverApproval": true,
+        "agentCredentialEntryAllowed": false,
+        "externalWriteActionsAllowed": false
+      },
+      "networkPolicy": {
+        "allowlistRequired": true,
+        "offsiteFailClosed": true,
+        "credentialPagesUserOnly": true
+      },
+      "audit": {
+        "emitSessionLifecycleEvents": true,
+        "emitTakeoverEvents": true,
+        "redactInputValues": true,
+        "redactFrameContent": true
+      },
+      "source": {
+        "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+        "exampleConfig": false
+      }
+    }
+  },
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider",
+    "scoreKey": "hosted_remote_browser_sandbox",
+    "providerEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER",
+    "readyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY",
+    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED",
+    "configFileEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "externalActions": false,
+    "phiSeeded": false,
+    "agentCredentialEntryAllowed": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawInputReturned": false
+  },
+  "hostedProviderAdapterReady": true,
+  "adapterContract": {
+    "request": {
+      "contractVersion": "2026-06-17.browser-sandbox-provider.v1",
+      "operation": "create_browser_session",
+      "method": "POST",
+      "endpoint": {
+        "endpointResolved": true,
+        "rawEndpointReturned": false
+      },
+      "auth": {
+        "authResolved": true,
+        "authorizationHeader": "[redacted]",
+        "rawSecretReturned": false
+      },
+      "body": {
+        "sessionId": "session_adapter_smoke",
+        "userId": "user_adapter_smoke",
+        "targetUrlRef": "approved-target-url-ref-redacted",
+        "options": {},
+        "approvalContract": {
+          "readOnlyApprovalRequired": true,
+          "humanTakeoverApprovalRequired": true,
+          "humanInputRelay": "approval_gated_human_only"
+        },
+        "safetyContract": {
+          "agentCredentialEntryAllowed": false,
+          "externalWriteActionsAllowed": false,
+          "frameRecordingAllowed": false,
+          "rawOcrPersistenceAllowed": false,
+          "offsiteFailClosed": true,
+          "credentialPagesUserOnly": true
+        },
+        "expectedResponseContract": {
+          "browserSessionId": "provider_scoped_id",
+          "streamRef": "opaque_provider_stream_reference",
+          "screenshotRef": "opaque_provider_screenshot_reference",
+          "ocrCaptionRef": "opaque_provider_caption_reference",
+          "takeoverState": "not_requested"
+        }
+      }
+    },
+    "response": {
+      "contractVersion": "2026-06-17.browser-sandbox-provider.v1",
+      "status": "hosted_provider_adapter_contract_ready",
+      "providerSessionRef": "provider-session-ref-redacted",
+      "providerLiveConnected": false,
+      "stream": {
+        "transport": "webrtc_or_sse_frames",
+        "streamRef": "provider-stream-ref-redacted",
+        "rawFrameReturned": false,
+        "frameRecordingEnabled": false
+      },
+      "screenshot": {
+        "screenshotRef": "provider-screenshot-ref-redacted",
+        "rawImageReturned": false
+      },
+      "ocrCaption": {
+        "captionRef": "provider-caption-ref-redacted",
+        "rawOcrTextReturned": false
+      },
+      "takeover": {
+        "state": "not_requested",
+        "approvalRequired": true,
+        "inputRelay": "approval_gated_human_only"
+      },
+      "safety": {
+        "agentCredentialEntryAllowed": false,
+        "externalWriteActionsWithoutApproval": false,
+        "offsiteFailClosed": true,
+        "credentialPagesUserOnly": true
+      },
+      "actionsTaken": []
+    },
+    "responseValidation": {
+      "ok": true,
+      "failures": [],
+      "safety": {
+        "rawEndpointReturned": false,
+        "rawSecretReturned": false,
+        "rawFrameReturned": false,
+        "rawOcrTextReturned": false,
+        "externalWriteActionsWithoutApproval": false,
+        "agentCredentialEntryAllowed": false
+      }
+    },
+    "providerNetworkCalled": false,
+    "providerLiveConnected": false,
+    "liveProviderScoreMayPassOnlyAfterLiveVerified": true,
+    "liveLifecycleHarness": {
+      "ok": true,
+      "localHarnessOnly": true,
+      "providerNetworkCalled": true,
+      "createSession": {
+        "ok": true,
+        "statusCode": 200,
+        "responseValidation": {
+          "ok": true,
+          "failures": [],
+          "safety": {
+            "rawEndpointReturned": false,
+            "rawSecretReturned": false,
+            "rawFrameReturned": false,
+            "rawOcrTextReturned": false,
+            "externalWriteActionsWithoutApproval": false,
+            "agentCredentialEntryAllowed": false
+          }
+        }
+      },
+      "stream": {
+        "ok": true,
+        "statusCode": 200,
+        "eventType": "provider.lifecycle.frame",
+        "frameRefPresent": true,
+        "rawFrameReturned": false,
+        "rawOcrTextReturned": false
+      },
+      "screenshot": {
+        "ok": true,
+        "statusCode": 200,
+        "screenshotRefPresent": true,
+        "rawImageReturned": false
+      },
+      "ocrCaption": {
+        "ok": true,
+        "statusCode": 200,
+        "captionRefPresent": true,
+        "rawOcrTextReturned": false
+      },
+      "takeover": {
+        "ok": true,
+        "statusCode": 200,
+        "approvalRequired": true,
+        "inputRelay": "approval_gated_human_only"
+      },
+      "input": {
+        "ok": true,
+        "statusCode": 200,
+        "inputAccepted": true,
+        "rawInputReturned": false,
+        "externalWriteActionsWithoutApproval": false
+      },
+      "offsite": {
+        "ok": true,
+        "statusCode": 403,
+        "offsiteFailClosed": true,
+        "rawTargetUrlReturned": false
+      },
+      "teardown": {
+        "ok": true,
+        "statusCode": 200,
+        "teardownComplete": true,
+        "rawFramePersisted": false,
+        "rawOcrTextPersisted": false
+      },
+      "providerLiveConnected": false,
+      "liveProviderScoreMayPassOnlyAfterLiveVerified": true
+    }
+  },
+  "hostedProviderHttpAdapterReady": true,
+  "hostedProviderLiveLifecycleHarnessReady": true
+}

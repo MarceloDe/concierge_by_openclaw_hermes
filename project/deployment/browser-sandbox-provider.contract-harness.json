@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+  "provider": "hosted_remote",
+  "environment": "staging",
+  "endpointRef": "contract-harness-browser-sandbox-endpoint-ref",
+  "secretSource": "managed_env",
+  "transport": {
+    "stream": "sse_frames",
+    "inputRelay": "approval_gated_human_only",
+    "screenshot": "contract_harness_screenshot_placeholder",
+    "ocrCaption": "contract_harness_caption_placeholder"
+  },
+  "adapter": {
+    "mode": "contract_harness",
+    "providerLiveConnected": false,
+    "contractHarnessOnly": true
+  },
+  "sessionPolicy": {
+    "userScoped": true,
+    "sessionScoped": true,
+    "ephemeralBrowser": true,
+    "maxSessionMinutes": 15,
+    "idleTimeoutMinutes": 3,
+    "recordFrames": false,
+    "persistRawOcrText": false
+  },
+  "approvalPolicy": {
+    "requiresReadOnlyApproval": true,
+    "requiresHumanTakeoverApproval": true,
+    "agentCredentialEntryAllowed": false,
+    "externalWriteActionsAllowed": false
+  },
+  "networkPolicy": {
+    "allowlistRequired": true,
+    "offsiteFailClosed": true,
+    "credentialPagesUserOnly": true
+  },
+  "audit": {
+    "emitSessionLifecycleEvents": true,
+    "emitTakeoverEvents": true,
+    "redactInputValues": true,
+    "redactFrameContent": true
+  }
+}

@@ -163,6 +163,63 @@ This proves the harness can project its state into the shapes required by the ne
 Cost of changing later:
 Low to medium. Field names and transport wrappers may need adjustment when the actual LangGraph/OpenClaw/Hindsight libraries are installed, but the user/session/thread IDs, database pointers, prompt bundle, memory context, approval policy, and heartbeat semantics should remain stable.
 
+## 2026-06-02: Dynamic Skill Server As LangGraph State, Not Hidden Worker Autonomy
+
+Context:
+`docs/INSURANCE_PLAN_SKILL_METHODOLOGY.md` calls for plan-specialist insurance skills beside journey/workflow skills, while the current runner still hardcodes `insurance_portal_browser` at execution time. The user asked for editable Aetna and claim skills that can mount session, memory, database pointers, success likelihood, dynamic runtime variables, required OpenClaw worker tasks, search engines, and APIs.
+
+Options considered:
+- Let OpenClaw choose the skill and workflow dynamically.
+- Add arbitrary SQL/tool declarations directly to generated skill files.
+- Add a LangGraph-compatible dynamic skill server that reads editable artifacts, validates named mounts, and returns structured graph state.
+
+Decision:
+Add a `dynamic_skill_context` state field and a `skill_resolver` LangGraph node. The dynamic skill server reads `skill-server.json` files from `openclaw/skills/*`, validates them, mounts only allowlisted database queries, and returns selected insurance, journey, and execution skill keys plus success estimates and required worker/search/API contracts.
+
+Reason:
+This keeps LangGraph as workflow master while allowing progressively smarter skill generation. External skill-generator LLMs can edit structured skill artifacts, but they cannot introduce raw SQL, credential capture, medical advice, or unapproved external actions. The design follows LangGraph's shared-state node pattern and keeps skill selection visible in proof/audit.
+
+Cost of changing later:
+Low to medium. Additional generated skills can be added as files. Moving to a database-backed skill registry later will require preserving the `dynamic_skill_context` contract and named mount validation.
+
+## 2026-06-15: First Docker Connector Profile Defaults Product Memory To Disabled-Safe
+
+Context:
+The server connector stack now needs a repeatable Docker topology for the Node runtime, FastAPI facade, Next.js mobile PWA, and memory dependency services. The local product-memory adapter can use Graphiti/FalkorDB, but the current Node runtime image does not yet install the Graphiti Python runtime and OpenAI-backed Graphiti dependencies.
+
+Options considered:
+- Claim full Graphiti/FalkorDB readiness from a compose file only.
+- Build the entire Graphiti Python runtime into the first Node image immediately.
+- Ship a connector compose profile that starts FalkorDB and wires Graphiti environment variables, but defaults the Node product-memory adapter to disabled/degraded-safe until the Graphiti image proof is added.
+
+Decision:
+Use the third option for the first deployment slice. The compose topology includes FalkorDB and Graphiti env wiring, but `BRAINSTY_PRODUCT_MEMORY_ADAPTER` defaults to `disabled`. The dashboard and health proof must say this honestly.
+
+Reason:
+The goal of this slice is remote-app connector deployability, not overstating production memory health. The system remains safe and testable while preserving a clear next step for full Graphiti-in-container proof.
+
+Cost of changing later:
+Low. A follow-up Dockerfile layer or sidecar can install Graphiti dependencies and switch `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` once health, replay, and degraded-mode proof pass in containers.
+
+## 2026-06-15: Install Graphiti Runtime In The Node Connector Image
+
+Context:
+The first Docker connector slice intentionally shipped with FalkorDB wired but product memory disabled by default. The remaining product-memory deployment gap was proving that the Node runtime container can actually run the official project-local Graphiti package against the compose FalkorDB service, initialize schema, and retain/recall safe source-pointer memory.
+
+Options considered:
+- Keep Graphiti outside Docker and document it as a local-only dependency.
+- Add a separate Graphiti worker sidecar immediately.
+- Install the Graphiti bridge runtime into the Node image while keeping the adapter env-gated.
+
+Decision:
+Use the third option for this slice. The Node image now creates `/app/.venv-graphiti`, installs `vendor/getzep-graphiti[falkordb]`, and verifies the FalkorDB driver during build. Compose still defaults `BRAINSTY_PRODUCT_MEMORY_ADAPTER` to `disabled`, but can be launched with `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` plus model credentials for live schema and retain/recall proof.
+
+Reason:
+The current product runtime is Node/LangGraph calling a Python Graphiti bridge. Baking that bridge into the same internal runtime image is the smallest reliable proof without adding a second worker lifecycle. Keeping the adapter disabled by default preserves safe local startup when credentials are unavailable, while the live smoke prevents disabled-safe memory from being counted as full product-memory readiness.
+
+Cost of changing later:
+Medium. A later production deployment can split Graphiti into a sidecar or managed service, but it should preserve the same adapter boundary, outbound payload observation, source-pointer-only retain payloads, replay queue, and dashboard scoring semantics.
+
 ## 2026-05-17: Workflow Architecture Registry Before Live LangGraph/OpenClaw
 
 Context:
@@ -1168,3 +1225,1011 @@ This is the safest bridge to the Wefella architecture: the frontend can now beha
 
 Cost of changing later:
 Low. Phase 9D can switch the default route to FastAPI and add formal parity comparison without changing the underlying orchestration contracts.
+
+## 2026-06-01 - Make The MVP FastAPI-First Only After Visible Parity Proof
+
+Context:
+Phase 9C moved all user-facing `/mvp` actions behind FastAPI when the Wefella route is selected, but the screen still defaulted to the direct Node path. The Wefella target asks for FastAPI to become the public production API, while the current Node/LangGraph/OpenClaw/Zep Graphiti runtime remains the proven orchestration source of truth.
+
+Options considered:
+- Remove Node-direct from `/mvp` and make FastAPI the only route immediately.
+- Keep Node-direct as the default until a later backend migration.
+- Default `/mvp` to FastAPI now, but keep Node-direct selectable and add an explicit side-by-side parity check.
+
+Decision:
+Phase 9D defaults `/mvp` to the Wefella FastAPI facade and adds a visible Node-direct versus FastAPI parity panel for the same Benefits prompt. The parity check uses separate temporary sessions, compares stable graph-contract fields, and remains proposal-only with no approved worker action. Direct Node remains selectable for operator/debug fallback.
+
+Reason:
+This makes the user-facing app behave like the future public API without pretending the runtime has been rewritten. A visible parity check is the guardrail that keeps FastAPI honest while Node/LangGraph/OpenClaw continues to own healthcare orchestration.
+
+Cost of changing later:
+Low. Once parity stays stable, the Node selector can move out of the user MVP surface and into the operator dashboard. A Python orchestration migration should still wait for parity tests that prove behavior, approval, audit, source-pointer, and memory equivalence.
+
+## 2026-06-01 - Add Provider-Style JWT Checks Before Deeper FastAPI Expansion
+
+Context:
+Phase 9D made `/mvp` FastAPI-first and proved parity with the Node runtime, but FastAPI auth was still purely local-development HS256 bearer tokens. The Wefella support document requires JWT auth on public API routes and a production-ready auth posture before the facade becomes more than a local bridge.
+
+Options considered:
+- Keep local dev tokens only until deployment.
+- Replace local MVP auth immediately with a hosted auth provider.
+- Add provider-style JWT claim validation now while preserving local MVP auth for development and parity testing.
+
+Decision:
+Phase 9E keeps local HS256 tokens as the default development path, adds explicit `WEFELLA_AUTH_MODE=provider`, requires issuer/audience configuration in provider mode, validates subject, expiration, not-before, issuer, and audience, disables local MVP auth by default in provider mode, and exposes only safe auth metadata from `/api/health`.
+
+Reason:
+This improves the public API contract without forcing a provider choice or breaking the local `/mvp` proof loop. It also creates testable auth boundaries before adding production deployment, rate limiting, or deeper Python orchestration.
+
+Cost of changing later:
+Low to medium. A later hosted provider can add JWKS/RS256 verification behind the same `require_user` contract. The local dev path can remain for non-production testing while production runs with provider mode and disabled local auth.
+
+## 2026-06-01 - Treat The FastAPI Approved Loop As Complete With A Precise External Blocker
+
+Context:
+Phase 9E secured the FastAPI facade auth path. The next risk was whether `/mvp` could drive the same real approval and OpenClaw continuation loop through FastAPI, then let the operator dashboard inspect the same session. The current machine has the dedicated OpenClaw profile available, but no authenticated member-portal tab was available during this proof.
+
+Options considered:
+- Wait for an authenticated payer portal before implementing the Phase 9F proof surface.
+- Mark the phase incomplete until source pointers can be created from a live member portal.
+- Implement the full FastAPI-approved loop now and accept either verified source pointers or a precise external blocker, matching the final-system contract.
+
+Decision:
+Phase 9F treats a precise fail-closed blocker as a valid proof branch when authenticated external portal state is missing. `/mvp` now shows a Phase 9F proof panel, the approved loop runs through FastAPI, and `/` can hydrate the same session from the proof link. Tests assert the approved resume carries approval and worker continuation fields to Node/LangGraph, and the live facade gate accepts source pointers or a precise blocker.
+
+Reason:
+This proves the product can guide a user through the real deterministic harness without fabricating evidence when the payer portal is unavailable or unauthenticated. It keeps LangGraph and OpenClaw honest: approval can be consumed, read-only worker actions can start, blockers are explicit, and the operator can inspect the same trace.
+
+Cost of changing later:
+Low. When the user signs into the dedicated OpenClaw browser profile, the same 9F path can produce source pointers instead of the current `blocked_no_authenticated_evidence` result. The proof panel and tests already accept that sourced-result branch.
+
+## 2026-06-01 - Harden FastAPI Without Moving Orchestration Out Of Node/LangGraph
+
+Context:
+Phase 9F proved the FastAPI-first approved loop from `/mvp`, including the correct precise-blocker branch when no authenticated OpenClaw member-portal tab is available. The Wefella support document calls for production API behaviors such as rate limiting, CORS, task status, error contracts, source grounding, and durable task tracking. The risk is adding those concerns by creating a second healthcare runtime.
+
+Options considered:
+- Move orchestration into FastAPI now while adding production API features.
+- Keep FastAPI as a thin proxy and postpone all hardening until deployment.
+- Harden the FastAPI facade contract while continuing to delegate healthcare decisions, approvals, worker dispatch, evidence, memory, and audit to Node/LangGraph/OpenClaw.
+
+Decision:
+Phase 9G hardens the facade layer only. FastAPI now adds request IDs, standardized error envelopes, configurable rate limiting, explicit CORS metadata/defaults, optional local JSON task persistence, and source-grounding metadata/enforcement around completed facade chat tasks. Node/LangGraph/OpenClaw remains the orchestration source of truth.
+
+Reason:
+This gives the public API a safer deployment posture without reintroducing runtime divergence. Source grounding is checked at the facade boundary as an additional guardrail, but LangGraph still decides workflow state, approval consumption, source-pointer creation, final answer composition, and memory behavior.
+
+Cost of changing later:
+Low to medium. The local JSON task store can later become Redis/Postgres while keeping the task registry interface. Source-grounding enforcement can be enabled in production once the sourced-result and blocker branches are both stable across real user sessions.
+
+## 2026-06-01 - Add Readiness And Observability Hooks Without Adding A Second Runtime
+
+Context:
+The Phase 9G facade had production API guardrails, but deployment still lacked an operator-ready runbook, a readiness endpoint, a smoke command, and a safe task-level observability hook. The final goal requires public/internal APIs, background/worker status, SSE recovery, and auditable behavior, but the current MVP must not become a FastAPI rewrite of the working Node/LangGraph/OpenClaw runtime.
+
+Options considered:
+- Add LangSmith as a required dependency before deployment proof.
+- Build a broad production backend rewrite with new operator/research APIs.
+- Add small deployment hooks around the current facade and keep product orchestration delegated to Node/LangGraph/OpenClaw.
+
+Decision:
+Phase 9H adds deployment and observability readiness at the facade boundary: `/api/readiness`, safe observability metadata in health, optional JSONL facade task events, a running-service `npm run smoke:facade` command, a deployment runbook, and expanded environment examples. The JSONL export stores message hashes and statuses, not raw healthcare input.
+
+Reason:
+This gives the project a deployable operating surface without changing who owns healthcare behavior. Readiness and smoke checks make the FastAPI facade easier to run in CI or local demos, while the optional event export gives useful task lifecycle proof without leaking PHI.
+
+Cost of changing later:
+Low. JSONL export can be replaced by LangSmith/OpenTelemetry/log drains behind the same event shape. The readiness checks can grow as Postgres, Redis, vector stores, MockWorker, Hermes, or operator/research APIs are implemented.
+
+## 2026-06-01 - Add Document Upload As A Facade Capability Before Chat Grounding
+
+Context:
+The broad final-system goal requires user document upload and extraction, but the current MVP proof loop is centered on LangGraph chat plus approval-gated OpenClaw portal observation. Adding document ingest directly into the orchestrator before there is a proven upload/extraction surface would make failures harder to isolate.
+
+Options considered:
+- Add uploaded documents directly to the LangGraph chat path first.
+- Defer document ingest until after all operator/research APIs are built.
+- Build a narrow FastAPI upload/extraction harness first, then connect extracted fields to LangGraph in a later slice.
+
+Decision:
+Phase 10A adds authenticated upload and local extraction at the FastAPI facade boundary first. The harness stores files locally, validates type and size, runs real local extraction for text/PDF/image when runtimes are available, returns safe redacted previews and structured fields, and exposes the result in `/mvp`. It does not yet let chat use uploaded document evidence.
+
+Reason:
+This satisfies a concrete final-system user capability while keeping the runtime boundaries clean. Upload/extraction can now be tested independently from LangGraph routing, OpenClaw worker state, Graphiti retain, and answer composition. The next phase can wire only the safe extracted evidence into the orchestrator with source-pointer tests.
+
+Cost of changing later:
+Low to medium. The local filesystem store can later become object storage with the same upload id and extraction response shape. The extraction harness can be replaced by a stronger OCR/document AI service behind the same API contract, as long as safe preview, fields, provenance, blockers, and user ownership remain stable.
+
+## 2026-06-01 - Ground Chat On Uploaded Extractions Without Dispatching OpenClaw
+
+Context:
+Phase 10A proved authenticated upload and local extraction, but the user-facing value loop still could not answer a chat question from an uploaded insurance document. The final-system goal needs user-supplied documents to become evidence, but OpenClaw should remain the adaptive portal/worker arm rather than the mechanism for reading already-extracted local uploads.
+
+Options considered:
+- Send uploaded files directly to Node and let LangGraph extract them.
+- Dispatch OpenClaw for every uploaded document question.
+- Keep extraction and ownership in FastAPI, pass only safe extraction packets into LangGraph, and treat the upload as a read-only local evidence source.
+
+Decision:
+Phase 10B keeps upload ownership and extraction at the FastAPI facade boundary. FastAPI resolves `uploaded_document_ids` for the authenticated user and passes safe extraction packets to Node/LangGraph. LangGraph creates `uploaded_document_extractions` source pointers and composes a sourced answer without any OpenClaw worker dispatch.
+
+Reason:
+This preserves the runtime boundaries: FastAPI owns public upload/auth checks, LangGraph remains the healthcare workflow master, and OpenClaw stays reserved for approval-gated adaptive portal/document observation. It also gives the user-facing app an immediate document-grounded chat capability without inventing a mock worker path.
+
+Cost of changing later:
+Low. The source pointer and safe extraction packet shape can survive a later object-storage or document-AI backend. If uploaded document observation later needs OpenClaw for complex PDFs or OCR, it can be added as an approved worker path without changing the basic ownership and source-pointer contract.
+
+## 2026-06-01 - Make Uploaded Document Citations First-Class MVP Evidence
+
+Context:
+Phase 10B allowed chat to answer from uploaded document extractions, but the user-facing UI still showed mostly source-pointer counts and compact labels. The final-system goal requires citations/source views and cross-session product-memory proof, not just an internal source pointer array.
+
+Options considered:
+- Leave citation details only in the operator dashboard.
+- Add a separate document-inspection workflow before improving the chat result.
+- Enrich the existing uploaded-document source pointer and render it directly in `/mvp`, while proving Graphiti retain/recall across sessions.
+
+Decision:
+Phase 10C treats uploaded-document extractions as first-class source-backed evidence. LangGraph source pointers now include uploaded-document citation metadata, `/mvp` renders source detail cards and Graphiti memory proof, and product-memory retain sanitizes uploaded-document fields/spans before sending them to Graphiti.
+
+Reason:
+This makes the existing user-facing value loop more real without adding a new workflow or runtime fork. The user can see where an answer came from, while the system proves memory is source-pointer based and not raw-document based.
+
+Cost of changing later:
+Low. The enriched pointer shape can be reused if storage moves from local files to object storage or if extraction moves to a document-AI service. The UI cards can later render richer page and bounding-box citations without changing the core LangGraph evidence contract.
+
+## 2026-06-01 - Add User Continuity Without Creating A Second Runtime
+
+Context:
+The final-system goal requires a user to resume sessions, review prior answers, submit feedback, and export useful outputs. Before Phase 10D, the operator dashboard could inspect session state, but the user-facing `/mvp` app did not have a protected continuity loop through the FastAPI-first route.
+
+Options considered:
+- Keep session continuity only in the operator/debug dashboard.
+- Add a separate FastAPI session store independent from the Node/LangGraph runtime.
+- Add a thin continuity module over the existing SQLite session/messages/state tables and expose it through both Node and FastAPI.
+
+Decision:
+Phase 10D adds `sessionContinuity.mjs`, a `feedback_items` table, Node continuity endpoints, FastAPI protected proxy endpoints, and `/mvp` controls for history, feedback, and Markdown export. The continuity layer reads from the existing LangGraph-backed session state and conversation messages, and it persists feedback back into the same audit/session database.
+
+Reason:
+This closes user-facing resume/feedback/export gaps without splitting runtime authority. LangGraph remains the workflow master, FastAPI remains the public/auth facade, and Node remains the current product runtime for session state, source pointers, audit, and feedback persistence.
+
+Cost of changing later:
+Low to medium. The endpoint contracts can survive a later move from SQLite to Postgres. Markdown export can become server-side artifact storage later, and feedback can feed an operator queue or evaluation workflow without changing the current user ownership checks.
+
+## 2026-06-01 - Add Operator Research Control Plane Without Executing Research Yet
+
+Context:
+The final-system goal calls for operator/research APIs, source management, task control, and proof dashboards. After Phase 10D, the user-facing continuity loop existed, but the operator dashboard still had no first-class way to manage research sources or queue source-review work. The risk was jumping straight to scraping/crawling/worker execution without a stable source/run/audit contract.
+
+Options considered:
+- Add scrapers or OpenClaw research dispatch immediately.
+- Move research APIs into a new backend architecture before finishing the current MVP runtime.
+- Add a narrow operator research control plane first, using the current Node/LangGraph database and FastAPI facade, and leave execution queued until the next phase.
+
+Decision:
+Phase 10E adds the operator research API foundation only. `knowledge_sources` now supports proposal/review/run metadata, `research_runs` and `research_run_events` store queued manual runs and lifecycle events, Node owns the research operation logic, FastAPI protects the public proxy routes and binds `actorUserId` to the JWT subject, and `/` renders the operator research console. A run is a real queued/audited record, not a scraped result and not a mock answer.
+
+Reason:
+This creates the contracts needed for real research execution without hiding behavior. It keeps healthcare orchestration in the existing Node/LangGraph/OpenClaw runtime, keeps FastAPI as the public/auth facade, and gives the operator UI a visible source/run lifecycle before any scraper, crawler, or worker is allowed to act.
+
+Cost of changing later:
+Low to medium. The queued run/event shape can feed deterministic fetchers, OpenClaw worker jobs, MockWorker/Hermes mode, or a later Postgres-backed task system. Full RBAC still needs to be added before this becomes a production operator surface.
+
+## 2026-06-01 - Require Operator/Admin RBAC For FastAPI Research Routes
+
+Context:
+Phase 10E created the first operator research control plane, but the FastAPI facade only required a valid JWT subject and actor binding. That protected cross-user access but still let any authenticated local user call operator/research routes if they knew the endpoint.
+
+Options considered:
+- Leave research routes subject-bound only until the production identity provider is selected.
+- Hide research controls only in the UI.
+- Add a narrow role boundary in the FastAPI facade now while keeping the Node runtime unchanged.
+
+Decision:
+Phase 10F adds role-based authorization at the FastAPI public boundary. The facade normalizes roles from `roles`, `role`, `groups`, `permissions`, `scope`, and `scp` claims. All `/api/research/*` routes require `operator` or `admin`; normal local-session tokens remain user role only. The existing `actorUserId` subject binding remains required after the role check.
+
+Reason:
+The final-system goal requires user/operator/admin separation, and research controls are operator actions even before real scraper or OpenClaw execution is attached. Enforcing this at FastAPI is the smallest useful production boundary because `/mvp` user routes keep working while operator routes become explicitly privileged.
+
+Cost of changing later:
+Low. The role parser can be narrowed to the selected identity provider's exact claim shape, and the same `require_operator` dependency can later protect additional operator APIs such as write proposals, tool control, and research execution.
+
+## 2026-06-01 - Execute Approved Research Runs With Deterministic Fetch Before Worker Expansion
+
+Context:
+After Phase 10F, operator research routes were role-protected, but manual runs were still queued control records only. The final-system contract requires background/evidence pipeline behavior, MockWorker mode, worker status, source artifacts, auditability, and no hidden worker action. Jumping directly to OpenClaw/Hermes research execution would blur the boundary between a proven deterministic pipeline and future adaptive workers.
+
+Options considered:
+- Keep research runs queued until OpenClaw/Hermes research workers are ready.
+- Add MockWorker only.
+- Add a bounded deterministic fetch executor first, plus an explicit MockWorker fallback.
+
+Decision:
+Phase 10G executes approved research runs through a deterministic fetch adapter and stores source/run artifacts. The adapter fetches only approved HTTP(S) sources, enforces a byte/content-type boundary, extracts local text, stores a raw artifact file under a git-ignored directory, records hashes and safe previews in `research_artifacts`, and writes execution events/audit rows. MockWorker mode is available and visible, but outputs are marked `mock_worker_untrusted`. OpenClaw and Hermes research modes remain feature-gated.
+
+Reason:
+This creates the first real operator research execution loop while preserving truthfulness. The system can now prove source proposal, approval, run queueing, execution, artifact provenance, audit, and UI visibility without overclaiming adaptive worker readiness or trusted retrieval closure.
+
+Cost of changing later:
+Low to medium. The artifact table and run event lifecycle can feed future scrapers, OCR/PDF extraction, embeddings, citation closure, OpenClaw worker dispatch, Hermes workers, or a Postgres-backed evidence pipeline. The deterministic adapter may later become one worker mode among several.
+
+## 2026-06-01 - Require Artifact Review Before Trusted Research Retrieval
+
+Context:
+Phase 10G created real research artifacts, but deterministic fetch output was intentionally marked `extracted_pending_review`. The final-system goal requires evidence search, citation closure, groundedness, and a review queue. If fetched artifacts became searchable as trusted evidence immediately, the system could silently cite unreviewed scrape/fetch output in healthcare answers.
+
+Options considered:
+- Treat every deterministic fetch artifact as trusted because it came from an approved source.
+- Wait for embeddings/vector search before exposing any evidence search.
+- Add a deterministic review gate and safe-preview search first.
+
+Decision:
+Phase 10H adds artifact review and trusted-only evidence search. Operators can approve an artifact for `trusted_retrieval_approved`, quarantine unsuitable artifacts, or leave artifacts pending. Default search returns only trusted reviewed artifacts; pending matches are reported as unavailable to trusted retrieval. MockWorker artifacts are blocked from trusted approval.
+
+Reason:
+This creates citation closure before broader retrieval. It preserves the truth boundary between "we fetched something" and "the system may cite it," while still giving operators a usable review/search loop over real artifacts.
+
+Cost of changing later:
+Low. Embeddings, Graphiti/Zep indexing, OpenClaw/Hermes research workers, and scheduled automation can all reuse the same citation status contract. If storage moves to Postgres/object storage, the review state remains a simple artifact-level field.
+
+## 2026-06-01 - Let User Answers Use Only Reviewed Research Evidence
+
+Context:
+Phase 10H created trusted research artifact search, but user-facing healthcare answers still did not consume that store. The remaining risk was two-sided: answering from scripted templates when no portal evidence was available, or prematurely citing unreviewed fetch/worker artifacts.
+
+Options considered:
+- Keep research search operator-only until embeddings or Graphiti indexing are ready.
+- Let deterministic fetch artifacts answer users immediately after execution.
+- Add a narrow LangGraph evidence node path that uses only `trusted_retrieval_approved` artifacts and refuses when evidence is missing or pending.
+
+Decision:
+Phase 10I connects reviewed research evidence to user-facing LangGraph answers. The graph searches reviewed research artifacts when no approved portal/document observation is present, maps trusted matches into `trusted_research_artifact` source pointers, and composes a sourced answer from reviewed snippets. Pending-review matches and missing evidence create blocker/refusal responses, not healthcare answers. MockWorker output remains excluded.
+
+Reason:
+This closes the citation loop without weakening the review boundary. It also keeps LangGraph as workflow master, FastAPI as public facade, and Node as the current runtime while making the user-facing MVP more useful: a user can now receive a sourced answer from operator-reviewed evidence without requiring live portal access.
+
+Cost of changing later:
+Low to medium. The same source-pointer shape can be backed by embeddings, Graphiti/Zep indexing, scheduled research refreshes, OpenClaw research workers, or Hermes workers later. Ranking may need improvement once many trusted artifacts exist, but the trust boundary remains artifact-level citation status.
+
+## 2026-06-01 - Gate Operator Natural-Language Write Actions With Proposals
+
+Context:
+After Phase 10I, user answers could cite reviewed research evidence, but the operator control plane still required direct button/API actions for source/run/artifact changes. The final-system goal calls for a more flexible operator assistant, but letting natural-language instructions mutate research state directly would create hidden worker/operator action risk.
+
+Options considered:
+- Let the operator assistant execute all parsed actions immediately.
+- Defer natural-language operator control until an LLM planner is added.
+- Add a fixed registry-bound assistant now where read tools execute directly and write tools become approval-bound proposals.
+
+Decision:
+Phase 10J adds an operator assistant with a fixed research tool registry. Read-only requests execute immediately through registered read tools. Write/action requests create `operator_tool_proposals` with risk, expected effect, hashes, status, and audit proof. Approval or rejection is a separate endpoint; approval executes the stored tool/args exactly once, while rejection performs no target mutation. FastAPI protects the same routes with operator/admin RBAC and actor binding.
+
+Reason:
+This gives the operator surface more flexibility without weakening the audit boundary. The system can now accept plain-English operator requests while preserving deterministic tool selection, visible proposal review, and no hidden source/run/artifact changes.
+
+Cost of changing later:
+Low. The curated parser can later be replaced or augmented by an LLM classifier/planner as long as it still emits one of the registered tool keys and validated args. The proposal table can also wrap future OpenClaw/Hermes dispatch and scheduled automation actions without changing the approval lifecycle.
+
+## 2026-06-01 - Represent Scheduled Research As Approved Records Plus Explicit Due Ticks
+
+Context:
+After Phase 10J, operators could create gated proposals for source/run/artifact changes, but the final-system goal still required recurring research automation. Adding a hidden cron or daemon immediately would make it hard to prove which worker action happened and under whose authority.
+
+Options considered:
+- Add a background daemon that automatically executes research on an interval.
+- Defer all recurring automation until production infrastructure is chosen.
+- Add persisted schedules and an explicit due-tick endpoint that queues work first.
+
+Decision:
+Phase 10K stores approved research schedules in `research_schedules` and exposes due ticks that queue `scheduled_research_run` records by default. Schedule creation/pause/resume/run-due are available through the operator tool registry and remain proposal-gated when driven by natural language. Real execution remains a separate worker action.
+
+Reason:
+This gives the MVP an auditable automation contract without hiding worker behavior. It preserves the rule that scheduled work must be visible, source-bound, and reviewable before execution.
+
+Cost of changing later:
+Low. A real cron, external scheduler, queue worker, OpenClaw dispatch, or Hermes dispatch can call the same due-tick contract. The schedule table can move to Postgres without changing the operator-visible lifecycle.
+
+## 2026-06-01 - Expose Audit Logs Through Redacted Operator API Before More Worker Expansion
+
+Context:
+The project already had hash-chained `audit_events`, but the operator dashboard could only see scattered audit snippets embedded in specific task results. The final-system checklist explicitly calls for `GET /api/audit`, and new source/proposal/schedule actions need a single proof surface before adding more autonomous workers.
+
+Options considered:
+- Keep audit only inside per-feature responses.
+- Return raw audit details to the dashboard for maximum debugging.
+- Add a redacted audit API that returns event metadata, hashes, safe previews, and chain verification.
+
+Decision:
+Phase 10L adds `GET /api/audit` in Node and a FastAPI operator/admin proxy. The response includes event ids, session ids, event types, action kinds, timestamps, event hashes, details hashes, redacted/truncated details previews, event-type counts, pagination, and visible-chain verification. It explicitly does not return raw audit details.
+
+Reason:
+This closes the audit-log API gap while respecting healthcare data boundaries. Operators can now inspect what happened, prove hash-chain status, and trace proposal/scheduler/research events without turning the audit endpoint into a raw data export.
+
+Cost of changing later:
+Low. The same contract can later add search indexes, Postgres pagination, downloadable operator reports, or tamper-evidence dashboards while preserving the default redacted response shape.
+
+## 2026-06-01 - Add Explicit Embedding Route Selection Before Adaptive Research Workers
+
+Context:
+Phase 10L made research/source/scheduler/proposal actions visible through a redacted audit API. The next gap was retrieval quality and index lifecycle: trusted research artifacts were searchable only by deterministic token scoring, and the final-system goal explicitly required an embedding route decision plus safe reindexing before broader knowledge growth.
+
+Options considered:
+- Jump directly to OpenClaw/Hermes research-worker dispatch.
+- Wire OpenAI embeddings as the only route.
+- Add a persisted route/index/reindex contract first, with a credential-free local route and a failure-safe OpenAI route option.
+
+Decision:
+Phase 10M adds `research_embedding_routes`, `research_embedding_jobs`, and `research_embedding_index`. The default route is `local_tfidf` with deterministic local vectors so the MVP has a real, reproducible backend without requiring external credentials. Operators can select `local_tfidf` or `openai`, inspect status, and reindex trusted artifacts. Reindexing writes only `trusted_retrieval_approved` artifacts, reports route use in search, blocks dimension mismatches safely, and preserves prior active index rows unless a new reindex succeeds.
+
+Reason:
+This closes the route-selection/reindexing contract without pretending that every environment has OpenAI embedding credentials. It keeps the artifact review boundary intact: approved sources and completed runs still do not become citable until artifact citation review approves them. It also gives future OpenClaw/Hermes research workers a stable rule: worker output must pass review before entering trusted retrieval.
+
+Cost of changing later:
+Low to medium. The local vector route can be replaced or complemented by OpenAI, pgvector, Graphiti/Zep, Chroma, or another vector backend behind the same route/job/index contract. If production storage moves to Postgres, the route/job semantics should remain stable while vector storage moves out of SQLite.
+
+## 2026-06-01 - Attach OpenClaw And Hermes As Bounded Research Workers
+
+Context:
+Phase 10M closed the trusted-evidence embedding lifecycle, but OpenClaw and Hermes were still visible only as future feature-gated modes. The final-system contract requires real worker adapter modes without letting the frontend call workers directly or letting workers bypass source approval, operator approval, audit, artifact review, or trusted retrieval gates.
+
+Options considered:
+- Keep OpenClaw/Hermes as labels until a production queue exists.
+- Let `/` execute OpenClaw/Hermes directly as broad autonomous research agents.
+- Add bounded adapter modes now, disabled by default, using a typed task envelope and pending-review artifact lifecycle.
+
+Decision:
+Phase 10N adds `openclaw` and `hermes` worker modes to research run execution. Both require an approved source/run, explicit `approvedWorkerDispatch=true`, and an environment feature flag before command dispatch. OpenClaw uses the official project profile through `openclaw --profile brainstyworkers agent --local ... --json`; Hermes uses `hermes --oneshot`. Both receive the same `brainstyworkers.research_worker_task.v1` envelope and must return structured JSON. Results become pending-review artifacts, never trusted retrieval evidence directly.
+
+Reason:
+This gives the MVP a real adaptive-worker attachment point without weakening the deterministic governance already built. OpenClaw/Hermes can now be tested as powerful workers inside an approved source-scoped task, while LangGraph/FastAPI/researchOps still own routing, approval, audit, artifact review, embeddings, and user-facing citation.
+
+Cost of changing later:
+Low to medium. The command runners can be replaced by OpenClaw MCP/channel endpoints, Hermes task channels, a durable queue, or a Postgres-backed worker table while preserving the typed envelope and result schema. The important invariant is stable: adaptive worker output enters trusted retrieval only after operator review.
+
+## 2026-06-01 - Build Research Evidence Graph From Safe Metadata Only
+
+Context:
+After Phase 10N, the research system had approved sources, runs, artifacts, review gates, embeddings, schedules, audit, and bounded adaptive workers, but the final-system checklist still required `GET /api/research/graph` and `POST /api/research/graph/build`. The graph needs to help operators understand relationships without becoming another raw-content export.
+
+Options considered:
+- Return raw artifact previews and URLs as graph labels for easier debugging.
+- Defer the graph until Neo4j or Graphiti production storage is chosen.
+- Build a local metadata graph from the existing SQLite research tables and persist graph-build proof rows.
+
+Decision:
+Phase 10O adds a metadata-only research evidence graph. Nodes and edges are built from `knowledge_sources`, `research_runs`, `research_artifacts`, `research_embedding_*`, and `research_schedules`. Artifact bodies and safe text previews are not returned. URLs are reduced to host plus hashes inside graph metadata. `POST /api/research/graph/build` records a `research_graph_builds` row and a hash-chained `research_graph_build_completed` audit event.
+
+Reason:
+This closes D17/D18 without adding a new graph database or weakening citation safety. Operators get relationship proof across sources, runs, artifacts, schedules, and embedding routes while trusted retrieval still depends on artifact review and reindexing.
+
+Cost of changing later:
+Low. The local graph builder can later publish the same node/edge contract to Graphiti, Neo4j, Postgres graph tables, or a UI visualization. The safety invariant should remain: raw artifact text and raw portal/private dumps do not appear in graph responses.
+
+## 2026-06-01 - Add Labels-Only Claim Citation Closure Before Final Answers Are Trusted
+
+Context:
+Phase 10O made the research evidence graph visible, but the system still needed a direct answer-quality boundary: every factual answer claim should be linked to trusted reviewed evidence or treated as not citation-closed. Without this, a user-facing answer could contain a well-sourced sentence beside an unsupported sentence and still look grounded.
+
+Options considered:
+- Let the LLM decide groundedness in free text.
+- Use all fetched and pending-review artifacts as support to maximize coverage.
+- Add a deterministic labels-only claim judge over trusted reviewed artifacts first, then later swap in richer LLM/embedding entailment behind the same contract.
+
+Decision:
+Phase 10P adds `research_claim_evaluations` and a citation-closure evaluator that extracts factual/domain claims from a safe answer preview, scores them only against `trusted_retrieval_approved` artifacts, labels each claim as supported, low-confidence, or unsupported, and writes only labels, scores, hashes, safety flags, metadata citation pointers, and audit proof. Pending-review evidence cannot support a trusted answer, and the judge never creates or promotes evidence.
+
+Reason:
+This closes the immediate grounded-answer safety gap without introducing another source of invented facts. The evaluator can fail an answer cleanly when citation closure is incomplete, while the UI and operator assistant can show exactly which claims need revision or more evidence.
+
+Cost of changing later:
+Low to medium. The deterministic scorer can be replaced or complemented by an LLM judge, embedding reranker, or graph entailment service as long as the same invariant holds: the judge labels claims against trusted reviewed evidence and never manufactures support.
+
+## 2026-06-01 - Keep A Tested Final Verification Matrix Before Claiming Completion
+
+Context:
+After Phase 10P, the project had many green local gates and a working MVP value loop, but `docs/goal_final_system.md` remained broader than the implemented surface. It included UI mode switching, urgent escalation, manual research PDF ingestion, analytics, budget/kill-switch controls, and live worker/provider proof that were not all finished. The goal instructions require completion to be proven requirement by requirement, not inferred from passing tests.
+
+Options considered:
+- Continue directly to another feature without a full matrix.
+- Mark the active goal complete because the main local MVP path passes.
+- Add a maintained final-system report and make tests/build guards check its coverage.
+
+Decision:
+Phase 10Q adds `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md` and a report coverage test. The report maps every explicit `A*` through `H*` item in `docs/goal_final_system.md` to one of the allowed final-report statuses. Known gaps remain visible as `FAILING / NEEDS FIX`, and live OpenClaw/Hermes proof remains `BLOCKED BY EXTERNAL DEPENDENCY`.
+
+Reason:
+This prevents accidental completion claims and gives the next agent a crisp, test-backed backlog. It also keeps the project honest: green local tests prove many slices, but the broad final-system contract still contains unfinished surfaces.
+
+Cost of changing later:
+Low. As future phases close gaps, the report rows can move from failing/blocked to passing with evidence. The coverage test will keep the report aligned with any new goal-file requirement ids.
+
+## 2026-06-01 - Urgent/Emergency Prompts Bypass Workers And Create Human Handoffs
+
+Context:
+The final verification matrix showed A19, A20, and H10 as failing. Unsafe medical-advice prompts were blocked, but emergency/safety-critical messages did not yet have a first-class bypass path, durable handoff record, audit proof, or dashboard visibility.
+
+Options considered:
+- Treat urgent prompts as generic medical-advice refusals.
+- Let GPT classify emergency language and decide whether to escalate.
+- Add a deterministic urgent policy signal that routes directly to a durable handoff before GPT, OpenClaw, or evidence observation.
+
+Decision:
+Phase 10R adds deterministic urgent/emergency detection and routes those messages to `human_approval_escalation` with `urgent_emergency_escalation`. LangGraph creates `human_handoff_items`, an `urgent_human_handoff` task, a hash-chained `human_handoff_created` audit event, and immediate emergency-safe guidance. The urgent path skips OpenClaw proposal/dispatch, browser observation, payer contact, external messaging, credential entry, form submission, and GPT calls.
+
+Reason:
+Emergency handling must be predictable and must not depend on adaptive worker behavior or model availability. Durable handoff rows give the operator proof surface something concrete to review without turning the worker into a clinical responder.
+
+Cost of changing later:
+Low to medium. Assignment, acknowledgement, closure, and notification workflows can be added around `human_handoff_items` without changing the critical invariant: urgent/safety prompts bypass normal worker execution and create audit-backed handoff proof.
+
+## 2026-06-01 - Render The MVP From Typed AI2UI Blocks Instead Of Ad Hoc Text
+
+Context:
+The final verification matrix showed A6 and A7 as failing. `/mvp` already displayed answers, citations, approval state, worker state, memory, and handoffs, but it did not have the requested Chat/Split/Guided/Bento mode system and it did not receive a complete typed AI-to-UI block payload from the backend. Without a typed contract, frontend mode changes risk becoming string-specific or duplicating orchestration logic in the browser.
+
+Options considered:
+- Keep rendering only the final response text plus scattered proof panels.
+- Build a new frontend framework or separate Next.js app before finishing the current MVP scope.
+- Add a small backend block contract inside the existing Node/LangGraph runtime and let `/mvp` switch presentation modes over the same run state.
+
+Decision:
+Phase 10S adds `brainstyworkers.ai2ui.blocks.v1` through `src/concierge/ai2uiBlocks.mjs`. LangGraph attaches blocks after product-memory retain and `POST /api/chat` returns them as `ai2uiBlocks`. `/mvp` renders typed answer, workflow, approval, worker, citation, memory, handoff, safety, and next-step cards. It also adds Chat, Split, Guided, and Bento modes that re-render the same current result and persist the selected mode in localStorage. Unknown future block types render as safe warning cards.
+
+Reason:
+This closes A6/A7 without a frontend rewrite or runtime fork. It keeps LangGraph as the source of truth for healthcare workflow state while giving the UI a stable, testable rendering contract. State-preserving modes help user testing because the same session can be inspected in a friendly chat shape, guided workflow shape, or proof-dense bento shape.
+
+Cost of changing later:
+Low. The block schema can be extended with new typed cards, richer renderer hints, or a future Next.js frontend as long as unknown block fallback remains and mode switching stays presentation-only.
+
+## 2026-06-01 - Use An Env-Gated Approved-Schedule Daemon Instead Of Hidden Cron Execution
+
+Context:
+Phase 10K created approved research schedules and an explicit due-tick endpoint, but the final verification matrix still showed E1 as failing because there was no always-on daemon/cron proof. The system needed recurring research automation without weakening the existing approval/source/audit boundaries.
+
+Options considered:
+- Leave schedule execution as manual `POST /api/research/schedules/tick` only.
+- Add an external cron first, before local daemon state and tests.
+- Add a hidden background worker that executes all due work automatically.
+- Add an env-gated local daemon that calls the same approved due-tick contract and defaults to queue-only behavior.
+
+Decision:
+Phase 10T adds `src/concierge/researchScheduler.mjs` and `research_scheduler_daemon_state`. The Node server creates the daemon at startup and auto-starts only when `BRAINSTY_RESEARCH_SCHEDULER_ENABLED=1`. Each tick calls `runDueResearchSchedules`, emits runtime events, writes hash-chain audit proof, records daemon state, and skips overlapping same-process ticks. Default behavior queues `scheduled_research_run` records; adaptive OpenClaw/Hermes execution remains feature-flagged and requires `approvedWorkerDispatch=true`.
+
+Reason:
+This closes the local MVP E1 proof while preserving the deterministic research contract. The daemon is observable, testable, and operator-visible, and it does not create a second hidden path for worker execution.
+
+Cost of changing later:
+Low to medium. A production cron, queue worker, Vercel Cron, systemd/launchd job, or external scheduler can call the same daemon tick contract. High-volume production should move overlap/concurrency guarantees from the in-process guard and shell-out SQLite to Postgres transactions, leases, or a durable queue.
+
+## 2026-06-15 - Put LLM Intelligence Inside A Deterministic Healthcare Harness
+
+Context:
+The consulting loop called for real LLM reasoning and answer composition, but the existing MVP still relied heavily on deterministic route templates and hardcoded OpenClaw skill assumptions. The system needed more intelligence without allowing the model or worker layer to authorize unsafe healthcare actions.
+
+Options considered:
+- Keep deterministic routing and postpone LLM composition.
+- Add direct model calls in graph nodes for speed.
+- Add schema-constrained intent and answer modules behind outbound payload observation, deterministic validators, source-pointer gates, and LangGraph authority.
+
+Decision:
+Slice 1 adds `src/concierge/intelligence/*` for structured intent reasoning, journey planning, and source-caged answer composition. LangGraph keeps deterministic policy authority and conditional routing. OpenClaw gets registry/executor/policy modules so skills are discovered and bounded by capability, approval scope, and blocked actions instead of treated as a single hardcoded browser worker.
+
+Reason:
+This makes the model useful for interpretation and composition while preserving the critical invariants: the LLM cannot authorize unsafe action, cannot invent evidence, cannot bypass payload observation, and cannot turn advisory memory into instructions. LangGraph remains the healthcare journey authority; OpenClaw remains the bounded worker/tool arm.
+
+Cost of changing later:
+Medium. Future work can replace the internal LLM gateway or product memory adapter, but the structured schemas, validators, source-pointer claim cage, and OpenClaw registry contract should remain stable because tests now depend on those safety boundaries.
+
+## 2026-06-15 - Queue Retryable Product-Memory Retain Failures For Replay
+
+Context:
+The architecture requires real temporal product memory through Graphiti/Zep or an equivalent adapter. The runtime already reports Graphiti/FalkorDB degradation, but retryable retain failures could still be lost after being audited. That makes degraded mode visible but not recoverable.
+
+Options considered:
+- Leave retain failures as audit-only repair plans.
+- Treat local SQLite memory as successful product memory when Graphiti is down.
+- Persist safe source-pointer retain payloads in a replay queue and expose queue health through the product-memory API.
+
+Decision:
+Add `product_memory_replay_queue` as a durable fallback for retryable Graphiti retain failures. The queue stores only safe, identifier-masked, source-pointer retain payloads. Status and replay endpoints expose the backlog, and replay uses the same Graphiti bridge plus outbound payload observation path as normal retain.
+
+Reason:
+This preserves the product-memory boundary without pretending degraded Graphiti memory worked. Runtime failures become actionable and replayable; policy failures remain manual-repair items and are not retried automatically.
+
+Cost of changing later:
+Low to medium. A production deployment can move this queue to Postgres, Vercel Queues, Redis, or another durable worker system while keeping the same safe payload contract and replay status semantics.
+
+## 2026-06-15 - Replace Shell-Backed SQLite Store With Native SQLite
+
+Context:
+The consulting plan called out the database layer as a safety/infrastructure gap because the central store shelled out to `sqlite3` for each statement and built SQL strings for high-level helpers. This created hidden failure modes around per-command PRAGMA state, foreign-key enforcement, quoting, and production migration discipline.
+
+Options considered:
+- Keep the CLI-backed store and only add more identifier checks.
+- Install `better-sqlite3`.
+- Use Node's built-in `node:sqlite` runtime and preserve the current async store interface.
+
+Decision:
+Use `node:sqlite` `DatabaseSync` as the local store backend. Keep the public `SqliteStore` methods async for compatibility, but run through a persistent native connection with foreign keys, busy timeout, WAL, bound high-level helpers, explicit transactions, and a `schema_migrations` ledger.
+
+Reason:
+This removes shell execution without adding a dependency or rewriting every runtime module at once. It also makes local tests more production-like: foreign keys are consistently enforced, which caught and fixed placeholder-session browser takeover tests.
+
+Cost of changing later:
+Medium. The store interface can later move to Postgres or a fully parameterized query layer. The next hardening pass should reduce legacy raw `store.get()` and `store.all()` SQL call sites and add lease-based concurrency for production workers.
+
+## 2026-06-15 - Migrate Recent Memory And Retention Queries To Bound Parameters First
+
+Context:
+After the native SQLite migration, the store supports bound parameters, but many legacy modules still pass raw SQL strings to `store.get()` and `store.all()`. Rewriting every query at once would create a large behavioral diff across audit, session, research, memory, and worker subsystems.
+
+Options considered:
+- Leave all raw call sites for a later all-at-once rewrite.
+- Rewrite the entire repo to a new query builder in one pass.
+- Start with recent high-value paths that handle memory replay, retention expiration, and review evidence lookup, then continue module-by-module.
+
+Decision:
+Migrate the recent product-memory replay queue, retention sweeper, and review endpoint queries to bound parameters first. Add DB safety coverage proving raw `store.get()` and `store.all()` can safely bind hostile-looking values.
+
+Reason:
+This keeps the database hardening moving without destabilizing unrelated legacy modules. It also creates a clear pattern for future migrations: preserve the store API, bind every value, and reserve string assembly for reviewed identifiers or static SQL only.
+
+Cost of changing later:
+Low. The remaining raw SQL call sites can be migrated module-by-module using the same parameterized store calls, then eventually folded into stricter query helpers or a production database adapter.
+
+## 2026-06-15 - Parameterize Audit Log Reads Because Audit Is A Proof Surface
+
+Context:
+The audit log API is both an operator surface and a verification surface for approvals, model payloads, worker actions, and safety events. It accepted user-facing filters and still used interpolated SQL even after the store gained native bound-parameter support.
+
+Options considered:
+- Leave audit SQL for a later broad raw-query migration.
+- Replace the audit module with a generic query builder.
+- Parameterize the audit filters in place and add hostile-filter tests.
+
+Decision:
+Parameterize audit hash lookup, chain verification, and list/filter/count/type queries in `src/concierge/audit.mjs`. Escape user-entered `LIKE` wildcards and keep only the intentional event-prefix suffix wildcard.
+
+Reason:
+Audit is too central to leave on manual quote escaping. This change improves security posture without changing the audit event schema or API response shape.
+
+Cost of changing later:
+Low. Future work can move audit reads to stricter query helpers or a production database adapter while preserving the current filter semantics and chain verification contract.
+
+## 2026-06-15 - Parameterize Session Runtime Queries Before Broader Legacy Cleanup
+
+Context:
+LangGraph statefulness depends on session lookup, resume-latest behavior, checkpoints, and session listing. After audit was parameterized, `sessionManager` still had manual SQL quote helpers around user/email filtering.
+
+Options considered:
+- Leave session queries until a full query-builder migration.
+- Rewrite the whole session subsystem.
+- Bind the stateful lookup/listing queries in place while preserving existing session APIs.
+
+Decision:
+Parameterize `resolveManagedSession` latest-session lookup and `listManagedSessions` filters/limit. Remove the unused manual SQL helper from `sessionContinuity`.
+
+Reason:
+This hardens a central runtime path without altering LangGraph thread IDs, checkpoint semantics, session continuity export, or API response shape. It also reduces risk that hostile-looking email/user-id strings could affect session listing behavior.
+
+Cost of changing later:
+Low. The same bound-parameter pattern can be carried into memory harness, worker continuation, research, and operator query modules.
+
+## 2026-06-15 - Parameterize Memory Harness Queries Because Harness Context Becomes Prompt Context
+
+Context:
+The memory harness assembles cross-session context packets for LangGraph and the dedicated OpenClaw arm. It reads memory items, source pointers, tasks, scheduled jobs, outbox proposals, and heartbeat runs. Because this data becomes prompt context and worker context, query broadening or cross-user leakage would be higher impact than an ordinary reporting bug.
+
+Options considered:
+- Leave the harness on manual quote escaping until a full query-builder migration.
+- Rewrite the memory harness around a new persistence abstraction.
+- Parameterize the existing harness queries in place and add hostile-input regression coverage.
+
+Decision:
+Remove the harness-local SQL quote helper and migrate memory-harness reads/deduplication lookups to bound parameters. Keep the existing context packet, heartbeat, and follow-up planning contracts unchanged.
+
+Reason:
+This closes a high-value database safety gap while preserving the already-tested LangGraph/OpenClaw memory injection behavior. The regression explicitly checks hostile-looking user/source identifiers and cross-user memory isolation.
+
+Cost of changing later:
+Low. A future production database adapter can preserve the current query shapes and context packet schema while moving storage to Postgres, a queue-backed worker store, or a stricter typed repository layer.
+
+## 2026-06-15 - Parameterize Approval And Worker Continuation Queries At The Action Boundary
+
+Context:
+The approval-resume and worker-continuation modules enforce single-use approval tokens, user/session/task binding, read-only action scope, and async OpenClaw continuation status. These paths are part of the safety boundary between LangGraph authority and OpenClaw worker execution.
+
+Options considered:
+- Leave manual SQL quote helpers in place until a broad persistence rewrite.
+- Move approval and continuation state to a new repository layer immediately.
+- Parameterize the current queries in place and add hostile-binding regressions.
+
+Decision:
+Remove local SQL quote helpers from `approvalResume` and `workerContinuations`, bind approval-token/session lookups and continuation listing/latest-event queries, and clamp continuation list limits.
+
+Reason:
+This keeps the action boundary stable while reducing query-broadening risk in exactly the code that gates worker execution. The tests now prove hostile-looking session/status values stay literal and do not consume approvals or expose unrelated continuations.
+
+Cost of changing later:
+Low. The same API and state schema can later move into a stricter repository or production database adapter without altering LangGraph/OpenClaw approval semantics.
+
+## 2026-06-15 - Route OpenClaw Through Bounded Registry Proposals Before Worker Execution
+
+Context:
+OpenClaw needs to become a general bounded proposing/solving worker without taking over healthcare journey authority from LangGraph. The implementation already had registry, executor, readiness, gateway, and policy modules, but the graph path still leaned on a single hardcoded browser skill.
+
+Options considered:
+- Keep the insurance browser skill as the only accepted OpenClaw artifact.
+- Let OpenClaw choose journeys and tools directly.
+- Use registry-driven matching to build a bounded task proposal, then keep LangGraph as the workflow authority and approval owner.
+
+Decision:
+OpenClaw now produces a bounded task proposal from the loaded skill registry, dynamic skill context, executor registry, approval state, and readiness state. The proposal can select multiple official skills and an executor, propose subtasks, list required evidence, declare blocked actions, and identify fallbacks, but it cannot choose the healthcare journey or perform write/external actions.
+
+Reason:
+This closes the automation gap without weakening the healthcare safety boundary. Skills can be added through the registry, tests prove insurance portal browser, claim journey, and Aetna plan routing, and executor mismatches or write actions fail closed before worker dispatch.
+
+Cost of changing later:
+Low to moderate. Additional official skills should extend registry metadata and tests rather than editing hardcoded graph modules. A future dispatcher can consume the same proposal contract once explicit approval and action-execution contracts are documented.
+
+## 2026-06-15 - Prefer Sourced LLM Composition When Evidence Exists
+
+Context:
+The project had a strict sourced-answer composer and validator, but the final healthcare answer path still used deterministic text unless the request explicitly asked for a live model. That left evidence-backed answers underusing the LLM composition architecture.
+
+Options considered:
+- Keep deterministic final answers as the default.
+- Always call the model, even without source pointers.
+- Prefer the LLM composer only when source pointers exist and the user has not explicitly disabled live model use, with deterministic fallback for missing credentials or validation failure.
+
+Decision:
+The graph now attempts sourced LLM composition when source pointers are present. The composer still runs through observed OpenAI egress, validates claim/source schema, and falls back deterministically when there are no source pointers, no model key, an explicit `useLiveModel:false`, or validator rejection.
+
+Reason:
+This implements the required `source pointers + structured facts + advisory memory -> LLM sourced composer -> strict validator -> deterministic policy -> final_response` path while preserving local/offline behavior and unsupported-claim vetoes.
+
+Cost of changing later:
+Low. The validator contract and source-pointer schema are stable enough to support more answer types, and the deterministic fallback remains available for offline demos and blocked model calls.
+
+## 2026-06-15 - Treat Retention Sweeper Results As Auditable Acceptance Proof
+
+Context:
+Retention expiration was implemented, but the acceptance gate needed explicit proof that sessions, continuations, and memory expiration actions were recorded for review.
+
+Options considered:
+- Leave retention as silent database mutation.
+- Add a separate reporting table.
+- Emit hash-chained audit events for retention actions while preserving the existing sweeper API.
+
+Decision:
+The retention sweeper now writes audit proof for expired sessions, expired worker continuations, and tombstoned expired memory items.
+
+Reason:
+Retention touches safety, privacy, and product memory. Hash-backed audit events make the cleanup observable without storing raw PHI in the proof surface.
+
+Cost of changing later:
+Low. A production retention job can keep emitting the same audit events while moving scheduling, locking, or purge policy into a dedicated worker.
+
+## 2026-06-15 - Make FastAPI /api/v1 The Public Connector For Remote Apps
+
+Context:
+The prototype had a strong Node/LangGraph/OpenClaw runtime and a static `/mvp` UI, but remote/mobile apps needed a stable server-only contract that does not expose Node internals, database access, product memory, or raw OpenClaw runtime endpoints.
+
+Options considered:
+- Expose the Node server directly to remote apps.
+- Put a Next.js API backend-for-frontend in front of Node and FastAPI.
+- Promote the existing FastAPI facade into the versioned public connector while leaving Node as the internal orchestration runtime.
+
+Decision:
+Add FastAPI `/api/v1` session, task, document, approval, OpenClaw readiness, browser sandbox, and proof-run routes. Keep Node as the internal LangGraph/OpenClaw runtime and keep existing `/api` routes as compatibility aliases.
+
+Reason:
+FastAPI already owns auth, rate limits, uploads, task registry, source-grounding policy, and connector-safe response models. Using it as the public API gives mobile and future remote apps a stable integration surface without weakening the existing healthcare workflow safety boundary.
+
+Cost of changing later:
+Moderate. A future backend-for-frontend can still call `/api/v1`, but remote clients should not be migrated to direct Node endpoints.
+
+## 2026-06-15 - Introduce A Browser Sandbox Provider Boundary Before Hosted Sandbox Integration
+
+Context:
+The MVP needs a remote-user live worker browser block, but a hosted sandbox provider has not been selected or credentialed. The current local OpenClaw/CDP path already supports read-only frames, readiness, takeover, and input relay.
+
+Options considered:
+- Keep the browser UI wired directly to Node runtime endpoints.
+- Integrate a hosted sandbox immediately.
+- Define the sandbox provider interface now and implement a local CDP adapter first.
+
+Decision:
+Add a provider-neutral FastAPI browser sandbox boundary with a local CDP adapter. Remote clients create browser sessions through `/api/v1/browser/sessions` and then stream/take over/input through v1 browser routes.
+
+Reason:
+This lets the mobile/PWA architecture behave like a remote sandbox while preserving approval gates and current local proof. A hosted provider can replace the adapter later without changing the public API or mobile app.
+
+Cost of changing later:
+Low to moderate. The stream transport may evolve from SSE frames to WebRTC, but ownership checks, takeover states, and safety contract should remain stable.
+
+## 2026-06-15 - Use CDP Screenshot Fallback For Live Worker Frames
+
+Context:
+The FastAPI `/api/v1/browser/sessions/{id}/stream` route could open the Node live-frame SSE stream, and `Page.startScreencast` returned success, but the local Chromium/CDP runtime did not consistently emit `Page.screencastFrame` events. That left the mobile live-worker block stuck on "waiting for frames" even though the browser session existed.
+
+Options considered:
+- Treat missing native screencast frames as a hard browser failure.
+- Move immediately to a hosted sandbox/WebRTC provider.
+- Keep the SSE frame contract and publish periodic in-memory `Page.captureScreenshot` frames whenever native screencast frames are not arriving.
+
+Decision:
+Keep the provider-neutral `/api/v1` browser stream contract and add a Node-side CDP screenshot fallback. The fallback publishes `browser.frame` events through the same in-memory pub/sub, stores no screenshots in the database, and replays the latest in-memory frame to late subscribers.
+
+Reason:
+This makes the regular-user live block visually reliable today while preserving the PHI boundary: frames are transient, not persisted, and all input/takeover paths remain approval-gated. A later hosted sandbox can replace the local CDP adapter without changing the public API or PWA client.
+
+Cost of changing later:
+Low. The frame payload already carries source metadata, so a future WebRTC or hosted streaming provider can replace `cdp_screenshot_fallback` while keeping the API ownership checks and visual proof contract.
+
+## 2026-06-15 - Add Postgres Compose Target While Keeping SQLite Runtime
+
+Context:
+The connector stack needed a production-shaped transactional database profile, but the current application storage layer is already stabilized around the native SQLite adapter, bounded parameters, retention tests, and local proof gates. Switching the runtime driver before a Postgres repository adapter and migration suite exists would create a false production-readiness claim.
+
+Options considered:
+- Keep compose on SQLite volumes only until the full Postgres adapter is implemented.
+- Flip `BRAINSTY_DB_DRIVER=postgres` immediately and patch failures as they appear.
+- Add a live Postgres service, init contract, readiness reporting, and smoke tests now while keeping the app runtime on SQLite by default.
+
+Decision:
+Add Postgres as the deployment storage target in Docker Compose and expose it through the dashboard/API storage readiness profile. Keep `BRAINSTY_DB_DRIVER=sqlite` as the default runtime driver and mark `appRuntimeMigratedToPostgres=false` until the adapter and migration tests are implemented.
+
+Reason:
+This gives the project a real containerized Postgres dependency, health check, initialization contract, live write/read smoke, and remote-deployment shape without weakening the proven local runtime. The dashboard can now score database architecture honestly: improved to a live Postgres profile, but still below full production readiness.
+
+Cost of changing later:
+Moderate. The next storage phase must implement the Postgres app-state adapter, migration parity tests, transactional leases/worker claims, and hosted backup/restore proof. The public readiness shape can remain stable while the runtime driver changes behind it.
+
+## 2026-06-16 - Add Selectable Postgres Runtime Adapter Before Default Migration
+
+Context:
+The compose stack had a live Postgres service and readiness smoke, but the Node app still had no Postgres client-backed application store. Moving the full server to Postgres in one step would be risky because many historical endpoint paths still contain raw SQL written for SQLite.
+
+Options considered:
+- Keep Postgres as a Docker-only dependency until every raw query is rewritten.
+- Flip the default runtime to Postgres immediately and fix endpoint failures reactively.
+- Add a real `pg`-backed store adapter, make it selectable with `BRAINSTY_DB_DRIVER=postgres`, prove core app-state parity live, and keep SQLite as the default until full compatibility gates exist.
+
+Decision:
+Add `PostgresStore` and a `createDatabaseStore` factory. The server now can boot with `BRAINSTY_DB_DRIVER=postgres`, but compose and local defaults remain SQLite. Storage readiness reports adapter parity smoke separately from full migration and caps database architecture at `90 / 100`.
+
+Reason:
+This closes the fake-adapter gap without overclaiming. The project now proves real schema initialization, enrollment, session checkpointing, audit writes, registry seeding, and rollback through Postgres, while still making the remaining SQLite-specific query work visible.
+
+Cost of changing later:
+Moderate. The next storage phase should add endpoint-wide Postgres compatibility tests, replace remaining raw SQL assumptions, and then add database-level worker leases, backup/restore proof, and secret-manager wiring before moving the default runtime to Postgres.
+
+## 2026-06-16 - Score Postgres Operational Gates Separately From Secret-Managed Production
+
+Context:
+The Postgres runtime adapter can now boot and pass core parity smoke, but database production readiness needs more than a client adapter. The next risks are concurrent worker claims, endpoint-state parity, restore confidence, and credential handling. A local Docker password and env-file URL are useful for development proof but are not a managed-secret profile.
+
+Options considered:
+- Move the database score directly from `90 / 100` to `100 / 100` once leases and backup/restore smoke pass.
+- Keep the score capped at `90 / 100` until every production deployment concern is implemented.
+- Add an intermediate `95 / 100` operational-readiness state for endpoint parity, leases, and backup/restore, and reserve `100 / 100` for Postgres-selected runtime plus a proven managed-secret profile.
+
+Decision:
+Add `worker_leases`, a live Postgres production smoke, backup/restore proof, and explicit storage readiness gates. Report `95 / 100` when operational Postgres gates pass but secret management/default rollout remains pending. Report `100 / 100` only when `BRAINSTY_DB_DRIVER=postgres` and all production gates, including `BRAINSTY_DATABASE_SECRET_PROFILE_READY`, are true.
+
+Reason:
+This gives the project real concurrency and recovery proof without making a false security claim. It keeps the dashboard useful for operators: they can see exactly which database gates are done and which gate still blocks production declaration.
+
+Cost of changing later:
+Low. The readiness fields are additive. A future managed-secret/Docker-secret/hosted-secret phase can satisfy the final gate without changing the worker lease or backup/restore contract.
+
+## 2026-06-16 - Require Secret-Backed Postgres Default Rollout Before 100/100
+
+Context:
+The operational Postgres phase proved endpoint parity, worker leases, and logical backup/restore, but it still used local/dev-style database URL handling. A plain `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` flag would be too easy to set accidentally and would let the dashboard claim full database readiness without proving how the runtime actually receives a secret.
+
+Options considered:
+- Treat `BRAINSTY_DATABASE_SECRET_PROFILE_READY=1` as enough to unlock `100 / 100`.
+- Require a hosted cloud secret manager immediately before any local proof can pass.
+- Add a provider-neutral secret profile contract now: file/Docker-secret or managed-env source, redacted/hash-only proof, and a separate default-rollout smoke that boots the normal Postgres runtime through that profile.
+
+Decision:
+Add `databaseSecretProfile` URL resolution and a Postgres default-rollout smoke. The database score reaches `100 / 100` only when Postgres is the selected runtime, operational Postgres gates pass, the database URL is secret-backed, and `BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=1` is set by the rollout smoke/proven environment.
+
+Reason:
+This makes the final database score meaningful without coupling the local prototype to a specific cloud provider. Docker secrets, local secret files, and managed environment injection can all satisfy the same contract, while direct raw env URLs remain visible as not secret-backed. Health and dashboard responses expose only redacted URL and hashes.
+
+Cost of changing later:
+Low. A hosted secret manager can replace the local secret-file rehearsal by setting `BRAINSTY_DATABASE_SECRET_SOURCE=managed_env` or mounting `BRAINSTY_DATABASE_URL_FILE`; the runtime factory, readiness status, and dashboard fields stay the same.
+
+## 2026-06-16 - Add Docker-Secret Postgres Runtime Profile Without Bypassing Proof Gates
+
+Context:
+The project could already prove a Postgres default rollout in an isolated local smoke, but the compose stack still had no explicit deployment override for a remote/server connector runtime to consume a Docker secret. Simply changing the base compose default to Postgres would make local development fragile, while hardcoding all readiness flags in an override would let operators accidentally claim production readiness without running the smoke gates.
+
+Options considered:
+- Flip base `compose.yaml` from SQLite to Postgres.
+- Add a Postgres override that also sets every readiness flag to `1`.
+- Add a dedicated Postgres Docker-secret override that selects the runtime and secret source, but leaves readiness flags proof-controlled.
+
+Decision:
+Add `compose.postgres.yaml` for Postgres runtime selection through `/run/secrets/brainsty_database_url`. Preserve the SQLite local default in base compose. Keep Postgres live/runtime/prod/lease/backup/endpoint/secret/default-rollout flags environment-controlled with `:-0` defaults, and expose the profile as a separate deployment-profile score in the dashboard.
+
+Reason:
+This gives remote applications and deployment operators a concrete server-only connector profile without weakening the evidence model. The dashboard can say "the Docker-secret profile exists" separately from "the database runtime is fully production ready."
+
+Cost of changing later:
+Low. A hosted cloud secret manager can replace the Docker secret source, or a provider-specific compose/Helm profile can mount the same `BRAINSTY_DATABASE_URL_FILE` contract, without changing storage readiness or the public connector API.
+
+## 2026-06-16 - Require Live Profile Regression Before Treating Postgres Profile As Deployable
+
+Context:
+The Docker-secret Postgres override proved its static compose contract, but remote applications need confidence that the separated stack actually boots with Postgres selected as the Node runtime and that `/api/v1`, the PWA, dashboard proof, OpenClaw skill routing, session creation, memory context, chat, and skill-envelope validation still work together.
+
+Options considered:
+- Treat the static `compose.postgres.yaml` contract as enough deployment proof.
+- Flip the base compose default from SQLite to Postgres immediately.
+- Add live endpoint and compose-profile smoke gates while preserving SQLite as the safe local default.
+
+Decision:
+Add endpoint-wide Postgres regression and live Docker-secret profile smoke gates. The profile smoke creates a local runtime secret file outside image context, starts the separated stack on isolated ports, verifies Node/FastAPI/PWA/dashboard proof, writes sanitized artifacts, and then tears the stack down after visual proof.
+
+Reason:
+This proves the profile works as a server-only connector without over-claiming hosted production deployment. It also keeps developer startup stable: the base compose file still defaults to SQLite, while operators can explicitly run the Postgres override and must still satisfy evidence gates.
+
+Cost of changing later:
+Low. A managed cloud secret mount, hosted Postgres provider, or orchestration platform can replace the local Docker-secret file while keeping the same `BRAINSTY_DATABASE_URL_FILE`, readiness flags, `/api/v1`, and dashboard proof contract.
+
+## 2026-06-17 - Make Backup/Restore Runbooks A Separate Production Ops Gate
+
+Context:
+The Postgres production smoke already proved logical backup/restore integrity over temporary databases, but the remaining hosted-production gap was operational: operators still needed a provider-neutral runbook for scheduled backups, restore rehearsal, incident restore, migration rollback, and proof artifacts. Treating the logical restore smoke as the full hosted backup plan would overstate readiness.
+
+Options considered:
+- Count the existing logical backup/restore smoke as sufficient.
+- Pick a specific cloud Postgres provider immediately and write provider-specific automation.
+- Add a provider-neutral runbook and smoke gate now, while keeping provider-specific backup/PITR configuration as the next deployment step.
+
+Decision:
+Add `docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md`, `npm run storage:postgres:backup-runbook-smoke`, and a separate dashboard/API score `database_backup_restore_runbook`. Keep it separate from the core database architecture score so the project can show operational readiness progress without claiming a hosted provider is configured.
+
+Reason:
+This makes backup/restore operations auditable and repeatable today while preserving truthful deployment status. The runbook gate proves restore rehearsal and safety properties locally, and the same contract can later be backed by Neon/Supabase/Prisma Postgres or another hosted provider.
+
+Cost of changing later:
+Low. Provider-specific automation can satisfy the same runbook sections and set `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1` after hosted proof without changing the public connector API or Postgres adapter.
+
+## 2026-06-17 - Add Hosted Provider Backup Policy As A Separate Gate
+
+Context:
+After the provider-neutral backup runbook was added, the next production gap was the provider-specific policy contract: operators need to prove the hosted database has backup/PITR, retention, restore rehearsal, and promotion rules, but the project still does not have a selected hosted provider or credentials.
+
+Options considered:
+- Pick Neon, Supabase, or Prisma Postgres immediately and add provider-specific automation.
+- Treat the provider-neutral runbook as enough.
+- Add a provider-policy contract and smoke now, with a checked-in example and a readiness gate that only passes for a non-example provider policy.
+
+Decision:
+Add `project/deployment/postgres-provider-backup-policy.example.json`, `npm run storage:postgres:provider-backup-policy-smoke`, and a separate dashboard/API score `database_provider_backup_policy`. The example file validates the contract but never counts as hosted readiness.
+
+Reason:
+This lets the project verify the exact production policy shape without storing secrets or overclaiming deployment status. It keeps the hosted provider choice open while making the remaining work concrete and testable.
+
+Cost of changing later:
+Low. The selected provider can provide a private policy file through `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE` and set `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1` after provider-native backup/PITR proof, without changing the connector API or Postgres adapter.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Contract
+
+Context:
+The MVP already has a working local-CDP browser stream, screenshot fallback, takeover, and human-only input relay. The remaining production gap is a hosted sandbox/WebRTC provider. No provider or credentials are configured in the repo, so implementing a real hosted adapter would either block or overclaim readiness.
+
+Options considered:
+- Integrate a hosted sandbox immediately.
+- Keep local CDP only and leave hosted sandbox undefined.
+- Add a hosted provider contract and fail-closed FastAPI provider path now, while keeping local CDP as the default provider.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.example.json`, `npm run sandbox:browser:provider-contract`, FastAPI `hosted_remote` recognition, and separate proof keys `hosted_browser_sandbox_provider` and `hosted_remote_browser_sandbox`.
+
+Reason:
+This makes the hosted sandbox requirement testable without weakening the current local-CDP proof. Remote clients still use the same `/api/v1/browser/*` contract, and a later provider can replace the backend adapter without changing the PWA or public API.
+
+Cost of changing later:
+Low to moderate. The real provider implementation can satisfy the same create-session, stream, screenshot/OCR, takeover, input, and teardown contract. Transport may move to WebRTC, but ownership checks and approval gates remain stable.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Adapter Harness Without Claiming Provider Readiness
+
+Context:
+The hosted browser sandbox provider contract made the production requirement visible, but the FastAPI `hosted_remote` path still stopped at a setup-required error. The next useful step is to prove the public connector lifecycle shape for hosted sessions before provider credentials exist.
+
+Options considered:
+- Wait until a real hosted provider is selected.
+- Mark the existing contract as hosted readiness.
+- Add a deterministic contract harness that exercises the same public API lifecycle but remains visibly separate from real provider readiness.
+
+Decision:
+Add a `contract_harness` adapter mode, a non-secret harness config, an adapter-harness smoke script, and FastAPI lifecycle responses for hosted-style session creation, safe SSE stream events, approval-gated takeover, sanitized input, and teardown-style ending. Keep `hosted_remote_browser_sandbox` blocked until `adapter.mode=hosted_provider` with real proof.
+
+Reason:
+This makes the next hosted adapter implementation concrete and testable without storing credentials or pretending a provider exists. Remote clients can rely on the same `/api/v1/browser/*` shapes, and the dashboard can show harness progress separately from production provider status.
+
+Cost of changing later:
+Low. A real provider adapter can replace the harness internals while preserving the public API, ownership checks, approval gates, and proof keys. The harness can remain as a CI fallback contract.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Resolver Before Live Provider Readiness
+
+Context:
+The contract harness proved the public hosted browser lifecycle shape, but the real `hosted_provider` mode still needed a safe way to check provider endpoint and auth readiness. Treating a non-example hosted config plus `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1` as live-ready would overclaim production readiness and risk leaking provider details in proof artifacts.
+
+Options considered:
+- Keep the hosted provider blocked until a vendor is fully selected.
+- Let any non-example `hosted_provider` config count as ready.
+- Add a resolver gate that checks env-referenced endpoint/auth presence, redacts all values, and still requires separate live verification before the provider score can pass.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.hosted-provider.example.json`, `npm run sandbox:browser:provider-resolver`, FastAPI resolver states, and a separate `hosted_browser_sandbox_provider_resolver` proof score. `hosted_remote_browser_sandbox` remains blocked until endpoint/auth refs resolve, live provider proof passes, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set, and the private provider config marks `adapter.providerLiveConnected=true`.
+
+Reason:
+This makes the next real-provider step concrete without committing URLs, tokens, or vendor-specific assumptions. Operators can prove secret wiring safely while the product remains honest about the absence of a live hosted browser sandbox.
+
+Cost of changing later:
+Low. A selected provider adapter can consume the same env refs and proof states. If a provider uses mTLS, signed URLs, or a secret manager instead of bearer tokens, the resolver can gain a new secret source while keeping the public `/api/v1/browser/*` contract unchanged.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Adapter Contract Before Live Calls
+
+Context:
+After the resolver could safely prove endpoint/auth refs, the next gap was the provider adapter itself. Jumping straight to a real vendor call would require credentials and might conflate request-shape readiness with live stream/screenshot/takeover proof.
+
+Options considered:
+- Wait for a selected hosted browser provider.
+- Treat resolver readiness as enough adapter readiness.
+- Add a deterministic adapter contract smoke that validates the create-session request/response envelope with redacted refs and no network call.
+
+Decision:
+Add `npm run sandbox:browser:provider-adapter`, a strict redacted provider request/response contract, and a separate `hosted_browser_sandbox_provider_adapter` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+Reason:
+This makes the provider implementation target concrete while preserving truthfulness. The project can now prove endpoint/auth wiring and adapter-envelope readiness without exposing secrets or implying that a real sandbox is connected.
+
+Cost of changing later:
+Low. The real provider client can reuse the request and response validator, swapping the deterministic mock transport for HTTPS/WebRTC calls once credentials and provider-specific endpoints are available.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider HTTP Adapter Harness Before Live Provider Integration
+
+Context:
+The adapter contract proved the create-session request and response envelope, but it did not yet prove that the runtime could actually send a provider-style HTTP request and validate the provider response. A real provider is still not selected or credentialed, so using production endpoints would either block or overclaim live readiness.
+
+Options considered:
+- Wait for a selected hosted browser provider.
+- Treat the deterministic adapter envelope as enough implementation proof.
+- Add a local provider-compatible HTTP harness that exercises the request plumbing and response validator without exposing secrets or claiming live provider readiness.
+
+Decision:
+Add `npm run sandbox:browser:provider-http-adapter`, an in-process provider-compatible HTTP harness, and a separate `hosted_browser_sandbox_provider_http_adapter` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+Reason:
+This closes the next meaningful implementation gap while preserving truthfulness. The connector now proves provider-style network plumbing and strict response validation, but the dashboard still clearly distinguishes local harness readiness from production hosted browser readiness.
+
+Cost of changing later:
+Low. The selected provider adapter can replace the local harness endpoint with the provider endpoint while keeping the request contract, response validator, redaction policy, and FastAPI public API stable.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Live Lifecycle Harness Before Live Provider Enablement
+
+Context:
+The HTTP adapter harness proved provider-style create-session request plumbing, but it did not yet exercise the rest of the hosted-browser lifecycle that a mobile/remote client needs: stream frames, screenshot/OCR, takeover, approved input, teardown, and offsite fail-closed behavior. A real hosted provider is still not selected or credentialed.
+
+Options considered:
+- Wait for a selected hosted browser provider before adding lifecycle tests.
+- Treat create-session HTTP plumbing as enough lifecycle readiness.
+- Add a local provider-compatible lifecycle harness that exercises all required provider operations while keeping live hosted readiness blocked.
+
+Decision:
+Add `npm run sandbox:browser:provider-live-lifecycle`, a local provider-compatible lifecycle harness, and a separate `hosted_browser_sandbox_provider_live_lifecycle` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+Reason:
+This closes the next implementation gap without leaking secrets or pretending a production sandbox is connected. The public connector can now prove the full provider lifecycle contract while the dashboard remains honest that the provider is local harness only.
+
+Cost of changing later:
+Low. A selected provider can replace the local lifecycle handlers with provider HTTPS/WebRTC calls while preserving the same proof fields, redaction policy, approval boundaries, and FastAPI public API contract.

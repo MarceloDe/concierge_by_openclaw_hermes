@@ -1,0 +1,153 @@
+name: brainstyworkers-connector
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${BRAINSTY_POSTGRES_DB:-brainstyworkers}
+      POSTGRES_USER: ${BRAINSTY_POSTGRES_USER:-brainsty}
+      POSTGRES_PASSWORD: ${BRAINSTY_POSTGRES_PASSWORD:-brainsty-dev-only}
+    ports:
+      - "${BRAINSTY_COMPOSE_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./project/db/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 8
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "${BRAINSTY_COMPOSE_FALKORDB_PORT:-6380}:6379"
+      - "${BRAINSTY_COMPOSE_FALKORDB_UI_PORT:-3001}:3000"
+    volumes:
+      - falkordb_data:/data
+
+  node-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4173
+      BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}
+      BRAINSTY_DB_PATH: /app/data/brainstyworkers.sqlite
+      BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}
+      BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}
+      BRAINSTY_DATABASE_SECRET_SOURCE: ${BRAINSTY_DATABASE_SECRET_SOURCE:-direct_env}
+      BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}
+      BRAINSTY_POSTGRES_LIVE_READY: ${BRAINSTY_POSTGRES_LIVE_READY:-0}
+      BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}
+      BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}
+      BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}
+      BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}
+      BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY: ${BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY:-0}
+      BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY:-0}
+      BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE:-project/deployment/postgres-provider-backup-policy.example.json}
+      BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}
+      BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}
+      BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}
+      BRAINSTY_PRODUCT_MEMORY_ADAPTER: ${BRAINSTY_PRODUCT_MEMORY_ADAPTER:-disabled}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      BRAINSTY_OPENAI_BASE_URL: ${BRAINSTY_OPENAI_BASE_URL:-}
+      GRAPHITI_OPENAI_BASE_URL: ${GRAPHITI_OPENAI_BASE_URL:-}
+      GRAPHITI_BACKEND: falkordb
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: 6379
+      GRAPHITI_GROUP_ID: ${GRAPHITI_GROUP_ID:-brainstyworkers_compose}
+      GRAPHITI_LLM_MODEL: ${GRAPHITI_LLM_MODEL:-gpt-4.1-mini}
+      GRAPHITI_SMALL_MODEL: ${GRAPHITI_SMALL_MODEL:-gpt-4.1-nano}
+      GRAPHITI_EMBEDDING_MODEL: ${GRAPHITI_EMBEDDING_MODEL:-text-embedding-3-small}
+      GRAPHITI_MAX_COROUTINES: ${GRAPHITI_MAX_COROUTINES:-1}
+      GRAPHITI_STORE_RAW_EPISODES: "0"
+      BRAINSTY_RESEARCH_ARTIFACT_DIR: /app/data/research-artifacts
+      BRAINSTY_RESEARCH_WORKER_MODE: deterministic_fetch
+      WEFELLA_UPLOAD_STORE_PATH: /app/data/wefella-uploads
+    ports:
+      - "${BRAINSTY_COMPOSE_NODE_PORT:-4173}:4173"
+    volumes:
+      - node_runtime_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4173/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 8
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      WEFELLA_NODE_RUNTIME_URL: http://node-runtime:4173
+      WEFELLA_AUTH_MODE: local
+      WEFELLA_ENABLE_LOCAL_AUTH: "1"
+      WEFELLA_JWT_SECRET: ${WEFELLA_JWT_SECRET:-dev-only-change-me}
+      WEFELLA_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:4173,http://127.0.0.1:4173,http://localhost:8000,http://127.0.0.1:8000
+      WEFELLA_TASK_REGISTRY_PATH: /app/data/tasks.json
+      WEFELLA_UPLOAD_STORE_PATH: /app/data/uploads
+      WEFELLA_RATE_LIMIT_PER_MINUTE: ${WEFELLA_RATE_LIMIT_PER_MINUTE:-120}
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_PROVIDER:-local_cdp}
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_READY:-0}
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}
+    ports:
+      - "${BRAINSTY_COMPOSE_API_PORT:-8000}:8000"
+    volumes:
+      - fastapi_data:/app/data
+    depends_on:
+      node-runtime:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5).read()"
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 8
+
+  mobile-pwa:
+    build:
+      context: .
+      dockerfile: apps/mobile-next/Dockerfile
+    environment:
+      BRAINSTY_CONNECTOR_API_BASE: http://fastapi:8000
+      NEXT_PUBLIC_BRAINSTY_CLIENT_API_BASE: ""
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "${BRAINSTY_COMPOSE_MOBILE_PORT:-3000}:3000"
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 8
+
+volumes:
+  postgres_data:
+  node_runtime_data:
+  fastapi_data:
+  falkordb_data:

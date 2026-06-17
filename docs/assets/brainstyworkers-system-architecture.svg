@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1260" viewBox="0 0 1800 1260" role="img" aria-labelledby="title desc">
+  <title id="title">Brainstyworkers AI Concierge System Architecture</title>
+  <desc id="desc">Detailed architecture diagram showing user interfaces, API runtime, LangGraph orchestration, dynamic skills, OpenClaw workers, memory, evidence, audit, and gated external systems.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f9fb; }
+      .band { fill: #ffffff; stroke: #c9d6df; stroke-width: 2; }
+      .box { fill: #ffffff; stroke: #253847; stroke-width: 1.6; rx: 8; }
+      .box-soft { fill: #edf5fb; stroke: #6f9fc2; stroke-width: 1.4; rx: 8; }
+      .box-green { fill: #f0f8f2; stroke: #5e9a73; stroke-width: 1.4; rx: 8; }
+      .box-amber { fill: #fff8e8; stroke: #d5a847; stroke-width: 1.4; rx: 8; }
+      .box-red { fill: #fff1ee; stroke: #c66f55; stroke-width: 1.4; rx: 8; }
+      .box-purple { fill: #f4f1fb; stroke: #8c78bd; stroke-width: 1.4; rx: 8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #172635; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #4b5b66; }
+      .lane-title { font: 700 18px Arial, sans-serif; fill: #203342; }
+      .label { font: 700 15px Arial, sans-serif; fill: #172635; }
+      .small { font: 400 12.5px Arial, sans-serif; fill: #334957; }
+      .tiny { font: 400 11px Arial, sans-serif; fill: #52626e; }
+      .mono { font: 400 11.5px Menlo, Consolas, monospace; fill: #263744; }
+      .arrow { stroke: #334957; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #6f7f8c; stroke-width: 1.6; fill: none; marker-end: url(#arrow-soft); stroke-dasharray: 6 5; }
+      .divider { stroke: #d4dde5; stroke-width: 1.5; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334957" />
+    </marker>
+    <marker id="arrow-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#6f7f8c" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1260" />
+  <text class="title" x="48" y="54">Brainstyworkers AI Concierge Architecture</text>
+  <text class="subtitle" x="48" y="82">LangGraph is the workflow master. Dynamic skills guide orchestration. OpenClaw is the approval-gated adaptive worker arm.</text>
+
+  <rect class="band" x="36" y="112" width="314" height="1040" rx="12" />
+  <text class="lane-title" x="58" y="146">User and Operator Surfaces</text>
+
+  <rect class="box-soft" x="58" y="174" width="270" height="118" />
+  <text class="label" x="78" y="203">/mvp User App</text>
+  <text class="small" x="78" y="226">Auth plus chat</text>
+  <text class="small" x="78" y="246">Workflow buttons</text>
+  <text class="small" x="78" y="266">Approval cards</text>
+  <text class="small" x="78" y="286">Dynamic Skills proof</text>
+
+  <rect class="box-soft" x="58" y="318" width="270" height="118" />
+  <text class="label" x="78" y="347">/ Operator Dashboard</text>
+  <text class="small" x="78" y="370">Trace and audit proof</text>
+  <text class="small" x="78" y="390">OpenClaw validation</text>
+  <text class="small" x="78" y="410">Research console</text>
+  <text class="small" x="78" y="430">Scheduler and hooks</text>
+
+  <rect class="box-soft" x="58" y="462" width="270" height="110" />
+  <text class="label" x="78" y="491">FastAPI Facade</text>
+  <text class="small" x="78" y="514">Provider-style JWT option</text>
+  <text class="small" x="78" y="534">Async task status</text>
+  <text class="small" x="78" y="554">Production API wrapper</text>
+
+  <rect class="box-amber" x="58" y="598" width="270" height="126" />
+  <text class="label" x="78" y="627">Human-in-the-loop</text>
+  <text class="small" x="78" y="650">Approve read-only portal observation</text>
+  <text class="small" x="78" y="670">Approve one document candidate</text>
+  <text class="small" x="78" y="690">Deny, expire, or leave async</text>
+  <text class="small" x="78" y="710">No silent worker action</text>
+
+  <rect class="band" x="382" y="112" width="346" height="1040" rx="12" />
+  <text class="lane-title" x="404" y="146">API Runtime</text>
+
+  <rect class="box" x="410" y="174" width="300" height="126" />
+  <text class="label" x="430" y="203">Node server</text>
+  <text class="mono" x="430" y="226">src/server/server.mjs</text>
+  <text class="small" x="430" y="249">/api/chat and /api/langgraph/run</text>
+  <text class="small" x="430" y="269">/api/openclaw/skills/*</text>
+  <text class="small" x="430" y="289">/api/runtime/events</text>
+
+  <rect class="box" x="410" y="326" width="300" height="122" />
+  <text class="label" x="430" y="355">API contracts</text>
+  <text class="small" x="430" y="378">Auth start and local session</text>
+  <text class="small" x="430" y="398">Approval and worker continuations</text>
+  <text class="small" x="430" y="418">Uploads, feedback, history, export</text>
+  <text class="small" x="430" y="438">Research and scheduler routes</text>
+
+  <rect class="box-green" x="410" y="474" width="300" height="126" />
+  <text class="label" x="430" y="503">Runtime event bus</text>
+  <text class="small" x="430" y="526">SSE and JSON event history</text>
+  <text class="small" x="430" y="546">Workflow classified/routed</text>
+  <text class="small" x="430" y="566">Approval consumed</text>
+  <text class="small" x="430" y="586">Worker status and final answer</text>
+
+  <rect class="box-purple" x="410" y="626" width="300" height="120" />
+  <text class="label" x="430" y="655">Wefella FastAPI facade</text>
+  <text class="small" x="430" y="678">Calls Node runtime internally</text>
+  <text class="small" x="430" y="698">Keeps LangGraph parity checks</text>
+  <text class="small" x="430" y="718">JWT, CORS, readiness, smoke</text>
+
+  <rect class="band" x="760" y="112" width="430" height="1040" rx="12" />
+  <text class="lane-title" x="782" y="146">LangGraph Product Runtime</text>
+
+  <rect class="box-green" x="788" y="174" width="382" height="76" />
+  <text class="label" x="808" y="203">Input policy</text>
+  <text class="small" x="808" y="226">Credential, medical advice, prompt injection, urgent handoff gates</text>
+
+  <rect class="box-green" x="788" y="270" width="382" height="84" />
+  <text class="label" x="808" y="299">Memory recall and context packet</text>
+  <text class="small" x="808" y="322">Session, user, portal, source pointers, prior facts, open tasks</text>
+  <text class="mono" x="808" y="342">memoryHarness + Graphiti recall</text>
+
+  <rect class="box-green" x="788" y="374" width="382" height="82" />
+  <text class="label" x="808" y="403">Intent and LLM decision</text>
+  <text class="small" x="808" y="426">Structured classifier plus optional GPT orchestration</text>
+  <text class="small" x="808" y="446">Routes claim, benefits, prior auth, appeal, handoff</text>
+
+  <rect class="box-amber" x="788" y="476" width="382" height="110" />
+  <text class="label" x="808" y="505">Dynamic skill resolver</text>
+  <text class="mono" x="808" y="528">src/concierge/dynamicSkillServer.mjs</text>
+  <text class="small" x="808" y="550">Selects insurance skill, journey skill, execution skill</text>
+  <text class="small" x="808" y="570">Returns success estimate, missing data, worker tasks, search, APIs</text>
+
+  <rect class="box-green" x="788" y="606" width="382" height="116" />
+  <text class="label" x="808" y="635">Workflow executor</text>
+  <text class="small" x="808" y="658">Prepares OpenClaw envelope and worker plan</text>
+  <text class="small" x="808" y="678">Stores pending proposal task</text>
+  <text class="small" x="808" y="698">No worker action before approval</text>
+
+  <rect class="box-green" x="788" y="742" width="382" height="116" />
+  <text class="label" x="808" y="771">Evidence observation node</text>
+  <text class="small" x="808" y="794">Consumes approval token</text>
+  <text class="small" x="808" y="814">Runs read-only worker only when enabled</text>
+  <text class="small" x="808" y="834">Verifies authenticated portal evidence</text>
+
+  <rect class="box-green" x="788" y="878" width="382" height="118" />
+  <text class="label" x="808" y="907">Response, memory retain, output policy</text>
+  <text class="small" x="808" y="930">Final answer cites source pointers</text>
+  <text class="small" x="808" y="950">Graphiti retains safe summaries</text>
+  <text class="small" x="808" y="970">Audit records hash-chain proof</text>
+
+  <rect class="band" x="1222" y="112" width="348" height="1040" rx="12" />
+  <text class="lane-title" x="1244" y="146">Skills, Workers, and Evidence</text>
+
+  <rect class="box-amber" x="1250" y="174" width="292" height="128" />
+  <text class="label" x="1270" y="203">Editable dynamic skills</text>
+  <text class="mono" x="1270" y="226">skill-server.json</text>
+  <text class="small" x="1270" y="249">insurance_plan_aetna_temporary</text>
+  <text class="small" x="1270" y="269">claim_journey_temporary</text>
+  <text class="small" x="1270" y="289">External generator LLM editable</text>
+
+  <rect class="box-amber" x="1250" y="326" width="292" height="124" />
+  <text class="label" x="1270" y="355">OpenClaw skill contract</text>
+  <text class="mono" x="1270" y="378">insurance_portal_browser</text>
+  <text class="small" x="1270" y="401">Allowed workflow and inputs</text>
+  <text class="small" x="1270" y="421">Approval gates and stop conditions</text>
+  <text class="small" x="1270" y="441">Fallback: browser, OCR, manual export</text>
+
+  <rect class="box-purple" x="1250" y="474" width="292" height="132" />
+  <text class="label" x="1270" y="503">Dedicated OpenClaw worker</text>
+  <text class="small" x="1270" y="526">Profile: brainstyworkers</text>
+  <text class="small" x="1270" y="546">Agent: insurance browser</text>
+  <text class="small" x="1270" y="566">DOM, accessibility, screenshot/OCR</text>
+  <text class="small" x="1270" y="586">Read-only, approved scope only</text>
+
+  <rect class="box-soft" x="1250" y="630" width="292" height="132" />
+  <text class="label" x="1270" y="659">Research and documents</text>
+  <text class="small" x="1270" y="682">Trusted reviewed research artifacts</text>
+  <text class="small" x="1270" y="702">Uploaded document extraction</text>
+  <text class="small" x="1270" y="722">Citation closure and evidence graph</text>
+  <text class="small" x="1270" y="742">Approved schedule daemon</text>
+
+  <rect class="box-soft" x="1250" y="786" width="292" height="126" />
+  <text class="label" x="1270" y="815">SQLite state and source pointers</text>
+  <text class="small" x="1270" y="838">users, sessions, tasks, approvals</text>
+  <text class="small" x="1270" y="858">eligibility, claims, portal pages</text>
+  <text class="small" x="1270" y="878">research artifacts, uploads</text>
+  <text class="small" x="1270" y="898">runtime events and audit rows</text>
+
+  <rect class="box-green" x="1250" y="936" width="292" height="96" />
+  <text class="label" x="1270" y="965">Product memory</text>
+  <text class="small" x="1270" y="988">Zep Graphiti through FalkorDB</text>
+  <text class="small" x="1270" y="1008">Safe retain and recall, no Cortex product memory</text>
+
+  <rect class="band" x="1602" y="112" width="162" height="1040" rx="12" />
+  <text class="lane-title" x="1622" y="146">Gates</text>
+
+  <rect class="box-red" x="1622" y="174" width="122" height="108" />
+  <text class="label" x="1638" y="203">Blocked</text>
+  <text class="tiny" x="1638" y="226">Credentials</text>
+  <text class="tiny" x="1638" y="246">2FA bypass</text>
+  <text class="tiny" x="1638" y="266">Forms</text>
+
+  <rect class="box-red" x="1622" y="306" width="122" height="112" />
+  <text class="label" x="1638" y="335">Blocked</text>
+  <text class="tiny" x="1638" y="358">Payer contact</text>
+  <text class="tiny" x="1638" y="378">External send</text>
+  <text class="tiny" x="1638" y="398">Medical advice</text>
+
+  <rect class="box-amber" x="1622" y="442" width="122" height="120" />
+  <text class="label" x="1638" y="471">Approval</text>
+  <text class="tiny" x="1638" y="494">Task id</text>
+  <text class="tiny" x="1638" y="514">Session id</text>
+  <text class="tiny" x="1638" y="534">Scope</text>
+  <text class="tiny" x="1638" y="554">Expiry</text>
+
+  <rect class="box-green" x="1622" y="586" width="122" height="116" />
+  <text class="label" x="1638" y="615">Allowed</text>
+  <text class="tiny" x="1638" y="638">Read-only</text>
+  <text class="tiny" x="1638" y="658">Source pointers</text>
+  <text class="tiny" x="1638" y="678">Audit proof</text>
+
+  <line class="arrow" x1="328" y1="232" x2="410" y2="232" />
+  <line class="arrow" x1="328" y1="376" x2="410" y2="376" />
+  <line class="arrow" x1="710" y1="236" x2="788" y2="212" />
+  <line class="arrow" x1="978" y1="250" x2="978" y2="270" />
+  <line class="arrow" x1="978" y1="354" x2="978" y2="374" />
+  <line class="arrow" x1="978" y1="456" x2="978" y2="476" />
+  <line class="arrow" x1="978" y1="586" x2="978" y2="606" />
+  <line class="arrow" x1="978" y1="722" x2="978" y2="742" />
+  <line class="arrow" x1="978" y1="858" x2="978" y2="878" />
+  <line class="arrow" x1="1170" y1="531" x2="1250" y2="238" />
+  <line class="arrow" x1="1170" y1="662" x2="1250" y2="388" />
+  <line class="arrow" x1="1170" y1="800" x2="1250" y2="540" />
+  <line class="arrow" x1="1170" y1="936" x2="1250" y2="998" />
+  <line class="arrow" x1="1542" y1="540" x2="1622" y2="502" />
+  <line class="arrow" x1="1542" y1="850" x2="1622" y2="646" />
+  <line class="arrow-soft" x1="560" y1="600" x2="788" y2="936" />
+  <line class="arrow-soft" x1="1250" y1="850" x2="1170" y2="936" />
+  <line class="arrow-soft" x1="1250" y1="998" x2="808" y2="322" />
+
+  <rect class="box-red" x="410" y="788" width="300" height="190" />
+  <text class="label" x="430" y="817">Safety model</text>
+  <text class="small" x="430" y="840">Product memory is Graphiti, not Cortex</text>
+  <text class="small" x="430" y="860">Cortex stores project memory only</text>
+  <text class="small" x="430" y="880">Direct identifiers masked to DB pointers</text>
+  <text class="small" x="430" y="900">Raw portal text blocked from model/memory payloads</text>
+  <text class="small" x="430" y="920">Audit hash-chain verifies events</text>
+  <text class="small" x="430" y="940">Irreversible actions require new scoped gates</text>
+
+  <rect class="box" x="58" y="772" width="270" height="140" />
+  <text class="label" x="78" y="801">Main test surfaces</text>
+  <text class="small" x="78" y="824">Benefits</text>
+  <text class="small" x="78" y="844">Claim Status</text>
+  <text class="small" x="78" y="864">Prior Auth</text>
+  <text class="small" x="78" y="884">Appeal</text>
+  <text class="small" x="78" y="904">Portal Evidence</text>
+
+  <rect class="box" x="58" y="936" width="270" height="96" />
+  <text class="label" x="78" y="965">Current proof</text>
+  <text class="small" x="78" y="988">Dynamic skill UI visible in /mvp and /</text>
+  <text class="small" x="78" y="1008">Build and local tests pass</text>
+
+  <text class="tiny" x="48" y="1228">Generated for README. Diagram intentionally shows implemented local MVP surfaces and gated/deferred production surfaces.</text>
+</svg>

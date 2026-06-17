@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
-import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
+import { consumeReadOnlyObservationApproval, createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-approval-resume-"));
@@ -145,4 +145,44 @@ test("orchestrator approval API binds proposal task and enables one read-only gr
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
+});
+
+test("approval consumption binds hostile-looking session ids literally", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store);
+  const proposalRun = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Use my Aetna portal memory to check eligibility and benefits.",
+    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false }
+  });
+  const taskId = proposalRun.state.openclaw_skill_proposal.task.id;
+  const approval = await createReadOnlyObservationApproval(store, {
+    taskId,
+    sessionId: session.id,
+    userId: user.id,
+    decision: "approved",
+    expiresInMinutes: 15
+  });
+
+  const hostile = await consumeReadOnlyObservationApproval(store, {
+    approvalToken: approval.approvalToken,
+    taskId,
+    sessionId: `${session.id}' OR 1=1 --`,
+    userId: user.id,
+    workflow: "eligibility_benefits_navigation"
+  });
+  assert.equal(hostile.ok, false);
+  assert.equal(hostile.status, "approval_not_found");
+
+  const valid = await consumeReadOnlyObservationApproval(store, {
+    approvalToken: approval.approvalToken,
+    taskId,
+    sessionId: session.id,
+    userId: user.id,
+    workflow: "eligibility_benefits_navigation"
+  });
+  assert.equal(valid.ok, true);
+  assert.equal(valid.status, "approved_consumed");
 });

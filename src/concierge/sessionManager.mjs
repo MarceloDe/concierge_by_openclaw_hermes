@@ -24,13 +24,6 @@ async function withCheckpointLock(sessionId, fn) {
   }
 }
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function addHours(date, hours) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
 }
@@ -147,7 +140,8 @@ export async function resolveManagedSession(store, { user, portal, sessionId, re
     resumed = true;
   } else if (resumeLatestSession) {
     session = await store.get(
-      `SELECT * FROM sessions WHERE user_id = ${sql(user.id)} AND channel = ${sql(channel)} AND status = 'active' ORDER BY COALESCE(last_active_at, created_at) DESC LIMIT 1;`
+      "SELECT * FROM sessions WHERE user_id = ? AND channel = ? AND status = 'active' ORDER BY COALESCE(last_active_at, created_at) DESC LIMIT 1;",
+      [user.id, channel]
     );
     resumed = Boolean(session);
   }
@@ -277,9 +271,12 @@ export async function getManagedSessionState(store, sessionId) {
 }
 
 export async function listManagedSessions(store, { email, userId, limit = 20 }) {
-  const where = userId ? `u.id = ${sql(userId)}` : `u.email = ${sql(email)}`;
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+  const where = userId ? "u.id = ?" : "u.email = ?";
+  const value = userId ?? email;
   return store.all(
-    `SELECT s.*, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id WHERE ${where} ORDER BY COALESCE(s.last_active_at, s.created_at) DESC LIMIT ${Number(limit)};`
+    `SELECT s.*, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id WHERE ${where} ORDER BY COALESCE(s.last_active_at, s.created_at) DESC LIMIT ?;`,
+    [value, safeLimit]
   );
 }
 

@@ -1,0 +1,113 @@
+{
+  "schema_version": "brainstyworkers.dynamic_skill.v1",
+  "skill_key": "claim_journey_temporary",
+  "skill_kind": "journey_specific",
+  "title": "Temporary Claim Journey Skill",
+  "status": "draft_sketch_runtime_gated",
+  "editable_by": "external_skill_generator_llm",
+  "matching": {
+    "carriers": ["aetna"],
+    "workflows": ["claim_status_navigation", "denial_appeal_preparation"],
+    "intents": ["claim_status_question", "denial_appeal_question"],
+    "question_types": ["claim_status", "denial_explanation", "appeal_workflow", "source_lookup"],
+    "keywords": [
+      "claim",
+      "eob",
+      "explanation of benefits",
+      "paid",
+      "denied",
+      "processed",
+      "pending",
+      "patient responsibility",
+      "owe",
+      "last visit"
+    ]
+  },
+  "questions_to_solve": [
+    "Which claim or visit is the user asking about?",
+    "Is there a stored claim item, EOB/document pointer, portal page pointer, or trusted reviewed evidence?",
+    "What is the claim status, service date, billed/allowed/paid/share amount, and denial or adjustment reason?",
+    "Does the result require more evidence, human review, or an approval-gated next action?"
+  ],
+  "data_needed": {
+    "required": [
+      "claim_identifier_or_visit_description",
+      "service_date_or_time_window",
+      "claim_source_pointer"
+    ],
+    "optional": [
+      "provider_or_facility",
+      "eob_document",
+      "denial_reason",
+      "patient_responsibility",
+      "appeal_deadline"
+    ]
+  },
+  "runtime_mounts": {
+    "memory_layers": ["session", "episodic", "product_memory_recall"],
+    "session_fields": ["user_id", "session_id", "thread_id", "channel", "active_workflow_key"],
+    "database_queries": [
+      "recent_claim_items_by_session",
+      "latest_portal_pages_by_session",
+      "open_tasks_by_user"
+    ]
+  },
+  "runtime_variables": {
+    "journey": "claim_status_navigation",
+    "evidence_mode": "claim_source_pointer_required",
+    "decision_points": [
+      "missing_claim_identifier",
+      "claim_found",
+      "claim_not_found",
+      "denial_or_adjustment_present",
+      "appeal_or_handoff_needed"
+    ]
+  },
+  "required_workers": {
+    "openclaw_tasks": [
+      "insurance_portal_browser.read_only_claims_observation",
+      "insurance_portal_browser.read_only_eob_document_candidate_discovery"
+    ],
+    "worker_mode": "only_after_read_only_approval_when_claim_rows_are_missing"
+  },
+  "required_search": {
+    "engines": [
+      "trusted_research_retrieval"
+    ],
+    "preferred_sources": ["stored_claim_items", "portal_page_snapshots", "approved_eob_document"]
+  },
+  "required_apis": {
+    "connectors": [
+      "graphiti_recall",
+      "local_sqlite_claim_lookup",
+      "document_candidate_approval"
+    ]
+  },
+  "success_model": {
+    "base_chance": 0.42,
+    "boost_signals": [
+      "claim_item_present",
+      "eob_pointer_present",
+      "service_date_present",
+      "portal_claims_page_present"
+    ],
+    "blockers": [
+      "no_source_pointer"
+    ]
+  },
+  "answer_contract": {
+    "required_fields": [
+      "status",
+      "facts",
+      "citations",
+      "uncertainties",
+      "next_actions"
+    ],
+    "forbidden": [
+      "appeal_submission_without_approval",
+      "payer_contact_without_approval",
+      "medical_advice",
+      "uncited_claim_fact"
+    ]
+  }
+}

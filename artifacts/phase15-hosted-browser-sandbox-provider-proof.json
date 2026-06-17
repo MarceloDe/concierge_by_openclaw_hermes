@@ -1,0 +1,67 @@
+{
+  "createdAt": "2026-06-17T02:17:23.984Z",
+  "route": "http://127.0.0.1:4200/?phase=hosted-browser-sandbox-provider",
+  "screenshot": "artifacts/phase15-hosted-browser-sandbox-provider-dashboard-proof.png",
+  "screenshotAttempt": "In-app browser Page.captureScreenshot timed out, so a headless Chrome DevTools capture clicked Load Connector Proof and saved the loaded dashboard screenshot.",
+  "visibleProof": {
+    "excerpt": [
+      "Browser boundary",
+      "browser_sandbox_gatewayhosted_browser_sandbox_contract_valid_not_configured · Live worker browser sessions are represented as remote sandbox sessions, with hosted provider readiness separate from local CDP proof.",
+      "hosted_browser_sandbox_providerhosted_browser_sandbox_contract_valid_not_configured · Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract.",
+      "hosted_browser_sandbox_providerhosted_browser_sandbox_contract_valid_not_configured",
+      "gui_visual_test100 / 100 · pass_visual_browser_proof",
+      "remote_browser_controls90 / 90 · pass_live_frame_local_cdp",
+      "hosted_remote_browser_sandbox0 / 100 · hosted_browser_sandbox_contract_valid_not_configured",
+      "      \"status\": \"hosted_browser_sandbox_contract_valid_not_configured\",",
+      "      \"key\": \"hosted_browser_sandbox_provider\",",
+      "      \"status\": \"hosted_browser_sandbox_contract_valid_not_configured\",",
+      "      \"key\": \"hosted_browser_sandbox_provider\",",
+      "      \"status\": \"hosted_browser_sandbox_contract_valid_not_configured\",",
+      "      \"key\": \"gui_visual_test\",",
+      "      \"key\": \"remote_browser_controls\",",
+      "      \"status\": \"hosted_browser_sandbox_contract_valid_not_configured\"",
+      "    \"hostedBrowserSandboxProviderStatus\": \"hosted_browser_sandbox_contract_valid_not_configured\","
+    ],
+    "hasContractNotConfiguredStatus": true,
+    "hasGuiVisualPass": true,
+    "hasHostedProviderGoal": true,
+    "hasHostedRemoteScore": true,
+    "hasProviderContractCommand": true,
+    "hasRemoteBrowserControlsPass": true,
+    "title": "Brainstyworkers AI Concierge",
+    "url": "http://127.0.0.1:4200/?phase=hosted-browser-sandbox-provider"
+  },
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "apiProof": {
+    "status": "cycle_contract_ready",
+    "cycle": "server_connector_next_mobile_mvp",
+    "hostedProviderCheck": {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-contract"
+    },
+    "hostedRemoteScore": {
+      "key": "hosted_remote_browser_sandbox",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    "remoteBrowserScore": {
+      "key": "remote_browser_controls",
+      "score": 90,
+      "target": 90,
+      "status": "pass_live_frame_local_cdp",
+      "readinessStatus": "auth_required"
+    },
+    "safety": {
+      "fastApiIsPublicConnector": true,
+      "nodeIsInternalRuntime": true,
+      "publicApi": "/api/v1",
+      "frontendDirectNodeCallsAllowedForPwa": false,
+      "externalWriteActionsWithoutApproval": false,
+      "rawOcrTextReturned": false
+    }
+  }
+}

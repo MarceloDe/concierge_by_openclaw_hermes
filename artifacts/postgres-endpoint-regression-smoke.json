@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "version": "2026-06-16.postgres-endpoint-regression.v1",
+  "baseUrl": "http://127.0.0.1:4197",
+  "generatedSecretFile": true,
+  "secretFilePathHash": "b5ee52b5862b160bd1973d88d9959f9c4c03e48df7db6e2d264e0750b8a06271",
+  "checks": {
+    "health": {
+      "databaseDriver": "postgres",
+      "databaseAdapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+      "storageStatus": "postgres_production_ready",
+      "storageScore": 100,
+      "fullMigrationReady": true,
+      "migrationPending": false,
+      "secretProfileReady": true,
+      "defaultRolloutReady": true
+    },
+    "proof": {
+      "status": "cycle_contract_ready",
+      "databaseProductReadyScore": {
+        "key": "database_product_ready_architecture",
+        "score": 100,
+        "target": 100,
+        "status": "postgres_production_ready"
+      },
+      "databaseDeploymentProfileScore": {
+        "key": "database_deployment_profile",
+        "score": 100,
+        "target": 100,
+        "status": "postgres_docker_secret_runtime_profile_present"
+      }
+    },
+    "openclawSkills": {
+      "skillCount": 3
+    },
+    "authStart": {
+      "userId": "user_f49cab77-7bdf-45a9-b872-851679757149",
+      "sessionId": "session_a014d5e3-f495-461e-8a2e-475f8ab73451"
+    },
+    "memoryContext": {
+      "contextPacketId": "ctx_7940f65d-3164-4ff6-855d-4aa504885fc7"
+    },
+    "chat": {
+      "sessionId": "session_a014d5e3-f495-461e-8a2e-475f8ab73451",
+      "finalResponsePresent": true,
+      "ai2uiBlockCount": 8,
+      "sourcePointerCount": 0
+    },
+    "openclawEnvelope": {
+      "executionMode": "proposal_only",
+      "actionsTakenCount": 0,
+      "proposalStatus": null
+    }
+  },
+  "safety": {
+    "rawDatabaseUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "externalActions": false,
+    "openclawActionsTaken": false,
+    "phiSeeded": false
+  }
+}

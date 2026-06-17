@@ -1,0 +1,136 @@
+{
+  "schema_version": "brainstyworkers.dynamic_skill.v1",
+  "skill_key": "insurance_plan_aetna_temporary",
+  "skill_kind": "insurance_specific",
+  "title": "Temporary Aetna Insurance Plan Skill",
+  "status": "draft_sketch_runtime_gated",
+  "editable_by": "external_skill_generator_llm",
+  "matching": {
+    "carriers": ["aetna"],
+    "workflows": [
+      "eligibility_benefits_navigation",
+      "claim_status_navigation",
+      "prior_authorization_navigation",
+      "denial_appeal_preparation"
+    ],
+    "intents": [
+      "eligibility_benefits_question",
+      "claim_status_question",
+      "prior_authorization_question",
+      "denial_appeal_question"
+    ],
+    "question_types": [
+      "coverage_check",
+      "cost_estimate",
+      "prior_auth",
+      "claim_status",
+      "source_lookup"
+    ],
+    "keywords": [
+      "aetna",
+      "deductible",
+      "out of pocket",
+      "copay",
+      "coinsurance",
+      "benefits",
+      "coverage",
+      "claim",
+      "eob",
+      "prior authorization"
+    ]
+  },
+  "questions_to_solve": [
+    "What Aetna plan evidence is needed to answer this user question?",
+    "Can existing session, memory, source-pointer, or trusted research evidence answer the question?",
+    "Does the user need authenticated portal evidence before LangGraph can answer?",
+    "Which source hierarchy should govern conflicting Aetna evidence?"
+  ],
+  "data_needed": {
+    "required": [
+      "payer",
+      "plan_name_or_plan_pointer",
+      "source_pointer_or_trusted_evidence"
+    ],
+    "optional": [
+      "plan_year",
+      "state",
+      "market",
+      "network",
+      "benefit_category",
+      "member_portal_page",
+      "sbc_or_spd_document"
+    ]
+  },
+  "runtime_mounts": {
+    "memory_layers": ["session", "episodic", "semantic", "product_memory_recall"],
+    "session_fields": ["user_id", "session_id", "thread_id", "channel", "active_workflow_key"],
+    "database_queries": [
+      "latest_eligibility_snapshot_by_session",
+      "latest_portal_pages_by_session",
+      "trusted_research_artifacts_by_workflow",
+      "open_tasks_by_user"
+    ]
+  },
+  "runtime_variables": {
+    "carrier": "Aetna",
+    "evidence_mode": "citation_closed_or_handoff",
+    "source_hierarchy": [
+      "regulator_or_federal_rule",
+      "plan_contract_or_eoc",
+      "spd_or_plan_booklet",
+      "sbc",
+      "carrier_policy",
+      "portal_visible_member_fact",
+      "trusted_reviewed_research",
+      "complaint_or_social_signal_low_authority"
+    ]
+  },
+  "required_workers": {
+    "openclaw_tasks": [
+      "insurance_portal_browser.read_only_observation"
+    ],
+    "worker_mode": "only_when_account_specific_evidence_is_missing"
+  },
+  "required_search": {
+    "engines": [
+      "trusted_research_retrieval",
+      "authoritative_web_source_lookup"
+    ],
+    "preferred_sources": ["aetna.com", "cms.gov", "healthcare.gov", "state_doi"]
+  },
+  "required_apis": {
+    "connectors": [
+      "graphiti_recall",
+      "local_sqlite_source_pointer_lookup",
+      "research_trusted_retrieval"
+    ]
+  },
+  "success_model": {
+    "base_chance": 0.46,
+    "boost_signals": [
+      "aetna_portal_pointer_present",
+      "trusted_research_artifact_present",
+      "eligibility_snapshot_present",
+      "source_pointer_present"
+    ],
+    "blockers": [
+      "no_source_pointer",
+      "no_authenticated_portal"
+    ]
+  },
+  "answer_contract": {
+    "required_fields": [
+      "status",
+      "facts",
+      "citations",
+      "uncertainties",
+      "next_actions"
+    ],
+    "forbidden": [
+      "coverage_guarantee",
+      "medical_advice",
+      "uncited_plan_rule",
+      "credential_request"
+    ]
+  }
+}

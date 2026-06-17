@@ -1,0 +1,11 @@
+{
+  "schema_version": "2026-06-02.insurance-plan-skill.sketch.v1",
+  "skill_key": "insurance_plan_aetna_temporary",
+  "title": "Temporary Aetna Insurance Plan Skill",
+  "status": "draft_sketch_runtime_gated",
+  "risk_level": "medium_high",
+  "purpose": "Provide Aetna-specific insurance-plan reasoning requirements and evidence expectations for LangGraph skill resolution.",
+  "compatible_hosts": ["langgraph", "openclaw", "brainstyworkers_dynamic_skill_server"],
+  "execution_mode": "context_resolution_only",
+  "portal_access": "delegate_to_insurance_portal_browser_with_read_only_approval"
+}

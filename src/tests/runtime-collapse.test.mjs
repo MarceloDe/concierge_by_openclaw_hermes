@@ -45,14 +45,14 @@ test("public chat endpoints share the LangGraph product runtime contract", async
     assert.equal(chatPayload.graphRun.state.schema_version, graphPayload.graphRun.state.schema_version);
     assert.equal(chatPayload.graphRun.state.graph_trace_id, graphPayload.graphRun.state.graph_trace_id);
     assert.equal(chatPayload.graphRun.state.workflow, graphPayload.graphRun.state.workflow);
-    assert.equal(chatPayload.graphRun.state.evidence_observation.status, "not_requested");
-    assert.equal(graphPayload.graphRun.state.evidence_observation.status, "not_requested");
+    assert.equal(chatPayload.graphRun.state.evidence_observation.status, "blocked_no_trusted_research_evidence");
+    assert.equal(graphPayload.graphRun.state.evidence_observation.status, "blocked_no_trusted_research_evidence");
     assert.deepEqual(chatPayload.graphRun.state.source_pointers, []);
     assert.deepEqual(graphPayload.graphRun.state.source_pointers, []);
     assert.equal(chatPayload.graphRun.state.openclaw_skill_proposal.task.status, "pending_approval");
     assert.equal(graphPayload.graphRun.state.openclaw_skill_proposal.task.status, "pending_approval");
-    assert.match(chatPayload.finalResponse, /LangGraph routed this request/);
-    assert.match(graphPayload.graphRun.state.final_response, /LangGraph routed this request/);
+    assert.match(chatPayload.finalResponse, /cannot answer the insurance question from trusted citations yet/);
+    assert.match(graphPayload.graphRun.state.final_response, /cannot answer the insurance question from trusted citations yet/);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }

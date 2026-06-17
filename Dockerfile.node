@@ -1,0 +1,68 @@
+FROM node:24-bookworm-slim AS deps
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM node:24-bookworm-slim AS runner
+
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=4173 \
+    BRAINSTY_DB_DRIVER=sqlite \
+    BRAINSTY_DATABASE_TARGET=postgres \
+    BRAINSTY_DATABASE_URL_FILE="" \
+    BRAINSTY_DATABASE_SECRET_SOURCE=direct_env \
+    BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY=0 \
+    BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY=0 \
+    BRAINSTY_POSTGRES_WORKER_LEASE_READY=0 \
+    BRAINSTY_POSTGRES_BACKUP_RESTORE_READY=0 \
+    BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=0 \
+    BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=0 \
+    BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE=project/deployment/postgres-provider-backup-policy.example.json \
+    BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY=0 \
+    BRAINSTY_DATABASE_SECRET_PROFILE_READY=0 \
+    BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY=0 \
+    BRAINSTY_DB_PATH=/app/data/brainstyworkers.sqlite \
+    BRAINSTY_RESEARCH_ARTIFACT_DIR=/app/data/research-artifacts \
+    BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      build-essential \
+      ca-certificates \
+      python3 \
+      python3-pip \
+      python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY vendor/getzep-graphiti ./vendor/getzep-graphiti
+RUN python3 -m venv .venv-graphiti \
+    && .venv-graphiti/bin/python -m pip install --upgrade pip setuptools wheel \
+    && .venv-graphiti/bin/pip install --no-cache-dir -e "vendor/getzep-graphiti[falkordb]" \
+    && .venv-graphiti/bin/python -c "import graphiti_core; import falkordb; from graphiti_core.driver.falkordb_driver import FalkorDriver"
+
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY .dockerignore Dockerfile.node Dockerfile.api compose.yaml compose.postgres.yaml ./
+COPY brainstyworkers_ai_concierge_prompt.md README.md ./
+COPY src ./src
+COPY scripts ./scripts
+COPY openclaw ./openclaw
+COPY tools ./tools
+COPY docs ./docs
+COPY project ./project
+COPY apps/mobile-next/Dockerfile ./apps/mobile-next/Dockerfile
+COPY eng.traineddata ./eng.traineddata
+
+USER node
+EXPOSE 4173
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=8 \
+  CMD node -e "fetch('http://127.0.0.1:4173/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["npm", "run", "start"]

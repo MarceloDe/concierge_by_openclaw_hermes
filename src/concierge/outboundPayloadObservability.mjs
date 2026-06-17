@@ -17,12 +17,13 @@ function inspectKeys(value, predicate) {
 }
 
 function directIdentifierPatterns(user = {}) {
+  const safeUser = user ?? {};
   const patterns = [
     /\b\d{3}-\d{2}-\d{4}\b/,
     /\b(member|subscriber|subscription)\s*(id|number|#|no\.?)?\s*(?:[:#=-]\s*)?(?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{4,}\b/i
   ];
-  if (user.name) patterns.push(new RegExp(String(user.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
-  if (user.email) patterns.push(new RegExp(String(user.email).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  if (safeUser.name) patterns.push(new RegExp(String(safeUser.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  if (safeUser.email) patterns.push(new RegExp(String(safeUser.email).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   return patterns;
 }
 
@@ -30,8 +31,8 @@ export function classifyOutboundPayload(payload, { user = {}, payloadType, desti
   const serializedPayload = safeStringify(payload);
   const containsDirectIdentifier = directIdentifierPatterns(user).some((pattern) => pattern.test(serializedPayload));
   const containsSourcePointers =
-    inspectKeys(payload, (key) => ["sourcePointers", "source_pointers", "dbPointers", "db_pointers"].includes(key)) ||
-    /\b(sourcePointers|source_pointers|dbPointers|db_pointers)\b/.test(serializedPayload) ||
+    inspectKeys(payload, (key) => ["sourcePointers", "source_pointers", "allowed_source_pointers", "dbPointers", "db_pointers"].includes(key)) ||
+    /\b(sourcePointers|source_pointers|allowed_source_pointers|dbPointers|db_pointers)\b/.test(serializedPayload) ||
     /\b(eligibility_snapshots|coverage_balances|claim_items|prior_authorizations|extraction_artifacts|memory_items)\/[A-Za-z0-9_-]+/.test(serializedPayload);
   const containsPortalText = inspectKeys(payload, (key, value) => {
     const normalized = key.toLowerCase();

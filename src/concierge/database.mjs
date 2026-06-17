@@ -1,14 +1,14 @@
-import { execFile, spawn } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { promisify } from "node:util";
 import { SCHEMA_SQL, TABLES } from "./schema.mjs";
 import { seedRuntimeRegistries } from "./workflowArchitecture.mjs";
 
-const execFileAsync = promisify(execFile);
-
 export const DEFAULT_DB_PATH = resolve("data/brainstyworkers.sqlite");
 const SQLITE_BUSY_TIMEOUT_MS = Number(process.env.BRAINSTY_SQLITE_BUSY_TIMEOUT_MS ?? 30000);
+export const DATABASE_ADAPTER_VERSION = "2026-06-15.node-sqlite-bound-store.v1";
+const TABLE_ALLOWLIST = new Set(TABLES);
+const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function nowIso() {
   return new Date().toISOString();
@@ -25,47 +25,86 @@ function quote(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function whereClause(where = {}) {
-  const entries = Object.entries(where);
-  if (entries.length === 0) return "";
-  return ` WHERE ${entries.map(([key, value]) => `${key} = ${quote(value)}`).join(" AND ")}`;
+function normalizeParam(value) {
+  if (value === undefined) return null;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return value;
 }
 
-async function runSqliteStatement(dbPath, statement) {
-  await new Promise((resolve, reject) => {
-    const child = spawn("sqlite3", ["-cmd", `.timeout ${SQLITE_BUSY_TIMEOUT_MS}`, dbPath], {
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(stderr || stdout || `sqlite3 exited with code ${code}`));
-    });
-    child.stdin.end(statement);
-  });
+function normalizeParams(params = []) {
+  return Array.isArray(params) ? params.map(normalizeParam) : [normalizeParam(params)];
+}
+
+function whereClause(where = {}, params = null) {
+  const entries = Object.entries(where);
+  if (entries.length === 0) return "";
+  return ` WHERE ${entries
+    .map(([key, value]) => {
+      const column = assertSafeSqlIdentifier(key, "column");
+      if (params) {
+        params.push(normalizeParam(value));
+        return `${column} = ?`;
+      }
+      return `${column} = ${quote(value)}`;
+    })
+    .join(" AND ")}`;
+}
+
+export function assertSafeSqlIdentifier(identifier, kind = "identifier") {
+  const value = String(identifier ?? "");
+  if (!IDENTIFIER_RE.test(value)) throw new Error(`Unsafe SQL ${kind}: ${value || "empty"}`);
+  return value;
+}
+
+export function assertSafeTableName(table) {
+  const value = assertSafeSqlIdentifier(table, "table");
+  if (!TABLE_ALLOWLIST.has(value)) throw new Error(`SQL table is not allowlisted: ${value}`);
+  return value;
 }
 
 export class SqliteStore {
   constructor(dbPath = DEFAULT_DB_PATH) {
     this.dbPath = dbPath;
+    this.adapterVersion = DATABASE_ADAPTER_VERSION;
+    this.db = null;
   }
 
   async initialize() {
     await mkdir(dirname(this.dbPath), { recursive: true });
+    this.open();
     await this.exec(SCHEMA_SQL);
+    await this.recordMigration("schema:base", { adapterVersion: this.adapterVersion });
     await this.migrate();
     await seedRuntimeRegistries(this, { nowIso, createId });
     return this;
+  }
+
+  open() {
+    if (this.db) return this.db;
+    this.db = new DatabaseSync(this.dbPath);
+    this.db.exec(`
+      PRAGMA foreign_keys = ON;
+      PRAGMA busy_timeout = ${Math.max(1, Math.trunc(SQLITE_BUSY_TIMEOUT_MS))};
+      PRAGMA journal_mode = WAL;
+    `);
+    return this.db;
+  }
+
+  close() {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+
+  async recordMigration(migrationKey, details = {}) {
+    const now = nowIso();
+    this.open()
+      .prepare(
+        `INSERT OR IGNORE INTO schema_migrations (id, migration_key, details_json, applied_at)
+         VALUES (?, ?, ?, ?);`
+      )
+      .run(createId("migration"), migrationKey, JSON.stringify(details), now);
   }
 
   async migrate() {
@@ -100,10 +139,181 @@ export class SqliteStore {
       ["workflow_key", "ALTER TABLE agent_tasks ADD COLUMN workflow_key TEXT;"],
       ["journey_stage", "ALTER TABLE agent_tasks ADD COLUMN journey_stage TEXT;"]
     ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS human_handoff_items (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        task_id TEXT,
+        message_id TEXT,
+        handoff_type TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        response_guidance TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.migrateColumns("knowledge_sources", [
+      ["priority", "ALTER TABLE knowledge_sources ADD COLUMN priority INTEGER NOT NULL DEFAULT 100;"],
+      ["last_run_at", "ALTER TABLE knowledge_sources ADD COLUMN last_run_at TEXT;"],
+      ["last_status", "ALTER TABLE knowledge_sources ADD COLUMN last_status TEXT;"],
+      ["metadata_json", "ALTER TABLE knowledge_sources ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';"],
+      ["proposed_by", "ALTER TABLE knowledge_sources ADD COLUMN proposed_by TEXT;"],
+      ["approved_by", "ALTER TABLE knowledge_sources ADD COLUMN approved_by TEXT;"],
+      ["reviewed_at", "ALTER TABLE knowledge_sources ADD COLUMN reviewed_at TEXT;"]
+    ]);
     await this.migrateColumns("scheduled_jobs", [
       ["workflow_key", "ALTER TABLE scheduled_jobs ADD COLUMN workflow_key TEXT;"],
       ["journey_stage", "ALTER TABLE scheduled_jobs ADD COLUMN journey_stage TEXT;"]
     ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_schedules (
+        id TEXT PRIMARY KEY,
+        schedule_key TEXT NOT NULL UNIQUE,
+        actor_user_id TEXT,
+        source_id TEXT,
+        source_key TEXT,
+        schedule_label TEXT NOT NULL,
+        interval_hours INTEGER NOT NULL,
+        workflow_key TEXT NOT NULL,
+        topic TEXT NOT NULL DEFAULT '',
+        query_json TEXT NOT NULL DEFAULT '{}',
+        worker_mode TEXT NOT NULL DEFAULT 'deterministic_fetch',
+        status TEXT NOT NULL,
+        approval_status TEXT NOT NULL,
+        next_run_at TEXT NOT NULL,
+        last_run_at TEXT,
+        last_run_id TEXT,
+        last_status TEXT,
+        run_count INTEGER NOT NULL DEFAULT 0,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_scheduler_daemon_state (
+        id TEXT PRIMARY KEY,
+        daemon_key TEXT NOT NULL UNIQUE,
+        actor_user_id TEXT,
+        status TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        interval_ms INTEGER NOT NULL,
+        tick_limit INTEGER NOT NULL,
+        execute_due_runs INTEGER NOT NULL DEFAULT 0,
+        approved_worker_dispatch INTEGER NOT NULL DEFAULT 0,
+        worker_mode TEXT,
+        last_tick_at TEXT,
+        last_tick_event_id TEXT,
+        last_success_at TEXT,
+        last_failure_at TEXT,
+        last_error TEXT,
+        last_processed_count INTEGER NOT NULL DEFAULT 0,
+        last_blocked_count INTEGER NOT NULL DEFAULT 0,
+        last_actions_json TEXT NOT NULL DEFAULT '[]',
+        tick_count INTEGER NOT NULL DEFAULT 0,
+        overlap_skipped_count INTEGER NOT NULL DEFAULT 0,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_routes (
+        id TEXT PRIMARY KEY,
+        route_key TEXT NOT NULL UNIQUE,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        selected_by TEXT,
+        selected_at TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_jobs (
+        id TEXT PRIMARY KEY,
+        route_key TEXT NOT NULL,
+        actor_user_id TEXT,
+        job_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        artifact_count INTEGER NOT NULL DEFAULT 0,
+        indexed_count INTEGER NOT NULL DEFAULT 0,
+        skipped_count INTEGER NOT NULL DEFAULT 0,
+        failure_reason TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_embedding_index (
+        id TEXT PRIMARY KEY,
+        artifact_id TEXT NOT NULL,
+        route_key TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        vector_json TEXT NOT NULL,
+        vector_hash TEXT NOT NULL,
+        text_hash TEXT NOT NULL,
+        source_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        job_id TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_graph_builds (
+        id TEXT PRIMARY KEY,
+        actor_user_id TEXT,
+        status TEXT NOT NULL,
+        node_count INTEGER NOT NULL DEFAULT 0,
+        edge_count INTEGER NOT NULL DEFAULT 0,
+        graph_hash TEXT NOT NULL,
+        graph_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        failure_reason TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS research_claim_evaluations (
+        id TEXT PRIMARY KEY,
+        actor_user_id TEXT,
+        question_hash TEXT,
+        question_preview TEXT,
+        answer_hash TEXT NOT NULL,
+        answer_preview TEXT NOT NULL,
+        status TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        claim_count INTEGER NOT NULL DEFAULT 0,
+        supported_count INTEGER NOT NULL DEFAULT 0,
+        unsupported_count INTEGER NOT NULL DEFAULT 0,
+        low_confidence_count INTEGER NOT NULL DEFAULT 0,
+        evaluation_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        audit_event_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
     await this.exec(`
       CREATE TABLE IF NOT EXISTS worker_continuations (
         id TEXT PRIMARY KEY,
@@ -140,6 +350,7 @@ export class SqliteStore {
       if (!names.has(column)) {
         try {
           await this.exec(sql);
+          await this.recordMigration(`column:${table}.${column}`, { table, column, sql });
         } catch (error) {
           if (!String(error.message ?? "").includes(`duplicate column name: ${column}`)) {
             throw error;
@@ -150,45 +361,52 @@ export class SqliteStore {
   }
 
   async exec(sql) {
-    await runSqliteStatement(this.dbPath, sql);
+    this.open().exec(sql);
   }
 
-  async all(sql) {
-    const { stdout } = await execFileAsync(
-      "sqlite3",
-      ["-cmd", `.timeout ${SQLITE_BUSY_TIMEOUT_MS}`, "-json", this.dbPath, sql],
-      {
-        maxBuffer: 1024 * 1024 * 20,
-        timeout: SQLITE_BUSY_TIMEOUT_MS + 10000
-      }
-    );
-    const trimmed = stdout.trim();
-    return trimmed ? JSON.parse(trimmed) : [];
+  async all(sql, params = []) {
+    return this.open().prepare(sql).all(...normalizeParams(params));
   }
 
-  async get(sql) {
-    const rows = await this.all(sql);
-    return rows[0] ?? null;
+  async get(sql, params = []) {
+    return this.open().prepare(sql).get(...normalizeParams(params)) ?? null;
   }
 
   async insert(table, values) {
+    const safeTable = assertSafeTableName(table);
     const keys = Object.keys(values);
-    const sql = `INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map((key) => quote(values[key])).join(", ")});`;
-    await this.exec(sql);
+    const safeKeys = keys.map((key) => assertSafeSqlIdentifier(key, "column"));
+    const placeholders = keys.map(() => "?").join(", ");
+    const sql = `INSERT INTO ${safeTable} (${safeKeys.join(", ")}) VALUES (${placeholders});`;
+    this.open()
+      .prepare(sql)
+      .run(...keys.map((key) => normalizeParam(values[key])));
     return values;
   }
 
   async update(table, values, where) {
-    const assignments = Object.entries(values).map(([key, value]) => `${key} = ${quote(value)}`);
-    await this.exec(`UPDATE ${table} SET ${assignments.join(", ")}${whereClause(where)};`);
+    const safeTable = assertSafeTableName(table);
+    const entries = Object.entries(values);
+    if (!entries.length) throw new Error("Cannot update with no values.");
+    const params = [];
+    const assignments = entries.map(([key, value]) => {
+      params.push(normalizeParam(value));
+      return `${assertSafeSqlIdentifier(key, "column")} = ?`;
+    });
+    const whereSql = whereClause(where, params);
+    this.open()
+      .prepare(`UPDATE ${safeTable} SET ${assignments.join(", ")}${whereSql};`)
+      .run(...params);
   }
 
   async findOne(table, where) {
-    return this.get(`SELECT * FROM ${table}${whereClause(where)} LIMIT 1;`);
+    const params = [];
+    return this.get(`SELECT * FROM ${assertSafeTableName(table)}${whereClause(where, params)} LIMIT 1;`, params);
   }
 
   async list(table, where = {}) {
-    return this.all(`SELECT * FROM ${table}${whereClause(where)} ORDER BY created_at ASC;`);
+    const params = [];
+    return this.all(`SELECT * FROM ${assertSafeTableName(table)}${whereClause(where, params)} ORDER BY created_at ASC;`, params);
   }
 
   async counts() {
@@ -198,5 +416,18 @@ export class SqliteStore {
       counts[table] = row?.count ?? 0;
     }
     return counts;
+  }
+
+  async transaction(callback) {
+    const db = this.open();
+    db.exec("BEGIN IMMEDIATE;");
+    try {
+      const result = await callback(this);
+      db.exec("COMMIT;");
+      return result;
+    } catch (error) {
+      db.exec("ROLLBACK;");
+      throw error;
+    }
   }
 }

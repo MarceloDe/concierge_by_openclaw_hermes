@@ -16,6 +16,7 @@ export const DEFAULT_APPROVALS = Object.freeze({
 export const WORKFLOWS = Object.freeze({
   ENROLLMENT_PORTAL_DEPURATION: "enrollment_portal_depuration",
   ESCALATE_APPROVAL: "escalate_approval",
+  URGENT_HUMAN_HANDOFF: "urgent_human_handoff",
   REFUSE_MEDICAL_ADVICE: "refuse_medical_advice",
   REFUSE_CREDENTIAL_ENTRY: "refuse_credential_entry",
   REFUSE_PROMPT_INJECTION: "refuse_prompt_injection",

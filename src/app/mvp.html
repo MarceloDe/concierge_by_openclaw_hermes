@@ -5,15 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Brainstyworkers Concierge MVP</title>
     <link rel="stylesheet" href="/mvp.css" />
+    <style>
+      /* Phase 11 remote-browser widget (scoped) */
+      .worker-browser-panel.is-attention { outline: 2px solid #f59e0b; outline-offset: 2px; }
+      .remote-browser { display: flex; flex-direction: column; gap: 8px; }
+      .remote-browser__bar { display: flex; align-items: center; justify-content: space-between; }
+      .remote-browser__badge { font-size: .72rem; font-weight: 700; color: #0b0e14; background: #f59e0b; padding: 2px 8px; border-radius: 999px; }
+      .remote-browser__stage { background: #000; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden; display: flex; }
+      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; touch-action: none; user-select: none; }
+      .remote-browser__stage.is-live-control { outline: 2px solid #f59e0b; outline-offset: -2px; }
+      .remote-browser__controls, .remote-browser__relay { display: flex; gap: 8px; flex-wrap: wrap; }
+      .remote-browser__relay input { flex: 1; padding: 10px; font-size: 16px; border-radius: 8px; }
+      .remote-browser__status { font-size: .76rem; opacity: .8; margin: 2px 0 0; }
+    </style>
   </head>
   <body>
     <main class="mvp-shell">
       <header class="mvp-topbar">
         <div>
-              <p class="eyebrow">Phase 9B</p>
+          <p class="eyebrow">Phase 10I</p>
           <h1>Brainstyworkers Concierge</h1>
         </div>
         <nav aria-label="App views">
+          <div class="mode-switch" role="tablist" aria-label="MVP UI mode">
+            <button type="button" data-ui-mode="chat" aria-pressed="false">Chat</button>
+            <button type="button" data-ui-mode="split" aria-pressed="true">Split</button>
+            <button type="button" data-ui-mode="guided" aria-pressed="false">Guided</button>
+            <button type="button" data-ui-mode="bento" aria-pressed="false">Bento</button>
+          </div>
           <a href="/">Proof Dashboard</a>
           <button id="resetApp" type="button">Reset View</button>
         </nav>
@@ -66,8 +85,8 @@
             <label>
               Route
               <select id="backendRoute">
-                <option value="node">Node / LangGraph runtime</option>
-                <option value="wefella">Wefella FastAPI facade</option>
+                <option value="wefella" selected>Wefella FastAPI facade</option>
+                <option value="node">Node / LangGraph runtime (operator parity)</option>
               </select>
             </label>
             <label>
@@ -78,7 +97,7 @@
               <button id="checkFacade" type="button">Check Facade</button>
               <button id="useFacade" type="button">Use Facade</button>
             </div>
-            <p id="facadeStatus" class="status-text">Direct Node route active.</p>
+            <p id="facadeStatus" class="status-text">FastAPI facade route active by default.</p>
           </section>
 
           <section class="panel">
@@ -91,6 +110,30 @@
             <button class="workflow-button" type="button" data-message="My doctor wants approval for an MRI next month.">Prior Auth</button>
             <button class="workflow-button" type="button" data-message="They said no and I want to fight it.">Appeal</button>
             <button class="workflow-button" type="button" data-message="Use my authenticated member portal in read-only mode and return source pointers.">Portal Evidence</button>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Documents</p>
+              <h2>Upload Evidence</h2>
+            </div>
+            <label>
+              File
+              <input id="documentFile" type="file" accept=".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,text/plain,text/markdown,text/csv,application/pdf,image/png,image/jpeg" />
+            </label>
+            <label>
+              Kind
+              <select id="documentKind">
+                <option value="benefits" selected>Benefits or SBC</option>
+                <option value="claim">Claim or EOB</option>
+                <option value="bill">Bill or statement</option>
+                <option value="id_card">Insurance ID card</option>
+                <option value="other">Other insurance document</option>
+              </select>
+            </label>
+            <button id="uploadDocument" type="button">Upload + Extract</button>
+            <button id="askUploadedDocument" class="secondary-button" type="button">Ask About Upload</button>
+            <div id="uploadPanel" class="upload-panel">No uploaded document yet.</div>
           </section>
 
           <section class="panel">
@@ -147,6 +190,7 @@
             <ol id="sequence" class="sequence-list">
               <li data-step="auth"><span>Auth</span><b>waiting</b></li>
               <li data-step="route"><span>GPT / Intent</span><b>waiting</b></li>
+              <li data-step="skill"><span>Skill</span><b>waiting</b></li>
               <li data-step="approval"><span>Approval</span><b>waiting</b></li>
               <li data-step="worker"><span>OpenClaw</span><b>waiting</b></li>
               <li data-step="evidence"><span>Evidence</span><b>waiting</b></li>
@@ -155,12 +199,67 @@
             </ol>
           </section>
 
+          <section class="panel phase-proof">
+            <div class="panel-heading">
+              <p class="eyebrow">Phase 10I</p>
+              <h2>Trusted Research Answers</h2>
+            </div>
+            <div id="phase9fPanel" class="phase-proof-panel">No sourced FastAPI-first memory loop yet.</div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Parity</p>
+              <h2>Node vs FastAPI</h2>
+            </div>
+            <button id="runParity" type="button">Compare Benefits Route</button>
+            <div id="parityPanel" class="parity-panel">No parity run yet.</div>
+          </section>
+
           <section class="panel">
             <div class="panel-heading">
               <p class="eyebrow">Approval</p>
               <h2>Gate</h2>
             </div>
             <div id="approvalPanel" class="approval-panel">No pending worker proposal yet.</div>
+          </section>
+
+          <section class="panel worker-browser-panel" id="workerBrowserPanel" hidden>
+            <div class="panel-heading">
+              <p class="eyebrow">Live</p>
+              <h2>Worker Browser</h2>
+            </div>
+            <p class="status-text" id="workerBrowserHint">Watch the worker browser. If the portal asks for a password, 2FA, or captcha, take over and type it yourself — the assistant never enters credentials.</p>
+            <div id="remoteBrowserMount"></div>
+          </section>
+
+          <section class="panel continuity-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Continuity</p>
+              <h2>History + Feedback</h2>
+            </div>
+            <div class="split-actions">
+              <button id="loadHistory" type="button">Load History</button>
+              <button id="exportSession" type="button">Export Answer</button>
+            </div>
+            <label>
+              Feedback
+              <textarea id="feedbackComment" rows="3" placeholder="Optional note for this answer"></textarea>
+            </label>
+            <div class="split-actions">
+              <button id="submitUsefulFeedback" type="button">Useful</button>
+              <button id="submitNeedsFollowupFeedback" class="secondary-button" type="button">Needs Follow-Up</button>
+            </div>
+            <div id="historyPanel" class="history-panel">No session history loaded yet.</div>
+          </section>
+
+          <section class="panel handoff-panel">
+            <div class="panel-heading">
+              <p class="eyebrow">Safety</p>
+              <h2>Human Handoff</h2>
+            </div>
+            <button id="loadHandoffs" type="button">Load Handoffs</button>
+            <div id="handoffPanel" class="handoff-panel-body">No handoff created for this session.</div>
           </section>
 
           <section class="panel">

@@ -695,6 +695,91 @@ async function captureScreenshotViaCdp({ config, targetUrl = null, browserRunId,
   }
 }
 
+// Resolve the live page CDP websocket for the dedicated OpenClaw browser so the
+// remote-view/takeover controller (Phase 11) can attach a screencast + human input
+// relay. Returns only connection metadata; it performs no navigation or actions —
+// the read-only/agent-never-acts invariants live in browserStreamController.mjs.
+export async function resolveActivePageCdpTarget({
+  config = getOfficialOpenClawConfig(),
+  targetUrl = null,
+  preferredTab = null
+} = {}) {
+  const status = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "status"], {
+    config,
+    timeoutMs: 20000
+  });
+  if (!status.ok) {
+    return { ok: false, status: "official_openclaw_browser_status_failed", error: status.error ?? status.stderr };
+  }
+  const browser = parseBrowserStatus(status.stdout);
+  if (!browser.cdpUrl) {
+    return { ok: false, status: "official_openclaw_cdp_url_missing", error: "OpenClaw browser status did not expose cdpUrl." };
+  }
+  let tabs;
+  try {
+    const tabsResponse = await fetch(`${browser.cdpUrl}/json/list`);
+    if (!tabsResponse.ok) {
+      return { ok: false, status: "official_openclaw_cdp_tabs_failed", error: `HTTP ${tabsResponse.status} from ${browser.cdpUrl}/json/list` };
+    }
+    tabs = await tabsResponse.json();
+  } catch (error) {
+    return { ok: false, status: "official_openclaw_cdp_tabs_failed", error: error.message };
+  }
+  const target =
+    (preferredTab?.targetId || preferredTab?.id
+      ? tabs.find((tab) => tab.id === preferredTab.targetId || tab.id === preferredTab.id)
+      : null) ??
+    (targetUrl ? tabs.find((tab) => tab.type === "page" && canonicalUrl(tab.url) === canonicalUrl(targetUrl)) : null) ??
+    tabs.find((tab) => tab.type === "page" && tab.webSocketDebuggerUrl);
+  if (!target?.webSocketDebuggerUrl) {
+    return { ok: false, status: "official_openclaw_cdp_target_missing", error: "No page target with a websocket debugger URL was available." };
+  }
+  return {
+    ok: true,
+    status: "official_openclaw_cdp_target_resolved",
+    webSocketDebuggerUrl: target.webSocketDebuggerUrl,
+    targetId: target.id ?? null,
+    url: target.url ?? null,
+    title: target.title ?? null,
+    cdpUrl: browser.cdpUrl,
+    browser
+  };
+}
+
+export async function openOfficialOpenClawBrowserUrl({
+  config = getOfficialOpenClawConfig(),
+  targetUrl
+} = {}) {
+  if (!targetUrl) return { ok: false, status: "official_openclaw_target_url_missing", error: "targetUrl is required." };
+  try {
+    const parsed = new URL(targetUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return { ok: false, status: "official_openclaw_target_url_unsupported", error: "Only http and https URLs can be opened." };
+    }
+  } catch {
+    return { ok: false, status: "official_openclaw_target_url_invalid", error: "targetUrl must be a valid URL." };
+  }
+
+  const start = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "start"], { config });
+  if (!start.ok) {
+    return {
+      ok: false,
+      status: "official_openclaw_browser_start_failed",
+      targetUrl,
+      error: start.error ?? start.stderr,
+      commandResults: { start }
+    };
+  }
+  const opened = await execOpenClaw(["browser", "--browser-profile", config.browserProfile, "open", targetUrl], { config });
+  return {
+    ok: opened.ok,
+    status: opened.ok ? "official_openclaw_url_opened" : "official_openclaw_open_url_failed",
+    targetUrl: extractOpenedUrl(opened.stdout, targetUrl),
+    error: opened.ok ? null : opened.error ?? opened.stderr,
+    commandResults: { start, opened }
+  };
+}
+
 async function runLocalOcr({ config, imagePath }) {
   const scriptPath = join(config.ocrSkillPath, "scripts", "ocr.js");
   if (!existsSync(scriptPath)) {

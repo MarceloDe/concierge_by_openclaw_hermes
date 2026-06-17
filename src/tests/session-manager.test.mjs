@@ -4,8 +4,9 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
+import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
-import { getManagedSessionState, listManagedSessions } from "../concierge/sessionManager.mjs";
+import { getManagedSessionState, listManagedSessions, resolveManagedSession } from "../concierge/sessionManager.mjs";
 
 async function testStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-session-"));
@@ -78,4 +79,43 @@ test("session list returns active sessions for a member", async () => {
   assert.equal(sessions[0].id, result.session.id);
   assert.equal(sessions[0].status, "active");
   assert.match(sessions[0].langgraph_thread_id, /^thread:/);
+});
+
+test("session list binds hostile email and user id filters", async () => {
+  const store = await testStore();
+  const enrollment = await enrollDefaultMember(store, {
+    name: "Session Filter User",
+    email: "session-filter@example.com",
+    payer: "Aetna",
+    portalUrl: "https://www.aetna.com/"
+  });
+
+  const normal = await listManagedSessions(store, { email: "session-filter@example.com" });
+  assert.equal(normal.length, 1);
+  assert.equal(normal[0].id, enrollment.session.id);
+
+  const hostileEmail = await listManagedSessions(store, { email: "session-filter@example.com' OR 1=1 --" });
+  assert.equal(hostileEmail.length, 0);
+
+  const hostileUserId = await listManagedSessions(store, { userId: `${enrollment.user.id}' OR 1=1 --` });
+  assert.equal(hostileUserId.length, 0);
+});
+
+test("resume latest session uses bound user and channel values", async () => {
+  const store = await testStore();
+  const enrollment = await enrollDefaultMember(store, {
+    name: "Resume Latest User",
+    email: "resume-latest@example.com",
+    payer: "Aetna",
+    portalUrl: "https://www.aetna.com/"
+  });
+  const resolved = await resolveManagedSession(store, {
+    user: enrollment.user,
+    portal: enrollment.portal,
+    resumeLatestSession: true,
+    channel: enrollment.session.channel
+  });
+
+  assert.equal(resolved.resumed, true);
+  assert.equal(resolved.session.id, enrollment.session.id);
 });

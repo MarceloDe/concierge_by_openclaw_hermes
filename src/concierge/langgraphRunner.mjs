@@ -1,6 +1,7 @@
 import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { audit } from "./audit.mjs";
+import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
 import { consumeReadOnlyObservationApproval } from "./approvalResume.mjs";
 import { persistClaimedChromeSnapshot, runPortalExtraction } from "./browserAutomation.mjs";
 import { classifyIntent } from "./classifier.mjs";
@@ -26,16 +27,24 @@ import { checkpointSession } from "./sessionManager.mjs";
 import { classifyHealthcareIntent } from "./structuredIntentClassifier.mjs";
 import { WORKFLOWS } from "./types.mjs";
 import { selectModelPayload } from "./modelPayloadPolicy.mjs";
+import { composeUrgentEscalationResponse, createHumanHandoffItem } from "./humanHandoffs.mjs";
 import { loadOpenClawSkillArtifact } from "./openclawSkillArtifacts.mjs";
 import { recordOpenClawSkillInvocationProposal, validateOpenClawEnvelopeAgainstSkill } from "./openclawSkillInvocation.mjs";
 import { runOfficialOpenClawReadOnlyObservation } from "./openclawOfficialRuntime.mjs";
 import { buildLangGraphOpenClawWorkerPlan } from "./openclawWorkerContract.mjs";
+import { loadOpenClawSkillRegistry } from "./openclaw/skillRegistry.mjs";
+import { buildOpenClawBoundedTaskProposal } from "./openclaw/workerPolicy.mjs";
 import { recallProductMemoryForRequest, retainProductMemoryFromGraphRun } from "./productMemory.mjs";
+import { searchResearchEvidence } from "./researchOps.mjs";
+import { resolveDynamicSkillContext } from "./dynamicSkillServer.mjs";
 import {
   buildLlmOrchestrationDecisionMessages,
   normalizeLlmOrchestrationDecision,
   shouldUseLlmDecision
 } from "./llmOrchestrationDecision.mjs";
+import { buildDeterministicStructuredReasoning } from "./intelligence/structuredIntentReasoner.mjs";
+import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
+import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -43,7 +52,7 @@ import {
   validateWorkerContinuationForDispatch
 } from "./workerContinuations.mjs";
 
-export const LANGGRAPH_RUNNER_VERSION = "2026-05-17.langgraph-runner.v1";
+export const LANGGRAPH_RUNNER_VERSION = "2026-06-01.langgraph-runner.phase10s-ai2ui-modes.v1";
 
 const checkpointer = new MemorySaver();
 const activeStores = new Map();
@@ -52,6 +61,25 @@ function field(defaultValue = null) {
   return Annotation({
     reducer: (_, value) => value,
     default: () => defaultValue
+  });
+}
+
+function appendArrayField() {
+  return Annotation({
+    reducer: (left, value) => {
+      const current = Array.isArray(left) ? left : [];
+      const next = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];
+      if (Array.isArray(value) && value.length === 0) return [];
+      return [...current, ...next];
+    },
+    default: () => []
+  });
+}
+
+function mergeObjectField(defaultValue = {}) {
+  return Annotation({
+    reducer: (left, value) => ({ ...(left ?? {}), ...(value ?? {}) }),
+    default: () => ({ ...defaultValue })
   });
 }
 
@@ -72,34 +100,47 @@ const BrainstyState = Annotation.Root({
   intent: field(null),
   structured_intent: field(null),
   llm_orchestration_decision: field(null),
+  dynamic_skill_context: field(null),
   workflow: field(null),
   workflow_route: field(null),
   route_reason: field(null),
   openclaw_envelope: field(null),
   openclaw_skill_validation: field(null),
   openclaw_worker_plan: field(null),
+  openclaw_task_proposal: field(null),
   openclaw_skill_proposal: field(null),
   worker_continuation: field(null),
+  human_handoff: field(null),
   approval_resume: field(null),
   evidence_observation: field(null),
+  sourced_answer: field(null),
+  research_evidence: field(null),
+  uploaded_document_context: field(null),
   browser_result: field(null),
   eligibility_result: field(null),
   portal_scan: field(null),
-  source_pointers: field([]),
-  tool_calls: field([]),
-  tool_results: field([]),
+  source_pointers: appendArrayField(),
+  tool_calls: appendArrayField(),
+  tool_results: appendArrayField(),
   model_invocation: field(null),
   final_response: field(null),
+  ai2ui_blocks: appendArrayField(),
+  journey_decisions: appendArrayField(),
+  answer_claims: appendArrayField(),
   should_remember: field(false),
   memory_summary: field(null),
   memory_type: field(null),
   workflow_outcome: field(null),
-  safety: field({}),
-  proof: field([])
+  safety: mergeObjectField({}),
+  proof: appendArrayField()
 });
 
 function appendProof(state, step, details = {}) {
-  return [...(state.proof ?? []), { step, at: nowIso(), ...details }];
+  return [{ step, at: nowIso(), ...details }];
+}
+
+function mergeProof(state, step, details = {}) {
+  return [...(state.proof ?? []), ...appendProof(state, step, details)];
 }
 
 function refusalForIntent(intent) {
@@ -243,6 +284,140 @@ function sourcePointersFromObservation({ browserResult = null, eligibility = nul
   return pointers;
 }
 
+function uploadedDocumentsFromRawMessage(raw = {}) {
+  return (Array.isArray(raw.uploadedDocuments) ? raw.uploadedDocuments : [])
+    .filter((document) => document?.uploadId && document?.extraction)
+    .slice(0, 5)
+    .map((document) => ({
+      uploadId: String(document.uploadId),
+      filename: String(document.filename ?? "uploaded document"),
+      contentType: String(document.contentType ?? "application/octet-stream"),
+      byteSize: Number(document.byteSize ?? 0),
+      sha256: document.sha256 ?? null,
+      extraction: {
+        status: document.extraction.status ?? "unknown",
+        method: document.extraction.method ?? "unknown",
+        extractedAt: document.extraction.extractedAt ?? null,
+        textHash: document.extraction.textHash ?? null,
+        safeTextPreview: document.extraction.safeTextPreview ?? "",
+        fields: Array.isArray(document.extraction.fields) ? document.extraction.fields : [],
+        sourceSpans: Array.isArray(document.extraction.sourceSpans) ? document.extraction.sourceSpans : [],
+        blockers: Array.isArray(document.extraction.blockers) ? document.extraction.blockers : [],
+        pageCount: document.extraction.pageCount ?? null,
+        confidence: document.extraction.confidence ?? "none"
+      }
+    }));
+}
+
+function uploadedDocumentFieldValue(field) {
+  if (!field || typeof field !== "object") return "";
+  return String(field.value ?? field.text ?? field.label ?? "").slice(0, 240);
+}
+
+function uploadedDocumentFieldsSummary(fields = []) {
+  const pairs = fields
+    .slice(0, 8)
+    .map((field) => `${field.label ?? "field"}=${uploadedDocumentFieldValue(field)}`)
+    .filter(Boolean);
+  return pairs.length ? pairs.join("; ") : "no structured fields";
+}
+
+function sourcePointersFromUploadedDocuments(documents = []) {
+  return documents
+    .filter((document) => document.extraction.status !== "blocked")
+    .map((document) => ({
+      kind: "uploaded_document_extraction",
+      table: "uploaded_document_extractions",
+      id: document.uploadId,
+      displayLabel: document.filename,
+      sourceUrl: `upload://${document.uploadId}`,
+      summary: `${document.filename}: extraction ${document.extraction.status}; ${uploadedDocumentFieldsSummary(document.extraction.fields)}`,
+      createdAt: document.extraction.extractedAt ?? nowIso(),
+      contentType: document.contentType,
+      byteSize: document.byteSize,
+      sha256: document.sha256,
+      extractionMethod: document.extraction.method,
+      extractionHash: document.extraction.textHash,
+      pageCount: document.extraction.pageCount,
+      evidenceFields: document.extraction.fields.map((field) => ({
+        label: field.label ?? "field",
+        value: uploadedDocumentFieldValue(field),
+        confidence: field.confidence ?? document.extraction.confidence ?? "unknown"
+      })),
+      citation: {
+        sourceKind: "uploaded_document_extraction",
+        uploadId: document.uploadId,
+        filename: document.filename,
+        extractionStatus: document.extraction.status,
+        extractionMethod: document.extraction.method,
+        confidence: document.extraction.confidence,
+        sourceSpans: document.extraction.sourceSpans.slice(0, 5).map((span) => ({
+          spanId: span.span_id ?? span.spanId ?? null,
+          snippet: span.snippet ?? "",
+          confidence: span.confidence ?? document.extraction.confidence ?? "unknown"
+        }))
+      }
+    }));
+}
+
+function uploadedDocumentContextFromDocuments(documents = []) {
+  const sourcePointers = sourcePointersFromUploadedDocuments(documents);
+  return {
+    documentCount: documents.length,
+    sourcePointerCount: sourcePointers.length,
+    documents: documents.map((document) => ({
+      uploadId: document.uploadId,
+      filename: document.filename,
+      contentType: document.contentType,
+      byteSize: document.byteSize,
+      sha256: document.sha256,
+      extractionStatus: document.extraction.status,
+      extractionMethod: document.extraction.method,
+      confidence: document.extraction.confidence,
+      blockers: document.extraction.blockers,
+      fields: document.extraction.fields,
+      sourceSpans: document.extraction.sourceSpans,
+      safeTextPreview: document.extraction.safeTextPreview,
+      textHash: document.extraction.textHash,
+      pageCount: document.extraction.pageCount
+    })),
+    sourcePointers
+  };
+}
+
+function sourcePointersFromTrustedResearchEvidence(results = []) {
+  return results
+    .filter((result) => result?.citationStatus === "trusted_retrieval_approved")
+    .map((result) => ({
+      kind: "trusted_research_artifact",
+      table: "research_artifacts",
+      id: result.artifactId,
+      displayLabel: result.title ?? "Reviewed research evidence",
+      sourceUrl: result.sourceUrl,
+      summary: `Reviewed research evidence (${result.confidence ?? "unknown"} confidence, score ${result.score ?? 0}): ${String(result.snippet ?? "").slice(0, 280)}`,
+      createdAt: result.createdAt ?? nowIso(),
+      contentHash: result.contentHash,
+      extractionHash: result.extractionHash,
+      citationStatus: result.citationStatus,
+      evidenceFields: [
+        {
+          label: "Reviewed evidence snippet",
+          value: String(result.snippet ?? "").slice(0, 360),
+          confidence: result.confidence ?? "unknown"
+        }
+      ],
+      citation: {
+        sourceKind: "trusted_research_artifact",
+        runId: result.runId,
+        sourceId: result.sourceId,
+        artifactId: result.artifactId,
+        citationStatus: result.citationStatus,
+        score: result.score,
+        confidence: result.confidence ?? "unknown"
+      }
+    }));
+}
+
 function evidenceChannelsFromBrowserResult(browserResult = null) {
   if (!browserResult?.extraction) return [];
   const channels = [];
@@ -333,7 +508,76 @@ function shouldObserveEvidence(state) {
       raw.browserSnapshot ||
       raw.remoteDebuggerUrl ||
       raw.portalPageSnapshots?.length
+      || raw.uploadedDocuments?.length
   );
+}
+
+function shouldSearchTrustedResearchEvidence(state) {
+  if (state.final_response) return false;
+  if (state.raw_message?.trustedResearchEvidence === false || state.raw_message?.enableTrustedResearchEvidence === false) return false;
+  if (!state.policy_result?.allowed) return false;
+  if (!state.workflow || String(state.workflow).startsWith("refuse_") || state.workflow === "human_approval_escalation") return false;
+  return true;
+}
+
+async function retrieveTrustedResearchEvidence(store, state, { session, user }) {
+  if (!store || !shouldSearchTrustedResearchEvidence(state)) return null;
+  const evidence = await searchResearchEvidence(store, {
+    query: state.user_input,
+    includePending: false,
+    limit: Number(state.raw_message?.trustedResearchEvidenceLimit ?? 3)
+  });
+  const sourcePointers = sourcePointersFromTrustedResearchEvidence(evidence.results ?? []);
+  const status = sourcePointers.length
+    ? "captured_trusted_research_evidence"
+    : evidence.status === "pending_review_only"
+      ? "blocked_pending_research_evidence_review"
+      : "blocked_no_trusted_research_evidence";
+  const reason =
+    status === "captured_trusted_research_evidence"
+      ? "Reviewed research evidence is available for trusted citation."
+      : status === "blocked_pending_research_evidence_review"
+        ? "Matching research artifacts exist, but they are still pending operator citation review."
+        : "No reviewed trusted research evidence matched this insurance question.";
+  await publishGraphRuntimeEvent(store, state, {
+    eventType: "evidence.status",
+    session,
+    user,
+    payload: {
+      status,
+      terminalOutcome: sourcePointers.length ? "completed_with_sourced_result" : "not_possible_missing_reviewed_evidence",
+      workflow: state.workflow,
+      runtime: "trusted_research_evidence_search",
+      sourcePointerCount: sourcePointers.length,
+      trustedResultCount: evidence.trustedResultCount,
+      pendingReviewCount: evidence.pendingReviewCount,
+      actionsTaken: ["trusted_research_evidence_search"]
+    }
+  });
+  await audit(store, session.id, sourcePointers.length ? "trusted_research_evidence_retrieved" : "trusted_research_evidence_unavailable", {
+    status,
+    workflow: state.workflow,
+    queryLength: String(state.user_input ?? "").length,
+    trustedResultCount: evidence.trustedResultCount,
+    pendingReviewCount: evidence.pendingReviewCount,
+    artifactIds: sourcePointers.map((pointer) => pointer.id),
+    contentHashes: sourcePointers.map((pointer) => pointer.contentHash).filter(Boolean),
+    extractionHashes: sourcePointers.map((pointer) => pointer.extractionHash).filter(Boolean),
+    actionsTaken: ["trusted_research_evidence_search"]
+  });
+  return {
+    status,
+    reason,
+    query: state.user_input,
+    searchStatus: evidence.status,
+    message: evidence.message,
+    trustedResultCount: evidence.trustedResultCount,
+    pendingReviewCount: evidence.pendingReviewCount,
+    lowConfidence: evidence.lowConfidence,
+    results: evidence.results ?? [],
+    sourcePointers,
+    actionsTaken: ["trusted_research_evidence_search"]
+  };
 }
 
 async function documentCandidateFromApprovalTask(store, taskId) {
@@ -374,9 +618,15 @@ async function inputPolicyNode(state) {
     safety: {
       policyAllowed: policyResult.allowed,
       approvalRequired: policyResult.approvalRequired,
+      urgentEscalationRequired: policyResult.urgentEscalationRequired,
+      urgentEscalation: policyResult.urgentEscalation,
       checks: policyResult.checks
     },
-    proof: appendProof(state, "input_policy", { intent, allowed: policyResult.allowed })
+    proof: appendProof(state, "input_policy", {
+      intent,
+      allowed: policyResult.allowed,
+      urgentEscalationRequired: policyResult.urgentEscalationRequired
+    })
   };
 }
 
@@ -386,8 +636,11 @@ async function recallContextNode(state) {
     source: "langgraph_runner",
     requestedAt: nowIso()
   });
+  const store = activeStores.get(state.session_id);
+  const skillHints = await resolveDynamicSkillContext(store, state);
   return {
     runtime_bundle: bundle,
+    dynamic_skill_context: skillHints,
     memory_context: [
       bundle.langgraph.state.memory_context,
       ...(state.product_memory_recall?.facts ?? []).map((item) => `Graphiti memory fact: ${item.fact ?? item.name ?? item.uuid}`)
@@ -399,23 +652,44 @@ async function recallContextNode(state) {
       memoryItemCount: packet?.memoryItems?.length ?? 0,
       routeCandidateCount: packet?.workflowArchitecture?.routeCandidates?.length ?? 0,
       productMemoryAdapter: state.product_memory_recall?.adapter ?? "disabled",
-      productMemoryFactCount: state.product_memory_recall?.facts?.length ?? 0
+      productMemoryFactCount: state.product_memory_recall?.facts?.length ?? 0,
+      dynamicSkillMatches:
+        skillHints.matches?.map((item) => ({
+          skillKey: item.skillKey,
+          kind: item.skillKind,
+          score: item.fit?.score ?? 0
+        })) ?? []
     })
   };
 }
 
 async function structuredIntentNode(state) {
-  const structuredIntent = classifyHealthcareIntent({
+  const curatedIntent = classifyHealthcareIntent({
     message: state.user_input,
     policyResult: state.policy_result,
     contextPacket: state.context_packet
   });
+  const reasoning = buildDeterministicStructuredReasoning({
+    message: state.user_input,
+    policyResult: state.policy_result,
+    curatedIntent,
+    contextPacket: state.context_packet
+  });
+  const journeyPlan = planJourneyFromIntent(reasoning);
+  const structuredIntent = {
+    ...curatedIntent,
+    reasoning,
+    primary_intent: reasoning.primary_intent,
+    candidate_journeys: reasoning.candidate_journeys
+  };
   return {
     structured_intent: structuredIntent,
+    journey_decisions: [journeyPlan],
     proof: appendProof(state, "structured_intent_classifier", {
       classifier: structuredIntent.classifier,
       intent: structuredIntent.intent,
       workflow: structuredIntent.workflow,
+      journey: reasoning.primary_intent,
       confidence: structuredIntent.confidence,
       refusalOrEscalationFlag: structuredIntent.refusalOrEscalationFlag,
       missingEvidence: structuredIntent.missingEvidence
@@ -424,6 +698,24 @@ async function structuredIntentNode(state) {
 }
 
 async function llmOrchestrationDecisionNode(state) {
+  if (state.policy_result?.urgentEscalationRequired) {
+    return {
+      llm_orchestration_decision: {
+        mode: "skipped_urgent_emergency_escalation",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: "human_approval_escalation",
+        confidence: 0,
+        rationale: "Urgent or emergency content bypasses external LLM decisioning and routes directly to safe handoff.",
+        issues: ["urgent_emergency_escalation"],
+        warnings: []
+      },
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_urgent_emergency_escalation" })
+    };
+  }
+
   if (!state.policy_result?.allowed) {
     return {
       llm_orchestration_decision: {
@@ -584,12 +876,113 @@ async function llmOrchestrationDecisionNode(state) {
 }
 
 async function workflowRouterNode(state) {
+  if (state.policy_result?.urgentEscalationRequired || state.intent === WORKFLOWS.URGENT_HUMAN_HANDOFF) {
+    const structuredIntent =
+      state.structured_intent ??
+      classifyHealthcareIntent({
+        message: state.user_input,
+        policyResult: state.policy_result,
+        contextPacket: state.context_packet
+      });
+    const store = activeStores.get(state.session_id);
+    const user = userFromContext(state.context_packet) ?? { id: state.user_id };
+    const session = sessionFromState(state);
+    const route =
+      state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === "human_approval_escalation") ??
+      state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === "human_approval_escalation") ??
+      null;
+    const handoff = store
+      ? await createHumanHandoffItem(store, {
+          user,
+          session,
+          graphTraceId: state.graph_trace_id,
+          policyResult: state.policy_result,
+          userInput: state.user_input,
+          workflow: "human_approval_escalation"
+        })
+      : null;
+    if (store && handoff?.handoff) {
+      await publishGraphRuntimeEvent(store, state, {
+        eventType: "handoff.created",
+        session,
+        user,
+        payload: {
+          status: handoff.handoff.status,
+          handoffId: handoff.handoff.id,
+          taskId: handoff.handoff.taskId,
+          priority: handoff.handoff.priority,
+          handoffType: handoff.handoff.handoffType,
+          workflow: "human_approval_escalation",
+          urgentEscalationCategory: state.policy_result?.urgentEscalation?.category ?? null,
+          actionsTaken: []
+        }
+      });
+    }
+    return {
+      workflow: "human_approval_escalation",
+      structured_intent: structuredIntent,
+      workflow_route: route,
+      route_reason: "urgent_emergency_handoff_required",
+      human_handoff: handoff,
+      evidence_observation: {
+        status: "skipped",
+        reason: "urgent_emergency_handoff_required",
+        actionsTaken: []
+      },
+      llm_orchestration_decision: state.llm_orchestration_decision ?? {
+        mode: "skipped_urgent_emergency_escalation",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: "human_approval_escalation",
+        confidence: 0,
+        rationale: "Urgent or emergency content routes directly to safe handoff before external LLM decisioning.",
+        issues: ["urgent_emergency_escalation"],
+        warnings: []
+      },
+      final_response: composeUrgentEscalationResponse(handoff?.handoff),
+      should_remember: false,
+      memory_summary: `Urgent/emergency human handoff ${handoff?.handoff?.id ?? "not_persisted"} created for session ${state.session_id}.`,
+      memory_type: "urgent_handoff_event",
+      workflow_outcome: "urgent_handoff_created",
+      proof: appendProof(state, "workflow_router", {
+        route: "human_approval_escalation",
+        reason: "urgent_emergency_handoff_required",
+        handoffId: handoff?.handoff?.id ?? null,
+        taskId: handoff?.handoff?.taskId ?? null,
+        openclawBypassed: true,
+        executableNow: Boolean(route?.executableNow)
+      })
+    };
+  }
+
   const refusal = refusalForIntent(state.intent);
   if (refusal) {
+    const structuredIntent =
+      state.structured_intent ??
+      classifyHealthcareIntent({
+        message: state.user_input,
+        policyResult: state.policy_result,
+        contextPacket: state.context_packet
+      });
     return {
       workflow: state.intent,
+      structured_intent: structuredIntent,
       workflow_route: null,
       route_reason: "blocked_by_input_policy",
+      llm_orchestration_decision: state.llm_orchestration_decision ?? {
+        mode: "skipped_policy_refusal",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini",
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "Deterministic safety policy blocked the request before external LLM decisioning.",
+        issues: ["deterministic_policy_refusal"],
+        warnings: []
+      },
       final_response: refusal,
       workflow_outcome: "blocked",
       proof: appendProof(state, "workflow_router", { route: state.intent, reason: "blocked_by_input_policy" })
@@ -647,6 +1040,87 @@ async function workflowRouterNode(state) {
   };
 }
 
+async function maybeComposeLiveSourcedAnswer(state, deterministicAnswer) {
+  if (!(state.source_pointers?.length > 0)) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "skipped_no_source_pointers",
+        valid: false
+      },
+      answerClaims: []
+    };
+  }
+  if (state.raw_message?.useLiveModel === false) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "explicitly_disabled_by_request",
+        valid: false
+      },
+      answerClaims: []
+    };
+  }
+  const store = activeStores.get(state.session_id);
+  const user = userFromContext(state.context_packet);
+  try {
+    const composed = await composeSourcedAnswerWithOpenAI({
+      state,
+      deterministicAnswer,
+      store,
+      sessionId: state.session_id,
+      user
+    });
+    if (!composed.valid) {
+      return {
+        finalResponse: deterministicAnswer,
+        sourcedAnswer: composed,
+        answerClaims: []
+      };
+    }
+    return {
+      finalResponse: composed.finalResponse,
+      sourcedAnswer: composed,
+      answerClaims: composed.answer.claims.map((claim) => ({
+        ...claim,
+        composerMode: composed.mode,
+        workflow: state.workflow
+      }))
+    };
+  } catch (error) {
+    return {
+      finalResponse: deterministicAnswer,
+      sourcedAnswer: {
+        mode: "openai_sourced_answer_failed",
+        valid: false,
+        issues: [error.message]
+      },
+      answerClaims: []
+    };
+  }
+}
+
+async function skillResolverNode(state) {
+  if (state.final_response) {
+    return {
+      proof: appendProof(state, "skill_resolver", { skipped: true, reason: "policy_response_already_composed" })
+    };
+  }
+  const store = activeStores.get(state.session_id);
+  const dynamicSkillContext = await resolveDynamicSkillContext(store, state);
+  return {
+    dynamic_skill_context: dynamicSkillContext,
+    proof: appendProof(state, "skill_resolver", {
+      selected: dynamicSkillContext.selected,
+      matchCount: dynamicSkillContext.matches.length,
+      requiredOpenClawTasks: dynamicSkillContext.requiredOpenClawTasks,
+      requiredSearch: dynamicSkillContext.requiredSearch,
+      requiredApis: dynamicSkillContext.requiredApis,
+      successEstimate: dynamicSkillContext.successEstimate
+    })
+  };
+}
+
 async function workflowExecutorNode(state) {
   if (state.final_response) {
     return {
@@ -656,18 +1130,39 @@ async function workflowExecutorNode(state) {
     };
   }
   const envelope = toOpenClawChannelEnvelope(state.context_packet, state.raw_message);
-  const skillArtifact = await loadOpenClawSkillArtifact("insurance_portal_browser");
+  const registry = await loadOpenClawSkillRegistry();
+  const executionSkillKey = state.dynamic_skill_context?.selected?.executionSkillKey ?? "insurance_portal_browser";
+  const skillArtifact = await loadOpenClawSkillArtifact(executionSkillKey);
   const validation = validateOpenClawEnvelopeAgainstSkill(envelope, skillArtifact, {
     workflowKey: state.workflow
   });
   const workerPlan = buildLangGraphOpenClawWorkerPlan(envelope, validation);
+  const boundedTaskProposal = buildOpenClawBoundedTaskProposal({
+    registry,
+    dynamicSkillContext: state.dynamic_skill_context,
+    workflow: state.workflow,
+    task: {
+      action: state.dynamic_skill_context?.requiredOpenClawTasks?.[0] ?? "read_only_observation",
+      goal: state.user_input,
+      description: summarizeRoute(state.workflow_route)
+    }
+  });
   const toolCall = {
     tool: "openclaw_channel_envelope",
     status: "prepared_not_executed",
     workflow: state.workflow,
     approvalPolicy: envelope.approval_policy,
     skillKey: validation.skillKey,
+    routedOpenClawSkills: boundedTaskProposal.routedSkills,
+    selectedExecutor: boundedTaskProposal.selectedExecutor,
     executionMode: validation.executionMode,
+    dynamicSkillContext: state.dynamic_skill_context
+      ? {
+          selected: state.dynamic_skill_context.selected,
+          successEstimate: state.dynamic_skill_context.successEstimate,
+          requiredOpenClawTasks: state.dynamic_skill_context.requiredOpenClawTasks
+        }
+      : null,
     workerPlanId: workerPlan.planId,
     workerJobIds: workerPlan.workerJobs.map((job) => job.jobId)
   };
@@ -675,6 +1170,7 @@ async function workflowExecutorNode(state) {
     openclaw_envelope: envelope,
     openclaw_skill_validation: validation,
     openclaw_worker_plan: workerPlan,
+    openclaw_task_proposal: boundedTaskProposal,
     tool_calls: [toolCall],
     tool_results: [
       {
@@ -686,6 +1182,7 @@ async function workflowExecutorNode(state) {
         fallbackPath: validation.fallbackPath,
         actionsTaken: [],
         approvalsRequired: validation.approvalsRequired,
+        boundedTaskProposal,
         workerPlan: {
           planId: workerPlan.planId,
           status: workerPlan.status,
@@ -698,6 +1195,10 @@ async function workflowExecutorNode(state) {
     ],
     proof: appendProof(state, "workflow_executor", {
       workflow: state.workflow,
+      dynamicSkillSelected: state.dynamic_skill_context?.selected ?? null,
+      openclawRoutedSkillCount: boundedTaskProposal.routedSkills.length,
+      openclawSelectedExecutor: boundedTaskProposal.selectedExecutor?.executorKey ?? null,
+      openclawTaskProposalStatus: boundedTaskProposal.status,
       openclawEnvelopePrepared: true,
       openclawSkillValidated: true,
       openclawSkillValid: validation.valid,
@@ -721,7 +1222,38 @@ async function evidenceObservationNode(state) {
       })
     };
   }
+  const user = userFromContext(state.context_packet);
+  const portal = portalFromContext(state.context_packet);
+  const session = sessionFromState(state);
+  const store = activeStores.get(state.session_id);
   if (!shouldObserveEvidence(state)) {
+    const researchEvidence = await retrieveTrustedResearchEvidence(store, state, { session, user });
+    if (researchEvidence) {
+      return {
+        research_evidence: researchEvidence,
+        evidence_observation: {
+          status: researchEvidence.status,
+          reason: researchEvidence.reason,
+          terminalOutcome: researchEvidence.sourcePointers.length
+            ? "completed_with_sourced_result"
+            : "not_possible_missing_reviewed_evidence",
+          actionsTaken: researchEvidence.actionsTaken,
+          sourcePointers: researchEvidence.sourcePointers,
+          trustedResultCount: researchEvidence.trustedResultCount,
+          pendingReviewCount: researchEvidence.pendingReviewCount,
+          lowConfidence: researchEvidence.lowConfidence,
+          runtime: "trusted_research_evidence_search"
+        },
+        source_pointers: researchEvidence.sourcePointers,
+        proof: appendProof(state, "evidence_observation", {
+          status: researchEvidence.status,
+          runtime: "trusted_research_evidence_search",
+          sourcePointerCount: researchEvidence.sourcePointers.length,
+          trustedResultCount: researchEvidence.trustedResultCount,
+          pendingReviewCount: researchEvidence.pendingReviewCount
+        })
+      };
+    }
     return {
       evidence_observation: {
         status: "not_requested",
@@ -732,10 +1264,6 @@ async function evidenceObservationNode(state) {
       proof: appendProof(state, "evidence_observation", { status: "not_requested" })
     };
   }
-
-  const user = userFromContext(state.context_packet);
-  const portal = portalFromContext(state.context_packet);
-  const session = sessionFromState(state);
   if (!user || !portal) {
     return {
       evidence_observation: {
@@ -749,7 +1277,6 @@ async function evidenceObservationNode(state) {
     };
   }
 
-  const store = activeStores.get(state.session_id);
   if (!store) {
     return {
       evidence_observation: {
@@ -760,6 +1287,66 @@ async function evidenceObservationNode(state) {
       },
       source_pointers: [],
       proof: appendProof(state, "evidence_observation", { status: "blocked_missing_store" })
+    };
+  }
+
+  const uploadedDocuments = uploadedDocumentsFromRawMessage(state.raw_message);
+  if (uploadedDocuments.length) {
+    const uploadedDocumentContext = uploadedDocumentContextFromDocuments(uploadedDocuments);
+    const sourcePointers = uploadedDocumentContext.sourcePointers;
+    const status = sourcePointers.length ? "captured_uploaded_document_extraction" : "blocked_uploaded_document_extraction";
+    const blockers = uploadedDocuments.flatMap((document) => document.extraction.blockers ?? []);
+    const actionsTaken = sourcePointers.length ? ["read_uploaded_document_extraction"] : [];
+    await publishGraphRuntimeEvent(store, state, {
+      eventType: "evidence.status",
+      session,
+      user,
+      payload: {
+        status,
+        terminalOutcome: sourcePointers.length ? "completed_with_sourced_result" : "not_possible_missing_user_data",
+        workflow: state.workflow,
+        runtime: "fastapi_uploaded_document_extraction",
+        documentCount: uploadedDocuments.length,
+        sourcePointerCount: sourcePointers.length,
+        actionsTaken
+      }
+    });
+    await audit(store, session.id, "uploaded_document_extraction_observed", {
+      status,
+      documentCount: uploadedDocuments.length,
+      uploadIds: uploadedDocuments.map((document) => document.uploadId),
+      sourcePointerCount: sourcePointers.length,
+      extractionMethods: uploadedDocuments.map((document) => document.extraction.method),
+      blockers,
+      actionsTaken
+    });
+    return {
+      uploaded_document_context: uploadedDocumentContext,
+      evidence_observation: {
+        status,
+        terminalOutcome: sourcePointers.length ? "completed_with_sourced_result" : "not_possible_missing_user_data",
+        actionsTaken,
+        sourcePointers,
+        uploadedDocuments: uploadedDocumentContext.documents,
+        blockers,
+        documentCount: uploadedDocuments.length
+      },
+      browser_result: {
+        connected: true,
+        status: "uploaded_document_extraction",
+        page: {
+          title: uploadedDocuments.map((document) => document.filename).join(", "),
+          url: sourcePointers[0]?.sourceUrl ?? null
+        }
+      },
+      source_pointers: sourcePointers,
+      proof: appendProof(state, "evidence_observation", {
+        status,
+        runtime: "fastapi_uploaded_document_extraction",
+        documentCount: uploadedDocuments.length,
+        sourcePointerCount: sourcePointers.length,
+        actionsTaken
+      })
     };
   }
 
@@ -1800,6 +2387,75 @@ function composeBlockedEvidenceResponse(state, routeSummary) {
   ].join("\n\n");
 }
 
+function composeUploadedDocumentResponse(state, routeSummary) {
+  const context = state.uploaded_document_context ?? state.evidence_observation ?? {};
+  const documents = context.documents ?? state.evidence_observation?.uploadedDocuments ?? [];
+  const fieldLines = documents
+    .flatMap((document) =>
+      (document.fields ?? []).slice(0, 10).map((field) => {
+        const confidence = field.confidence ?? document.confidence ?? "unknown";
+        return `- ${document.filename}: ${field.label ?? "field"} = ${uploadedDocumentFieldValue(field)} (confidence ${confidence})`;
+      })
+    )
+    .slice(0, 16);
+  const blockerLines = documents
+    .flatMap((document) => (document.blockers ?? []).map((blocker) => `- ${document.filename}: ${blocker}`))
+    .slice(0, 8);
+  const pointerLine = state.source_pointers?.length
+    ? `Source pointers: ${state.source_pointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`
+    : "Source pointers: none stored because the uploaded extraction did not produce readable evidence.";
+  return [
+    `LangGraph routed this request to ${state.workflow} and answered from the uploaded document extraction attached to this session.`,
+    `Routing evidence: ${routeSummary}`,
+    documents.length
+      ? `Uploaded document(s): ${documents.map((document) => `${document.filename} (${document.extractionStatus}, ${document.extractionMethod})`).join("; ")}.`
+      : "Uploaded document(s): none available.",
+    fieldLines.length ? `Structured extracted fields:\n${fieldLines.join("\n")}` : "Structured extracted fields: none recognized yet.",
+    blockerLines.length ? `Extraction blockers:\n${blockerLines.join("\n")}` : "Extraction blockers: none reported.",
+    pointerLine,
+    "This answer uses only the stored extraction fields, redacted preview metadata, hashes, and source snippets from the upload harness. It does not use raw document dumps.",
+    "No OpenClaw worker action, payer contact, external message, credential entry, medical advice, form submission, or account change was performed."
+  ].join("\n\n");
+}
+
+function composeTrustedResearchEvidenceResponse(state, routeSummary) {
+  const evidence = state.research_evidence ?? {};
+  const sourcePointers = state.source_pointers ?? [];
+  const results = evidence.results ?? [];
+  const resultLines = results
+    .slice(0, 3)
+    .map((result, index) => {
+      const label = result.title ?? result.sourceUrl ?? `reviewed source ${index + 1}`;
+      const snippet = String(result.snippet ?? "").slice(0, 360);
+      return `- ${label}: ${snippet || "reviewed safe preview available"} (confidence ${result.confidence ?? "unknown"}, score ${result.score ?? 0})`;
+    });
+  const pointerLine = sourcePointers.length
+    ? `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`
+    : "Source pointers: none.";
+  return [
+    `LangGraph routed this request to ${state.workflow} and answered from operator-reviewed research evidence.`,
+    `Routing evidence: ${routeSummary}`,
+    resultLines.length ? `Reviewed evidence used:\n${resultLines.join("\n")}` : "Reviewed evidence used: none.",
+    pointerLine,
+    "This answer is limited to reviewed, citation-approved research artifacts. It does not use pending review artifacts, MockWorker output, raw document dumps, payer contact, form submission, credential entry, medical advice, or account changes."
+  ].join("\n\n");
+}
+
+function composeMissingTrustedResearchEvidenceResponse(state, routeSummary) {
+  const evidence = state.research_evidence ?? {};
+  const pendingLine =
+    evidence.pendingReviewCount > 0
+      ? `${evidence.pendingReviewCount} matching artifact(s) exist, but they are still pending operator citation review.`
+      : "No reviewed trusted artifact matched this question.";
+  return [
+    `LangGraph routed this request to ${state.workflow}, but I cannot answer the insurance question from trusted citations yet.`,
+    `Routing evidence: ${routeSummary}`,
+    `Retrieval status: ${evidence.searchStatus ?? state.evidence_observation?.status ?? "not_available"}. ${pendingLine}`,
+    "To answer safely, add or approve relevant research evidence, upload a document, or approve a read-only portal observation. I will not invent plan or coverage facts without a stored trusted source pointer.",
+    "No source pointers, payer contact, external messages, credential entry, medical advice, form submissions, or account changes were created."
+  ].join("\n\n");
+}
+
 async function composeResponseNode(state) {
   if (state.final_response) {
     return {
@@ -1825,12 +2481,70 @@ async function composeResponseNode(state) {
     };
   }
   if (
+    ["captured_uploaded_document_extraction", "blocked_uploaded_document_extraction"].includes(state.evidence_observation?.status)
+  ) {
+    const deterministicResponse = composeUploadedDocumentResponse(state, routeSummary);
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
+    return {
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
+      should_remember: state.source_pointers?.length > 0,
+      memory_summary: state.source_pointers?.length
+        ? `LangGraph answered from uploaded document extraction for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`
+        : `LangGraph could not answer from uploaded document extraction for ${state.workflow}; extraction blockers were reported.`,
+      memory_type: state.source_pointers?.length ? "uploaded_document_evidence_event" : "workflow_blocker_event",
+      workflow_outcome: state.source_pointers?.length ? "uploaded_document_explained" : "uploaded_document_extraction_blocked",
+      proof: appendProof(state, "response_policy", {
+        finalResponsePrepared: true,
+        evidenceObservationStatus: state.evidence_observation.status,
+        sourcePointerCount: state.source_pointers?.length ?? 0
+      })
+    };
+  }
+  if (state.evidence_observation?.status === "captured_trusted_research_evidence") {
+    const deterministicResponse = composeTrustedResearchEvidenceResponse(state, routeSummary);
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
+    return {
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
+      should_remember: state.source_pointers?.length > 0,
+      memory_summary: `LangGraph answered from reviewed research evidence for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
+      memory_type: "trusted_research_evidence_event",
+      workflow_outcome: "trusted_research_answered",
+      proof: appendProof(state, "response_policy", {
+        finalResponsePrepared: true,
+        evidenceObservationStatus: state.evidence_observation.status,
+        sourcePointerCount: state.source_pointers?.length ?? 0
+      })
+    };
+  }
+  if (
+    ["blocked_pending_research_evidence_review", "blocked_no_trusted_research_evidence"].includes(state.evidence_observation?.status)
+  ) {
+    const finalResponse = composeMissingTrustedResearchEvidenceResponse(state, routeSummary);
+    return {
+      final_response: finalResponse,
+      should_remember: false,
+      memory_summary: `LangGraph could not answer ${state.workflow} from trusted research evidence; ${state.evidence_observation.reason}`,
+      memory_type: "workflow_blocker_event",
+      workflow_outcome: "trusted_research_evidence_unavailable",
+      proof: appendProof(state, "response_policy", {
+        finalResponsePrepared: true,
+        evidenceObservationStatus: state.evidence_observation.status,
+        sourcePointerCount: 0,
+        pendingReviewCount: state.evidence_observation.pendingReviewCount ?? 0
+      })
+    };
+  }
+  if (
     SOURCE_POINTER_RESPONSE_STATUSES.has(state.evidence_observation?.status) &&
     user &&
     portal &&
     state.browser_result
   ) {
-    const finalResponse = composeResponse({
+    const deterministicResponse = composeResponse({
       user,
       portal,
       policyResult: state.policy_result,
@@ -1840,8 +2554,11 @@ async function composeResponseNode(state) {
       sourcePointers: state.source_pointers,
       evidenceObservation: state.evidence_observation
     });
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: true,
       memory_summary: `LangGraph captured read-only evidence for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "evidence_capture_event",
@@ -1853,15 +2570,18 @@ async function composeResponseNode(state) {
     };
   }
   if (state.evidence_observation?.status === "captured_multi_page_scan") {
-    const finalResponse = [
+    const deterministicResponse = [
       `LangGraph routed this request to ${state.workflow} and captured ${state.portal_scan?.pageRows?.length ?? 0} read-only portal page snapshot(s).`,
       `Source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       `The OpenClaw task envelope was prepared, validated as ${state.openclaw_skill_validation?.status ?? "not_validated"}, and not executed in this slice.`,
       "No payer API, external message, credential entry, medical advice, or irreversible portal action was performed.",
       "This answer was composed inside the LangGraph product runtime."
     ].join("\n\n");
+    const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
     return {
-      final_response: finalResponse,
+      final_response: composed.finalResponse,
+      sourced_answer: composed.sourcedAnswer,
+      answer_claims: composed.answerClaims,
       should_remember: true,
       memory_summary: `LangGraph captured a read-only portal scan for ${state.workflow}; source pointers: ${state.source_pointers.map((item) => `${item.table}/${item.id}`).join(", ")}.`,
       memory_type: "evidence_capture_event",
@@ -1896,6 +2616,16 @@ async function composeResponseNode(state) {
 }
 
 async function maybeModelNode(state) {
+  if (state.policy_result?.urgentEscalationRequired) {
+    return {
+      model_invocation: {
+        mode: "skipped_urgent_emergency_escalation",
+        provider: "openai",
+        model: process.env.OPENAI_MODEL || "gpt-5-mini"
+      },
+      proof: appendProof(state, "model_invocation", { mode: "skipped_urgent_emergency_escalation" })
+    };
+  }
   const useLiveModel = Boolean(state.raw_message?.useLiveModel);
   if (!useLiveModel) {
     return {
@@ -2023,6 +2753,10 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
       payload: {
         planId: state.openclaw_worker_plan?.planId ?? null,
         dispatchStatus: state.openclaw_worker_plan?.dispatchStatus ?? null,
+        taskProposalStatus: state.openclaw_task_proposal?.status ?? null,
+        selectedSkill: state.openclaw_task_proposal?.selectedSkill?.skillKey ?? null,
+        selectedExecutor: state.openclaw_task_proposal?.selectedExecutor?.executorKey ?? null,
+        routedSkills: state.openclaw_task_proposal?.routedSkills?.map((skill) => skill.skillKey) ?? [],
         workerJobIds: (state.openclaw_worker_plan?.workerJobs ?? []).map((job) => job.jobId),
         mayCreateSubtasks: state.openclaw_worker_plan?.workerJobs?.[0]?.deterministicControls?.workerMayCreateSubtasks ?? null,
         progressEverySeconds: state.openclaw_worker_plan?.workerJobs?.[0]?.progressProtocol?.reportEverySeconds ?? null
@@ -2090,21 +2824,79 @@ export function createBrainstyLangGraph() {
     .addNode("classify_intent", structuredIntentNode)
     .addNode("llm_decision", llmOrchestrationDecisionNode)
     .addNode("workflow_router", workflowRouterNode)
+    .addNode("skill_resolver", skillResolverNode)
     .addNode("workflow_executor", workflowExecutorNode)
     .addNode("observe_evidence", evidenceObservationNode)
     .addNode("compose_response", composeResponseNode)
     .addNode("maybe_model", maybeModelNode)
     .addEdge(START, "input_policy")
-    .addEdge("input_policy", "recall_context")
+    .addConditionalEdges("input_policy", routeAfterInputPolicy, {
+      workflow_router: "workflow_router",
+      recall_context: "recall_context"
+    })
     .addEdge("recall_context", "classify_intent")
     .addEdge("classify_intent", "llm_decision")
     .addEdge("llm_decision", "workflow_router")
-    .addEdge("workflow_router", "workflow_executor")
+    .addConditionalEdges("workflow_router", routeAfterWorkflowRouter, {
+      compose_response: "compose_response",
+      skill_resolver: "skill_resolver"
+    })
+    .addEdge("skill_resolver", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
-    .addEdge("observe_evidence", "compose_response")
+    .addConditionalEdges("observe_evidence", routeAfterEvidenceObservation, {
+      compose_response: "compose_response"
+    })
     .addEdge("compose_response", "maybe_model")
     .addEdge("maybe_model", END)
     .compile({ checkpointer });
+}
+
+export function routeAfterInputPolicy(state) {
+  if (state.policy_result?.urgentEscalationRequired || state.policy_result?.allowed === false) return "workflow_router";
+  return "recall_context";
+}
+
+export function routeAfterWorkflowRouter(state) {
+  if (state.policy_result?.urgentEscalationRequired || state.policy_result?.allowed === false) return "compose_response";
+  if (refusalForIntent(state.intent)) return "compose_response";
+  if (["urgent_handoff_created", "blocked"].includes(state.workflow_outcome)) return "compose_response";
+  return state.final_response ? "compose_response" : "skill_resolver";
+}
+
+export function routeAfterEvidenceObservation() {
+  return "compose_response";
+}
+
+export function describeBrainstyLangGraphTopology() {
+  return {
+    version: LANGGRAPH_RUNNER_VERSION,
+    conditionalEdges: [
+      {
+        from: "input_policy",
+        cases: ["workflow_router", "recall_context"],
+        proves: ["refusal", "urgent_handoff", "safe_continue"]
+      },
+      {
+        from: "workflow_router",
+        cases: ["compose_response", "skill_resolver"],
+        proves: ["policy_response", "approval_pending", "journey_execution"]
+      },
+      {
+        from: "observe_evidence",
+        cases: ["compose_response"],
+        proves: ["evidence_blocked", "evidence_found", "answer_composition"]
+      }
+    ],
+    linearEdges: [
+      ["recall_context", "classify_intent"],
+      ["classify_intent", "llm_decision"],
+      ["llm_decision", "workflow_router"],
+      ["skill_resolver", "workflow_executor"],
+      ["workflow_executor", "observe_evidence"],
+      ["compose_response", "maybe_model"]
+    ],
+    finalResponseBranchingMechanism: "policy_and_workflow_state_first_with_final_response_backward_compatibility"
+  };
 }
 
 const graph = createBrainstyLangGraph();
@@ -2168,10 +2960,14 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclaw_envelope: null,
     openclaw_skill_validation: null,
     openclaw_worker_plan: null,
+    openclaw_task_proposal: null,
     openclaw_skill_proposal: null,
     worker_continuation: null,
+    human_handoff: null,
     approval_resume: null,
     evidence_observation: null,
+    research_evidence: null,
+    uploaded_document_context: null,
     browser_result: null,
     eligibility_result: null,
     portal_scan: null,
@@ -2180,6 +2976,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     tool_results: [],
     model_invocation: null,
     final_response: null,
+    ai2ui_blocks: [],
     should_remember: false,
     memory_summary: null,
     memory_type: null,
@@ -2213,10 +3010,11 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       contextPacketId: context.row.id,
       envelope: state.openclaw_envelope,
       validation: state.openclaw_skill_validation,
-      workerPlan: state.openclaw_worker_plan
+      workerPlan: state.openclaw_worker_plan,
+      taskProposal: state.openclaw_task_proposal
     });
     state.openclaw_skill_proposal = proposal;
-    state.proof = appendProof(state, "openclaw_skill_invocation_proposal", {
+    state.proof = mergeProof(state, "openclaw_skill_invocation_proposal", {
       taskId: proposal.task.id,
       auditEventId: proposal.auditEvent.id,
       executionMode: proposal.executionMode,
@@ -2234,7 +3032,10 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclawEnvelopePrepared: Boolean(state.openclaw_envelope),
     openclawSkillValidated: Boolean(state.openclaw_skill_validation),
     openclawWorkerPlanPrepared: Boolean(state.openclaw_worker_plan),
+    openclawTaskProposalPrepared: Boolean(state.openclaw_task_proposal),
     openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
+    humanHandoffId: state.human_handoff?.handoff?.id ?? null,
+    humanHandoffTaskId: state.human_handoff?.handoff?.taskId ?? state.human_handoff?.task?.id ?? null,
     modelInvocationMode: state.model_invocation?.mode
   });
   await checkpointSession(store, {
@@ -2252,7 +3053,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
         openclawEnvelopePrepared: Boolean(state.openclaw_envelope),
         openclawSkillValidated: Boolean(state.openclaw_skill_validation),
         openclawWorkerPlanPrepared: Boolean(state.openclaw_worker_plan),
+        openclawTaskProposalPrepared: Boolean(state.openclaw_task_proposal),
         openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
+        humanHandoff: state.human_handoff?.handoff ?? null,
         modelInvocationMode: state.model_invocation?.mode
       }
     },
@@ -2288,12 +3091,23 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     localMemoryItems: retainedMemory
   });
   state.product_memory_retain = productMemoryRetain;
-  state.proof = appendProof(state, "product_memory_retain", {
+  state.proof = mergeProof(state, "product_memory_retain", {
     adapter: productMemoryRetain.adapter,
     enabled: productMemoryRetain.enabled,
     retained: productMemoryRetain.retained,
     episodeUuid: productMemoryRetain.episodeUuid ?? null,
     error: productMemoryRetain.error ?? null
+  });
+  state.ai2ui_blocks = buildAi2UiBlocksFromState(state, {
+    productMemory: {
+      recall: productMemoryRecall,
+      retain: productMemoryRetain
+    }
+  });
+  state.proof = mergeProof(state, "ai2ui_blocks_prepared", {
+    version: state.ai2ui_blocks[0]?.version ?? null,
+    blockCount: state.ai2ui_blocks.length,
+    blockTypes: state.ai2ui_blocks.map((block) => block.type)
   });
   await publishLangGraphLifecycleEvents(store, {
     user,

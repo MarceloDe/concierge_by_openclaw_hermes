@@ -119,6 +119,12 @@ function confidenceFromScore(score) {
 }
 
 function refusalOrEscalation(policyResult) {
+  if (policyResult.urgentEscalationRequired) {
+    return {
+      flag: "urgent_emergency_escalation",
+      rationale: policyResult.urgentEscalation?.reason ?? "Emergency or safety-critical content requires immediate escalation."
+    };
+  }
   if (!policyResult.allowed) {
     const failed = policyResult.checks.find((check) => !check.passed);
     return {
@@ -141,6 +147,19 @@ function refusalOrEscalation(policyResult) {
 export function classifyHealthcareIntent({ message, policyResult, contextPacket = null }) {
   const cleanMessage = compactWhitespace(message);
   const safety = refusalOrEscalation(policyResult);
+  if (safety.flag === "urgent_emergency_escalation") {
+    return {
+      schemaVersion: 1,
+      classifier: "curated_healthcare_intent_v1",
+      intent: "urgent_emergency_escalation",
+      workflow: WORKFLOW_KEYS.HUMAN_APPROVAL,
+      confidence: 1,
+      requiredEvidence: ["human_handoff_record", "urgent_safe_response", "audit_event"],
+      missingEvidence: [],
+      refusalOrEscalationFlag: safety.flag,
+      rationale: safety.rationale
+    };
+  }
   if (safety.flag === "refusal") {
     return {
       schemaVersion: 1,

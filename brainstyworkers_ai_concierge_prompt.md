@@ -1112,3 +1112,185 @@ Phase 8Q restart state and next phases:
   - Phase 8T: narrow approval for one document candidate from Discovery.
   - Phase 8U: read-only PDF/document ingestion only after candidate-specific approval.
   - Phase 8V: polish `/mvp` for user testing while `/` remains the operator proof dashboard.
+
+Phase 10M operator research embedding contract:
+
+- The current active runtime remains Node/LangGraph/OpenClaw/Zep Graphiti with FastAPI as the public/auth facade.
+- Operator-reviewed research evidence now has an explicit embedding route and reindex lifecycle.
+- Trusted research retrieval must only index artifacts with citation status `trusted_retrieval_approved`.
+- Pending-review, quarantined, rejected, and MockWorker artifacts must not enter the trusted embedding index.
+- The default local route is `local_tfidf` / `local-tfidf-v1` for credential-free reproducible MVP proof.
+- Optional OpenAI embedding route selection is explicit and must fail safely when credentials are missing or vectors do not match the configured dimension.
+- Reindex jobs must preserve active prior index rows until a new reindex succeeds; dimension mismatch must block without silent deletion.
+- Operator tooling must expose:
+  - `GET /api/research/embeddings/status`,
+  - `POST /api/research/embeddings/route`,
+  - `POST /api/research/embeddings/reindex`,
+  - operator assistant read tool `research.getEmbeddingStatus`,
+  - proposal-gated write tools `research.chooseEmbeddingRoute` and `research.reindexEmbeddings`.
+- `/` remains the proof console and must show the selected route, trusted/indexed/stale counts, latest reindex job, safety state, and embedding contribution to search ranking.
+- Next likely phase after 10M is OpenClaw/Hermes research-worker dispatch behind existing source approval, operator proposal, schedule, audit, artifact review, and trusted-retrieval gates.
+
+Phase 10N adaptive research worker contract:
+
+- The current active runtime remains Node/LangGraph/OpenClaw/Zep Graphiti with FastAPI as the public/auth facade.
+- OpenClaw and Hermes are now explicit research worker modes, but they remain bounded workers, not orchestrators.
+- Frontend code must never call OpenClaw or Hermes directly; it calls the protected API, and the backend dispatches only after gates pass.
+- Adaptive worker dispatch requires:
+  - approved research source,
+  - queued/running research run,
+  - explicit `approvedWorkerDispatch=true`,
+  - feature flag `BRAINSTY_RESEARCH_OPENCLAW_ENABLED=1` or `BRAINSTY_RESEARCH_HERMES_ENABLED=1`.
+- The worker task envelope is `brainstyworkers.research_worker_task.v1`.
+- The envelope grants only approved-source read-only research actions:
+  - open/read approved source,
+  - read-only browser observation,
+  - read-only scrape,
+  - DOM/accessibility extraction,
+  - screenshot/OCR extraction when available,
+  - structured summary with source pointers.
+- The envelope forbids:
+  - credential entry,
+  - password-manager use,
+  - captcha/2FA bypass,
+  - form submission,
+  - payer contact,
+  - external messages,
+  - account or record modification,
+  - medical advice,
+  - raw private data dumps.
+- OpenClaw command binding uses the dedicated project profile:
+  - `openclaw --profile brainstyworkers agent --local ... --json`.
+- Hermes command binding uses:
+  - `hermes --oneshot ...`.
+- Worker results must be strict structured JSON. Unstructured output fails closed.
+- Successful OpenClaw/Hermes output creates only pending-review research artifacts:
+  - `openclaw_research_worker_result`,
+  - `hermes_research_worker_result`.
+- Adaptive worker evidence is not citable/trusted until the existing artifact review gate approves it and reindexing runs if needed.
+- Every dispatch request, worker completion/failure, artifact creation, and trusted-retrieval promotion remains audit-visible.
+
+Phase 10O research evidence graph contract:
+
+- The current active runtime remains Node/LangGraph/OpenClaw/Zep Graphiti with FastAPI as the public/auth facade.
+- The research graph is an operator proof and relationship layer over existing research metadata, not a raw content export.
+- Node must expose:
+  - `GET /api/research/graph`,
+  - `POST /api/research/graph/build`.
+- FastAPI must proxy both graph endpoints behind operator/admin RBAC and bind the authenticated operator as `actorUserId`.
+- The graph may include:
+  - knowledge sources,
+  - workflows,
+  - research runs,
+  - research artifacts,
+  - embedding routes/jobs/index rows,
+  - research schedules.
+- The graph may include edges such as:
+  - source has run,
+  - run produced artifact,
+  - artifact indexed by route,
+  - schedule targets source,
+  - run/source supports workflow.
+- The graph must not return raw artifact text, raw portal dumps, raw document bodies, raw private data, or raw safe-text preview fields.
+- URL data inside graph nodes should be reduced to host/hash metadata.
+- A build action must persist a `research_graph_builds` row with actor id, status, node count, edge count, graph hash, safety JSON, and audit event id.
+- Graph builds must be hash-chain audit visible.
+- Operator assistant must expose:
+  - read-only `research.getGraph`,
+  - proposal-gated write action `research.buildGraph`.
+- `/` remains the proof console and should show Phase 10O graph controls, node/edge counts, node types, latest build, and metadata-only safety.
+- This phase does not replace Graphiti/Zep product memory and does not introduce Neo4j yet. It creates the safe graph contract that a production graph backend can later consume.
+
+Phase 10P claim-level citation closure contract:
+
+- The current active runtime remains Node/LangGraph/OpenClaw/Zep Graphiti with FastAPI as the public/auth facade.
+- Citation closure is a labels-only judge over trusted reviewed evidence; it is not a new evidence source.
+- Node must expose:
+  - `GET /api/research/citation-closure`,
+  - `POST /api/research/citation-closure/evaluate`.
+- FastAPI must proxy both endpoints behind operator/admin RBAC and bind the authenticated operator as `actorUserId`.
+- The judge may extract factual/domain claims from a safe answer preview.
+- The judge may compare claims only against artifacts with citation status `trusted_retrieval_approved`.
+- The judge may label claims as:
+  - `supported`,
+  - `low_confidence`,
+  - `unsupported`.
+- The judge may return metadata-only citation pointers:
+  - artifact id,
+  - run id,
+  - source id,
+  - title/type,
+  - source host/hash,
+  - content hash,
+  - extraction hash,
+  - short reviewed snippet.
+- The judge must not:
+  - create research artifacts,
+  - approve or promote artifacts,
+  - use pending-review artifacts as trusted support,
+  - return raw artifact bodies,
+  - return raw private source URLs,
+  - invent factual evidence,
+  - silently pass unsupported claims.
+- Unsupported or low-confidence claims make the evaluated answer fail citation closure until the answer is revised or more trusted evidence is approved.
+- Operator assistant must expose:
+  - read-only `research.listCitationClosure`,
+  - proposal-gated `research.evaluateCitationClosure`.
+- `/` remains the proof console and should show Phase 10P citation-closure status, claim labels, safety flags, audit proof, and citation pointer ids.
+
+Phase 10Q final-system verification contract:
+
+- The final system must not be declared complete from passing local tests alone.
+- `docs/FINAL_SYSTEM_VERIFICATION_REPORT.md` is the maintained PASS / FAIL / BLOCKED audit over `docs/goal_final_system.md`.
+- The report must cover every explicit checklist item:
+  - A1-A22,
+  - B1-B8,
+  - C1-C32,
+  - D1-D24,
+  - E1-E11,
+  - F1-F4,
+  - G1-G7,
+  - H1-H24.
+- Report rows may use only:
+  - `PASSING`,
+  - `IMPLEMENTED DURING THIS RUN`,
+  - `BLOCKED BY EXTERNAL DEPENDENCY`,
+  - `FAILING / NEEDS FIX`.
+- A coverage test must fail if the report omits a goal item, uses an unsupported status, or hides all failures/blockers.
+- Phase 10R closed the highest-priority user-facing safety gap: urgent/emergency escalation and durable human handoff records.
+- Urgent/emergency prompts must bypass normal workflow execution, OpenClaw proposal/dispatch, browser evidence observation, payer contact, credential entry, form submission, external messages, and GPT calls.
+- The urgent path must create a durable `human_handoff_items` row, an `urgent_human_handoff` task, and a `human_handoff_created` audit event, then return immediate emergency-safe guidance.
+- Urgent/safety prompts must not be retained verbatim as reusable prompt-recall memory.
+- The current report still shows the active goal remains incomplete. The next phase should fix typed AI2UI blocks and state-preserving Chat/Split/Guided/Bento MVP modes.
+
+Phase 10S AI2UI and MVP mode contract:
+
+- The user-facing `/mvp` app must render backend-provided typed AI2UI blocks rather than relying only on ad hoc final-response text.
+- The current block contract is `brainstyworkers.ai2ui.blocks.v1`.
+- LangGraph attaches blocks after product-memory retain so block payloads reflect real workflow, approval, worker, source-pointer, memory, handoff, safety, and next-step state.
+- `POST /api/chat` returns `ai2uiBlocks` at the top level and `graphRun.state.ai2ui_blocks` for proof/debug inspection.
+- `/mvp` now has state-preserving Chat, Split, Guided, and Bento modes.
+- Switching modes must only change presentation. It must not reset the session, rerun LangGraph, consume approvals, schedule workers, or alter memory.
+- The frontend must render unknown/future block types as visible safe fallback cards with a warning and safe payload preview.
+- Phase 10S moved final-report rows A6 and A7 to `PASSING`; the active final-system goal is still incomplete.
+
+Phase 10T research scheduler daemon contract:
+
+- Approved research schedules now have an env-gated local daemon proof instead of only a manual due-tick endpoint.
+- The daemon module is `src/concierge/researchScheduler.mjs`.
+- The persisted state table is `research_scheduler_daemon_state`.
+- The Node server creates the daemon at startup and auto-starts only when `BRAINSTY_RESEARCH_SCHEDULER_ENABLED=1`.
+- The daemon scans due schedules through the existing `runDueResearchSchedules` contract, so only active approved schedules and approved/active sources are processed.
+- Default daemon action is to queue `scheduled_research_run` records. It must not silently execute worker dispatch.
+- Executing queued runs from a daemon tick remains explicit through `BRAINSTY_RESEARCH_SCHEDULER_EXECUTE=1`; adaptive OpenClaw/Hermes dispatch still requires feature flags plus `approvedWorkerDispatch=true`.
+- Every daemon tick emits runtime events and hash-chain audit proof.
+- Overlapping daemon ticks are skipped and audited with `research.scheduler.daemon.tick_skipped_overlap`.
+- Node exposes `GET /api/research/scheduler/status` and `POST /api/research/scheduler/tick`.
+- FastAPI proxies both routes behind operator/admin RBAC and actor binding.
+- `/` shows daemon process state, cadence, due schedules, last tick, last actions, overlap count, and safety.
+- Phase 10T moves final-report row E1 to `PASSING`; the active final-system goal remains incomplete.
+- Phase 10T verification passed locally with syntax checks, focused scheduler/research/UI tests, `npm run build`, `npm run test:facade`, `npm run test:local` with 163 total / 161 passed / 2 expected live-gated OpenClaw skips, and browser proof at `/` with one queued scheduled run and 0 console errors.
+
+Next likely phase after 10T:
+
+- Implement research knowledge-base PDF upload/extraction endpoints and dashboard path (`C17`, `D13`, `D14`), then analytics and budget/kill-switch controls.

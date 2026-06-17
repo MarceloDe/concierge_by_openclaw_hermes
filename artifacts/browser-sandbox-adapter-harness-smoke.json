@@ -1,0 +1,98 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_adapter_harness_ready",
+  "hostedProviderReady": false,
+  "hostedProviderResolverReady": false,
+  "adapterHarnessReady": true,
+  "hostedProviderResolver": {
+    "status": "hosted_browser_sandbox_provider_not_selected",
+    "resolverReady": false,
+    "ready": false,
+    "endpointResolved": false,
+    "authResolved": false,
+    "liveVerified": false,
+    "endpointRefKind": "logical_ref",
+    "authTokenRefKind": "env",
+    "endpointEnvPresent": false,
+    "authEnvPresent": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawSecretPathReturned": false
+  },
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+      "provider": "hosted_remote",
+      "environment": "staging",
+      "endpointRefPresent": true,
+      "secretSource": "managed_env",
+      "transport": {
+        "stream": "sse_frames",
+        "inputRelay": "approval_gated_human_only",
+        "screenshot": "contract_harness_screenshot_placeholder",
+        "ocrCaption": "contract_harness_caption_placeholder"
+      },
+      "adapter": {
+        "mode": "contract_harness",
+        "providerLiveConnected": false,
+        "contractHarnessOnly": true
+      },
+      "auth": {
+        "tokenRefPresent": false,
+        "tokenRefKind": "env"
+      },
+      "sessionPolicy": {
+        "userScoped": true,
+        "sessionScoped": true,
+        "ephemeralBrowser": true,
+        "maxSessionMinutes": 15,
+        "idleTimeoutMinutes": 3,
+        "recordFrames": false,
+        "persistRawOcrText": false
+      },
+      "approvalPolicy": {
+        "requiresReadOnlyApproval": true,
+        "requiresHumanTakeoverApproval": true,
+        "agentCredentialEntryAllowed": false,
+        "externalWriteActionsAllowed": false
+      },
+      "networkPolicy": {
+        "allowlistRequired": true,
+        "offsiteFailClosed": true,
+        "credentialPagesUserOnly": true
+      },
+      "audit": {
+        "emitSessionLifecycleEvents": true,
+        "emitTakeoverEvents": true,
+        "redactInputValues": true,
+        "redactFrameContent": true
+      },
+      "source": {
+        "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
+        "exampleConfig": false
+      }
+    }
+  },
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider",
+    "scoreKey": "hosted_remote_browser_sandbox",
+    "providerEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER",
+    "readyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY",
+    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED",
+    "configFileEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "externalActions": false,
+    "phiSeeded": false,
+    "agentCredentialEntryAllowed": false
+  }
+}

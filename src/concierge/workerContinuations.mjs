@@ -16,13 +16,6 @@ const ACTIVE_CONTINUATION_STATUSES = new Set(["pending_async_followup", "continu
 const TERMINAL_CONTINUATION_STATUSES = new Set(["completed", "blocked", "cancelled", "expired"]);
 const COMPLETED_TERMINAL_OUTCOMES = new Set(["completed_with_sourced_result", "partial_result_with_blockers"]);
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function parseJson(value, fallback = {}) {
   try {
     return JSON.parse(value ?? "{}");
@@ -59,12 +52,15 @@ function compactContinuation(row) {
 }
 
 async function latestWorkerEvent(store, { sessionId, correlationId = null, taskId = null }) {
+  const sessionClause = sessionId ? "session_id = ?" : "session_id IS NULL";
+  const params = sessionId ? [sessionId] : [];
   const rows = await store.all(
     `SELECT * FROM runtime_events
-     WHERE session_id = ${sql(sessionId)}
+     WHERE ${sessionClause}
        AND event_type IN ('worker.status.updated', 'worker.plan.prepared', 'approval.consumed')
      ORDER BY created_at DESC
-     LIMIT 20;`
+     LIMIT 20;`,
+    params
   );
   return (
     rows.find((row) => row.correlation_id === correlationId || row.correlation_id === taskId) ??
@@ -274,15 +270,26 @@ export async function createWorkerContinuation(
 }
 
 export async function listWorkerContinuations(store, { sessionId = null, userId = null, status = null, limit = 20 } = {}) {
-  const where = [
-    sessionId ? `session_id = ${sql(sessionId)}` : null,
-    userId ? `user_id = ${sql(userId)}` : null,
-    status ? `status = ${sql(status)}` : null
-  ]
-    .filter(Boolean)
-    .join(" AND ");
+  const clauses = [];
+  const params = [];
+  if (sessionId) {
+    clauses.push("session_id = ?");
+    params.push(sessionId);
+  }
+  if (userId) {
+    clauses.push("user_id = ?");
+    params.push(userId);
+  }
+  if (status) {
+    clauses.push("status = ?");
+    params.push(status);
+  }
+  const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+  params.push(safeLimit);
+  const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
   const rows = await store.all(
-    `SELECT * FROM worker_continuations${where ? ` WHERE ${where}` : ""} ORDER BY created_at DESC LIMIT ${Number(limit)};`
+    `SELECT * FROM worker_continuations${where} ORDER BY created_at DESC LIMIT ?;`,
+    params
   );
   return rows.map(compactContinuation);
 }

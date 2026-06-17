@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "brainstyworkers.postgres-provider-backup-policy.v1",
+  "provider": "managed_postgres",
+  "environment": "production",
+  "secretSource": "managed_env",
+  "databaseUrlRef": "provider-managed-secret-name-or-platform-env-ref",
+  "backupPolicy": {
+    "enabled": true,
+    "mode": "pitr_or_daily_backup",
+    "pitrEnabled": true,
+    "retentionDays": 7,
+    "rpoHours": 24,
+    "rtoHours": 4,
+    "encryptedAtRest": true
+  },
+  "restoreRehearsal": {
+    "enabled": true,
+    "cadenceDays": 30,
+    "isolatedTargetRequired": true,
+    "requiresEndpointRegression": true,
+    "requiresBackupRunbookSmoke": true
+  },
+  "promotionPolicy": {
+    "requiresOperatorApproval": true,
+    "requiresCredentialRotationOnCompromise": true,
+    "destructiveProductionRestoreAllowed": false
+  },
+  "audit": {
+    "artifactRetentionDays": 90,
+    "redactDatabaseUrls": true,
+    "redactSecretPaths": true
+  }
+}

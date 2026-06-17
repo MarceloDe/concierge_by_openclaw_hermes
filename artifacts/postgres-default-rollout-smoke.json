@@ -1,0 +1,73 @@
+{
+  "ok": true,
+  "version": "2026-06-16.postgres-default-rollout.v1",
+  "productionSmokeVersion": "2026-06-16.postgres-production-readiness.v1",
+  "status": "postgres_default_rollout_rehearsed",
+  "generatedSecretFile": true,
+  "runtime": {
+    "driver": "postgres",
+    "adapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+    "tableCount": 55,
+    "coreCounts": {
+      "users": 2,
+      "sessions": 2,
+      "session_checkpoints": 2,
+      "audit_events": 14,
+      "worker_leases": 0
+    }
+  },
+  "secretProfile": {
+    "version": "2026-06-16.database-secret-profile.v1",
+    "ready": true,
+    "status": "database_secret_profile_ready",
+    "source": "ephemeral_local_secret_file",
+    "secretBacked": true,
+    "urlPresent": true,
+    "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+    "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+    "fileConfigured": true,
+    "filePathHash": "53047a17cf4aacb6590a9300238f18d8f3a31901f65e196cf5f1f5bb56c36ab5",
+    "validPostgresUrl": true,
+    "protocol": "postgresql",
+    "host": "127.0.0.1",
+    "port": "55432",
+    "database": "brainstyworkers",
+    "hasUsername": true,
+    "hasPassword": true,
+    "devCredentialDetected": true,
+    "profileReadyClaimed": true,
+    "issues": []
+  },
+  "storage": {
+    "status": "postgres_production_ready",
+    "score": 100,
+    "targetScore": 100,
+    "runtimeDriver": "postgres",
+    "fullMigrationReady": true,
+    "migrationPending": false,
+    "defaultRolloutReady": true,
+    "secretProfileReady": true,
+    "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable"
+  },
+  "productionSmoke": {
+    "ok": true,
+    "version": "2026-06-16.postgres-production-readiness.v1",
+    "adapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+    "leaseVersion": "2026-06-16.worker-leases.v1",
+    "driver": "postgres",
+    "endpointParityOk": true,
+    "workerLeaseOk": true,
+    "backupRestoreOk": true,
+    "tableCount": 55,
+    "comparedTables": 17,
+    "countMismatches": []
+  },
+  "safety": {
+    "externalActions": false,
+    "phiSeeded": false,
+    "rawDatabaseUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "secretsRedacted": true,
+    "sqliteShellOut": false
+  }
+}

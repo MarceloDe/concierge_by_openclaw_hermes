@@ -288,7 +288,9 @@ export async function traceForSession(store, sessionId) {
     scheduledJobs,
     workerContinuations,
     agentOutbox,
-    memoryHarnessRuns
+    memoryHarnessRuns,
+    feedbackItems,
+    humanHandoffs
   ] = await Promise.all([
     store.findOne("sessions", { id: sessionId }),
     store.list("conversation_messages", { session_id: sessionId }),
@@ -310,7 +312,9 @@ export async function traceForSession(store, sessionId) {
     store.list("scheduled_jobs", { session_id: sessionId }),
     store.list("worker_continuations", { session_id: sessionId }),
     store.list("agent_outbox", { session_id: sessionId }),
-    store.list("memory_harness_runs", { session_id: sessionId })
+    store.list("memory_harness_runs", { session_id: sessionId }),
+    store.list("feedback_items", { session_id: sessionId }),
+    store.list("human_handoff_items", { session_id: sessionId })
   ]);
   return {
     session,
@@ -333,6 +337,8 @@ export async function traceForSession(store, sessionId) {
     workerContinuations,
     agentOutbox,
     memoryHarnessRuns,
+    feedbackItems,
+    humanHandoffs,
     auditEvents
   };
 }

@@ -32,6 +32,12 @@ class NodeRuntimeClient:
         response.raise_for_status()
         return response.json()
 
+    async def patch_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.patch(f"{self.base_url}{path}", json=body)
+        response.raise_for_status()
+        return response.json()
+
     async def stream_text(self, path: str, *, params: dict[str, Any] | None = None) -> AsyncIterator[str]:
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream("GET", f"{self.base_url}{path}", params=params) as response:
@@ -40,7 +46,7 @@ class NodeRuntimeClient:
                     if chunk:
                         yield chunk
 
-    async def chat(self, request: ChatRequest) -> dict[str, Any]:
+    async def chat(self, request: ChatRequest, *, uploaded_documents: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         body: dict[str, Any] = {
             "message": request.message,
             "member": request.member or {},
@@ -59,6 +65,8 @@ class NodeRuntimeClient:
             "approvalScope": request.approval_scope,
             "allowedAction": request.allowed_action,
             "approvedDocumentCandidateId": request.approved_document_candidate_id,
+            "uploadedDocumentIds": request.uploaded_document_ids,
+            "uploadedDocuments": uploaded_documents or [],
             "source": "wefella_fastapi_facade"
         }
         return await self.post_json("/api/chat", body)

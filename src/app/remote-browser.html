@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Concierge — Remote Browser Control</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #0b0e14; --panel: #141a26; --line: #243049; --fg: #e6edf6; --accent: #3b82f6; --warn: #f59e0b; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+      .wrap { max-width: 520px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom); }
+      h1 { font-size: 1rem; font-weight: 600; margin: 14px 4px 8px; }
+      .remote-browser { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; flex: 1; }
+      .remote-browser__bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+      .remote-browser__title { font-size: .85rem; color: #9fb0c8; }
+      .remote-browser__badge { font-size: .72rem; font-weight: 600; color: #0b0e14; background: var(--warn); padding: 3px 8px; border-radius: 999px; }
+      .remote-browser__stage { position: relative; background: #000; aspect-ratio: 3 / 4; display: flex; align-items: center; justify-content: center; }
+      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; touch-action: none; user-select: none; -webkit-user-select: none; }
+      .remote-browser__stage.is-live-control { outline: 2px solid var(--warn); outline-offset: -2px; }
+      .remote-browser__controls { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+      .remote-browser__relay { display: flex; gap: 8px; padding: 0 12px 10px; }
+      .remote-browser__relay input { flex: 1; padding: 12px; font-size: 16px; border-radius: 10px; border: 1px solid var(--line); background: #0b0e14; color: var(--fg); }
+      .remote-browser__relay input:disabled { opacity: .4; }
+      button { appearance: none; border: 1px solid var(--line); background: var(--accent); color: #fff; font-weight: 600; padding: 11px 14px; border-radius: 10px; font-size: .9rem; }
+      button[data-action="return"] { background: transparent; color: var(--warn); border-color: var(--warn); }
+      button[data-action="enter"] { background: #16a34a; }
+      .remote-browser__status { font-size: .78rem; color: #9fb0c8; padding: 0 14px 14px; margin: 0; line-height: 1.4; }
+      .hint { font-size: .72rem; color: #6b7a93; margin: 8px 6px 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Worker browser — watch &amp; take over</h1>
+      <div id="remote-browser"></div>
+      <p class="hint">
+        The assistant runs the portal read-only and never types your credentials. When a login,
+        2FA, or captcha is needed it hands you the keyboard: tap the page to focus the field, type,
+        then Enter. Your keystrokes go only to the insurance portal and are never stored.
+      </p>
+    </div>
+    <script type="module">
+      import { mountRemoteBrowser } from "./remoteBrowser.js";
+      const params = new URLSearchParams(location.search);
+      mountRemoteBrowser(document.querySelector("#remote-browser"), {
+        sessionId: params.get("sessionId") ?? "demo-session",
+        userId: params.get("userId"),
+        apiBase: params.get("apiBase") ?? ""
+      });
+    </script>
+  </body>
+</html>

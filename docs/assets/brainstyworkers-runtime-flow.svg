@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1320" viewBox="0 0 1800 1320" role="img" aria-labelledby="title desc">
+  <title id="title">Brainstyworkers AI Concierge Runtime Flow</title>
+  <desc id="desc">Runtime sequence diagram for testing healthcare insurance use cases through auth, chat, LangGraph routing, dynamic skill selection, approvals, OpenClaw worker dispatch, evidence storage, memory, audit, and final answer.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .lane { fill: #ffffff; stroke: #cbd6df; stroke-width: 2; }
+      .step { fill: #ffffff; stroke: #223241; stroke-width: 1.5; rx: 8; }
+      .step-blue { fill: #edf5fb; stroke: #6f9fc2; stroke-width: 1.4; rx: 8; }
+      .step-green { fill: #f0f8f2; stroke: #5e9a73; stroke-width: 1.4; rx: 8; }
+      .step-amber { fill: #fff8e8; stroke: #d5a847; stroke-width: 1.4; rx: 8; }
+      .step-red { fill: #fff1ee; stroke: #c66f55; stroke-width: 1.4; rx: 8; }
+      .step-purple { fill: #f4f1fb; stroke: #8c78bd; stroke-width: 1.4; rx: 8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #172635; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #4b5b66; }
+      .lane-title { font: 700 18px Arial, sans-serif; fill: #203342; }
+      .label { font: 700 15px Arial, sans-serif; fill: #172635; }
+      .small { font: 400 12.5px Arial, sans-serif; fill: #334957; }
+      .tiny { font: 400 11px Arial, sans-serif; fill: #52626e; }
+      .mono { font: 400 11.5px Menlo, Consolas, monospace; fill: #263744; }
+      .arrow { stroke: #334957; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #6f7f8c; stroke-width: 1.6; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow-soft); }
+      .no-arrow { stroke: #c66f55; stroke-width: 2; fill: none; marker-end: url(#arrow-red); }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#334957" />
+    </marker>
+    <marker id="arrow-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#6f7f8c" />
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#c66f55" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1320" />
+  <text class="title" x="48" y="54">Runtime Flow and Expected Test Results</text>
+  <text class="subtitle" x="48" y="82">Each workflow should show the same governed cycle: user request, LangGraph decision, dynamic skill selection, approval gate, evidence, memory, audit, and final answer.</text>
+
+  <rect class="lane" x="42" y="118" width="324" height="1110" rx="12" />
+  <text class="lane-title" x="64" y="152">1. User or Tester</text>
+
+  <rect class="step-blue" x="70" y="184" width="278" height="94" />
+  <text class="label" x="90" y="213">Open /mvp</text>
+  <text class="small" x="90" y="236">Select Node runtime for deterministic proof</text>
+  <text class="small" x="90" y="256">Start local planned-user session</text>
+
+  <rect class="step-blue" x="70" y="318" width="278" height="126" />
+  <text class="label" x="90" y="347">Pick a use case</text>
+  <text class="small" x="90" y="370">Benefits: deductible/coverage question</text>
+  <text class="small" x="90" y="390">Claim: why did insurance not pay?</text>
+  <text class="small" x="90" y="410">Prior auth: MRI approval next month</text>
+  <text class="small" x="90" y="430">Appeal: denial fight request</text>
+
+  <rect class="step-amber" x="70" y="484" width="278" height="116" />
+  <text class="label" x="90" y="513">Approve only when needed</text>
+  <text class="small" x="90" y="536">Read-only portal observation</text>
+  <text class="small" x="90" y="556">One document candidate observation</text>
+  <text class="small" x="90" y="576">Never credentials or form submit</text>
+
+  <rect class="step-blue" x="70" y="640" width="278" height="128" />
+  <text class="label" x="90" y="669">Inspect the result</text>
+  <text class="small" x="90" y="692">Answer should cite source pointers</text>
+  <text class="small" x="90" y="712">If evidence is missing, answer says so</text>
+  <text class="small" x="90" y="732">Dynamic Skills card explains selected skills</text>
+  <text class="small" x="90" y="752">Actions taken visible</text>
+
+  <rect class="lane" x="398" y="118" width="420" height="1110" rx="12" />
+  <text class="lane-title" x="420" y="152">2. API and LangGraph</text>
+
+  <rect class="step-green" x="430" y="184" width="366" height="94" />
+  <text class="label" x="452" y="213">Normalize web chat</text>
+  <text class="mono" x="452" y="236">POST /api/chat</text>
+  <text class="small" x="452" y="256">Creates/resumes user, session, graph thread</text>
+
+  <rect class="step-green" x="430" y="318" width="366" height="116" />
+  <text class="label" x="452" y="347">Input policy first</text>
+  <text class="small" x="452" y="370">Blocks credential entry, prompt injection, unrelated asks</text>
+  <text class="small" x="452" y="390">Urgent medical language creates human handoff</text>
+  <text class="small" x="452" y="410">Unsafe path stops before workflow execution</text>
+
+  <rect class="step-green" x="430" y="474" width="366" height="124" />
+  <text class="label" x="452" y="503">Recall and classify</text>
+  <text class="small" x="452" y="526">Context packet mounts session, DB pointers, memory</text>
+  <text class="small" x="452" y="546">Structured intent chooses workflow</text>
+  <text class="small" x="452" y="566">Optional GPT decision is visible, not hidden</text>
+
+  <rect class="step-amber" x="430" y="638" width="366" height="150" />
+  <text class="label" x="452" y="667">Dynamic skill resolver</text>
+  <text class="small" x="452" y="690">Insurance skill: Aetna temporary skill</text>
+  <text class="small" x="452" y="710">Journey skill: claim journey or benefits flow</text>
+  <text class="small" x="452" y="730">Execution skill: insurance portal browser</text>
+  <text class="small" x="452" y="750">Outputs missing data, chance, OpenClaw tasks, search, APIs</text>
+  <text class="mono" x="452" y="770">dynamic_skill_context</text>
+
+  <rect class="step-green" x="430" y="828" width="366" height="136" />
+  <text class="label" x="452" y="857">Workflow execution</text>
+  <text class="small" x="452" y="880">Creates proposal-only OpenClaw envelope</text>
+  <text class="small" x="452" y="900">Records pending approval task</text>
+  <text class="small" x="452" y="920">Prepares worker fan-out plan</text>
+  <text class="small" x="452" y="940">No browser worker before approval</text>
+
+  <rect class="step-green" x="430" y="1004" width="366" height="120" />
+  <text class="label" x="452" y="1033">Response policy</text>
+  <text class="small" x="452" y="1056">Composes answer or blocker</text>
+  <text class="small" x="452" y="1076">Publishes typed UI blocks and runtime events</text>
+  <text class="small" x="452" y="1096">Stores audit and session history</text>
+
+  <rect class="lane" x="850" y="118" width="372" height="1110" rx="12" />
+  <text class="lane-title" x="872" y="152">3. Worker and Evidence Path</text>
+
+  <rect class="step-amber" x="880" y="184" width="314" height="112" />
+  <text class="label" x="900" y="213">Proposal gate</text>
+  <text class="small" x="900" y="236">Task id, user id, session id, workflow</text>
+  <text class="small" x="900" y="256">Approval scope and expiry</text>
+  <text class="small" x="900" y="276">Denied/expired keeps actionsTaken=[]</text>
+
+  <rect class="step-purple" x="880" y="336" width="314" height="134" />
+  <text class="label" x="900" y="365">Approved OpenClaw worker</text>
+  <text class="small" x="900" y="388">Dedicated brainstyworkers profile</text>
+  <text class="small" x="900" y="408">Can navigate read-only inside task scope</text>
+  <text class="small" x="900" y="428">Uses DOM, accessibility, screenshot/OCR</text>
+  <text class="small" x="900" y="448">Returns status and source pointers</text>
+
+  <rect class="step-purple" x="880" y="510" width="314" height="126" />
+  <text class="label" x="900" y="539">Document candidate worker</text>
+  <text class="small" x="900" y="562">Candidate id must match approval token</text>
+  <text class="small" x="900" y="582">Observes exactly one approved URL</text>
+  <text class="small" x="900" y="602">Blocks mixed forms or irreversible areas</text>
+  <text class="small" x="900" y="622">No broad crawl</text>
+
+  <rect class="step-red" x="880" y="676" width="314" height="140" />
+  <text class="label" x="900" y="705">Fail-closed cases</text>
+  <text class="small" x="900" y="728">Public marketing page</text>
+  <text class="small" x="900" y="748">Login, captcha, 2FA challenge</text>
+  <text class="small" x="900" y="768">No authenticated member portal</text>
+  <text class="small" x="900" y="788">No source pointer or verified evidence</text>
+  <text class="small" x="900" y="808">No false healthcare evidence is stored</text>
+
+  <rect class="step-green" x="880" y="856" width="314" height="128" />
+  <text class="label" x="900" y="885">Evidence verifier</text>
+  <text class="small" x="900" y="908">Checks page kind and authenticated signals</text>
+  <text class="small" x="900" y="928">Stores URL, title, DOM hash, extraction hash</text>
+  <text class="small" x="900" y="948">Extracts structured benefits, claims, documents</text>
+  <text class="small" x="900" y="968">Creates source pointers only after verification</text>
+
+  <rect class="lane" x="1254" y="118" width="404" height="1110" rx="12" />
+  <text class="lane-title" x="1276" y="152">4. Persistence, Memory, and Proof</text>
+
+  <rect class="step-blue" x="1284" y="184" width="330" height="112" />
+  <text class="label" x="1304" y="213">SQLite application state</text>
+  <text class="small" x="1304" y="236">sessions, checkpoints, runtime events</text>
+  <text class="small" x="1304" y="256">agent tasks, approvals, continuations</text>
+  <text class="small" x="1304" y="276">portal pages, claims, balances, documents</text>
+
+  <rect class="step-green" x="1284" y="336" width="330" height="126" />
+  <text class="label" x="1304" y="365">Source pointers</text>
+  <text class="small" x="1304" y="388">Eligibility snapshots</text>
+  <text class="small" x="1304" y="408">Coverage balances and claims</text>
+  <text class="small" x="1304" y="428">Research artifacts and uploaded documents</text>
+  <text class="small" x="1304" y="448">Final answer cites these pointers</text>
+
+  <rect class="step-green" x="1284" y="502" width="330" height="118" />
+  <text class="label" x="1304" y="531">Graphiti product memory</text>
+  <text class="small" x="1304" y="554">Safe summary plus source pointers</text>
+  <text class="small" x="1304" y="574">Recall across sessions</text>
+  <text class="small" x="1304" y="594">Cortex remains project memory only</text>
+
+  <rect class="step-green" x="1284" y="660" width="330" height="126" />
+  <text class="label" x="1304" y="689">Audit and observability</text>
+  <text class="small" x="1304" y="712">Hash-chained audit rows</text>
+  <text class="small" x="1304" y="732">Outbound payload observability</text>
+  <text class="small" x="1304" y="752">Runtime event timeline</text>
+  <text class="small" x="1304" y="772">Operator proof dashboard</text>
+
+  <rect class="step-amber" x="1284" y="826" width="330" height="176" />
+  <text class="label" x="1304" y="855">Correct results by use case</text>
+  <text class="small" x="1304" y="878">Benefits: asks for source or approval if missing</text>
+  <text class="small" x="1304" y="898">Claim: selects claim journey skill and claim worker tasks</text>
+  <text class="small" x="1304" y="918">Prior auth: asks for service/provider/evidence</text>
+  <text class="small" x="1304" y="938">Appeal: asks for denial/EOB evidence</text>
+  <text class="small" x="1304" y="958">Unsafe: refuses before worker execution</text>
+  <text class="small" x="1304" y="978">Sourced answer: cites stored source pointers</text>
+
+  <line class="arrow" x1="209" y1="278" x2="209" y2="318" />
+  <line class="arrow" x1="348" y1="381" x2="430" y2="231" />
+  <line class="arrow" x1="613" y1="278" x2="613" y2="318" />
+  <line class="arrow" x1="613" y1="434" x2="613" y2="474" />
+  <line class="arrow" x1="613" y1="598" x2="613" y2="638" />
+  <line class="arrow" x1="613" y1="788" x2="613" y2="828" />
+  <line class="arrow" x1="796" y1="896" x2="880" y2="240" />
+  <line class="arrow" x1="1037" y1="296" x2="1037" y2="336" />
+  <line class="arrow" x1="1037" y1="470" x2="1037" y2="856" />
+  <line class="no-arrow" x1="1037" y1="636" x2="1037" y2="676" />
+  <line class="arrow" x1="1194" y1="920" x2="1284" y2="392" />
+  <line class="arrow" x1="1194" y1="920" x2="1284" y2="244" />
+  <line class="arrow" x1="1194" y1="920" x2="1284" y2="560" />
+  <line class="arrow-soft" x1="1284" y1="724" x2="796" y2="1064" />
+  <line class="arrow-soft" x1="430" y1="1064" x2="348" y2="704" />
+
+  <rect class="step-red" x="70" y="816" width="278" height="116" />
+  <text class="label" x="90" y="845">Bad results to catch</text>
+  <text class="small" x="90" y="868">Answer invents benefit facts</text>
+  <text class="small" x="90" y="888">Worker runs without approval</text>
+  <text class="small" x="90" y="908">Credentials or 2FA requested</text>
+  <text class="small" x="90" y="928">No source pointer for factual answer</text>
+
+  <rect class="step-blue" x="70" y="972" width="278" height="104" />
+  <text class="label" x="90" y="1001">Operator validation</text>
+  <text class="small" x="90" y="1024">Open / and click Validate Envelope</text>
+  <text class="small" x="90" y="1044">Expect validated proposal, task recorded</text>
+  <text class="small" x="90" y="1064">Dynamic Skills card should match /mvp</text>
+
+  <rect class="step" x="430" y="1160" width="1184" height="78" />
+  <text class="label" x="452" y="1189">Current MVP rule of thumb</text>
+  <text class="small" x="452" y="1212">The system is correct when LangGraph visibly chooses the workflow, dynamic skills explain the case-specific strategy, OpenClaw tasks stay approval-gated, evidence creates source pointers, Graphiti stores safe summaries, and audit/runtime proof matches the UI.</text>
+</svg>

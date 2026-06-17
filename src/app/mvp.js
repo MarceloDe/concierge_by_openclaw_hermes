@@ -1,19 +1,37 @@
+import { mountRemoteBrowser } from "./remoteBrowser.js";
+
 const DEFAULT_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 const READ_ONLY_SCOPE = "read_only_observation";
 const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
+const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
+const UI_MODES = ["chat", "split", "guided", "bento"];
+const AI2UI_MODE_BLOCKS = {
+  chat: ["answer_markdown", "source_citations", "human_handoff", "next_steps"],
+  split: ["answer_markdown", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"],
+  guided: ["workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "next_steps", "safety_notice"],
+  bento: ["answer_markdown", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"]
+};
+const AI2UI_SUPPORTED_TYPES = new Set([...AI2UI_MODE_BLOCKS.bento, "unknown"]);
 
 const state = {
   user: null,
   session: null,
+  uiMode: localStorage.getItem("brainstyworkers.mvp.uiMode") || "split",
   latestRun: null,
   latestTaskId: null,
   latestMessage: DEFAULT_BENEFITS_MESSAGE,
   runtimeEvents: [],
   documentCandidates: [],
+  latestUpload: null,
+  sessionHistory: null,
+  latestFeedback: null,
+  latestExport: null,
+  handoffs: [],
   eventSource: null,
   runtimeStreamAbortController: null,
   facadeAccessToken: null,
   latestFacadeTask: null,
+  parityResult: null,
   workerStatus: null,
   busy: false
 };
@@ -37,13 +55,22 @@ const elements = {
   facadeStatus: $("#facadeStatus"),
   authStatus: $("#authStatus"),
   workerStatus: $("#workerStatus"),
+  documentFile: $("#documentFile"),
+  documentKind: $("#documentKind"),
+  uploadPanel: $("#uploadPanel"),
+  feedbackComment: $("#feedbackComment"),
+  historyPanel: $("#historyPanel"),
+  handoffPanel: $("#handoffPanel"),
   messages: $("#messages"),
   message: $("#message"),
   currentAnswer: $("#currentAnswer"),
   approvalPanel: $("#approvalPanel"),
   discoveryPanel: $("#discoveryPanel"),
+  phase9fPanel: $("#phase9fPanel"),
+  parityPanel: $("#parityPanel"),
   timeline: $("#timeline"),
-  sequence: $("#sequence")
+  sequence: $("#sequence"),
+  modeButtons: document.querySelectorAll("[data-ui-mode]")
 };
 
 function escapeHtml(value) {
@@ -75,6 +102,235 @@ function formatListValue(value) {
   );
 }
 
+function setUiMode(mode, options = {}) {
+  const nextMode = UI_MODES.includes(mode) ? mode : "split";
+  state.uiMode = nextMode;
+  document.body.dataset.uiMode = nextMode;
+  localStorage.setItem("brainstyworkers.mvp.uiMode", nextMode);
+  elements.modeButtons.forEach((button) => {
+    const active = button.dataset.uiMode === nextMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  if (!options.skipRender) renderAnswer(state.latestRun);
+}
+
+function ai2uiBlocks(result = state.latestRun) {
+  const blocks = result?.ai2uiBlocks ?? graphState(result).ai2ui_blocks ?? [];
+  return normalizeUiBlocks(blocks);
+}
+
+function normalizeUiBlocks(blocks = []) {
+  return (Array.isArray(blocks) ? blocks : []).map(normalizeUiBlock);
+}
+
+function normalizeUiBlock(block, index) {
+  const type = String(block?.type ?? "unknown");
+  if (!AI2UI_SUPPORTED_TYPES.has(type) || type === "unknown") {
+    return {
+      id: block?.id ?? `unknown:${index}`,
+      type: "unknown",
+      version: AI2UI_BLOCK_CONTRACT_VERSION,
+      title: "Unsupported UI block",
+      payload: {
+        originalType: type,
+        safePreview: compact(block?.payload ?? block, "No payload")
+      },
+      renderHints: { severity: "warning", fallback: "safe_json_preview" }
+    };
+  }
+  return {
+    id: block.id ?? `${type}:${index}`,
+    type,
+    version: block.version ?? AI2UI_BLOCK_CONTRACT_VERSION,
+    title: block.title ?? type,
+    payload: block.payload ?? {},
+    renderHints: block.renderHints ?? {}
+  };
+}
+
+function blocksForMode(result, mode = state.uiMode) {
+  const order = AI2UI_MODE_BLOCKS[mode] ?? AI2UI_MODE_BLOCKS.split;
+  const blocks = ai2uiBlocks(result);
+  const unknownBlocks = blocks.filter((block) => block.type === "unknown");
+  const ordered = order
+    .map((type) => blocks.find((block) => block.type === type))
+    .filter(Boolean);
+  return [...ordered, ...unknownBlocks];
+}
+
+function renderAi2UiBlocks(result, mode = state.uiMode) {
+  const blocks = blocksForMode(result, mode);
+  if (!blocks.length) {
+    return `
+      <section class="ai2ui-empty">
+        <p class="eyebrow">AI2UI</p>
+        <h3>No typed block payload returned</h3>
+        <p class="status-text">The latest backend response did not include typed UI blocks. This is a contract gap to investigate.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="ai2ui-section ai2ui-mode-${escapeHtml(mode)}" aria-label="AI2UI typed blocks">
+      <div class="ai2ui-section-header">
+        <div>
+          <p class="eyebrow">AI2UI</p>
+          <h3>${escapeHtml(modeLabel(mode))} mode</h3>
+        </div>
+        <span>${escapeHtml(blocks[0]?.version ?? AI2UI_BLOCK_CONTRACT_VERSION)}</span>
+      </div>
+      <div class="ai2ui-block-grid">
+        ${blocks.map((block) => renderAi2UiBlock(block, result)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function modeLabel(mode) {
+  return {
+    chat: "Chat",
+    split: "Split",
+    guided: "Guided",
+    bento: "Bento"
+  }[mode] ?? "Split";
+}
+
+function renderAi2UiBlock(block, result) {
+  if (block.type === "unknown") return renderUnknownAi2UiBlock(block);
+  const payload = block.payload ?? {};
+  const className = `ai2ui-block block-${block.type} ${block.renderHints?.severity ?? ""}`.trim();
+  if (block.type === "answer_markdown") {
+    return `
+      <article class="${className}">
+        <h3>${escapeHtml(block.title)}</h3>
+        <p class="answer-text">${escapeHtml(payload.markdown || result?.finalResponse || "No final answer returned.")}</p>
+      </article>
+    `;
+  }
+  if (block.type === "workflow_status") {
+    return renderDefinitionBlock(block, [
+      ["Workflow", payload.workflow],
+      ["Intent", payload.intent],
+      ["Confidence", payload.confidence],
+      ["Route reason", payload.routeReason],
+      ["Trace", payload.traceId],
+      ["LLM decision", payload.llmDecisionMode]
+    ]);
+  }
+  if (block.type === "approval_gate") {
+    return renderDefinitionBlock(block, [
+      ["Status", payload.status],
+      ["Task", payload.taskId],
+      ["Scope", payload.approvalScope],
+      ["Execution mode", payload.executionMode],
+      ["Consumed", payload.approvalTokenConsumed],
+      ["Actions taken", payload.actionsTaken?.length ? payload.actionsTaken.join(", ") : "none"]
+    ]);
+  }
+  if (block.type === "worker_status") {
+    return renderDefinitionBlock(block, [
+      ["Status", payload.status],
+      ["Outcome", payload.terminalOutcome],
+      ["Continuation", payload.continuationId],
+      ["Source pointers", payload.sourcePointerCount],
+      ["Discovery", payload.discoveryAvailable ? "available" : "not available"],
+      ["Blocker", payload.blocker || "none"],
+      ["Actions taken", payload.actionsTaken?.length ? payload.actionsTaken.join(", ") : "none"]
+    ]);
+  }
+  if (block.type === "source_citations") {
+    const pointers = payload.sourcePointers ?? [];
+    return `
+      <article class="${className}">
+        <h3>${escapeHtml(block.title)}</h3>
+        <p class="status-text">${escapeHtml(payload.sourcePointerCount ?? pointers.length)} stored source pointer(s) · ${escapeHtml(payload.evidenceStatus ?? "not requested")}</p>
+        <div class="ai2ui-citation-list">
+          ${
+            pointers.length
+              ? pointers.slice(0, 6).map((pointer) => `
+                  <div class="ai2ui-citation-row">
+                    <b>${escapeHtml(pointer.displayLabel ?? "source pointer")}</b>
+                    <span>${escapeHtml([pointer.table, pointer.id].filter(Boolean).join("/") || pointer.kind || "source")}</span>
+                    <small>${escapeHtml(pointer.extractionHash ?? pointer.sourceUrl ?? "hash/url not reported")}</small>
+                  </div>
+                `).join("")
+              : '<p class="status-text">No stored citations yet.</p>'
+          }
+        </div>
+      </article>
+    `;
+  }
+  if (block.type === "memory_status") {
+    return renderDefinitionBlock(block, [
+      ["Adapter", payload.adapter],
+      ["Recall", `${payload.recallStatus ?? "not reported"} · ${payload.recalledFactCount ?? 0} fact(s)`],
+      ["Retain", payload.retainStatus],
+      ["Episode", payload.episodeUuid],
+      ["Next action", payload.nextAction || "none"],
+      ["Cortex product memory", payload.cortexProductMemory ? "yes" : "no"]
+    ]);
+  }
+  if (block.type === "human_handoff") {
+    return renderDefinitionBlock(block, [
+      ["Status", `${payload.status ?? "open"} · ${payload.priority ?? "urgent"}`],
+      ["Type", payload.handoffType],
+      ["Task", payload.taskId],
+      ["Summary", payload.summary]
+    ]);
+  }
+  if (block.type === "safety_notice") {
+    return `
+      <article class="${className}">
+        <h3>${escapeHtml(block.title)}</h3>
+        <p>${escapeHtml(payload.message ?? "Safety boundary active.")}</p>
+        <ul class="ai2ui-checklist">
+          ${(payload.blockedActions ?? []).slice(0, 8).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+      </article>
+    `;
+  }
+  if (block.type === "next_steps") {
+    return `
+      <article class="${className}">
+        <h3>${escapeHtml(block.title)}</h3>
+        <ol class="ai2ui-checklist">
+          ${(payload.items ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ol>
+      </article>
+    `;
+  }
+  return renderUnknownAi2UiBlock(block);
+}
+
+function renderDefinitionBlock(block, rows) {
+  return `
+    <article class="ai2ui-block block-${escapeHtml(block.type)} ${escapeHtml(block.renderHints?.severity ?? "")}">
+      <h3>${escapeHtml(block.title)}</h3>
+      <dl>
+        ${rows.map(([label, value]) => `
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(compact(value))}</dd>
+        `).join("")}
+      </dl>
+    </article>
+  `;
+}
+
+function renderUnknownAi2UiBlock(block) {
+  return `
+    <article class="ai2ui-block block-unknown warning">
+      <h3>${escapeHtml(block.title ?? "Unsupported UI block")}</h3>
+      <dl>
+        <dt>Original type</dt>
+        <dd>${escapeHtml(block.payload?.originalType ?? "unknown")}</dd>
+        <dt>Fallback</dt>
+        <dd>${escapeHtml(block.renderHints?.fallback ?? "safe_json_preview")}</dd>
+      </dl>
+      <p class="status-text">${escapeHtml(block.payload?.safePreview ?? "No safe preview available.")}</p>
+    </article>
+  `;
+}
+
 function memberPayload() {
   return {
     member: {
@@ -104,7 +360,7 @@ async function api(path, options = {}) {
     const text = await response.text();
     const payload = text ? JSON.parse(text) : {};
     if (!response.ok) {
-      const message = payload.error ?? payload.status ?? response.statusText;
+      const message = apiErrorMessage(payload, response.statusText);
       throw new Error(`${response.status} ${message}`);
     }
     return payload;
@@ -114,7 +370,7 @@ async function api(path, options = {}) {
 }
 
 function backendMode() {
-  return elements.backendRoute?.value ?? "node";
+  return elements.backendRoute?.value ?? "wefella";
 }
 
 function usingFacade() {
@@ -151,13 +407,20 @@ async function facadeApi(path, options = {}) {
     const text = await response.text();
     const payload = text ? JSON.parse(text) : {};
     if (!response.ok) {
-      const message = payload.detail ?? payload.error ?? payload.status ?? response.statusText;
+      const message = apiErrorMessage(payload, response.statusText);
       throw new Error(`${response.status} ${message}`);
     }
     return payload;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function apiErrorMessage(payload, fallback) {
+  if (payload?.detail) return payload.detail;
+  if (typeof payload?.error === "string") return payload.error;
+  if (payload?.error?.message) return payload.error.message;
+  return payload?.status ?? fallback;
 }
 
 async function routeApi(path, options = {}) {
@@ -206,6 +469,26 @@ function updateSession(enrollment) {
     ? `Signed in · ${state.session.id}`
     : "Not signed in";
   if (state.session?.id) startEventStream(state.session.id, state.user?.id);
+  if (state.session?.id) mountWorkerBrowser();
+}
+
+// Mount the live worker-browser widget once per session. The /api/runtime/browser/*
+// routes are served same-origin by the Node runtime (where /mvp is served), so apiBase
+// is empty regardless of the chat backend toggle.
+function mountWorkerBrowser() {
+  const mount = document.getElementById("remoteBrowserMount");
+  const panel = document.getElementById("workerBrowserPanel");
+  if (!mount || !panel) return;
+  if (state.remoteBrowserSession === state.session.id) return;
+  state.remoteBrowser?.destroy?.();
+  state.remoteBrowser = mountRemoteBrowser(mount, {
+    sessionId: state.session.id,
+    userId: state.user?.id ?? null,
+    apiBase: "",
+    targetUrl: elements.portalUrl.value.trim() || null
+  });
+  state.remoteBrowserSession = state.session.id;
+  panel.hidden = false;
 }
 
 function updateLatestRun(result) {
@@ -215,12 +498,127 @@ function updateLatestRun(result) {
   renderAnswer(result);
   renderApproval(result);
   renderDiscovery(result);
+  renderPhase9FProof(result);
+  renderHandoffPanel({ handoffs: [humanHandoff(result)].filter(Boolean) });
   loadDocumentCandidates().catch(() => {});
+  loadSessionHistory().catch(() => {});
+  loadHandoffs().catch(() => {});
   renderSequence(result);
 }
 
 function sourcePointers(result = state.latestRun) {
   return result?.sourcePointers ?? result?.graphRun?.state?.source_pointers ?? [];
+}
+
+function sourcePointerLabel(pointer = {}) {
+  return pointer.displayLabel || [pointer.table, pointer.id ?? pointer.rowId].filter(Boolean).join("/") || pointer.sourceUrl || "source pointer";
+}
+
+function uploadedDocumentForPointer(pointer = {}, result = state.latestRun) {
+  const uploadId = pointer.id ?? pointer.citation?.uploadId;
+  return (graphState(result).uploaded_document_context?.documents ?? []).find((document) => document.uploadId === uploadId) ?? null;
+}
+
+function renderCitationDetails(result = state.latestRun) {
+  const pointers = sourcePointers(result);
+  if (!pointers.length) {
+    return `
+      <section class="citation-panel" aria-label="Source details">
+        <div class="panel-heading">
+          <p class="eyebrow">Citations</p>
+          <h3>No stored source pointer yet</h3>
+        </div>
+        <p class="status-text">Run an uploaded-document question or approve read-only evidence observation to create source-backed citations.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="citation-panel" aria-label="Source details">
+      <div class="panel-heading">
+        <p class="eyebrow">Citations</p>
+        <h3>Source details</h3>
+      </div>
+      <div class="citation-grid">
+        ${pointers.map((pointer) => renderCitationCard(pointer, result)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderCitationCard(pointer, result) {
+  const document = uploadedDocumentForPointer(pointer, result);
+  const fields = pointer.evidenceFields ?? document?.fields ?? [];
+  const spans = pointer.citation?.sourceSpans ?? document?.sourceSpans ?? [];
+  const fieldRows = fields
+    .slice(0, 8)
+    .map((field) => `
+      <div class="citation-field">
+        <b>${escapeHtml(field.label ?? "field")}</b>
+        <span>${escapeHtml(compact(field.value ?? field.text))}</span>
+        <small>${escapeHtml(field.confidence ?? document?.confidence ?? "unknown")}</small>
+      </div>
+    `)
+    .join("");
+  const spanRows = spans
+    .slice(0, 4)
+    .map((span) => `
+      <li>
+        <span>${escapeHtml(span.spanId ?? span.span_id ?? "span")}</span>
+        <p>${escapeHtml(span.snippet ?? "No snippet.")}</p>
+      </li>
+    `)
+    .join("");
+  return `
+    <article class="citation-card">
+      <div class="citation-card-header">
+        <strong>${escapeHtml(sourcePointerLabel(pointer))}</strong>
+        <span>${escapeHtml(pointer.kind ?? pointer.table ?? "source")}</span>
+      </div>
+      <dl>
+        <dt>Pointer</dt>
+        <dd>${escapeHtml(`${pointer.table ?? "source"}/${pointer.id ?? pointer.rowId ?? "unknown"}`)}</dd>
+        <dt>URL</dt>
+        <dd>${escapeHtml(pointer.sourceUrl ?? "not reported")}</dd>
+        <dt>Method</dt>
+        <dd>${escapeHtml(pointer.extractionMethod ?? pointer.citation?.extractionMethod ?? "not reported")}</dd>
+        <dt>Hash</dt>
+        <dd>${escapeHtml(pointer.extractionHash ?? pointer.sha256 ?? "not reported")}</dd>
+      </dl>
+      ${fieldRows ? `<div class="citation-fields">${fieldRows}</div>` : '<p class="status-text">No structured fields attached.</p>'}
+      ${spanRows ? `<ol class="citation-spans">${spanRows}</ol>` : ""}
+    </article>
+  `;
+}
+
+function renderMemoryDetails(result = state.latestRun) {
+  const recall = graphState(result).product_memory_recall ?? result?.graphRun?.productMemory?.recall ?? {};
+  const retain = productMemoryRetain(result);
+  const facts = recall.facts ?? [];
+  return `
+    <section class="memory-panel" aria-label="Product memory proof">
+      <div class="panel-heading">
+        <p class="eyebrow">Product Memory</p>
+        <h3>Graphiti retain/recall</h3>
+      </div>
+      <div class="key-value-list">
+        <dl>
+          <dt>Recall</dt>
+          <dd>${escapeHtml(recall.enabled === false ? "disabled" : `${recall.adapter ?? "graphiti"} · ${facts.length} fact(s)`)}</dd>
+          <dt>Retain</dt>
+          <dd>${escapeHtml(memoryStatus(result))}</dd>
+          <dt>Episode</dt>
+          <dd>${escapeHtml(retain.episodeUuid ?? "none")}</dd>
+          <dt>Next action</dt>
+          <dd>${escapeHtml(retain.repairPlan?.nextAction ?? retain.message ?? retain.error ?? (retain.retained ? "retained" : "not reported"))}</dd>
+        </dl>
+      </div>
+      ${
+        facts.length
+          ? `<div class="memory-facts">${facts.slice(0, 3).map((fact) => `<p>${escapeHtml(fact.fact ?? fact.name ?? fact.uuid ?? "fact")}</p>`).join("")}</div>`
+          : '<p class="status-text">No recalled facts returned for this run.</p>'
+      }
+    </section>
+  `;
 }
 
 function evidenceObservation(result = state.latestRun) {
@@ -229,6 +627,84 @@ function evidenceObservation(result = state.latestRun) {
 
 function graphState(result = state.latestRun) {
   return result?.graphRun?.state ?? {};
+}
+
+function dynamicSkillContext(result = state.latestRun) {
+  const snapshot = graphState(result);
+  return snapshot.dynamic_skill_context ?? snapshot.dynamicSkillContext ?? null;
+}
+
+function dynamicSkillSelectedLine(context = {}) {
+  const selected = context.selected ?? {};
+  return [
+    selected.insuranceSkillKey ? `insurance=${selected.insuranceSkillKey}` : null,
+    selected.journeySkillKey ? `journey=${selected.journeySkillKey}` : null,
+    selected.executionSkillKey ? `execution=${selected.executionSkillKey}` : null
+  ].filter(Boolean).join(" · ") || "none selected";
+}
+
+function dynamicSkillMissingData(context = {}) {
+  const missing = new Set(context.dataNeeded ?? []);
+  for (const match of context.matches ?? []) {
+    for (const item of match.success?.missingData ?? []) missing.add(item);
+  }
+  return [...missing].filter(Boolean);
+}
+
+function renderDynamicSkillCard(result = state.latestRun) {
+  const context = dynamicSkillContext(result);
+  if (!context) {
+    return `
+      <section class="dynamic-skill-panel" aria-label="Dynamic skill resolution">
+        <div class="panel-heading">
+          <p class="eyebrow">Dynamic Skills</p>
+          <h3>Waiting for workflow</h3>
+        </div>
+        <p class="status-text">Run a chat workflow to resolve insurance, journey, and execution skills.</p>
+      </section>
+    `;
+  }
+  const missing = dynamicSkillMissingData(context);
+  const matches = context.matches ?? [];
+  return `
+    <section class="dynamic-skill-panel" aria-label="Dynamic skill resolution">
+      <div class="panel-heading">
+        <p class="eyebrow">Dynamic Skills</p>
+        <h3>${escapeHtml(dynamicSkillSelectedLine(context))}</h3>
+      </div>
+      <div class="key-value-list">
+        <dl>
+          <dt>Success estimate</dt>
+          <dd>${escapeHtml(context.successEstimate?.overallChance ?? "n/a")}</dd>
+          <dt>Missing data</dt>
+          <dd>${escapeHtml(missing.join(" · ") || "none")}</dd>
+          <dt>OpenClaw tasks</dt>
+          <dd>${escapeHtml((context.requiredOpenClawTasks ?? []).join(" · ") || "none")}</dd>
+          <dt>Search</dt>
+          <dd>${escapeHtml((context.requiredSearch ?? []).join(" · ") || "none")}</dd>
+          <dt>APIs</dt>
+          <dd>${escapeHtml((context.requiredApis ?? []).join(" · ") || "none")}</dd>
+        </dl>
+      </div>
+      <div class="dynamic-skill-match-grid">
+        ${
+          matches.length
+            ? matches.slice(0, 4).map((match) => `
+                <article class="dynamic-skill-match-card">
+                  <strong>${escapeHtml(match.title ?? match.skillKey)}</strong>
+                  <span>${escapeHtml(match.skillKind ?? "skill")} · fit ${escapeHtml(match.fit?.score ?? 0)} · success ${escapeHtml(match.success?.chance ?? "n/a")}</span>
+                  <small>${escapeHtml((match.requiredWorkers?.openclawTasks ?? match.requiredOpenClawTasks ?? []).slice(0, 2).join(" · ") || "no worker task listed")}</small>
+                </article>
+              `).join("")
+            : '<p class="status-text">No skill match returned.</p>'
+        }
+      </div>
+    </section>
+  `;
+}
+
+function humanHandoff(result = state.latestRun) {
+  return graphState(result).human_handoff?.handoff ?? result?.trace?.humanHandoffs?.at?.(-1) ?? null;
 }
 
 function productMemoryRetain(result = state.latestRun) {
@@ -273,11 +749,98 @@ function workerOutcome(result = state.latestRun) {
   return evidence.workerTerminalOutcome ?? evidence.status ?? "not run";
 }
 
+function operatorDashboardUrl(result = state.latestRun) {
+  const sessionId = result?.session?.id ?? state.session?.id ?? "";
+  const userId = result?.user?.id ?? state.user?.id ?? "";
+  const params = new URLSearchParams();
+  if (sessionId) params.set("sessionId", sessionId);
+  if (userId) params.set("userId", userId);
+  const query = params.toString();
+  return query ? `/?${query}` : "/";
+}
+
+function evidenceBlocker(result = state.latestRun) {
+  const evidence = evidenceObservation(result);
+  return (
+    evidence.blocker ??
+    evidence.reason ??
+    evidence.error ??
+    evidence.officialOpenClaw?.blocker ??
+    evidence.workerContinuation?.blocker ??
+    ""
+  );
+}
+
+function phase9FStatus(result = state.latestRun) {
+  if (!result) return "ready_to_test";
+  if (sourcePointers(result).length > 0) return "sourced_result";
+  const blocker = evidenceBlocker(result);
+  const evidence = evidenceObservation(result);
+  if (blocker || String(evidence.status ?? "").includes("blocked")) return "precise_blocker";
+  if (approvalStatus(result) === "pending" || approvalStatus(result) === "needed") return "pending_approval";
+  if (state.latestFacadeTask?.status === "queued") return "facade_task_queued";
+  return "in_progress_or_waiting";
+}
+
+function renderPhase9FProof(result = state.latestRun) {
+  if (!elements.phase9fPanel) return;
+  if (!result) {
+    elements.phase9fPanel.innerHTML = `
+      <p>Run Benefits through the Wefella FastAPI facade, approve read-only observation, and expect either verified source pointers or a precise external blocker.</p>
+      <p class="status-text">No worker action is allowed before approval.</p>
+    `;
+    return;
+  }
+  const evidence = evidenceObservation(result);
+  const pointers = sourcePointers(result);
+  const status = phase9FStatus(result);
+  const blocker = evidenceBlocker(result);
+  const sessionId = result.session?.id ?? state.session?.id ?? "not reported";
+  const traceId = graphState(result).graph_trace_id ?? result.session?.langgraph_thread_id ?? "not reported";
+  const pointerLabels = pointers
+    .slice(0, 3)
+    .map(sourcePointerLabel)
+    .join(" · ");
+  elements.phase9fPanel.innerHTML = `
+    <div class="phase-proof-state ${escapeHtml(status)}">
+      <strong>${escapeHtml(status)}</strong>
+      <span>${escapeHtml(usingFacade() ? "FastAPI facade" : "Node parity route")}</span>
+    </div>
+    <div class="key-value-list">
+      <dl>
+        <dt>Session</dt>
+        <dd>${escapeHtml(sessionId)}</dd>
+        <dt>Trace</dt>
+        <dd>${escapeHtml(traceId)}</dd>
+        <dt>Approval</dt>
+        <dd>${escapeHtml(approvalStatus(result))}</dd>
+        <dt>Worker</dt>
+        <dd>${escapeHtml(workerOutcome(result))}</dd>
+        <dt>Evidence</dt>
+        <dd>${escapeHtml(evidence.status ?? "not requested")}</dd>
+        <dt>Source pointers</dt>
+        <dd>${escapeHtml(pointerLabels || String(pointers.length))}</dd>
+        <dt>Memory</dt>
+        <dd>${escapeHtml(memoryStatus(result))}</dd>
+        <dt>Blocker</dt>
+        <dd>${escapeHtml(blocker || "none")}</dd>
+      </dl>
+    </div>
+    <a class="proof-link" href="${escapeHtml(operatorDashboardUrl(result))}">Open operator proof for this session</a>
+  `;
+}
+
 function renderAnswer(result = null) {
   if (!result) {
+    elements.currentAnswer.dataset.mode = state.uiMode;
     elements.currentAnswer.innerHTML = `
-      <p class="eyebrow">Current Answer</p>
-      <h2>Start a session to test the full sequence.</h2>
+      <div class="answer-mode-header">
+        <div>
+          <p class="eyebrow">Current Answer</p>
+          <h2>Start a session to test the full sequence.</h2>
+        </div>
+        <span>${escapeHtml(modeLabel(state.uiMode))} mode</span>
+      </div>
       <p>The existing proof dashboard stays available. This view uses the same local LangGraph, approval, OpenClaw, audit, and memory APIs.</p>
     `;
     return;
@@ -292,21 +855,34 @@ function renderAnswer(result = null) {
   const classifier = stateSnapshot.structured_intent;
   const pointerLabels = pointers
     .slice(0, 4)
-    .map((pointer) => `${pointer.table ?? "source"}/${pointer.id ?? pointer.rowId ?? "pointer"}`)
+    .map(sourcePointerLabel)
     .join(", ");
   const finalResponse = result.finalResponse ?? "No final response returned.";
+  const handoff = humanHandoff(result);
+  const typedBlocks = ai2uiBlocks(result);
+  const skills = dynamicSkillContext(result);
 
+  elements.currentAnswer.dataset.mode = state.uiMode;
   elements.currentAnswer.innerHTML = `
-    <p class="eyebrow">Current Answer</p>
-    <h2>${escapeHtml(workflow)}</h2>
-    <p>${escapeHtml(finalResponse)}</p>
+    <div class="answer-mode-header">
+      <div>
+        <p class="eyebrow">Current Answer</p>
+        <h2>${escapeHtml(workflow)}</h2>
+      </div>
+      <span>${escapeHtml(modeLabel(state.uiMode))} mode · ${escapeHtml(typedBlocks.length)} typed block(s)</span>
+    </div>
+    ${state.uiMode === "guided" ? '<p class="status-text">Guided mode emphasizes the workflow sequence and the next operator/user decision point.</p>' : ""}
+    ${state.uiMode === "bento" ? '<p class="status-text">Bento mode shows every typed AI2UI block returned by LangGraph in a compact proof grid.</p>' : ""}
+    ${state.uiMode === "chat" ? `<p>${escapeHtml(finalResponse)}</p>` : ""}
     <div class="answer-grid" aria-label="Latest run proof">
       ${metric("Intent", classifier?.intent ?? stateSnapshot.intent ?? "not reported")}
       ${metric("LLM", llmMode)}
       ${metric("Approval", approvalStatus(result))}
       ${metric("Worker", workerOutcome(result))}
       ${metric("Source pointers", pointers.length)}
+      ${metric("Skills", dynamicSkillSelectedLine(skills ?? {}))}
       ${metric("Memory", memoryStatus(result))}
+      ${metric("Handoff", handoff ? `${handoff.priority} · ${handoff.status}` : "none")}
       ${metric("Backend", usingFacade() ? "FastAPI facade" : "Node direct")}
       ${metric("Facade task", state.latestFacadeTask?.task_id ?? "none")}
     </div>
@@ -318,8 +894,15 @@ function renderAnswer(result = null) {
         <dd>${escapeHtml(pointerLabels || "none")}</dd>
         <dt>Evidence status</dt>
         <dd>${escapeHtml(evidence.status ?? "not requested")}</dd>
+        <dt>Skill success</dt>
+        <dd>${escapeHtml(skills?.successEstimate?.overallChance ?? "n/a")}</dd>
+        <dt>Operator proof</dt>
+        <dd><a href="${escapeHtml(operatorDashboardUrl(result))}">Open same session in dashboard</a></dd>
       </dl>
     </div>
+    ${renderDynamicSkillCard(result)}
+    ${renderAi2UiBlocks(result, state.uiMode)}
+    ${state.uiMode === "split" ? `${handoff ? renderHandoffCard(handoff) : ""}${renderCitationDetails(result)}${renderMemoryDetails(result)}` : ""}
   `;
 }
 
@@ -445,13 +1028,66 @@ function renderDiscovery(result = state.latestRun) {
   `;
 }
 
+function renderHandoffCard(handoff) {
+  if (!handoff) return "";
+  return `
+    <article class="handoff-card">
+      <h3>Human Handoff</h3>
+      <dl>
+        <dt>Status</dt>
+        <dd>${escapeHtml(handoff.status ?? "open")} · ${escapeHtml(handoff.priority ?? "urgent")}</dd>
+        <dt>Type</dt>
+        <dd>${escapeHtml(handoff.handoffType ?? handoff.handoff_type ?? "urgent_emergency")}</dd>
+        <dt>Task</dt>
+        <dd>${escapeHtml(handoff.taskId ?? handoff.task_id ?? "not reported")}</dd>
+        <dt>Summary</dt>
+        <dd>${escapeHtml(handoff.summary ?? "Handoff created.")}</dd>
+      </dl>
+    </article>
+  `;
+}
+
+function renderHandoffPanel(payload = {}) {
+  if (!elements.handoffPanel) return;
+  const handoffs = payload.handoffs ?? state.handoffs ?? [];
+  if (!handoffs.length) {
+    elements.handoffPanel.textContent = "No handoff created for this session.";
+    return;
+  }
+  elements.handoffPanel.innerHTML = handoffs.slice(0, 5).map(renderHandoffCard).join("");
+}
+
+async function loadHandoffs() {
+  if (!state.session?.id || !state.user?.id) return null;
+  const params = new URLSearchParams({
+    sessionId: state.session.id,
+    userId: state.user.id,
+    limit: "10"
+  });
+  const payload = await routeApi(`/api/handoffs?${params.toString()}`, {
+    method: "GET",
+    timeoutMs: 30000
+  });
+  state.handoffs = payload.handoffs ?? [];
+  renderHandoffPanel(payload);
+  return payload;
+}
+
 function renderSequence(result = state.latestRun) {
   const approval = approvalStatus(result);
+  const handoff = humanHandoff(result);
   const sequence = {
     auth: state.session?.id ? ["done", "signed in"] : ["active", "waiting"],
     route: graphState(result).structured_intent ? ["done", graphState(result).workflow ?? "routed"] : ["active", "waiting"],
+    skill: dynamicSkillContext(result) ? ["done", dynamicSkillSelectedLine(dynamicSkillContext(result))] : ["", "waiting"],
     approval: approvalConsumed(result) ? ["done", approval] : approval === "needed" || approval === "pending" ? ["active", approval] : ["", "waiting"],
-    worker: sourcePointers(result).length ? ["done", workerOutcome(result)] : workerOutcome(result) !== "not run" && workerOutcome(result) !== "not requested" ? ["active", workerOutcome(result)] : ["", "waiting"],
+    worker: handoff
+      ? ["done", "bypassed"]
+      : sourcePointers(result).length
+        ? ["done", workerOutcome(result)]
+        : workerOutcome(result) !== "not run" && workerOutcome(result) !== "not requested"
+          ? ["active", workerOutcome(result)]
+          : ["", "waiting"],
     evidence: sourcePointers(result).length ? ["done", `${sourcePointers(result).length} pointers`] : ["", evidenceObservation(result).status ?? "waiting"],
     memory: memoryStatus(result) !== "not reported" ? ["done", memoryStatus(result)] : ["", "waiting"],
     answer: result?.finalResponse ? ["done", "ready"] : ["", "waiting"]
@@ -491,6 +1127,243 @@ function renderTimeline(events = state.runtimeEvents) {
       `;
     })
     .join("");
+}
+
+function lastAssistantMessage(history = state.sessionHistory) {
+  return (history?.messages ?? []).filter((message) => message.role === "assistant").at(-1) ?? null;
+}
+
+function renderSessionHistory(history = state.sessionHistory) {
+  if (!elements.historyPanel) return;
+  if (!history) {
+    elements.historyPanel.textContent = "No session history loaded yet.";
+    return;
+  }
+  const messages = history.messages ?? [];
+  const feedback = history.feedback ?? [];
+  const handoffs = history.handoffs ?? [];
+  const latestFeedback = state.latestFeedback?.feedback ?? feedback.at(-1) ?? null;
+  const rows = messages
+    .slice(-6)
+    .map((message) => `
+      <article class="history-message ${escapeHtml(message.role)}">
+        <b>${escapeHtml(message.role)}</b>
+        <p>${escapeHtml(message.content).slice(0, 360)}</p>
+        <small>${escapeHtml(message.createdAt ?? "")}</small>
+      </article>
+    `)
+    .join("");
+  elements.historyPanel.innerHTML = `
+    <div class="key-value-list">
+      <dl>
+        <dt>Session</dt>
+        <dd>${escapeHtml(history.session?.id ?? "not reported")}</dd>
+        <dt>Messages</dt>
+        <dd>${escapeHtml(messages.length)}</dd>
+        <dt>Source pointers</dt>
+        <dd>${escapeHtml(history.sourcePointerCount ?? (history.sourcePointers ?? []).length ?? 0)}</dd>
+        <dt>Feedback</dt>
+        <dd>${escapeHtml(latestFeedback ? `${latestFeedback.rating} · ${latestFeedback.status}` : `${feedback.length} recorded`)}</dd>
+        <dt>Handoffs</dt>
+        <dd>${escapeHtml(handoffs.length ? `${handoffs.length} · ${handoffs.at(-1)?.status ?? "open"}` : "none")}</dd>
+        <dt>Export</dt>
+        <dd>${escapeHtml(state.latestExport?.filename ?? (history.exportAvailable ? "available" : "waiting for answer"))}</dd>
+      </dl>
+    </div>
+    <div class="history-list">${rows || '<p class="status-text">No messages recorded yet.</p>'}</div>
+  `;
+}
+
+async function loadSessionHistory() {
+  if (!state.session?.id) return null;
+  const params = new URLSearchParams();
+  if (state.user?.id) params.set("userId", state.user.id);
+  const query = params.toString();
+  const payload = await routeApi(`/api/sessions/${encodeURIComponent(state.session.id)}${query ? `?${query}` : ""}`, {
+    method: "GET",
+    timeoutMs: 30000
+  });
+  state.sessionHistory = payload;
+  renderSessionHistory(payload);
+  return payload;
+}
+
+async function submitFeedback(rating) {
+  await ensureSession();
+  if (!state.sessionHistory) await loadSessionHistory();
+  const latestAssistant = lastAssistantMessage();
+  const payload = await routeApi("/api/feedback", {
+    method: "POST",
+    body: JSON.stringify({
+      userId: state.user.id,
+      sessionId: state.session.id,
+      messageId: latestAssistant?.id ?? null,
+      taskId: state.latestFacadeTask?.task_id ?? state.latestTaskId ?? null,
+      answerHash: latestAssistant?.contentHash ?? null,
+      rating,
+      comment: elements.feedbackComment?.value ?? "",
+      metadata: {
+        source: "mvp_user_ui",
+        workflow: graphState().workflow ?? null,
+        sourcePointerCount: sourcePointers().length,
+        backend: usingFacade() ? "fastapi_facade" : "node_direct"
+      }
+    }),
+    timeoutMs: 30000
+  });
+  state.latestFeedback = payload;
+  elements.feedbackComment.value = "";
+  await loadSessionHistory();
+  addMessage("system", `Feedback recorded: ${payload.feedback?.rating ?? rating}.`);
+  return payload;
+}
+
+async function exportSessionAnswer() {
+  await ensureSession();
+  const params = new URLSearchParams();
+  if (state.user?.id) params.set("userId", state.user.id);
+  const query = params.toString();
+  const payload = await routeApi(`/api/sessions/${encodeURIComponent(state.session.id)}/export${query ? `?${query}` : ""}`, {
+    method: "GET",
+    timeoutMs: 30000
+  });
+  state.latestExport = payload;
+  downloadTextFile(payload.filename ?? "brainstyworkers-session-export.md", payload.content ?? "");
+  renderSessionHistory(state.sessionHistory);
+  addMessage("system", `Export ready: ${payload.filename ?? "session export"}.`);
+  return payload;
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function renderUploadPanel(upload = state.latestUpload) {
+  if (!elements.uploadPanel) return;
+  if (!upload) {
+    elements.uploadPanel.textContent = "No uploaded document yet.";
+    return;
+  }
+  const extraction = upload.extraction ?? {};
+  const fields = extraction.fields ?? [];
+  const blockers = extraction.blockers ?? [];
+  const spans = extraction.source_spans ?? extraction.sourceSpans ?? [];
+  const fieldItems = fields
+    .slice(0, 10)
+    .map((item) => `
+      <div class="upload-field">
+        <b>${escapeHtml(item.label)}</b>
+        <span>${escapeHtml(item.value)}</span>
+      </div>
+    `)
+    .join("");
+  const spanItems = spans
+    .slice(0, 5)
+    .map((span) => `
+      <li>
+        <span>${escapeHtml(span.span_id ?? span.spanId ?? "span")}</span>
+        <p>${escapeHtml(span.snippet ?? "No snippet.")}</p>
+      </li>
+    `)
+    .join("");
+  elements.uploadPanel.innerHTML = `
+    <div class="phase-proof-state ${escapeHtml(extraction.status ?? "partial")}">
+      <strong>${escapeHtml(extraction.status ?? "not extracted")}</strong>
+      <span>${escapeHtml(extraction.method ?? upload.content_type ?? "local extraction")}</span>
+    </div>
+    <div class="key-value-list">
+      <dl>
+        <dt>Upload</dt>
+        <dd>${escapeHtml(upload.upload_id ?? "not stored")}</dd>
+        <dt>File</dt>
+        <dd>${escapeHtml(upload.filename ?? "not reported")}</dd>
+        <dt>Size</dt>
+        <dd>${escapeHtml(upload.byte_size ?? "not reported")} bytes</dd>
+        <dt>Text hash</dt>
+        <dd>${escapeHtml(extraction.text_hash ?? "none")}</dd>
+        <dt>Blockers</dt>
+        <dd>${escapeHtml(blockers.length ? blockers.join("; ") : "none")}</dd>
+      </dl>
+    </div>
+    <div class="upload-fields">${fieldItems || '<p class="status-text">No recognized insurance fields yet.</p>'}</div>
+    ${spanItems ? `<ol class="citation-spans">${spanItems}</ol>` : ""}
+    <p class="upload-preview">${escapeHtml(extraction.safe_text_preview || "No redacted preview available.")}</p>
+  `;
+}
+
+async function uploadDocument() {
+  if (!usingFacade()) {
+    elements.uploadPanel.textContent = "Document upload requires the Wefella FastAPI facade. Start the facade or use the Node route for non-upload MVP testing.";
+    addMessage("system", "Document upload requires the Wefella FastAPI facade. Node / LangGraph runtime remains available for chat and worker testing.");
+    return { ok: false, status: "facade_required" };
+  }
+  const file = elements.documentFile.files?.[0];
+  if (!file) {
+    elements.uploadPanel.textContent = "Choose a document file before running extraction.";
+    addMessage("system", "Choose a document file before running extraction.");
+    return { ok: false, status: "document_file_required" };
+  }
+  await ensureSession();
+  if (!usingFacade() || !state.facadeAccessToken) {
+    elements.uploadPanel.textContent = "Document upload requires the Wefella FastAPI facade. Start the facade, then try the upload again.";
+    addMessage("system", "Document upload requires the Wefella FastAPI facade. Node / LangGraph runtime remains available for chat and worker testing.");
+    return { ok: false, status: "facade_required" };
+  }
+  const contentBase64 = await readFileAsDataUrl(file);
+  const payload = await facadeApi("/api/uploads", {
+    method: "POST",
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: file.type || guessContentType(file.name),
+      content_base64: contentBase64,
+      session_id: state.session.id,
+      document_kind: elements.documentKind.value
+    }),
+    timeoutMs: 120000
+  });
+  state.latestUpload = payload;
+  renderUploadPanel();
+  addMessage("system", `Uploaded and extracted ${payload.filename}. Extraction status: ${payload.extraction?.status ?? "not reported"}.`);
+  return payload;
+}
+
+async function askAboutUploadedDocument() {
+  if (!state.latestUpload?.upload_id) {
+    elements.uploadPanel.textContent = "Upload and extract a document before asking about it.";
+    addMessage("system", "Upload and extract a document before asking about it.");
+    return { ok: false, status: "uploaded_document_required" };
+  }
+  const message = `Please explain the uploaded ${state.latestUpload.filename} and cite the stored extraction source pointer.`;
+  elements.message.value = message;
+  addMessage("user", message);
+  return runChat(message, { executeEvidenceObservation: false });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function guessContentType(filename) {
+  const extension = filename.toLowerCase().split(".").pop();
+  if (extension === "pdf") return "application/pdf";
+  if (extension === "png") return "image/png";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "md") return "text/markdown";
+  if (extension === "csv") return "text/csv";
+  return "text/plain";
 }
 
 function startEventStream(sessionId, userId) {
@@ -577,6 +1450,23 @@ function appendRuntimeEvent(event) {
   state.runtimeEvents.push(event);
   state.runtimeEvents = state.runtimeEvents.slice(-80);
   renderTimeline();
+  maybeHighlightWorkerBrowser(event);
+}
+
+// When the worker reports a login / 2FA / captcha wall, draw attention to the live
+// worker-browser panel so the user can take over and clear it themselves.
+function maybeHighlightWorkerBrowser(event) {
+  const panel = document.getElementById("workerBrowserPanel");
+  if (!panel || panel.hidden) return;
+  const blob = JSON.stringify(event ?? {}).toLowerCase();
+  const wall = /(login|sign[\s-]?in|2fa|passkey|captcha|password|credential|authenticate)/.test(blob);
+  const workerish = /(worker|evidence|browser|portal|openclaw)/.test(blob);
+  if (wall && workerish) {
+    panel.classList.add("is-attention");
+    const hint = document.getElementById("workerBrowserHint");
+    if (hint) hint.textContent = "The portal needs a login, 2FA, or captcha. Tap Start live view, then Take over to enter it yourself — the assistant never types your credentials.";
+    panel.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 async function loadRuntimeEvents() {
@@ -587,7 +1477,27 @@ async function loadRuntimeEvents() {
 }
 
 async function startSession() {
-  if (usingFacade()) return startFacadeSession();
+  if (usingFacade()) {
+    try {
+      return await startFacadeSession();
+    } catch (error) {
+      if (!isFacadeUnavailableError(error)) throw error;
+      elements.backendRoute.value = "node";
+      state.facadeAccessToken = null;
+      state.latestFacadeTask = null;
+      setFacadeStatus("FastAPI facade unavailable; using same-origin Node / LangGraph runtime.");
+      addMessage("system", `FastAPI facade was unavailable (${error.message}). Continuing with the local Node / LangGraph runtime.`);
+      return startNodeSession();
+    }
+  }
+  return startNodeSession();
+}
+
+function isFacadeUnavailableError(error) {
+  return error?.name === "TypeError" || /Failed to fetch|NetworkError|Load failed|Timed out/i.test(error?.message ?? "");
+}
+
+async function startNodeSession() {
   const enrollment = await api("/api/orchestrator/auth-start", {
     method: "POST",
     body: JSON.stringify(memberPayload())
@@ -596,6 +1506,7 @@ async function startSession() {
   renderSequence();
   renderAnswer();
   await loadRuntimeEvents();
+  await loadSessionHistory();
   addMessage("assistant", `Signed in locally for ${enrollment.user?.email ?? "the planned user"}.`);
   return enrollment;
 }
@@ -616,6 +1527,7 @@ async function startFacadeSession() {
   renderSequence();
   renderAnswer();
   await loadRuntimeEvents();
+  await loadSessionHistory();
   addMessage("assistant", `Signed in through the Wefella FastAPI facade for ${payload.enrollment?.user?.email ?? "the planned user"}.`);
   return payload.enrollment;
 }
@@ -644,7 +1556,8 @@ async function runChat(message, options = {}) {
     workerContinuationId: options.workerContinuationId,
     approvalScope: options.approvalScope,
     allowedAction: options.allowedAction,
-    approvedDocumentCandidateId: options.approvedDocumentCandidateId
+    approvedDocumentCandidateId: options.approvedDocumentCandidateId,
+    uploadedDocumentIds: state.latestUpload?.upload_id ? [state.latestUpload.upload_id] : []
   };
   const result = await api("/api/chat", {
     method: "POST",
@@ -676,7 +1589,8 @@ function facadeChatPayload(message, options = {}) {
     worker_continuation_id: options.workerContinuationId,
     approval_scope: options.approvalScope,
     allowed_action: options.allowedAction,
-    approved_document_candidate_id: options.approvedDocumentCandidateId
+    approved_document_candidate_id: options.approvedDocumentCandidateId,
+    uploaded_document_ids: state.latestUpload?.upload_id ? [state.latestUpload.upload_id] : []
   };
 }
 
@@ -765,6 +1679,239 @@ async function pollFacadeTask(taskId) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
   }
   throw new Error("facade task did not finish before timeout");
+}
+
+function parityMemberPayload() {
+  return {
+    name: elements.name.value.trim(),
+    email: elements.email.value.trim(),
+    payer: elements.payer.value.trim(),
+    portalUrl: elements.portalUrl.value.trim()
+  };
+}
+
+function summarizeParityResult(result) {
+  const stateSnapshot = graphState(result);
+  const workflow = stateSnapshot.workflow ?? result.intent?.workflow ?? "not routed";
+  const classifier = stateSnapshot.structured_intent ?? {};
+  const evidence = evidenceObservation(result);
+  const pointers = sourcePointers(result);
+  return {
+    workflow,
+    intent: classifier.intent ?? stateSnapshot.intent ?? "not reported",
+    approval: approvalStatus(result),
+    proposalStatus: proposalStatus(result),
+    evidenceStatus: evidence.status ?? "not requested",
+    sourcePointerCount: pointers.length,
+    finalResponseAvailable: Boolean(result.finalResponse),
+    tracePresent: Boolean(stateSnapshot.graph_trace_id ?? result.session?.langgraph_thread_id),
+    traceId: stateSnapshot.graph_trace_id ?? result.session?.langgraph_thread_id ?? "not reported"
+  };
+}
+
+async function runNodeParity(message) {
+  const member = parityMemberPayload();
+  const enrollment = await api("/api/orchestrator/auth-start", {
+    method: "POST",
+    body: JSON.stringify({ member, resumeLatestSession: false }),
+    timeoutMs: 90000
+  });
+  const result = await api("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({
+      member,
+      sessionId: enrollment.session?.id,
+      resumeLatestSession: false,
+      message,
+      executeEvidenceObservation: false,
+      requireLivePortalProof: false,
+      useOfficialOpenClawWorker: false,
+      officialOpenClawUseCurrentTab: false,
+      officialOpenClawMultiPage: false,
+      useLiveModel: false,
+      source: "mvp_phase9d_node_parity"
+    }),
+    timeoutMs: 240000
+  });
+  return {
+    route: "Node direct",
+    sessionId: result.session?.id ?? enrollment.session?.id ?? "not reported",
+    result,
+    summary: summarizeParityResult(result)
+  };
+}
+
+async function runFacadeParity(message) {
+  const previousToken = state.facadeAccessToken;
+  const previousTask = state.latestFacadeTask;
+  const member = parityMemberPayload();
+  try {
+    const auth = await facadeApi("/api/auth/local-session", {
+      method: "POST",
+      body: JSON.stringify({
+        member,
+        resume_latest_session: false
+      }),
+      timeoutMs: 90000
+    });
+    state.facadeAccessToken = auth.access_token;
+    const accepted = await facadeApi("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: auth.user_id,
+        session_id: auth.session_id,
+        member,
+        message,
+        execute_evidence_observation: false,
+        require_live_portal_proof: false,
+        use_official_openclaw_worker: false,
+        official_openclaw_use_current_tab: false,
+        official_openclaw_multi_page: false,
+        use_live_model: false,
+        resume_latest_session: false,
+        payload_mode: "phi_allowed_identifier_masked_reasoning",
+        source: "mvp_phase9d_fastapi_parity"
+      }),
+      timeoutMs: 30000
+    });
+    const result = await waitForFacadeTask(accepted.task_id);
+    return {
+      route: "FastAPI facade",
+      sessionId: result.session?.id ?? auth.session_id ?? "not reported",
+      taskId: accepted.task_id,
+      result,
+      summary: summarizeParityResult(result)
+    };
+  } finally {
+    state.facadeAccessToken = previousToken;
+    state.latestFacadeTask = previousTask;
+  }
+}
+
+function compareParityRuns(nodeRun, facadeRun) {
+  const fieldSpecs = [
+    ["workflow", "Workflow"],
+    ["intent", "Intent"],
+    ["approval", "Approval"],
+    ["proposalStatus", "Proposal"],
+    ["evidenceStatus", "Evidence"],
+    ["sourcePointerCount", "Source pointers"],
+    ["finalResponseAvailable", "Answer present"],
+    ["tracePresent", "Trace present"]
+  ];
+  const fields = fieldSpecs.map(([key, label]) => {
+    const nodeValue = nodeRun.summary[key];
+    const facadeValue = facadeRun.summary[key];
+    return {
+      key,
+      label,
+      nodeValue,
+      facadeValue,
+      matched: nodeValue === facadeValue
+    };
+  });
+  const matched = fields.every((field) => field.matched);
+  return {
+    status: matched ? "passed" : "mismatch",
+    matched,
+    prompt: DEFAULT_BENEFITS_MESSAGE,
+    node: nodeRun,
+    facade: facadeRun,
+    fields
+  };
+}
+
+function renderParity(result = state.parityResult) {
+  if (!elements.parityPanel) return;
+  if (!result) {
+    elements.parityPanel.textContent = "No parity run yet.";
+    return;
+  }
+  if (result.status === "running") {
+    elements.parityPanel.innerHTML = `
+      <p class="status-text">Running the same Benefits prompt through Node direct and the FastAPI facade. No worker action is approved in this check.</p>
+    `;
+    return;
+  }
+  if (result.status === "error") {
+    elements.parityPanel.innerHTML = `<p class="danger-line">${escapeHtml(result.message)}</p>`;
+    return;
+  }
+  if (result.status === "facade_unavailable") {
+    elements.parityPanel.innerHTML = `
+      <p class="danger-line">FastAPI facade unavailable.</p>
+      <p class="status-text">${escapeHtml(result.message)}</p>
+      ${result.node?.sessionId ? `<p class="status-text">Node direct completed for session ${escapeHtml(result.node.sessionId)}.</p>` : ""}
+    `;
+    return;
+  }
+  const fieldRows = result.fields
+    .map((field) => `
+      <div class="parity-row ${field.matched ? "match" : "mismatch"}">
+        <b>${escapeHtml(field.label)}</b>
+        <span>${escapeHtml(compact(field.nodeValue))}</span>
+        <span>${escapeHtml(compact(field.facadeValue))}</span>
+      </div>
+    `)
+    .join("");
+  elements.parityPanel.innerHTML = `
+    <p class="${result.matched ? "success-line" : "danger-line"}">${result.matched ? "Parity passed" : "Parity needs review"} for the proposal-only Benefits route.</p>
+    <div class="parity-grid" aria-label="Node and FastAPI parity fields">
+      <div class="parity-row header">
+        <b>Field</b>
+        <span>Node direct</span>
+        <span>FastAPI facade</span>
+      </div>
+      ${fieldRows}
+    </div>
+    <div class="key-value-list">
+      <dl>
+        <dt>Node session</dt>
+        <dd>${escapeHtml(result.node.sessionId)}</dd>
+        <dt>FastAPI session</dt>
+        <dd>${escapeHtml(result.facade.sessionId)}</dd>
+        <dt>FastAPI task</dt>
+        <dd>${escapeHtml(result.facade.taskId ?? "not reported")}</dd>
+        <dt>Node trace</dt>
+        <dd>${escapeHtml(result.node.summary.traceId)}</dd>
+        <dt>FastAPI trace</dt>
+        <dd>${escapeHtml(result.facade.summary.traceId)}</dd>
+      </dl>
+    </div>
+  `;
+}
+
+async function runParityCheck() {
+  state.parityResult = { status: "running" };
+  renderParity();
+  try {
+    const message = DEFAULT_BENEFITS_MESSAGE;
+    const nodeRun = await runNodeParity(message);
+    const facadeRun = await runFacadeParity(message);
+    state.parityResult = compareParityRuns(nodeRun, facadeRun);
+    renderParity();
+    addMessage(
+      "system",
+      `Phase 9D parity ${state.parityResult.matched ? "passed" : "needs review"} for Node direct versus FastAPI facade. No evidence observation or worker action was approved.`
+    );
+    return state.parityResult;
+  } catch (error) {
+    if (isFacadeUnavailableError(error)) {
+      state.parityResult = {
+        status: "facade_unavailable",
+        message: `FastAPI facade was unavailable (${error.message}). Node direct remains available for the MVP.`,
+        node: null,
+        facade: null
+      };
+      setFacadeStatus("FastAPI facade unavailable; use Node / LangGraph runtime for local MVP testing.");
+      renderParity();
+      addMessage("system", state.parityResult.message);
+      return state.parityResult;
+    }
+    state.parityResult = { status: "error", message: `Parity check failed: ${error.message}` };
+    renderParity();
+    throw error;
+  }
 }
 
 async function createWorkerContinuation(taskId, options = {}) {
@@ -906,7 +2053,7 @@ function renderWorkerStatus(payload) {
 }
 
 async function checkWorker() {
-  const payload = await routeApi("/api/openclaw/official/status", { method: "GET", timeoutMs: 60000 });
+  const payload = await api("/api/openclaw/official/status", { method: "GET", timeoutMs: 60000 });
   renderWorkerStatus(payload);
   addMessage("system", `OpenClaw readiness: ${payload.liveReadiness?.status ?? (payload.ready ? "ready" : "not ready")}.`);
   return payload;
@@ -928,11 +2075,19 @@ async function markPortalReady() {
 }
 
 async function checkFacade() {
-  const payload = await facadeApi("/api/health", { method: "GET", timeoutMs: 15000 });
-  const status = payload.node_runtime_ok ? "reachable and connected to Node" : "reachable but Node runtime is unavailable";
-  setFacadeStatus(`FastAPI ${payload.version} · ${status}`);
-  addMessage("system", `Wefella facade health: ${status}.`);
-  return payload;
+  try {
+    const payload = await facadeApi("/api/health", { method: "GET", timeoutMs: 15000 });
+    const status = payload.node_runtime_ok ? "reachable and connected to Node" : "reachable but Node runtime is unavailable";
+    setFacadeStatus(`FastAPI ${payload.version} · ${status}`);
+    addMessage("system", `Wefella facade health: ${status}.`);
+    return payload;
+  } catch (error) {
+    if (!isFacadeUnavailableError(error)) throw error;
+    const payload = { ok: false, status: "facade_unavailable", error: error.message };
+    setFacadeStatus("FastAPI facade unavailable; use Node / LangGraph runtime for local MVP testing.");
+    addMessage("system", `Wefella FastAPI facade unavailable (${error.message}). Node / LangGraph runtime remains available.`);
+    return payload;
+  }
 }
 
 function activateFacadeRoute() {
@@ -949,7 +2104,7 @@ function handleBackendRouteChange() {
   if (usingFacade()) {
     setFacadeStatus("FastAPI facade selected. Check Facade, then Start Session.");
   } else {
-    setFacadeStatus("Direct Node route active.");
+    setFacadeStatus("Direct Node route active for operator parity.");
   }
   renderAnswer(state.latestRun);
 }
@@ -962,16 +2117,26 @@ function resetView() {
   state.latestTaskId = null;
   state.facadeAccessToken = null;
   state.latestFacadeTask = null;
+  state.parityResult = null;
+  state.latestUpload = null;
+  state.sessionHistory = null;
+  state.latestFeedback = null;
+  state.latestExport = null;
   state.runtimeEvents = [];
   state.documentCandidates = [];
   state.eventSource = null;
   elements.sessionId.value = "";
   elements.authStatus.textContent = "Not signed in";
   elements.workerStatus.textContent = "Worker not checked";
-  setFacadeStatus(usingFacade() ? "FastAPI facade selected. Check Facade, then Start Session." : "Direct Node route active.");
+  setFacadeStatus(usingFacade() ? "FastAPI facade route active by default. Check Facade, then Start Session." : "Direct Node route active for operator parity.");
   elements.messages.innerHTML = "";
   elements.approvalPanel.textContent = "No pending worker proposal yet.";
   elements.discoveryPanel.textContent = "No discovery report yet.";
+  if (elements.feedbackComment) elements.feedbackComment.value = "";
+  renderSessionHistory();
+  renderUploadPanel();
+  renderPhase9FProof();
+  renderParity();
   renderAnswer();
   renderTimeline([]);
   renderSequence();
@@ -1006,8 +2171,19 @@ $("#checkWorker").addEventListener("click", () => runAction("Checking official O
 $("#portalReady").addEventListener("click", () => runAction("Checking portal readiness...", markPortalReady));
 $("#checkFacade").addEventListener("click", () => runAction("Checking Wefella FastAPI facade...", checkFacade));
 $("#useFacade").addEventListener("click", activateFacadeRoute);
+$("#runParity").addEventListener("click", () => runAction("Running Node versus FastAPI parity check...", runParityCheck));
+$("#uploadDocument").addEventListener("click", () => runAction("Uploading document and running local extraction...", uploadDocument));
+$("#askUploadedDocument").addEventListener("click", () => runAction("Routing uploaded document question through LangGraph...", askAboutUploadedDocument));
+$("#loadHistory").addEventListener("click", () => runAction("Loading protected session history...", loadSessionHistory));
+$("#loadHandoffs").addEventListener("click", () => runAction("Loading human handoff queue...", loadHandoffs));
+$("#exportSession").addEventListener("click", () => runAction("Exporting the latest sourced answer...", exportSessionAnswer));
+$("#submitUsefulFeedback").addEventListener("click", () => runAction("Recording feedback for this answer...", () => submitFeedback("useful")));
+$("#submitNeedsFollowupFeedback").addEventListener("click", () => runAction("Recording follow-up feedback for this answer...", () => submitFeedback("needs_follow_up")));
 elements.backendRoute.addEventListener("change", handleBackendRouteChange);
 $("#resetApp").addEventListener("click", resetView);
+elements.modeButtons.forEach((button) => {
+  button.addEventListener("click", () => setUiMode(button.dataset.uiMode));
+});
 
 document.querySelectorAll(".workflow-button").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1026,4 +2202,10 @@ $("#chatForm").addEventListener("submit", (event) => {
   runAction("Routing message through LangGraph...", () => runChat(message, { executeEvidenceObservation: false }));
 });
 
+setUiMode(state.uiMode, { skipRender: true });
 renderSequence();
+renderParity();
+renderPhase9FProof();
+renderUploadPanel();
+renderSessionHistory();
+renderAnswer();
