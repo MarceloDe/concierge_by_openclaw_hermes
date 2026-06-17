@@ -17,6 +17,9 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
   const postgresWorkerLeaseReady = Boolean(deployment?.postgresWorkerLeaseReady ?? env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1");
   const postgresBackupRestoreReady = Boolean(deployment?.postgresBackupRestoreReady ?? env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1");
   const postgresBackupRunbookReady = Boolean(deployment?.postgresBackupRunbookReady ?? env.BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY === "1");
+  const postgresProviderBackupPolicyReady = Boolean(
+    deployment?.postgresProviderBackupPolicyReady ?? env.BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY === "1"
+  );
   const postgresEndpointParityReady = Boolean(deployment?.postgresEndpointParityReady ?? env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1");
   const databaseSecretProfileReady = Boolean(deployment?.databaseSecretProfileReady ?? databaseSecretProfile.ready);
   const postgresDefaultRolloutReady = Boolean(deployment?.postgresDefaultRolloutReady ?? env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1");
@@ -101,6 +104,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       workerLeaseReady: postgresWorkerLeaseReady,
       backupRestoreReady: postgresBackupRestoreReady,
       backupRunbookReady: postgresBackupRunbookReady,
+      providerBackupPolicyReady: postgresProviderBackupPolicyReady,
       endpointParityReady: postgresEndpointParityReady,
       operationalGatesReady,
       productionGatesReady,
@@ -113,6 +117,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
       productionSmokeCommand: "npm run storage:postgres:production-smoke",
       backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
+      providerBackupPolicyCommand: "npm run storage:postgres:provider-backup-policy-smoke",
       defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
       productionProfileCommand: "npm run storage:postgres:profile-contract"
     },

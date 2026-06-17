@@ -7001,3 +7001,75 @@ Known risks or gaps:
 - Hosted provider backup/PITR policy is not configured yet.
 - The smoke proves local Docker Postgres restore rehearsal and runbook compliance, not a managed provider restore.
 - Provider-specific restore promotion steps should be added after the deployment target is selected.
+
+## Phase 14 Postgres Provider Backup Policy Update
+
+Status: Implemented and contract-smoked. Hosted provider configuration remains intentionally not claimed.
+
+Slice name:
+- Provider backup/PITR policy contract and readiness gate.
+
+Code changes:
+- Added `project/deployment/postgres-provider-backup-policy.example.json`.
+- Added `scripts/postgres-provider-backup-policy-smoke.mjs`.
+- Added package script `storage:postgres:provider-backup-policy-smoke`.
+- Added `src/tests/postgres-provider-backup-policy-contract.test.mjs`.
+- Updated compose defaults, Docker image env, storage readiness, connector proof payload, build guard, compose/storage contracts, and deployment tests.
+
+Safety decision:
+- The checked-in policy is an example contract only.
+- The example policy can validate the shape but cannot mark hosted-provider readiness, even when `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1`.
+- Hosted readiness requires a non-example policy file supplied through `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE`.
+- The policy file must reference a provider secret or env reference, not contain a raw database URL.
+
+Verification commands:
+- `node --check scripts/postgres-provider-backup-policy-smoke.mjs`
+- `node --check scripts/storage-contract.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/concierge/storageReadiness.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/server/build-check.mjs`
+- `node --test src/tests/postgres-provider-backup-policy-contract.test.mjs src/tests/deployment-storage.test.mjs src/tests/deployment-compose.test.mjs`
+- `npm run storage:postgres:provider-backup-policy-smoke`
+- `npm run build`
+- `node --test src/tests/final-system-verification-report.test.mjs`
+- `npm run test:docker:contract`
+- `npm run storage:contract`
+- `npm run test:db:postgres`
+- `npm run test:db:safety`
+- `npm run test:local`
+
+Verification result:
+- Focused syntax checks passed.
+- Focused contract tests passed with 8/8 tests.
+- `npm run storage:postgres:provider-backup-policy-smoke` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 17/17 tests.
+- `npm run storage:contract` passed and reported `providerBackupPolicyCommand`.
+- `npm run test:db:postgres` passed with 11/11 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- The smoke reported:
+  - `status=provider_policy_contract_valid_not_hosted`;
+  - `hostedProviderReady=false`;
+  - no validation failures;
+  - `rawDatabaseUrlWritten=false`;
+  - `rawSecretFilePathWritten=false`;
+  - `destructiveProductionRestore=false`;
+  - `externalActions=false`;
+  - `phiSeeded=false`.
+- API proof at `/api/proof/runs/postgres-provider-backup-policy` reported:
+  - `postgres_provider_backup_policy=provider_policy_contract_available`;
+  - `database_provider_backup_policy=0 / 100`;
+  - `configure_hosted_provider_policy`.
+- In-app browser verification passed at `http://127.0.0.1:4199/?phase=postgres-provider-backup-policy` with required provider-policy proof strings present in the dashboard DOM and 0 console errors.
+- Screenshot and proof artifacts:
+  - `artifacts/phase14-postgres-provider-backup-policy-dashboard-proof.png`;
+  - `artifacts/phase14-postgres-provider-backup-policy-proof.json`;
+  - `artifacts/postgres-provider-backup-policy-smoke.json`.
+
+Known risks or gaps:
+- A real hosted provider has not been selected in this repo.
+- Provider-native backup/PITR has not been configured.
+- A private provider policy file and deployment secret manager must be supplied outside Git before this score can pass.

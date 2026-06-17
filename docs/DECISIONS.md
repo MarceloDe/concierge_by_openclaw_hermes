@@ -2100,3 +2100,22 @@ This makes backup/restore operations auditable and repeatable today while preser
 
 Cost of changing later:
 Low. Provider-specific automation can satisfy the same runbook sections and set `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1` after hosted proof without changing the public connector API or Postgres adapter.
+
+## 2026-06-17 - Add Hosted Provider Backup Policy As A Separate Gate
+
+Context:
+After the provider-neutral backup runbook was added, the next production gap was the provider-specific policy contract: operators need to prove the hosted database has backup/PITR, retention, restore rehearsal, and promotion rules, but the project still does not have a selected hosted provider or credentials.
+
+Options considered:
+- Pick Neon, Supabase, or Prisma Postgres immediately and add provider-specific automation.
+- Treat the provider-neutral runbook as enough.
+- Add a provider-policy contract and smoke now, with a checked-in example and a readiness gate that only passes for a non-example provider policy.
+
+Decision:
+Add `project/deployment/postgres-provider-backup-policy.example.json`, `npm run storage:postgres:provider-backup-policy-smoke`, and a separate dashboard/API score `database_provider_backup_policy`. The example file validates the contract but never counts as hosted readiness.
+
+Reason:
+This lets the project verify the exact production policy shape without storing secrets or overclaiming deployment status. It keeps the hosted provider choice open while making the remaining work concrete and testable.
+
+Cost of changing later:
+Low. The selected provider can provide a private policy file through `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE` and set `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1` after provider-native backup/PITR proof, without changing the connector API or Postgres adapter.

@@ -25,7 +25,9 @@ const REQUIRED_FILES = [
   "scripts/postgres-endpoint-regression-smoke.mjs",
   "scripts/postgres-production-profile-live-smoke.mjs",
   "scripts/postgres-backup-runbook-smoke.mjs",
+  "scripts/postgres-provider-backup-policy-smoke.mjs",
   "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
+  "project/deployment/postgres-provider-backup-policy.example.json",
   "compose.postgres.yaml",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
@@ -34,6 +36,7 @@ const REQUIRED_FILES = [
   "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/postgres-production-profile-live-contract.test.mjs",
   "src/tests/postgres-backup-runbook-contract.test.mjs",
+  "src/tests/postgres-provider-backup-policy-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "src/tests/deployment-storage.test.mjs"
 ];
@@ -58,6 +61,8 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}",
   "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
   "BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY: ${BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY:-0}",
+  "BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY:-0}",
+  "BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE:-project/deployment/postgres-provider-backup-policy.example.json}",
   "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
   "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
@@ -139,6 +144,8 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     endpointRegressionSmoke,
     profileLiveSmoke,
     backupRunbookSmoke,
+    providerBackupPolicySmoke,
+    providerBackupPolicy,
     backupRunbook
   ] = await Promise.all([
     readFile(resolve(REPO_ROOT, "compose.yaml"), "utf8"),
@@ -154,6 +161,8 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     readFile(resolve(REPO_ROOT, "scripts/postgres-endpoint-regression-smoke.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "scripts/postgres-production-profile-live-smoke.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "scripts/postgres-backup-runbook-smoke.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "scripts/postgres-provider-backup-policy-smoke.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "project/deployment/postgres-provider-backup-policy.example.json"), "utf8"),
     readFile(resolve(REPO_ROOT, "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md"), "utf8")
   ]);
 
@@ -169,11 +178,13 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
       "workerLeaseReady",
       "backupRestoreReady",
       "backupRunbookReady",
+      "providerBackupPolicyReady",
       "endpointParityReady",
       "secretProfileReady",
       "defaultRolloutReady",
       "productionSmokeCommand",
       "backupRunbookCommand",
+      "providerBackupPolicyCommand",
       "defaultRolloutCommand",
       "fullMigrationReady"
     ],
@@ -207,6 +218,27 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     backupRunbookSmoke,
     ["POSTGRES_BACKUP_RUNBOOK_SMOKE_VERSION", "runPostgresBackupRunbookSmoke", "validatePostgresBackupRunbook", "runPostgresProductionReadinessSmoke"],
     "postgres-backup-runbook-smoke.mjs"
+  );
+  assertIncludes(
+    providerBackupPolicySmoke,
+    [
+      "POSTGRES_PROVIDER_BACKUP_POLICY_SMOKE_VERSION",
+      "runPostgresProviderBackupPolicySmoke",
+      "validatePostgresProviderBackupPolicy",
+      "BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY",
+      "database_url_ref_must_not_be_raw_url"
+    ],
+    "postgres-provider-backup-policy-smoke.mjs"
+  );
+  assertIncludes(
+    providerBackupPolicy,
+    [
+      "brainstyworkers.postgres-provider-backup-policy.v1",
+      "\"pitrEnabled\": true",
+      "\"requiresEndpointRegression\": true",
+      "\"destructiveProductionRestoreAllowed\": false"
+    ],
+    "postgres-provider-backup-policy.example.json"
   );
   assertIncludes(
     backupRunbook,
@@ -243,6 +275,7 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     endpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
     productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
     backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
+    providerBackupPolicyCommand: "npm run storage:postgres:provider-backup-policy-smoke",
     postgresProductionProfile,
     livePostgres
   };

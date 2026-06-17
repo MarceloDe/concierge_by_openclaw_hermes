@@ -1795,3 +1795,52 @@ Current proof status:
 - Screenshot artifacts:
   - `artifacts/phase13-postgres-backup-runbook-dashboard-proof.png`;
   - `artifacts/phase13-postgres-backup-runbook-connector-proof.png`.
+
+## Postgres Provider Backup Policy Acceptance
+
+This slice is acceptable when:
+
+- A provider backup/PITR policy example exists without storing credentials or raw database URLs.
+- `npm run storage:postgres:provider-backup-policy-smoke` validates:
+  - provider allowlist;
+  - staging/production environment;
+  - managed or file-backed secret source;
+  - no raw database URL in `databaseUrlRef`;
+  - backup/PITR or WAL-backed daily backup;
+  - at least 7 days retention;
+  - RPO at or below 24 hours;
+  - RTO at or below 4 hours;
+  - encrypted-at-rest backups;
+  - restore rehearsal every 30 days or less;
+  - isolated restore targets;
+  - endpoint regression and backup-runbook smoke requirements;
+  - operator approval for promotion;
+  - destructive production restore disabled;
+  - audit redaction for database URLs and secret paths.
+- The smoke writes a sanitized artifact and reports no raw database URL, no raw secret path, no PHI seed, no external action, and no destructive production restore.
+- Storage readiness exposes `postgres.providerBackupPolicyReady` and `postgres.providerBackupPolicyCommand`.
+- Connector proof exposes `postgres_provider_backup_policy` and `database_provider_backup_policy`.
+- The example policy remains `provider_policy_contract_valid_not_hosted` and cannot make the hosted-provider score pass by itself.
+
+Current proof status:
+
+- Focused syntax checks passed for the provider-policy smoke, storage/compose contracts, storage readiness, server, and build guard.
+- Focused contract tests passed with 8/8 tests.
+- `npm run storage:postgres:provider-backup-policy-smoke` passed.
+- The smoke reported:
+  - `status=provider_policy_contract_valid_not_hosted`;
+  - `hostedProviderReady=false`;
+  - `rawDatabaseUrlWritten=false`;
+  - `rawSecretFilePathWritten=false`;
+  - `destructiveProductionRestore=false`;
+  - `externalActions=false`;
+  - `phiSeeded=false`.
+- API proof at `/api/proof/runs/postgres-provider-backup-policy` reported:
+  - `postgres_provider_backup_policy=provider_policy_contract_available`;
+  - `database_provider_backup_policy=0 / 100`;
+  - `configure_hosted_provider_policy`.
+- Browser verification passed with required provider-policy proof strings present and 0 console errors.
+- Screenshot and proof artifacts:
+  - `artifacts/phase14-postgres-provider-backup-policy-dashboard-proof.png`;
+  - `artifacts/phase14-postgres-provider-backup-policy-proof.json`;
+  - `artifacts/postgres-provider-backup-policy-smoke.json`.

@@ -15,6 +15,7 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.storageRuntime.endpointRegressionCommand, "npm run storage:postgres:endpoint-regression-smoke");
   assert.equal(result.storageRuntime.productionProfileLiveCommand, "npm run storage:postgres:profile-live-smoke");
   assert.equal(result.storageRuntime.backupRunbookCommand, "npm run storage:postgres:backup-runbook-smoke");
+  assert.equal(result.storageRuntime.providerBackupPolicyCommand, "npm run storage:postgres:provider-backup-policy-smoke");
   assert.equal(result.postgresProductionProfile.ok, true);
   assert.equal(result.postgresProductionProfile.secretSource, "docker_secret");
   assert.equal(result.postgresProductionProfile.readinessGatesRemainProofControlled, true);

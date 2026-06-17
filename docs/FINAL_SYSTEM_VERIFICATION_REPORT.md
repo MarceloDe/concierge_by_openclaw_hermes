@@ -494,3 +494,26 @@ Score:
 - `database_backup_restore_runbook` can now report `100 / 100` when the runbook smoke has passed and `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1`.
 - This is an operations/runbook score, not a claim that a hosted provider's final PITR policy is configured.
 - Remaining production work is provider-specific backup/PITR setup, scheduled restore rehearsal in deployment operations, and hosted secret-manager integration.
+
+## Phase 14 Postgres Provider Backup Policy Update
+
+Implementation:
+- Added `project/deployment/postgres-provider-backup-policy.example.json`.
+- Added `scripts/postgres-provider-backup-policy-smoke.mjs` and package script `storage:postgres:provider-backup-policy-smoke`.
+- Added `src/tests/postgres-provider-backup-policy-contract.test.mjs` and included it in `npm run test:docker:contract`.
+- Exposed `postgres_provider_backup_policy` and `database_provider_backup_policy` through storage readiness and connector proof.
+
+Verification:
+- Focused syntax checks passed for the provider-policy smoke, storage/compose contracts, storage readiness, server, and build guard.
+- Focused provider/compose/storage contract tests passed with 8/8 tests.
+- `npm run storage:postgres:provider-backup-policy-smoke` passed.
+- `npm run test:docker:contract` passed with 17/17 tests.
+- `npm run build`, final-report coverage, storage contract, DB Postgres, DB safety, and full local regression passed.
+- API proof reported `postgres_provider_backup_policy=provider_policy_contract_available` and `database_provider_backup_policy=0 / 100`.
+- Browser proof passed with required provider-policy strings present and 0 console errors.
+- Screenshot artifact: `artifacts/phase14-postgres-provider-backup-policy-dashboard-proof.png`.
+
+Score decision:
+- `database_provider_backup_policy` remains `0 / 100` until a non-example hosted provider policy file is configured and `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1`.
+- The example policy validates the contract and intentionally reports `provider_policy_contract_valid_not_hosted`.
+- Remaining production work is selecting the hosted provider, configuring provider-native backup/PITR and secret management, then running the policy smoke against the private provider policy.

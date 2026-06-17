@@ -182,6 +182,10 @@ async function safeDeploymentContractStatus() {
     "scripts/postgres-production-profile-contract.mjs",
     "scripts/postgres-endpoint-regression-smoke.mjs",
     "scripts/postgres-production-profile-live-smoke.mjs",
+    "scripts/postgres-backup-runbook-smoke.mjs",
+    "scripts/postgres-provider-backup-policy-smoke.mjs",
+    "project/deployment/postgres-provider-backup-policy.example.json",
+    "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
     "scripts/compose-memory-smoke.mjs",
@@ -242,6 +246,9 @@ async function safeDeploymentContractStatus() {
     "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
     "BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}",
     "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
+    "BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY: ${BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY:-0}",
+    "BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY:-0}",
+    "BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE: ${BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE:-project/deployment/postgres-provider-backup-policy.example.json}",
     "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
     "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
     "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
@@ -273,6 +280,7 @@ async function safeDeploymentContractStatus() {
     postgresWorkerLeaseReady: process.env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1",
     postgresBackupRestoreReady: process.env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1",
     postgresBackupRunbookReady: process.env.BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY === "1",
+    postgresProviderBackupPolicyReady: process.env.BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY === "1",
     postgresEndpointParityReady: process.env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1",
     databaseSecretProfileReady: databaseSecretProfile.ready,
     databaseSecretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
@@ -289,6 +297,7 @@ async function safeDeploymentContractStatus() {
     postgresEndpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
     postgresProductionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
     postgresBackupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
+    postgresProviderBackupPolicyCommand: "npm run storage:postgres:provider-backup-policy-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -394,6 +403,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
           workerLeaseReady: storage.postgres.workerLeaseReady,
           backupRestoreReady: storage.postgres.backupRestoreReady,
           backupRunbookReady: storage.postgres.backupRunbookReady,
+          providerBackupPolicyReady: storage.postgres.providerBackupPolicyReady,
           secretProfileReady: storage.safety.secretProfileReady,
           defaultRolloutReady: storage.postgres.defaultRolloutReady
         },
@@ -405,6 +415,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         status: storage.postgres.backupRunbookReady ? "backup_restore_runbook_smoked" : "available_runbook_gate",
         ok: storage.postgres.backupRunbookReady,
         command: storage.postgres.backupRunbookCommand
+      },
+      {
+        key: "postgres_provider_backup_policy",
+        status: storage.postgres.providerBackupPolicyReady ? "hosted_provider_backup_policy_ready" : "provider_policy_contract_available",
+        ok: storage.postgres.providerBackupPolicyReady,
+        command: storage.postgres.providerBackupPolicyCommand
       },
       {
         key: "postgres_production_profile",
@@ -475,6 +491,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: storage.postgres.backupRunbookReady ? 100 : 0,
         target: 100,
         status: storage.postgres.backupRunbookReady ? "backup_restore_runbook_smoked" : "run_backup_runbook_smoke"
+      },
+      {
+        key: "database_provider_backup_policy",
+        score: storage.postgres.providerBackupPolicyReady ? 100 : 0,
+        target: 100,
+        status: storage.postgres.providerBackupPolicyReady ? "hosted_provider_backup_policy_ready" : "configure_hosted_provider_policy"
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },

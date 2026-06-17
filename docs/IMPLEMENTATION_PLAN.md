@@ -2208,3 +2208,25 @@ Remaining follow-up:
 - Configure the final hosted provider backup/PITR policy and secret manager.
 - Add an automated restore rehearsal in CI/CD or deployment operations once hosted credentials exist.
 - Add provider-specific restore promotion playbooks after Neon/Supabase/Prisma Postgres or another target is selected.
+
+## Postgres Provider Backup Policy Cycle - 2026-06-17
+
+Goal:
+- Add a provider-specific backup/PITR policy contract that can be satisfied by Neon, Supabase, Prisma Postgres, or another managed Postgres target without hardcoding credentials or pretending hosted proof exists.
+
+Implemented slice:
+- Add `project/deployment/postgres-provider-backup-policy.example.json` as the required provider policy shape.
+- Add `scripts/postgres-provider-backup-policy-smoke.mjs` and `npm run storage:postgres:provider-backup-policy-smoke`.
+- Add `src/tests/postgres-provider-backup-policy-contract.test.mjs` and wire it into `npm run test:docker:contract`.
+- Expose `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY`, `postgres_provider_backup_policy`, and `database_provider_backup_policy` through storage readiness and connector proof.
+
+Acceptance:
+- The smoke validates provider, environment, secret source, backup/PITR mode, retention, RPO/RTO, restore rehearsal cadence, promotion approval, and audit redaction.
+- The example policy never counts as hosted-provider readiness, even when the readiness env is set.
+- Dashboard/API proof reports `postgres_provider_backup_policy=provider_policy_contract_available` until a non-example provider file and readiness gate are configured.
+- No raw database URL, secret path, PHI, external action, or destructive restore is emitted in artifacts.
+
+Remaining follow-up:
+- Create the real provider policy file outside Git after selecting the hosted database provider.
+- Configure provider-native backup/PITR and secret management.
+- Run the provider policy smoke with `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE` pointing at the real policy and set `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1` only after hosted proof passes.
