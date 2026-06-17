@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
   validateBrowserSandboxProviderContract,
@@ -10,6 +12,7 @@ import {
   runBrowserSandboxProviderLivePreflightSmoke,
   runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxProviderWebrtcSignalingSmoke,
+  runBrowserSandboxProviderVisualOcrReplaySmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -214,6 +217,95 @@ test("hosted browser sandbox provider WebRTC signaling uses opaque refs and does
   assert.doesNotMatch(serialized, /v=0|candidate:|a=fingerprint|a=ice-ufrag|turn:|stun:|data:image|member id|subscriber id|typed-password/i);
 });
 
+test("hosted browser sandbox provider visual/OCR replay is blocked without private proof", async () => {
+  const result = await runBrowserSandboxProviderVisualOcrReplaySmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-visual-ocr-replay-blocked-smoke-test.json",
+    env: {}
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderVisualOcrReplayReady, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_visual_ocr_replay_blocked");
+  assert.equal(result.proofFile.present, false);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+});
+
+test("hosted browser sandbox provider visual/OCR replay validates private refs without overclaiming hosted readiness", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "brainsty-provider-visual-ocr-"));
+  const proofPath = join(tmp, "provider-visual-ocr-proof.json");
+  await writeFile(proofPath, JSON.stringify(validVisualOcrProofManifest(), null, 2));
+  const result = await runBrowserSandboxProviderVisualOcrReplaySmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-visual-ocr-replay-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: proofPath
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderVisualOcrReplayReady, true);
+  assert.equal(result.hostedProviderWebrtcSignalingReady, true);
+  assert.equal(result.hostedProviderLiveVerificationReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_visual_ocr_replay_ready");
+  assert.equal(result.proofFile.outsideGit, true);
+  assert.equal(result.proofFile.validation.ok, true);
+  assert.equal(result.proofFile.validation.sanitizedProof.dashboardScreenshotRefPresent, true);
+  assert.equal(result.proofFile.validation.sanitizedProof.mobileLiveBlockRefPresent, true);
+  assert.equal(result.safety.rawFrameReturned, false);
+  assert.equal(result.safety.rawImageReturned, false);
+  assert.equal(result.safety.rawOcrTextReturned, false);
+  assert.equal(result.safety.rawInputReturned, false);
+  assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+  assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password|v=0|candidate:/i);
+});
+
+test("hosted browser sandbox provider visual/OCR replay rejects raw OCR or screenshot payloads", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "brainsty-provider-visual-ocr-bad-"));
+  const proofPath = join(tmp, "provider-visual-ocr-proof.json");
+  await writeFile(proofPath, JSON.stringify({
+    ...validVisualOcrProofManifest(),
+    stream: { frameRefPresent: true, rawFrameReturned: true },
+    ocrCaption: { captionRefPresent: true, rawOcrTextReturned: true, visualCaptionSafe: false, unsafeText: "member id 123" }
+  }, null, 2));
+  const result = await runBrowserSandboxProviderVisualOcrReplaySmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-visual-ocr-replay-invalid-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: proofPath
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.hostedProviderVisualOcrReplayReady, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_visual_ocr_replay_invalid");
+  assert.equal(result.proofFile.validation.failures.includes("raw_frame_must_not_be_returned"), true);
+  assert.equal(result.proofFile.validation.failures.includes("raw_ocr_text_must_not_be_returned"), true);
+  assert.equal(result.proofFile.validation.failures.includes("raw_frame_ocr_or_credential_content_forbidden"), true);
+});
+
 test("hosted browser sandbox provider readiness requires live verification gate even when live verified is set", async () => {
   const previousProvider = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER;
   const previousEndpoint = process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL;
@@ -392,6 +484,56 @@ test("hosted browser sandbox provider live lifecycle harness proves full lifecyc
   assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost/);
   assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password/i);
 });
+
+function validVisualOcrProofManifest() {
+  return {
+    schemaVersion: "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1",
+    providerLiveConnected: true,
+    session: {
+      sessionRefPresent: true,
+      rawSessionRefReturned: false
+    },
+    stream: {
+      frameRefPresent: true,
+      rawFrameReturned: false,
+      rawFramePersisted: false
+    },
+    screenshot: {
+      screenshotRefPresent: true,
+      rawImageReturned: false
+    },
+    ocrCaption: {
+      captionRefPresent: true,
+      rawOcrTextReturned: false,
+      rawOcrTextPersisted: false,
+      visualCaptionSafe: true
+    },
+    takeover: {
+      approvalRequired: true,
+      inputRelay: "approval_gated_human_only"
+    },
+    input: {
+      rawInputReturned: false,
+      externalWriteActionsWithoutApproval: false
+    },
+    teardown: {
+      teardownComplete: true,
+      rawFramePersisted: false,
+      rawOcrTextPersisted: false
+    },
+    visualProof: {
+      dashboardScreenshotRefPresent: true,
+      mobileLiveBlockRefPresent: true,
+      ocrCaptionRefPresent: true
+    },
+    safety: {
+      agentCredentialEntryAllowed: false,
+      externalWriteActionsWithoutApproval: false,
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    }
+  };
+}
 
 function restoreEnv(key, value) {
   if (value === undefined) delete process.env[key];

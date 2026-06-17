@@ -1,0 +1,60 @@
+{
+  "phase": 25,
+  "route": "http://127.0.0.1:4211/?phase=hosted-browser-sandbox-provider-visual-ocr-replay",
+  "screenshot": "artifacts/phase25-hosted-provider-visual-ocr-replay-dashboard-proof.png",
+  "visualGate": {
+    "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+    "score": 100,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
+  },
+  "hostedRemote": {
+    "key": "hosted_remote_browser_sandbox",
+    "score": 0,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
+  },
+  "providerCheck": {
+    "key": "hosted_browser_sandbox_provider",
+    "status": "hosted_browser_sandbox_provider_visual_ocr_replay_ready",
+    "ok": false,
+    "command": "npm run sandbox:browser:provider-contract",
+    "resolver": {
+      "status": "hosted_browser_sandbox_provider_configured_unverified",
+      "resolverReady": true,
+      "ready": false,
+      "endpointResolved": true,
+      "authResolved": true,
+      "liveVerified": false,
+      "liveVerificationReady": true,
+      "streamRequiresWebrtc": true,
+      "webrtcSignalingReady": true,
+      "visualOcrReplayReady": true,
+      "endpointRefKind": "env",
+      "authTokenRefKind": "env",
+      "endpointEnvPresent": true,
+      "authEnvPresent": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawSecretPathReturned": false
+    }
+  },
+  "visualCheck": {
+    "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+    "status": "hosted_browser_sandbox_provider_visual_ocr_replay_ready",
+    "ok": true,
+    "command": "npm run sandbox:browser:provider-visual-ocr-replay",
+    "liveVerificationReady": true,
+    "webrtcSignalingReady": true,
+    "proofFilePresent": true,
+    "proofFileOutsideGit": true,
+    "proofValidationOk": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawOcrTextReturned": false,
+    "rawInputReturned": false,
+    "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+  },
+  "noEndpointOrTokenLeak": true
+}

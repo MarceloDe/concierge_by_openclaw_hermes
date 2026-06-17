@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import os
+import re
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ import httpx
 SANDBOX_CONTRACT_VERSION = "browser-sandbox-provider.v1"
 HOSTED_SANDBOX_CONTRACT_VERSION = "brainstyworkers.browser-sandbox-provider.v1"
 HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION = "2026-06-17.browser-sandbox-provider.v1"
+VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1"
 DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json"
 DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
@@ -654,6 +656,121 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         }
 
 
+def _read_json_if_present(path: str | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            parsed = json.load(handle)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _path_is_inside_repo(path: str | None) -> bool:
+    if not path:
+        return False
+    try:
+        relative = os.path.relpath(os.path.abspath(path), os.getcwd())
+    except ValueError:
+        return False
+    return bool(relative and not relative.startswith("..") and not os.path.isabs(relative))
+
+
+def validate_visual_ocr_proof_manifest(manifest: dict[str, Any], *, proof_path: str | None = None) -> dict[str, Any]:
+    failures: list[str] = []
+    if manifest.get("schemaVersion") != VISUAL_OCR_PROOF_SCHEMA_VERSION:
+        failures.append("visual_ocr_schema_version_missing_or_unknown")
+    if manifest.get("providerLiveConnected") is not True:
+        failures.append("provider_live_connected_required")
+    session = manifest.get("session", {}) if isinstance(manifest.get("session"), dict) else {}
+    stream = manifest.get("stream", {}) if isinstance(manifest.get("stream"), dict) else {}
+    screenshot = manifest.get("screenshot", {}) if isinstance(manifest.get("screenshot"), dict) else {}
+    ocr_caption = manifest.get("ocrCaption", {}) if isinstance(manifest.get("ocrCaption"), dict) else {}
+    takeover = manifest.get("takeover", {}) if isinstance(manifest.get("takeover"), dict) else {}
+    input_proof = manifest.get("input", {}) if isinstance(manifest.get("input"), dict) else {}
+    teardown = manifest.get("teardown", {}) if isinstance(manifest.get("teardown"), dict) else {}
+    visual_proof = manifest.get("visualProof", {}) if isinstance(manifest.get("visualProof"), dict) else {}
+    safety = manifest.get("safety", {}) if isinstance(manifest.get("safety"), dict) else {}
+    if session.get("sessionRefPresent") is not True:
+        failures.append("session_ref_required")
+    if session.get("rawSessionRefReturned") is True:
+        failures.append("raw_session_ref_must_not_be_returned")
+    if stream.get("frameRefPresent") is not True:
+        failures.append("frame_ref_required")
+    if stream.get("rawFrameReturned") is True or stream.get("rawFramePersisted") is True:
+        failures.append("raw_frame_must_not_be_returned_or_persisted")
+    if screenshot.get("screenshotRefPresent") is not True:
+        failures.append("screenshot_ref_required")
+    if screenshot.get("rawImageReturned") is True:
+        failures.append("raw_image_must_not_be_returned")
+    if ocr_caption.get("captionRefPresent") is not True:
+        failures.append("caption_ref_required")
+    if ocr_caption.get("rawOcrTextReturned") is True or ocr_caption.get("rawOcrTextPersisted") is True:
+        failures.append("raw_ocr_text_must_not_be_returned_or_persisted")
+    if ocr_caption.get("visualCaptionSafe") is not True:
+        failures.append("visual_caption_safety_required")
+    if takeover.get("approvalRequired") is not True:
+        failures.append("takeover_approval_required")
+    if takeover.get("inputRelay") != "approval_gated_human_only":
+        failures.append("input_relay_must_be_human_only")
+    if input_proof.get("rawInputReturned") is True:
+        failures.append("raw_input_must_not_be_returned")
+    if input_proof.get("externalWriteActionsWithoutApproval") is True:
+        failures.append("external_write_actions_without_approval")
+    if teardown.get("teardownComplete") is not True:
+        failures.append("teardown_required")
+    if teardown.get("rawFramePersisted") is True or teardown.get("rawOcrTextPersisted") is True:
+        failures.append("raw_replay_content_must_not_be_persisted")
+    if visual_proof.get("dashboardScreenshotRefPresent") is not True:
+        failures.append("dashboard_screenshot_ref_required")
+    if visual_proof.get("mobileLiveBlockRefPresent") is not True:
+        failures.append("mobile_live_block_ref_required")
+    if visual_proof.get("ocrCaptionRefPresent") is not True:
+        failures.append("visual_ocr_caption_ref_required")
+    if safety.get("agentCredentialEntryAllowed") is True:
+        failures.append("agent_credential_entry_allowed")
+    if safety.get("externalWriteActionsWithoutApproval") is True:
+        failures.append("external_write_actions_without_approval")
+    if safety.get("rawEndpointReturned") is True:
+        failures.append("raw_endpoint_returned")
+    if safety.get("rawSecretReturned") is True:
+        failures.append("raw_secret_returned")
+    if proof_path and _path_is_inside_repo(proof_path):
+        failures.append("visual_ocr_proof_file_must_live_outside_git")
+    serialized = json.dumps(manifest, separators=(",", ":"))
+    if re.search(r"https?://[^\"\\\s]+", serialized, re.I):
+        failures.append("raw_provider_url_forbidden")
+    if re.search(r"Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]", serialized, re.I):
+        failures.append("raw_secret_forbidden")
+    if re.search(r"data:image|<html|member id|subscriber id|password|captcha|typed-password", serialized, re.I):
+        failures.append("raw_frame_ocr_or_credential_content_forbidden")
+    if re.search(r"/Users/|/private/|/tmp/|/var/folders|[A-Za-z]:\\", serialized, re.I):
+        failures.append("raw_local_path_forbidden")
+    return {
+        "ok": len(failures) == 0,
+        "failures": failures,
+        "sanitizedProof": {
+            "providerLiveConnected": manifest.get("providerLiveConnected") is True,
+            "sessionRefPresent": session.get("sessionRefPresent") is True,
+            "streamFrameRefPresent": stream.get("frameRefPresent") is True,
+            "screenshotRefPresent": screenshot.get("screenshotRefPresent") is True,
+            "captionRefPresent": ocr_caption.get("captionRefPresent") is True,
+            "visualCaptionSafe": ocr_caption.get("visualCaptionSafe") is True,
+            "approvalRequired": takeover.get("approvalRequired") is True,
+            "inputRelay": takeover.get("inputRelay"),
+            "teardownComplete": teardown.get("teardownComplete") is True,
+            "dashboardScreenshotRefPresent": visual_proof.get("dashboardScreenshotRefPresent") is True,
+            "mobileLiveBlockRefPresent": visual_proof.get("mobileLiveBlockRefPresent") is True,
+            "rawFrameReturned": stream.get("rawFrameReturned") is True,
+            "rawImageReturned": screenshot.get("rawImageReturned") is True,
+            "rawOcrTextReturned": ocr_caption.get("rawOcrTextReturned") is True,
+            "rawInputReturned": input_proof.get("rawInputReturned") is True,
+            "proofFileOutsideGit": bool(proof_path and not _path_is_inside_repo(proof_path))
+        }
+    }
+
+
 def describe_browser_sandbox_provider_contract(
     *,
     provider: str | None = None,
@@ -712,6 +829,40 @@ def describe_browser_sandbox_provider_contract(
         and non_example_config
         and adapter_mode == "contract_harness"
     )
+    live_preflight_ready = bool(
+        selection_contract["preflightReady"]
+        and hosted_resolution["resolverReady"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY") == "1"
+    )
+    live_verification_ready = bool(
+        live_preflight_ready
+        and hosted_resolution["resolverReady"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
+    )
+    webrtc_signaling_ready = bool(
+        live_verification_ready
+        and hosted_resolution["resolverReady"]
+        and hosted_resolution["streamRequiresWebrtc"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY") == "1"
+    )
+    visual_ocr_proof_path = os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE")
+    visual_ocr_proof_manifest = _read_json_if_present(visual_ocr_proof_path)
+    visual_ocr_proof_validation = (
+        validate_visual_ocr_proof_manifest(visual_ocr_proof_manifest, proof_path=visual_ocr_proof_path)
+        if visual_ocr_proof_manifest
+        else {
+            "ok": False,
+            "failures": ["visual_ocr_proof_file_required"],
+            "sanitizedProof": {}
+        }
+    )
+    visual_ocr_replay_ready = bool(
+        live_verification_ready
+        and (not hosted_resolution["streamRequiresWebrtc"] or webrtc_signaling_ready)
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY") == "1"
+        and visual_ocr_proof_path
+        and visual_ocr_proof_validation["ok"]
+    )
     provider_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -722,6 +873,8 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["liveVerified"]
         and hosted_resolution["liveVerificationReady"]
         and hosted_resolution["webrtcSignalingReady"]
+        and hosted_resolution["visualOcrReplayReady"]
+        and visual_ocr_replay_ready
         and hosted_resolution["providerLiveConnected"]
     )
     adapter_contract_ready = bool(
@@ -741,26 +894,11 @@ def describe_browser_sandbox_provider_contract(
         http_adapter_harness_ready
         and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY") == "1"
     )
-    live_preflight_ready = bool(
-        selection_contract["preflightReady"]
-        and hosted_resolution["resolverReady"]
-        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY") == "1"
-    )
-    live_verification_ready = bool(
-        live_preflight_ready
-        and hosted_resolution["resolverReady"]
-        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
-    )
-    webrtc_signaling_ready = bool(
-        live_verification_ready
-        and hosted_resolution["resolverReady"]
-        and hosted_resolution["streamRequiresWebrtc"]
-        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY") == "1"
-    )
     status = (
         "hosted_browser_sandbox_provider_ready"
         if provider_ready
         else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
+        else "hosted_browser_sandbox_provider_visual_ocr_replay_ready" if visual_ocr_replay_ready
         else "hosted_browser_sandbox_provider_live_lifecycle_harness_ready" if live_lifecycle_harness_ready
         else "hosted_browser_sandbox_provider_http_adapter_harness_ready" if http_adapter_harness_ready
         else "hosted_browser_sandbox_provider_adapter_contract_ready" if adapter_contract_ready
@@ -833,6 +971,30 @@ def describe_browser_sandbox_provider_contract(
             "rawSecretReturned": False,
             "rawSdpReturned": False,
             "rawIceCandidateReturned": False
+        },
+        "hostedProviderVisualOcrReplayReady": visual_ocr_replay_ready,
+        "hostedProviderVisualOcrReplay": {
+            "status": (
+                "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
+                if visual_ocr_replay_ready
+                else "hosted_browser_sandbox_provider_visual_ocr_replay_requires_private_proof"
+                if os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY") == "1"
+                else "hosted_browser_sandbox_provider_visual_ocr_replay_blocked"
+            ),
+            "liveVerificationReady": live_verification_ready,
+            "webrtcSignalingReady": webrtc_signaling_ready,
+            "streamRequiresWebrtc": hosted_resolution["streamRequiresWebrtc"],
+            "proofFilePresent": bool(visual_ocr_proof_path),
+            "proofFileOutsideGit": bool(visual_ocr_proof_validation.get("sanitizedProof", {}).get("proofFileOutsideGit")),
+            "proofValidationOk": visual_ocr_proof_validation["ok"],
+            "failures": visual_ocr_proof_validation.get("failures", []),
+            "sanitizedProof": visual_ocr_proof_validation.get("sanitizedProof", {}),
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False,
+            "rawFrameReturned": False,
+            "rawOcrTextReturned": False,
+            "rawInputReturned": False
         },
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
@@ -969,6 +1131,7 @@ def resolve_hosted_browser_sandbox_provider_config(
     stream_transport = config.get("transport", {}).get("stream") if isinstance(config, dict) else None
     stream_requires_webrtc = stream_transport in {"webrtc", "webrtc_or_sse_frames"}
     webrtc_signaling_ready = (not stream_requires_webrtc) or env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY") == "1"
+    visual_ocr_replay_ready = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY") == "1"
     resolver_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -980,7 +1143,7 @@ def resolve_hosted_browser_sandbox_provider_config(
     )
     status = (
         "hosted_browser_sandbox_provider_ready"
-        if resolver_ready and live_verified and live_verification_ready and webrtc_signaling_ready and provider_live_connected
+        if resolver_ready and live_verified and live_verification_ready and webrtc_signaling_ready and visual_ocr_replay_ready and provider_live_connected
         else "hosted_browser_sandbox_provider_configured_unverified" if resolver_ready
         else "hosted_browser_sandbox_provider_missing_endpoint_or_secret"
         if selected_provider == "hosted_remote" and selected_ready and config_ok and non_example_config and adapter_mode == "hosted_provider"
@@ -996,6 +1159,7 @@ def resolve_hosted_browser_sandbox_provider_config(
         "providerLiveConnected": provider_live_connected,
         "streamRequiresWebrtc": stream_requires_webrtc,
         "webrtcSignalingReady": webrtc_signaling_ready,
+        "visualOcrReplayReady": visual_ocr_replay_ready,
         "endpointRefKind": _ref_kind(endpoint_ref),
         "authTokenRefKind": _ref_kind(auth_token_ref),
         "endpointEnvPresent": bool(endpoint_env_name),

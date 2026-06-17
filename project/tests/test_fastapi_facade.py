@@ -1274,6 +1274,76 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(webrtc_score["score"], 100)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_visual_ocr_replay_is_separate_from_hosted_ready(self):
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        proof_manifest = {
+            "schemaVersion": "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1",
+            "providerLiveConnected": True,
+            "session": {"sessionRefPresent": True, "rawSessionRefReturned": False},
+            "stream": {"frameRefPresent": True, "rawFrameReturned": False, "rawFramePersisted": False},
+            "screenshot": {"screenshotRefPresent": True, "rawImageReturned": False},
+            "ocrCaption": {
+                "captionRefPresent": True,
+                "rawOcrTextReturned": False,
+                "rawOcrTextPersisted": False,
+                "visualCaptionSafe": True
+            },
+            "takeover": {"approvalRequired": True, "inputRelay": "approval_gated_human_only"},
+            "input": {"rawInputReturned": False, "externalWriteActionsWithoutApproval": False},
+            "teardown": {"teardownComplete": True, "rawFramePersisted": False, "rawOcrTextPersisted": False},
+            "visualProof": {
+                "dashboardScreenshotRefPresent": True,
+                "mobileLiveBlockRefPresent": True,
+                "ocrCaptionRefPresent": True
+            },
+            "safety": {
+                "agentCredentialEntryAllowed": False,
+                "externalWriteActionsWithoutApproval": False,
+                "rawEndpointReturned": False,
+                "rawSecretReturned": False
+            }
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(proof_manifest, handle)
+            proof_path = handle.name
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json",
+            "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER": "custom_webrtc",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE": proof_path
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_provider_visual_ocr_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-visual-ocr-replay", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        self.assertNotIn(proof_path, proof_text)
+        proof = proof_response.json()
+        visual_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_visual_ocr_replay")
+        visual_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_visual_ocr_replay")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(visual_check["status"], "hosted_browser_sandbox_provider_visual_ocr_replay_ready")
+        self.assertTrue(visual_check["proofFilePresent"])
+        self.assertTrue(visual_check["proofFileOutsideGit"])
+        self.assertTrue(visual_check["proofValidationOk"])
+        self.assertEqual(visual_score["score"], 100)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_webrtc_offer_route_sanitizes_provider_response(self):
         from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
 

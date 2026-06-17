@@ -7726,3 +7726,55 @@ Known risks or gaps:
 - This phase adds the opaque signaling path and proof gate, but the local environment still does not include real provider credentials.
 - Real provider endpoint/token/config must stay outside Git and be supplied by the operator.
 - `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider returns live connected proof plus GUI/OCR evidence.
+
+## Phase 25 Hosted Browser Sandbox Provider Visual/OCR Replay Update
+
+Status: Implemented, regression-tested, and visually/API proved with the hosted remote score still honestly blocked.
+
+Slice name:
+- Hosted browser sandbox provider visual/OCR replay.
+
+Code changes:
+- Added `scripts/browser-sandbox-provider-visual-ocr-replay-smoke.mjs` and package script `sandbox:browser:provider-visual-ocr-replay`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with a private visual/OCR replay proof validator for operator-supplied dashboard screenshots, mobile live-block proof, screenshot refs, caption refs, human takeover proof, approved-input proof, and teardown proof.
+- Added `project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env` as a non-secret operator template; real proof manifests remain outside Git.
+- Extended compose, build, Docker, and deployment contract checks with visual/OCR replay env gates and command wiring.
+- Mirrored the replay gate in FastAPI proof via `hosted_browser_sandbox_provider_visual_ocr_replay`.
+- Strengthened final hosted-provider readiness so `hosted_remote_browser_sandbox` cannot pass without live verification, WebRTC signaling when required, visual/OCR replay readiness, explicit `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private config `adapter.providerLiveConnected=true`.
+
+Safety decision:
+- Private screenshot/OCR proof manifests must live outside Git and may contain only opaque refs, booleans, and redacted status fields.
+- Raw screenshots, `data:image` payloads, OCR text, portal/member text, endpoint URLs, bearer tokens, SDP, ICE candidates, local paths, credentials, and input values are rejected by the replay validator.
+- The visual/OCR replay score can reach `100 / 100` for a valid private manifest, but it does not enable the final hosted remote browser score without real provider live verification.
+- Human-only `interactive_takeover` remains the only approved input relay scope; Codex still must not enter credentials.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py`
+- `npm run sandbox:browser:provider-visual-ocr-replay`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+
+Focused verification result:
+- Browser-sandbox provider contract tests passed with 17/17 tests, including blocked-default replay, valid private-manifest replay, and invalid raw OCR/raw frame rejection.
+- Deployment compose contract test passed after initializing the temp worktree's Graphiti submodule dependency from the existing local checkout.
+- FastAPI facade regression passed with 47 tests and 2 expected live-gated skips.
+- Default visual/OCR replay smoke reported `hosted_browser_sandbox_provider_visual_ocr_replay_blocked`, `hostedProviderVisualOcrReplayReady=false`, `hostedProviderReady=false`, and no endpoint/token/raw OCR leakage.
+
+Full verification result:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 34/34 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Dashboard visual/API proof passed on `http://127.0.0.1:4211/?phase=hosted-browser-sandbox-provider-visual-ocr-replay`.
+- Browser/API assertion proved `hosted_browser_sandbox_provider_visual_ocr_replay` at `100 / 100`, `hosted_browser_sandbox_provider_webrtc_signaling` at `100 / 100`, `hosted_browser_sandbox_provider_live_verification` at `100 / 100`, `hosted_remote_browser_sandbox` still at `0 / 100`, and no endpoint/token leakage.
+- Proof artifacts:
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-dashboard-proof.png`
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-visual-proof.json`
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-proof.json`
+  - `artifacts/browser-sandbox-provider-visual-ocr-replay-smoke.json`
+
+Known risks or gaps:
+- This phase validates the visual/OCR replay artifact layer, but the local environment still does not include real provider credentials.
+- A real selected provider must still be verified with private endpoint/token/config and real GUI/OCR evidence before `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` can be set.
+- `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider proves live connection from private config, WebRTC signaling when required, and GUI/OCR replay proof.

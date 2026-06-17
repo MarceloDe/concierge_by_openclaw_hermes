@@ -1,0 +1,138 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+  "hostedProviderVisualOcrReplayReady": false,
+  "hostedProviderWebrtcSignalingReady": false,
+  "hostedProviderLiveVerificationReady": false,
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+      "provider": "hosted_remote",
+      "environment": "staging",
+      "endpointRefPresent": true,
+      "secretSource": "managed_env",
+      "transport": {
+        "stream": "webrtc_or_sse_frames",
+        "inputRelay": "approval_gated_human_only",
+        "screenshot": "provider_screenshot_api",
+        "ocrCaption": "provider_or_local_ocr"
+      },
+      "adapter": {
+        "mode": "hosted_provider",
+        "providerLiveConnected": false,
+        "contractHarnessOnly": false
+      },
+      "auth": {
+        "tokenRefPresent": true,
+        "tokenRefKind": "env"
+      },
+      "sessionPolicy": {
+        "userScoped": true,
+        "sessionScoped": true,
+        "ephemeralBrowser": true,
+        "maxSessionMinutes": 30,
+        "idleTimeoutMinutes": 5,
+        "recordFrames": false,
+        "persistRawOcrText": false
+      },
+      "approvalPolicy": {
+        "requiresReadOnlyApproval": true,
+        "requiresHumanTakeoverApproval": true,
+        "agentCredentialEntryAllowed": false,
+        "externalWriteActionsAllowed": false
+      },
+      "networkPolicy": {
+        "allowlistRequired": true,
+        "offsiteFailClosed": true,
+        "credentialPagesUserOnly": true
+      },
+      "audit": {
+        "emitSessionLifecycleEvents": true,
+        "emitTakeoverEvents": true,
+        "redactInputValues": true,
+        "redactFrameContent": true
+      },
+      "source": {
+        "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+        "exampleConfig": false
+      }
+    }
+  },
+  "resolver": {
+    "status": "hosted_browser_sandbox_provider_not_selected",
+    "resolverReady": false,
+    "ready": false,
+    "endpointResolved": false,
+    "authResolved": false,
+    "liveVerified": false,
+    "liveVerificationReady": false,
+    "streamRequiresWebrtc": true,
+    "webrtcSignalingReady": false,
+    "visualOcrReplayReady": false,
+    "endpointRefKind": "env",
+    "authTokenRefKind": "env",
+    "endpointEnvPresent": true,
+    "authEnvPresent": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawSecretPathReturned": false
+  },
+  "webrtc": {
+    "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
+    "hostedProviderWebrtcSignalingReady": false,
+    "hostedProviderLiveVerificationReady": false,
+    "streamRequiresWebrtc": true
+  },
+  "proofFile": {
+    "present": false,
+    "outsideGit": false,
+    "readable": false,
+    "validation": {
+      "ok": false,
+      "failures": [
+        "visual_ocr_proof_file_required"
+      ],
+      "sanitizedProof": {}
+    }
+  },
+  "requiredVisualProofBeforeHostedReady": [
+    "private visual/OCR proof manifest outside Git",
+    "dashboard screenshot reference",
+    "mobile live-worker block screenshot reference",
+    "safe OCR/caption reference",
+    "provider stream frame reference",
+    "provider screenshot reference",
+    "approval-gated human takeover proof",
+    "redacted approved input relay proof",
+    "teardown proof",
+    "no raw frame, image, OCR, local path, endpoint, secret, SDP, ICE, credential, or portal text"
+  ],
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_visual_ocr_replay",
+    "scoreKey": "hosted_browser_sandbox_provider_visual_ocr_replay",
+    "visualReplayReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY",
+    "visualProofFileEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE",
+    "hostedReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawInputReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "liveProviderOverclaimed": false
+  }
+}
