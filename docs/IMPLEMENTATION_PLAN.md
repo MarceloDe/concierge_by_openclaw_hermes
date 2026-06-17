@@ -2277,3 +2277,27 @@ Remaining follow-up:
 - Replace the contract harness with a real provider adapter after provider selection.
 - Add provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown proof.
 - Keep the harness as a CI/regression contract even after the hosted provider is live.
+
+## Hosted Browser Sandbox Provider Resolver Cycle - 2026-06-17
+
+Goal:
+- Close the gap between the hosted adapter harness and a real hosted provider by adding a safe endpoint/secret resolver gate, without storing provider URLs or tokens in Git and without claiming a live provider exists.
+
+Implemented slice:
+- Add `project/deployment/browser-sandbox-provider.hosted-provider.example.json` with env-referenced endpoint and token refs.
+- Add `scripts/browser-sandbox-provider-resolver.mjs` and `npm run sandbox:browser:provider-resolver`.
+- Extend the browser sandbox contract so `hosted_provider` requires env refs for endpoint and auth token.
+- Extend FastAPI hosted-provider readiness so missing endpoint/secret, configured-but-unverified, and live-ready are distinct states.
+- Expose `hosted_browser_sandbox_provider_resolver` in FastAPI proof and the Node dashboard proof.
+
+Acceptance:
+- Resolver smoke with no endpoint/token reports `hosted_browser_sandbox_provider_missing_endpoint_or_secret`.
+- Resolver smoke with fake endpoint/token refs reports `hosted_browser_sandbox_provider_configured_unverified`, never returns the raw endpoint or token, and still keeps `hostedProviderReady=false`.
+- FastAPI `/api/v1/browser/sessions` returns a precise safe blocker for missing endpoint/secret or configured-unverified hosted providers.
+- `hosted_browser_sandbox_provider_resolver` can score `50 / 50` when endpoint and auth refs resolve.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until live hosted stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof passes and `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set.
+
+Remaining follow-up:
+- Select the hosted browser sandbox provider.
+- Implement the real provider HTTP/WebRTC adapter behind this resolver.
+- Set `adapter.providerLiveConnected=true` only in a private provider config after live proof passes.

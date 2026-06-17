@@ -5,7 +5,8 @@ import {
   BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
   validateBrowserSandboxProviderContract,
   runBrowserSandboxProviderContractSmoke,
-  runBrowserSandboxAdapterHarnessSmoke
+  runBrowserSandboxAdapterHarnessSmoke,
+  runBrowserSandboxProviderResolverSmoke
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 test("hosted browser sandbox provider contract validates the safe remote provider shape", async () => {
@@ -54,3 +55,41 @@ test("hosted browser sandbox adapter harness proves lifecycle shape without clai
   assert.equal(result.safety.rawEndpointUrlWritten, false);
   assert.equal(result.safety.rawOcrTextReturned, false);
 });
+
+test("hosted browser sandbox provider resolver is safe and separate from live readiness", async () => {
+  const previousProvider = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER;
+  const previousEndpoint = process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL;
+  const previousToken = process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN;
+  const previousLive = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED;
+  try {
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER = "hosted_remote";
+    process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL = "https://sandbox-provider.invalid/api";
+    process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN = "test-token-that-must-not-leak";
+    delete process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED;
+    const result = await runBrowserSandboxProviderResolverSmoke({
+      artifactPath: "/tmp/brainsty-browser-sandbox-provider-resolver-smoke-test.json"
+    });
+    const serialized = JSON.stringify(result);
+    assert.equal(result.ok, true);
+    assert.equal(result.hostedProviderResolverReady, true);
+    assert.equal(result.hostedProviderReady, false);
+    assert.equal(result.status, "hosted_browser_sandbox_provider_configured_unverified");
+    assert.equal(result.hostedProviderResolver.endpointResolved, true);
+    assert.equal(result.hostedProviderResolver.authResolved, true);
+    assert.equal(result.hostedProviderResolver.liveVerified, false);
+    assert.equal(result.hostedProviderResolver.rawEndpointReturned, false);
+    assert.equal(result.hostedProviderResolver.rawSecretReturned, false);
+    assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+    assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  } finally {
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER", previousProvider);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL", previousEndpoint);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED", previousLive);
+  }
+});
+
+function restoreEnv(key, value) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

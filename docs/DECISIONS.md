@@ -2157,3 +2157,22 @@ This makes the next hosted adapter implementation concrete and testable without 
 
 Cost of changing later:
 Low. A real provider adapter can replace the harness internals while preserving the public API, ownership checks, approval gates, and proof keys. The harness can remain as a CI fallback contract.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Resolver Before Live Provider Readiness
+
+Context:
+The contract harness proved the public hosted browser lifecycle shape, but the real `hosted_provider` mode still needed a safe way to check provider endpoint and auth readiness. Treating a non-example hosted config plus `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1` as live-ready would overclaim production readiness and risk leaking provider details in proof artifacts.
+
+Options considered:
+- Keep the hosted provider blocked until a vendor is fully selected.
+- Let any non-example `hosted_provider` config count as ready.
+- Add a resolver gate that checks env-referenced endpoint/auth presence, redacts all values, and still requires separate live verification before the provider score can pass.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.hosted-provider.example.json`, `npm run sandbox:browser:provider-resolver`, FastAPI resolver states, and a separate `hosted_browser_sandbox_provider_resolver` proof score. `hosted_remote_browser_sandbox` remains blocked until endpoint/auth refs resolve, live provider proof passes, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set, and the private provider config marks `adapter.providerLiveConnected=true`.
+
+Reason:
+This makes the next real-provider step concrete without committing URLs, tokens, or vendor-specific assumptions. Operators can prove secret wiring safely while the product remains honest about the absence of a live hosted browser sandbox.
+
+Cost of changing later:
+Low. A selected provider adapter can consume the same env refs and proof states. If a provider uses mTLS, signed URLs, or a secret manager instead of bearer tokens, the resolver can gain a new secret source while keeping the public `/api/v1/browser/*` contract unchanged.

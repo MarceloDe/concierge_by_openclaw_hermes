@@ -960,6 +960,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("status")
             },
             {
+                "key": "hosted_browser_sandbox_provider_resolver",
+                "score": 50 if browser_sandbox_contract.get("hostedProviderResolverReady") else 0,
+                "target": 50,
+                "status": browser_sandbox_contract.get("hostedProviderResolver", {}).get("status")
+            },
+            {
                 "key": "hosted_remote_browser_sandbox",
                 "score": 100 if browser_sandbox_contract.get("ready") else 0,
                 "target": 100,

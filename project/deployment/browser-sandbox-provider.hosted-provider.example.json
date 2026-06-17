@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+  "provider": "hosted_remote",
+  "environment": "staging",
+  "endpointRef": "env:WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL",
+  "secretSource": "managed_env",
+  "transport": {
+    "stream": "webrtc_or_sse_frames",
+    "inputRelay": "approval_gated_human_only",
+    "screenshot": "provider_screenshot_api",
+    "ocrCaption": "provider_or_local_ocr"
+  },
+  "adapter": {
+    "mode": "hosted_provider",
+    "providerLiveConnected": false,
+    "contractHarnessOnly": false
+  },
+  "auth": {
+    "tokenRef": "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
+  },
+  "sessionPolicy": {
+    "userScoped": true,
+    "sessionScoped": true,
+    "ephemeralBrowser": true,
+    "maxSessionMinutes": 30,
+    "idleTimeoutMinutes": 5,
+    "recordFrames": false,
+    "persistRawOcrText": false
+  },
+  "approvalPolicy": {
+    "requiresReadOnlyApproval": true,
+    "requiresHumanTakeoverApproval": true,
+    "agentCredentialEntryAllowed": false,
+    "externalWriteActionsAllowed": false
+  },
+  "networkPolicy": {
+    "allowlistRequired": true,
+    "offsiteFailClosed": true,
+    "credentialPagesUserOnly": true
+  },
+  "audit": {
+    "emitSessionLifecycleEvents": true,
+    "emitTakeoverEvents": true,
+    "redactInputValues": true,
+    "redactFrameContent": true
+  }
+}

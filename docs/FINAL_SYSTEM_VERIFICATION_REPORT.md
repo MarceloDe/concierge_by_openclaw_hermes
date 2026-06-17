@@ -579,3 +579,24 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_adapter_harness` can reach `75 / 75` when the harness config and readiness env are selected.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real hosted provider config with `adapter.mode=hosted_provider` is supplied and live hosted proof passes.
+
+## Phase 17 Hosted Browser Sandbox Provider Resolver Update
+
+Implementation:
+- Added a hosted-provider example config whose endpoint and auth token are env references, not committed values.
+- Added `npm run sandbox:browser:provider-resolver`.
+- Added resolver proof states for missing endpoint/secret, configured-unverified, and live-ready.
+- Exposed `hosted_browser_sandbox_provider_resolver` as a separate FastAPI and dashboard score.
+
+Focused verification:
+- JS syntax checks passed for the hosted provider contract and resolver scripts.
+- Python compile checks passed for FastAPI browser sandbox and facade code.
+- Focused browser-sandbox/compose contract tests passed with 5/5 tests.
+- Focused FastAPI resolver and harness tests passed with 3/3 tests.
+- Resolver smoke passed in both missing-env and configured-unverified modes without leaking the fake endpoint or token.
+- Full gate passed: provider contract smoke, adapter harness smoke, provider resolver smoke, `npm run build`, final-report coverage, `npm run test:docker:contract` with 21/21 tests, FastAPI facade regression with 38 tests and 2 expected skips, and `npm run test:local` with 210 total tests, 208 passed, 0 failed, and 2 expected skips.
+- Headless Chrome dashboard proof passed with `hosted_browser_sandbox_provider_resolver`, `hosted_browser_sandbox_provider_configured_unverified`, and `hosted_remote_browser_sandbox` visible, and no fake endpoint/token leak.
+
+Score decision:
+- `hosted_browser_sandbox_provider_resolver` can reach `50 / 50` when endpoint and auth env refs resolve.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real provider adapter passes live stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.

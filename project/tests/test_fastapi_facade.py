@@ -930,6 +930,84 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertFalse(hosted_check["safety"]["agentCredentialEntryAllowed"])
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_resolver_requires_endpoint_and_secret(self):
+        hosted_config = "project/deployment/browser-sandbox-provider.hosted-provider.example.json"
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": hosted_config
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_resolver_missing_user")
+            browser_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_hosted_resolver_missing",
+                    "target_url": "https://health.aetna.com/member",
+                    "provider": "hosted_remote"
+                }
+            )
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-resolver", headers=headers)
+
+        self.assertEqual(browser_response.status_code, 400)
+        self.assertIn("endpoint or secret is not resolved", browser_response.json()["detail"])
+        proof = proof_response.json()
+        hosted_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider")
+        resolver_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_resolver")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(hosted_check["status"], "hosted_browser_sandbox_provider_missing_endpoint_or_secret")
+        self.assertFalse(hosted_check["hostedProviderResolver"]["endpointResolved"])
+        self.assertFalse(hosted_check["hostedProviderResolver"]["authResolved"])
+        self.assertFalse(hosted_check["hostedProviderResolver"]["rawEndpointReturned"])
+        self.assertFalse(hosted_check["hostedProviderResolver"]["rawSecretReturned"])
+        self.assertEqual(resolver_score["score"], 0)
+        self.assertEqual(hosted_score["score"], 0)
+
+    def test_hosted_browser_sandbox_provider_resolver_never_overclaims_live_provider(self):
+        hosted_config = "project/deployment/browser-sandbox-provider.hosted-provider.example.json"
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": hosted_config,
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_resolver_user")
+            browser_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_hosted_resolver",
+                    "target_url": "https://health.aetna.com/member",
+                    "provider": "hosted_remote"
+                }
+            )
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-resolver", headers=headers)
+
+        self.assertEqual(browser_response.status_code, 400)
+        self.assertIn("live provider verification has not passed", browser_response.json()["detail"])
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        proof = proof_response.json()
+        hosted_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider")
+        resolver_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_resolver")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(hosted_check["status"], "hosted_browser_sandbox_provider_configured_unverified")
+        self.assertTrue(hosted_check["hostedProviderResolver"]["endpointResolved"])
+        self.assertTrue(hosted_check["hostedProviderResolver"]["authResolved"])
+        self.assertFalse(hosted_check["hostedProviderResolver"]["liveVerified"])
+        self.assertEqual(resolver_score["score"], 50)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized(self):
         app = create_app(inline_tasks=True)
         app.state.node_client = FakeNodeRuntimeClient()

@@ -3,7 +3,23 @@
   "version": "2026-06-17.browser-sandbox-provider.v1",
   "status": "hosted_browser_sandbox_contract_valid_not_configured",
   "hostedProviderReady": false,
+  "hostedProviderResolverReady": false,
   "adapterHarnessReady": false,
+  "hostedProviderResolver": {
+    "status": "hosted_browser_sandbox_provider_not_selected",
+    "resolverReady": false,
+    "ready": false,
+    "endpointResolved": false,
+    "authResolved": false,
+    "liveVerified": false,
+    "endpointRefKind": "logical_ref",
+    "authTokenRefKind": "env",
+    "endpointEnvPresent": false,
+    "authEnvPresent": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawSecretPathReturned": false
+  },
   "validation": {
     "ok": true,
     "version": "2026-06-17.browser-sandbox-provider.v1",
@@ -25,6 +41,10 @@
         "mode": "contract_only",
         "providerLiveConnected": false,
         "contractHarnessOnly": false
+      },
+      "auth": {
+        "tokenRefPresent": false,
+        "tokenRefKind": "env"
       },
       "sessionPolicy": {
         "userScoped": true,
@@ -63,6 +83,7 @@
     "scoreKey": "hosted_remote_browser_sandbox",
     "providerEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER",
     "readyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY",
+    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED",
     "configFileEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE"
   },
   "safety": {

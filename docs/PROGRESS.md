@@ -7213,3 +7213,65 @@ Known risks or gaps:
 - The harness is a deterministic contract path only.
 - No hosted WebRTC/SSE provider credentials are configured.
 - Real hosted provider proof still needs provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.
+
+## Phase 17 Hosted Browser Sandbox Provider Resolver Update
+
+Status: Implemented, regression-tested, and visually proved.
+
+Slice name:
+- Hosted browser sandbox provider endpoint/auth resolver gate.
+
+Code changes:
+- Added `project/deployment/browser-sandbox-provider.hosted-provider.example.json`.
+- Added `scripts/browser-sandbox-provider-resolver.mjs` and package script `sandbox:browser:provider-resolver`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with hosted-provider env-ref validation and sanitized resolver output.
+- Extended FastAPI hosted provider behavior with distinct missing-endpoint/secret and configured-unverified states.
+- Exposed `hosted_browser_sandbox_provider_resolver` in FastAPI proof and Node dashboard proof.
+- Updated deployment/build contracts and focused tests.
+
+Safety decision:
+- Endpoint and token values are resolved only to booleans/statuses and are never returned in proof payloads.
+- A configured endpoint/token pair is not enough to create a hosted session.
+- `hosted_remote_browser_sandbox` stays `0 / 100` until live provider proof passes, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set, and a private config marks the provider live-connected.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-resolver.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py project/tests/test_fastapi_facade.py`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_resolver_requires_endpoint_and_secret project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_resolver_never_overclaims_live_provider project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized`
+- `npm run sandbox:browser:provider-resolver`
+- `WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL=https://sandbox-provider.invalid/api WEFELLA_BROWSER_SANDBOX_API_TOKEN=test-token-that-must-not-leak npm run sandbox:browser:provider-resolver`
+
+Focused verification result:
+- JS and Python syntax/compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 5/5 tests.
+- Focused FastAPI resolver and harness tests passed with 3/3 tests.
+- Resolver smoke without envs reported `hosted_browser_sandbox_provider_missing_endpoint_or_secret`.
+- Resolver smoke with fake endpoint/token reported `hosted_browser_sandbox_provider_configured_unverified`, `hostedProviderResolverReady=true`, `hostedProviderReady=false`, and did not emit the fake endpoint or token.
+
+Full verification result:
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 21/21 tests.
+- FastAPI facade regression passed with 38 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Headless Chrome dashboard proof passed at `http://127.0.0.1:4202/?phase=hosted-browser-sandbox-provider-resolver`:
+  - resolver row visible;
+  - `hosted_browser_sandbox_provider_configured_unverified` visible;
+  - `hosted_remote_browser_sandbox` visible;
+  - fake provider endpoint and token absent from the page;
+  - screenshot captured.
+- Screenshot and proof artifacts:
+  - `artifacts/phase17-hosted-browser-sandbox-provider-resolver-dashboard-proof.png`;
+  - `artifacts/phase17-hosted-browser-sandbox-provider-resolver-proof.json`;
+  - `artifacts/browser-sandbox-provider-resolver-smoke.json`.
+
+Known risks or gaps:
+- The real hosted provider adapter is not implemented yet.
+- No hosted provider endpoint/token is configured for production.
+- Live provider proof still needs provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.

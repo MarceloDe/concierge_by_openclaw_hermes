@@ -9,6 +9,8 @@ from uuid import uuid4
 
 SANDBOX_CONTRACT_VERSION = "browser-sandbox-provider.v1"
 HOSTED_SANDBOX_CONTRACT_VERSION = "brainstyworkers.browser-sandbox-provider.v1"
+DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json"
+DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
 def now_iso() -> str:
@@ -206,7 +208,7 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
     def __init__(self, *, config_path: str | None = None, ready: bool | None = None):
         self.config_path = config_path or os.environ.get(
             "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE",
-            "project/deployment/browser-sandbox-provider.example.json"
+            DEFAULT_PROVIDER_CONFIG_PATH
         )
         self.ready = bool(ready if ready is not None else os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_READY") == "1")
 
@@ -230,6 +232,16 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
     ) -> dict[str, Any]:
         contract = self.describe()
         if not contract["ready"] and not contract.get("adapterHarnessReady"):
+            if contract.get("status") == "hosted_browser_sandbox_provider_missing_endpoint_or_secret":
+                raise BrowserSandboxError(
+                    "Hosted browser sandbox provider endpoint or secret is not resolved. "
+                    "Set the endpoint and auth token environment references from the provider config before creating hosted sessions."
+                )
+            if contract.get("status") == "hosted_browser_sandbox_provider_configured_unverified":
+                raise BrowserSandboxError(
+                    "Hosted browser sandbox provider endpoint and secret are configured, but live provider verification has not passed. "
+                    "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1 only after hosted stream, screenshot/OCR, takeover, input, and teardown proof passes."
+                )
             raise BrowserSandboxError(
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
@@ -344,7 +356,7 @@ def describe_browser_sandbox_provider_contract(
     selected_provider = provider or os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER", "local_cdp")
     selected_config_path = config_path or os.environ.get(
         "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE",
-        "project/deployment/browser-sandbox-provider.example.json"
+        DEFAULT_PROVIDER_CONFIG_PATH
     )
     selected_ready = bool(ready if ready is not None else os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_READY") == "1")
     config = None
@@ -367,6 +379,8 @@ def describe_browser_sandbox_provider_contract(
             and adapter_mode in {"contract_only", "contract_harness", "hosted_provider"}
             and not (adapter_mode == "contract_harness" and provider_live_connected)
             and not (adapter_mode == "hosted_provider" and contract_harness_only)
+            and not (adapter_mode == "hosted_provider" and not _is_env_ref(config.get("endpointRef")))
+            and not (adapter_mode == "hosted_provider" and not _is_env_ref(config.get("auth", {}).get("tokenRef", DEFAULT_HOSTED_AUTH_TOKEN_REF)))
             and config.get("approvalPolicy", {}).get("agentCredentialEntryAllowed") is False
             and config.get("approvalPolicy", {}).get("externalWriteActionsAllowed") is False
             and config.get("sessionPolicy", {}).get("recordFrames") is False
@@ -375,7 +389,14 @@ def describe_browser_sandbox_provider_contract(
         if not config_ok:
             failures.append("config_contract_failed")
     adapter_mode = config.get("adapter", {}).get("mode", "contract_only") if isinstance(config, dict) else "missing"
-    non_example_config = selected_config_path != "project/deployment/browser-sandbox-provider.example.json"
+    hosted_resolution = resolve_hosted_browser_sandbox_provider_config(
+        config=config if isinstance(config, dict) else None,
+        config_path=selected_config_path,
+        config_ok=config_ok,
+        selected_provider=selected_provider,
+        selected_ready=selected_ready
+    )
+    non_example_config = selected_config_path != DEFAULT_PROVIDER_CONFIG_PATH
     adapter_harness_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -389,6 +410,18 @@ def describe_browser_sandbox_provider_contract(
         and config_ok
         and non_example_config
         and adapter_mode == "hosted_provider"
+        and hosted_resolution["resolverReady"]
+        and hosted_resolution["liveVerified"]
+        and hosted_resolution["providerLiveConnected"]
+    )
+    status = (
+        "hosted_browser_sandbox_provider_ready"
+        if provider_ready
+        else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
+        else "local_cdp_default" if selected_provider == "local_cdp"
+        else hosted_resolution["status"] if adapter_mode == "hosted_provider" and config_ok
+        else "hosted_browser_sandbox_contract_valid_not_configured" if config_ok
+        else "hosted_browser_sandbox_contract_missing_or_invalid"
     )
     return {
         "version": HOSTED_SANDBOX_CONTRACT_VERSION,
@@ -398,21 +431,94 @@ def describe_browser_sandbox_provider_contract(
         "adapterMode": adapter_mode,
         "ready": provider_ready,
         "adapterHarnessReady": adapter_harness_ready,
-        "status": (
-            "hosted_browser_sandbox_provider_ready"
-            if provider_ready
-            else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
-            else "local_cdp_default" if selected_provider == "local_cdp"
-            else "hosted_browser_sandbox_contract_valid_not_configured" if config_ok
-            else "hosted_browser_sandbox_contract_missing_or_invalid"
-        ),
+        "hostedProviderResolverReady": hosted_resolution["resolverReady"],
+        "hostedProviderResolver": hosted_resolution,
+        "status": status,
         "failures": failures,
         "safety": {
             "rawEndpointReturned": False,
+            "rawSecretReturned": False,
             "rawOcrTextReturned": False,
             "agentCredentialEntryAllowed": False,
             "externalWriteActionsAllowed": False
         }
+    }
+
+
+def _is_env_ref(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("env:") and len(value) > 4
+
+
+def _env_name_from_ref(value: Any) -> str | None:
+    return value[4:] if _is_env_ref(value) else None
+
+
+def _ref_kind(value: Any) -> str | None:
+    if not value:
+        return None
+    text = str(value)
+    if _is_env_ref(text):
+        return "env"
+    if text.startswith(("http://", "https://")):
+        return "raw_url"
+    return "logical_ref"
+
+
+def _is_https_endpoint(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("https://") and len(value) > len("https://")
+
+
+def resolve_hosted_browser_sandbox_provider_config(
+    *,
+    config: dict[str, Any] | None,
+    config_path: str,
+    config_ok: bool,
+    selected_provider: str,
+    selected_ready: bool,
+    environ: dict[str, str] | None = None
+) -> dict[str, Any]:
+    env = environ if environ is not None else os.environ
+    adapter_mode = config.get("adapter", {}).get("mode", "missing") if isinstance(config, dict) else "missing"
+    non_example_config = config_path != DEFAULT_PROVIDER_CONFIG_PATH
+    endpoint_ref = config.get("endpointRef") if isinstance(config, dict) else None
+    auth_token_ref = config.get("auth", {}).get("tokenRef", DEFAULT_HOSTED_AUTH_TOKEN_REF) if isinstance(config, dict) else DEFAULT_HOSTED_AUTH_TOKEN_REF
+    endpoint_env_name = _env_name_from_ref(endpoint_ref)
+    auth_env_name = _env_name_from_ref(auth_token_ref)
+    endpoint_resolved = bool(endpoint_env_name and _is_https_endpoint(env.get(endpoint_env_name)))
+    auth_resolved = bool(auth_env_name and env.get(auth_env_name))
+    live_verified = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED") == "1"
+    provider_live_connected = bool(isinstance(config, dict) and config.get("adapter", {}).get("providerLiveConnected") is True)
+    resolver_ready = bool(
+        selected_provider == "hosted_remote"
+        and selected_ready
+        and config_ok
+        and non_example_config
+        and adapter_mode == "hosted_provider"
+        and endpoint_resolved
+        and auth_resolved
+    )
+    status = (
+        "hosted_browser_sandbox_provider_ready"
+        if resolver_ready and live_verified and provider_live_connected
+        else "hosted_browser_sandbox_provider_configured_unverified" if resolver_ready
+        else "hosted_browser_sandbox_provider_missing_endpoint_or_secret"
+        if selected_provider == "hosted_remote" and selected_ready and config_ok and non_example_config and adapter_mode == "hosted_provider"
+        else "hosted_browser_sandbox_provider_not_selected"
+    )
+    return {
+        "status": status,
+        "resolverReady": resolver_ready,
+        "endpointResolved": endpoint_resolved,
+        "authResolved": auth_resolved,
+        "liveVerified": live_verified,
+        "providerLiveConnected": provider_live_connected,
+        "endpointRefKind": _ref_kind(endpoint_ref),
+        "authTokenRefKind": _ref_kind(auth_token_ref),
+        "endpointEnvPresent": bool(endpoint_env_name),
+        "authEnvPresent": bool(auth_env_name),
+        "rawEndpointReturned": False,
+        "rawSecretReturned": False,
+        "rawSecretPathReturned": False
     }
 
 

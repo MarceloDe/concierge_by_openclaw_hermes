@@ -1,20 +1,24 @@
+
+> brainstyworkers-ai-concierge@0.1.0 sandbox:browser:provider-resolver
+> node scripts/browser-sandbox-provider-resolver.mjs
+
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_adapter_harness_ready",
+  "status": "hosted_browser_sandbox_provider_configured_unverified",
   "hostedProviderReady": false,
-  "hostedProviderResolverReady": false,
-  "adapterHarnessReady": true,
+  "hostedProviderResolverReady": true,
+  "adapterHarnessReady": false,
   "hostedProviderResolver": {
-    "status": "hosted_browser_sandbox_provider_not_selected",
-    "resolverReady": false,
+    "status": "hosted_browser_sandbox_provider_configured_unverified",
+    "resolverReady": true,
     "ready": false,
-    "endpointResolved": false,
-    "authResolved": false,
+    "endpointResolved": true,
+    "authResolved": true,
     "liveVerified": false,
-    "endpointRefKind": "logical_ref",
+    "endpointRefKind": "env",
     "authTokenRefKind": "env",
-    "endpointEnvPresent": false,
+    "endpointEnvPresent": true,
     "authEnvPresent": true,
     "rawEndpointReturned": false,
     "rawSecretReturned": false,
@@ -23,7 +27,7 @@
   "validation": {
     "ok": true,
     "version": "2026-06-17.browser-sandbox-provider.v1",
-    "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
+    "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
     "failures": [],
     "sanitizedConfig": {
       "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
@@ -32,26 +36,26 @@
       "endpointRefPresent": true,
       "secretSource": "managed_env",
       "transport": {
-        "stream": "sse_frames",
+        "stream": "webrtc_or_sse_frames",
         "inputRelay": "approval_gated_human_only",
-        "screenshot": "contract_harness_screenshot_placeholder",
-        "ocrCaption": "contract_harness_caption_placeholder"
+        "screenshot": "provider_screenshot_api",
+        "ocrCaption": "provider_or_local_ocr"
       },
       "adapter": {
-        "mode": "contract_harness",
+        "mode": "hosted_provider",
         "providerLiveConnected": false,
-        "contractHarnessOnly": true
+        "contractHarnessOnly": false
       },
       "auth": {
-        "tokenRefPresent": false,
+        "tokenRefPresent": true,
         "tokenRefKind": "env"
       },
       "sessionPolicy": {
         "userScoped": true,
         "sessionScoped": true,
         "ephemeralBrowser": true,
-        "maxSessionMinutes": 15,
-        "idleTimeoutMinutes": 3,
+        "maxSessionMinutes": 30,
+        "idleTimeoutMinutes": 5,
         "recordFrames": false,
         "persistRawOcrText": false
       },
@@ -73,7 +77,7 @@
         "redactFrameContent": true
       },
       "source": {
-        "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
+        "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
         "exampleConfig": false
       }
     }
@@ -94,5 +98,12 @@
     "externalActions": false,
     "phiSeeded": false,
     "agentCredentialEntryAllowed": false
+  },
+  "resolverContract": {
+    "endpointAndAuthAreReferencesOnly": true,
+    "endpointResolved": true,
+    "authResolved": true,
+    "liveVerified": false,
+    "providerScoreMayPassOnlyAfterLiveVerified": true
   }
 }
