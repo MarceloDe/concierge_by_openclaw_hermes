@@ -16,6 +16,7 @@ test("storage contract defines a Postgres deployment target while preserving SQL
   assert.equal(result.productionProfileCommand, "npm run storage:postgres:profile-contract");
   assert.equal(result.endpointRegressionCommand, "npm run storage:postgres:endpoint-regression-smoke");
   assert.equal(result.productionProfileLiveCommand, "npm run storage:postgres:profile-live-smoke");
+  assert.equal(result.backupRunbookCommand, "npm run storage:postgres:backup-runbook-smoke");
   assert.equal(result.appRuntimeMigratedToPostgres, false);
   assert.deepEqual(result.services, ["postgres"]);
   assert.equal(result.livePostgres.checked, false);
@@ -90,7 +91,9 @@ test("storage readiness reports production gates without declaring full migratio
   assert.equal(readiness.postgres.productionSmokeReady, true);
   assert.equal(readiness.postgres.workerLeaseReady, true);
   assert.equal(readiness.postgres.backupRestoreReady, true);
+  assert.equal(readiness.postgres.backupRunbookReady, false);
   assert.equal(readiness.postgres.endpointParityReady, true);
+  assert.equal(readiness.postgres.backupRunbookCommand, "npm run storage:postgres:backup-runbook-smoke");
   assert.equal(readiness.postgres.defaultRolloutReady, true);
   assert.equal(readiness.postgres.productionProfileReady, false);
   assert.equal(readiness.safety.secretProfileReady, true);

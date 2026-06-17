@@ -24,6 +24,8 @@ const REQUIRED_FILES = [
   "scripts/postgres-production-profile-contract.mjs",
   "scripts/postgres-endpoint-regression-smoke.mjs",
   "scripts/postgres-production-profile-live-smoke.mjs",
+  "scripts/postgres-backup-runbook-smoke.mjs",
+  "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
   "compose.postgres.yaml",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
@@ -31,6 +33,7 @@ const REQUIRED_FILES = [
   "src/tests/postgres-production-readiness-contract.test.mjs",
   "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/postgres-production-profile-live-contract.test.mjs",
+  "src/tests/postgres-backup-runbook-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "src/tests/deployment-storage.test.mjs"
 ];
@@ -54,6 +57,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
   "BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}",
   "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
+  "BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY: ${BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY:-0}",
   "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
   "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
@@ -133,7 +137,9 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     productionSmoke,
     defaultRolloutSmoke,
     endpointRegressionSmoke,
-    profileLiveSmoke
+    profileLiveSmoke,
+    backupRunbookSmoke,
+    backupRunbook
   ] = await Promise.all([
     readFile(resolve(REPO_ROOT, "compose.yaml"), "utf8"),
     readFile(resolve(REPO_ROOT, "compose.postgres.yaml"), "utf8"),
@@ -146,7 +152,9 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     readFile(resolve(REPO_ROOT, "scripts/postgres-production-readiness-smoke.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "scripts/postgres-default-rollout-smoke.mjs"), "utf8"),
     readFile(resolve(REPO_ROOT, "scripts/postgres-endpoint-regression-smoke.mjs"), "utf8"),
-    readFile(resolve(REPO_ROOT, "scripts/postgres-production-profile-live-smoke.mjs"), "utf8")
+    readFile(resolve(REPO_ROOT, "scripts/postgres-production-profile-live-smoke.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "scripts/postgres-backup-runbook-smoke.mjs"), "utf8"),
+    readFile(resolve(REPO_ROOT, "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md"), "utf8")
   ]);
 
   assertIncludes(compose, COMPOSE_FRAGMENTS, "compose.yaml");
@@ -160,10 +168,12 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
       "productionSmokeReady",
       "workerLeaseReady",
       "backupRestoreReady",
+      "backupRunbookReady",
       "endpointParityReady",
       "secretProfileReady",
       "defaultRolloutReady",
       "productionSmokeCommand",
+      "backupRunbookCommand",
       "defaultRolloutCommand",
       "fullMigrationReady"
     ],
@@ -192,6 +202,16 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     profileLiveSmoke,
     ["POSTGRES_PRODUCTION_PROFILE_LIVE_SMOKE_VERSION", "runPostgresProductionProfileLiveSmoke", "compose.postgres.yaml", "/api/v1/health"],
     "postgres-production-profile-live-smoke.mjs"
+  );
+  assertIncludes(
+    backupRunbookSmoke,
+    ["POSTGRES_BACKUP_RUNBOOK_SMOKE_VERSION", "runPostgresBackupRunbookSmoke", "validatePostgresBackupRunbook", "runPostgresProductionReadinessSmoke"],
+    "postgres-backup-runbook-smoke.mjs"
+  );
+  assertIncludes(
+    backupRunbook,
+    ["Backup Schedule", "Restore Rehearsal", "Incident Restore", "RPO target", "RTO target", "Acceptance Gate"],
+    "POSTGRES_BACKUP_RESTORE_RUNBOOK.md"
   );
   assertIncludes(initSql, ["brainsty_storage_readiness", STORAGE_CONTRACT_VERSION, "ON CONFLICT"], "Postgres init SQL");
   const postgresProductionProfile = await assertPostgresProductionProfileContract({ verifyDockerConfig: false });
@@ -222,6 +242,7 @@ export async function assertStorageContract({ verifyLivePostgres = false } = {})
     productionProfileCommand: "npm run storage:postgres:profile-contract",
     endpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
     productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
+    backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
     postgresProductionProfile,
     livePostgres
   };

@@ -469,3 +469,28 @@ Score:
 - `database_product_ready_architecture` remains eligible for `100 / 100` when the Postgres runtime, operational gates, secret profile, and default rollout gates are all enabled by proof.
 - `database_deployment_profile` is now live-profile verified at `100 / 100`, not only statically contracted.
 - Remaining production work is hosted secret-manager selection, hosted backup scheduling/restore runbooks, and the broader hosted remote-browser/mobile proof beyond the local CDP adapter.
+
+## Phase 13 Postgres Hosted Backup Runbook Update
+
+Code changes:
+- Added `docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md`.
+- Added `scripts/postgres-backup-runbook-smoke.mjs` and package script `storage:postgres:backup-runbook-smoke`.
+- Added `src/tests/postgres-backup-runbook-contract.test.mjs` and included it in `npm run test:docker:contract`.
+- Added `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY` to compose/Docker runtime env.
+- Exposed `postgres_backup_runbook` and `database_backup_restore_runbook` through storage readiness and connector proof.
+
+Verification:
+- Syntax checks passed for the new smoke script, storage/compose contracts, storage readiness, server, and build guard.
+- Focused backup/compose/storage contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 14/14 tests.
+- `npm run storage:contract` passed.
+- `npm run storage:postgres:backup-runbook-smoke` passed against live Docker Postgres.
+- The smoke validated 11 runbook fragments, proved restore rehearsal, compared 17 tables, found no count mismatches, and restored user/session/checkpoint/approval/audit/worker-lease rows.
+- API proof reported `postgres_backup_runbook=backup_restore_runbook_smoked` and `database_backup_restore_runbook=100 / 100`.
+- Browser proof passed with required runbook strings present and 0 console errors.
+- Screenshot artifact: `artifacts/phase13-postgres-backup-runbook-dashboard-proof.png`.
+
+Score:
+- `database_backup_restore_runbook` can now report `100 / 100` when the runbook smoke has passed and `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1`.
+- This is an operations/runbook score, not a claim that a hosted provider's final PITR policy is configured.
+- Remaining production work is provider-specific backup/PITR setup, scheduled restore rehearsal in deployment operations, and hosted secret-manager integration.

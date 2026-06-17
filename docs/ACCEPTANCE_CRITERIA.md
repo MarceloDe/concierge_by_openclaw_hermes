@@ -1766,3 +1766,32 @@ Current proof status:
   - `artifacts/phase12-postgres-profile-live-dashboard-proof.png`
   - `artifacts/phase12-postgres-profile-live-pwa-proof.png`
 - The temporary compose project was torn down with volumes removed, `project/deployment/secrets/.runtime` was deleted, and ports `4296`, `8296`, `3296`, `65432`, `6580`, and `3297` were verified clear.
+
+## Postgres Hosted Backup Runbook Acceptance
+
+This slice is acceptable when:
+
+- A provider-neutral backup/restore runbook exists for hosted Postgres operations.
+- The runbook includes required inputs, backup schedule, RPO/RTO targets, restore rehearsal, incident restore, migration rollback, acceptance gate, and safety notes.
+- `npm run storage:postgres:backup-runbook-smoke` validates the runbook and runs a restore rehearsal through temporary Postgres databases.
+- The smoke artifact reports no raw database URL, no raw secret-file path, no external actions, no PHI seed, and no destructive production restore.
+- Storage readiness exposes `postgres.backupRunbookReady` and `postgres.backupRunbookCommand`.
+- Connector proof exposes `postgres_backup_runbook` and `database_backup_restore_runbook`.
+
+Current proof status:
+
+- Focused syntax checks passed for the runbook smoke, storage/compose contracts, storage readiness, server, and build guard.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 14/14 tests.
+- `npm run storage:contract` passed and reported `backupRunbookCommand`.
+- `npm run storage:postgres:backup-runbook-smoke` passed against live Docker Postgres.
+- The smoke compared 17 tables, found no count mismatches, restored user/session/checkpoint/approval/audit/worker-lease rows, and wrote:
+  - `artifacts/postgres-backup-runbook-smoke.json`;
+  - `artifacts/postgres-backup-runbook-production-smoke.json`.
+- API proof at `/api/proof/runs/postgres-backup-runbook` reported:
+  - `postgres_backup_runbook=backup_restore_runbook_smoked`;
+  - `database_backup_restore_runbook=100 / 100`.
+- Browser verification passed with required runbook proof strings present and 0 console errors.
+- Screenshot artifacts:
+  - `artifacts/phase13-postgres-backup-runbook-dashboard-proof.png`;
+  - `artifacts/phase13-postgres-backup-runbook-connector-proof.png`.

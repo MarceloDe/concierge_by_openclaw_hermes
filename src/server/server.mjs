@@ -272,6 +272,7 @@ async function safeDeploymentContractStatus() {
     postgresProductionSmokeReady: process.env.BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY === "1",
     postgresWorkerLeaseReady: process.env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1",
     postgresBackupRestoreReady: process.env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1",
+    postgresBackupRunbookReady: process.env.BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY === "1",
     postgresEndpointParityReady: process.env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1",
     databaseSecretProfileReady: databaseSecretProfile.ready,
     databaseSecretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
@@ -287,6 +288,7 @@ async function safeDeploymentContractStatus() {
     postgresProductionProfileCommand: "npm run storage:postgres:profile-contract",
     postgresEndpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
     postgresProductionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
+    postgresBackupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
     graphitiRuntimeReady,
     graphitiRuntimeStatus: graphitiRuntimeReady ? "graphiti_container_runtime_present" : "graphiti_container_runtime_missing",
     memorySmokeCommand: "npm run docker:memory:smoke",
@@ -391,11 +393,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
           endpointParityReady: storage.postgres.endpointParityReady,
           workerLeaseReady: storage.postgres.workerLeaseReady,
           backupRestoreReady: storage.postgres.backupRestoreReady,
+          backupRunbookReady: storage.postgres.backupRunbookReady,
           secretProfileReady: storage.safety.secretProfileReady,
           defaultRolloutReady: storage.postgres.defaultRolloutReady
         },
         productionProfileReady: storage.postgres.productionProfileReady,
         productionProfileCommand: storage.postgres.productionProfileCommand
+      },
+      {
+        key: "postgres_backup_runbook",
+        status: storage.postgres.backupRunbookReady ? "backup_restore_runbook_smoked" : "available_runbook_gate",
+        ok: storage.postgres.backupRunbookReady,
+        command: storage.postgres.backupRunbookCommand
       },
       {
         key: "postgres_production_profile",
@@ -460,6 +469,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.postgresProductionProfileReady ? 100 : 0,
         target: 100,
         status: deployment.postgresProductionProfileStatus
+      },
+      {
+        key: "database_backup_restore_runbook",
+        score: storage.postgres.backupRunbookReady ? 100 : 0,
+        target: 100,
+        status: storage.postgres.backupRunbookReady ? "backup_restore_runbook_smoked" : "run_backup_runbook_smoke"
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },

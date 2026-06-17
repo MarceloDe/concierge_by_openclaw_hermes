@@ -2081,3 +2081,22 @@ This proves the profile works as a server-only connector without over-claiming h
 
 Cost of changing later:
 Low. A managed cloud secret mount, hosted Postgres provider, or orchestration platform can replace the local Docker-secret file while keeping the same `BRAINSTY_DATABASE_URL_FILE`, readiness flags, `/api/v1`, and dashboard proof contract.
+
+## 2026-06-17 - Make Backup/Restore Runbooks A Separate Production Ops Gate
+
+Context:
+The Postgres production smoke already proved logical backup/restore integrity over temporary databases, but the remaining hosted-production gap was operational: operators still needed a provider-neutral runbook for scheduled backups, restore rehearsal, incident restore, migration rollback, and proof artifacts. Treating the logical restore smoke as the full hosted backup plan would overstate readiness.
+
+Options considered:
+- Count the existing logical backup/restore smoke as sufficient.
+- Pick a specific cloud Postgres provider immediately and write provider-specific automation.
+- Add a provider-neutral runbook and smoke gate now, while keeping provider-specific backup/PITR configuration as the next deployment step.
+
+Decision:
+Add `docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md`, `npm run storage:postgres:backup-runbook-smoke`, and a separate dashboard/API score `database_backup_restore_runbook`. Keep it separate from the core database architecture score so the project can show operational readiness progress without claiming a hosted provider is configured.
+
+Reason:
+This makes backup/restore operations auditable and repeatable today while preserving truthful deployment status. The runbook gate proves restore rehearsal and safety properties locally, and the same contract can later be backed by Neon/Supabase/Prisma Postgres or another hosted provider.
+
+Cost of changing later:
+Low. Provider-specific automation can satisfy the same runbook sections and set `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1` after hosted proof without changing the public connector API or Postgres adapter.

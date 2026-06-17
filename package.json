@@ -41,8 +41,9 @@
     "storage:postgres:profile-contract": "node scripts/postgres-production-profile-contract.mjs --static-only",
     "storage:postgres:endpoint-regression-smoke": "node scripts/postgres-endpoint-regression-smoke.mjs",
     "storage:postgres:profile-live-smoke": "node scripts/postgres-production-profile-live-smoke.mjs",
+    "storage:postgres:backup-runbook-smoke": "node scripts/postgres-backup-runbook-smoke.mjs",
     "test:db:postgres": "node --test src/tests/postgres-store-contract.test.mjs src/tests/postgres-production-readiness-contract.test.mjs src/tests/worker-leases.test.mjs",
-    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs src/tests/postgres-production-profile-contract.test.mjs src/tests/postgres-production-profile-live-contract.test.mjs",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs src/tests/postgres-production-profile-contract.test.mjs src/tests/postgres-production-profile-live-contract.test.mjs src/tests/postgres-backup-runbook-contract.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {

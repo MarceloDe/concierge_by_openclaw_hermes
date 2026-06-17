@@ -2185,3 +2185,26 @@ Remaining follow-up:
 - Replace the local smoke-created Docker secret file with the hosted deployment's real secret manager or provider secret mount.
 - Add hosted scheduled backup/restore runbooks beyond the logical smoke.
 - Continue the broader remote-browser/mobile proof work for hosted sandbox providers, production auth, and full regular-user journeys.
+
+## Postgres Hosted Backup Runbook Cycle - 2026-06-17
+
+Goal:
+- Promote backup/restore operations from an implicit logical smoke to a documented, testable hosted-production runbook gate without claiming a specific cloud provider is already configured.
+
+Implemented slice:
+- Add `docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md` with provider-neutral schedule, restore rehearsal, incident restore, migration rollback, acceptance, and safety procedures.
+- Add `scripts/postgres-backup-runbook-smoke.mjs` and `npm run storage:postgres:backup-runbook-smoke`.
+- The smoke validates the runbook and runs the existing Postgres production-readiness restore rehearsal against temporary source/restore databases.
+- Add `src/tests/postgres-backup-runbook-contract.test.mjs` and wire the test into `npm run test:docker:contract`.
+- Expose `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY`, `postgres_backup_runbook`, and `database_backup_restore_runbook` through storage readiness and connector proof.
+
+Acceptance:
+- `npm run storage:postgres:backup-runbook-smoke` validates the runbook, proves restore rehearsal, writes sanitized artifacts, and reports no raw database URL or secret path.
+- Dashboard/API proof reports `postgres_backup_runbook=backup_restore_runbook_smoked`.
+- The backup runbook score reaches `100 / 100` only when `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1`.
+- Base compose still defaults to SQLite and no destructive production restore is performed.
+
+Remaining follow-up:
+- Configure the final hosted provider backup/PITR policy and secret manager.
+- Add an automated restore rehearsal in CI/CD or deployment operations once hosted credentials exist.
+- Add provider-specific restore promotion playbooks after Neon/Supabase/Prisma Postgres or another target is selected.

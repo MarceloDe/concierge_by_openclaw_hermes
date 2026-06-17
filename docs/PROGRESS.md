@@ -6937,3 +6937,67 @@ Known risks or gaps:
 - The smoke uses a local Docker-secret-compatible file, not the hosted deployment's final secret manager.
 - Hosted backup scheduling and operator restore runbooks are still follow-up production work.
 - Base compose still defaults to SQLite for local developer safety until the user explicitly approves changing the general default.
+
+## Phase 13 Postgres Hosted Backup Runbook Update
+
+Status: Implemented, live-smoked, API-proven, and visually verified.
+
+Slice name:
+- Provider-neutral hosted Postgres backup/restore runbook proof gate.
+
+Code changes:
+- Added `docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md`.
+- Added `scripts/postgres-backup-runbook-smoke.mjs`.
+- Added package script `storage:postgres:backup-runbook-smoke`.
+- Added `src/tests/postgres-backup-runbook-contract.test.mjs`.
+- Updated compose defaults, Docker image context, storage readiness, connector proof payload, build guard, compose/storage contracts, and deployment storage tests.
+
+Safety decision:
+- The new runbook gate is separate from the core database product-ready architecture score.
+- `database_backup_restore_runbook` reaches `100 / 100` only when the runbook smoke has passed and `BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY=1`.
+- The smoke uses temporary Postgres databases, does not seed PHI, does not execute external actions, and does not perform destructive production restores.
+- Smoke artifacts are sanitized and must not contain raw database URLs or secret-file paths.
+
+Verification commands:
+- `node --check scripts/postgres-backup-runbook-smoke.mjs`
+- `node --check scripts/storage-contract.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/concierge/storageReadiness.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/server/build-check.mjs`
+- `node --test src/tests/postgres-backup-runbook-contract.test.mjs src/tests/deployment-storage.test.mjs src/tests/deployment-compose.test.mjs`
+- `npm run test:docker:contract`
+- `npm run storage:contract`
+- `docker compose up -d postgres`
+- `docker compose exec -T postgres pg_isready -U brainsty -d brainstyworkers`
+- `npm run storage:postgres:backup-runbook-smoke`
+- `curl -s http://127.0.0.1:4198/api/proof/runs/postgres-backup-runbook`
+
+Verification result:
+- Focused syntax checks passed.
+- Focused contract tests passed with 7/7 tests.
+- `npm run test:docker:contract` passed with 14/14 tests.
+- `npm run storage:contract` passed and reported `backupRunbookCommand`.
+- Docker Postgres readiness passed.
+- `npm run storage:postgres:backup-runbook-smoke` passed.
+- The smoke validated the runbook, compared 17 restored tables with no count mismatches, and restored user, session, checkpoint, approval, audit, and worker-lease rows.
+- Sanitized artifacts reported:
+  - no raw database URL;
+  - no raw secret-file path;
+  - no external actions;
+  - no PHI seed;
+  - no destructive production restore.
+- API proof reported:
+  - `postgres_backup_runbook=backup_restore_runbook_smoked`;
+  - `database_backup_restore_runbook=100 / 100`.
+- In-app browser verification passed at `http://127.0.0.1:4198/?phase=postgres-backup-runbook` with required runbook proof strings present in the dashboard DOM and 0 console errors.
+- Screenshot and proof artifacts:
+  - `artifacts/phase13-postgres-backup-runbook-dashboard-proof.png`;
+  - `artifacts/phase13-postgres-backup-runbook-proof.json`;
+  - `artifacts/postgres-backup-runbook-smoke.json`;
+  - `artifacts/postgres-backup-runbook-production-smoke.json`.
+
+Known risks or gaps:
+- Hosted provider backup/PITR policy is not configured yet.
+- The smoke proves local Docker Postgres restore rehearsal and runbook compliance, not a managed provider restore.
+- Provider-specific restore promotion steps should be added after the deployment target is selected.

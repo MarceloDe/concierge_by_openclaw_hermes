@@ -1,0 +1,47 @@
+{
+  "ok": true,
+  "version": "2026-06-17.postgres-backup-runbook.v1",
+  "runbook": {
+    "ok": true,
+    "version": "2026-06-17.postgres-backup-runbook.v1",
+    "runbookPath": "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
+    "requiredFragments": 11,
+    "missing": []
+  },
+  "schedule": {
+    "providerNeutral": true,
+    "rpoTargetHours": 24,
+    "rtoTargetHours": 4,
+    "requiresProviderBackupOrPitr": true,
+    "productionPromotionRequiresApproval": true
+  },
+  "restoreRehearsal": {
+    "checked": true,
+    "ok": true,
+    "command": "npm run storage:postgres:production-smoke",
+    "artifactPath": "artifacts/postgres-backup-runbook-production-smoke.json",
+    "comparedTables": 17,
+    "countMismatches": [],
+    "restoredRows": {
+      "user": true,
+      "session": true,
+      "checkpoint": true,
+      "approval": true,
+      "audit": true,
+      "workerLease": true
+    }
+  },
+  "dashboard": {
+    "readinessKey": "postgres_backup_runbook",
+    "scoreKey": "database_backup_restore_runbook",
+    "envGate": "BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY"
+  },
+  "safety": {
+    "rawDatabaseUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "externalActions": false,
+    "phiSeeded": false,
+    "destructiveProductionRestore": false,
+    "rawBackupContainsSmokeDataOnly": true
+  }
+}

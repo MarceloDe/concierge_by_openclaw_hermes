@@ -23,6 +23,8 @@ const REQUIRED_FILES = [
   "scripts/postgres-production-profile-contract.mjs",
   "scripts/postgres-endpoint-regression-smoke.mjs",
   "scripts/postgres-production-profile-live-smoke.mjs",
+  "scripts/postgres-backup-runbook-smoke.mjs",
+  "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
   "project/db/postgres-init/001_storage_readiness.sql",
@@ -34,6 +36,7 @@ const REQUIRED_FILES = [
   "src/tests/deployment-storage.test.mjs",
   "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/postgres-production-profile-live-contract.test.mjs",
+  "src/tests/postgres-backup-runbook-contract.test.mjs",
   "src/tests/postgres-production-readiness-contract.test.mjs",
   "src/tests/worker-leases.test.mjs",
   "scripts/compose-memory-smoke.mjs",
@@ -61,6 +64,7 @@ const COMPOSE_FRAGMENTS = [
   "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
   "BRAINSTY_POSTGRES_WORKER_LEASE_READY: ${BRAINSTY_POSTGRES_WORKER_LEASE_READY:-0}",
   "BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: ${BRAINSTY_POSTGRES_BACKUP_RESTORE_READY:-0}",
+  "BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY: ${BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY:-0}",
   "BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: ${BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY:-0}",
   "BRAINSTY_DATABASE_SECRET_PROFILE_READY: ${BRAINSTY_DATABASE_SECRET_PROFILE_READY:-0}",
   "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}",
@@ -186,7 +190,8 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
       productionProfileCommand: "npm run storage:postgres:profile-contract",
       endpointRegressionCommand: "npm run storage:postgres:endpoint-regression-smoke",
-      productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke"
+      productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
+      backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke"
     },
     postgresProductionProfile,
     graphitiRuntime: {

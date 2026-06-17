@@ -16,6 +16,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
   const postgresProductionSmokeReady = Boolean(deployment?.postgresProductionSmokeReady ?? env.BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY === "1");
   const postgresWorkerLeaseReady = Boolean(deployment?.postgresWorkerLeaseReady ?? env.BRAINSTY_POSTGRES_WORKER_LEASE_READY === "1");
   const postgresBackupRestoreReady = Boolean(deployment?.postgresBackupRestoreReady ?? env.BRAINSTY_POSTGRES_BACKUP_RESTORE_READY === "1");
+  const postgresBackupRunbookReady = Boolean(deployment?.postgresBackupRunbookReady ?? env.BRAINSTY_POSTGRES_BACKUP_RUNBOOK_READY === "1");
   const postgresEndpointParityReady = Boolean(deployment?.postgresEndpointParityReady ?? env.BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY === "1");
   const databaseSecretProfileReady = Boolean(deployment?.databaseSecretProfileReady ?? databaseSecretProfile.ready);
   const postgresDefaultRolloutReady = Boolean(deployment?.postgresDefaultRolloutReady ?? env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1");
@@ -99,6 +100,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       productionSmokeReady: postgresProductionSmokeReady,
       workerLeaseReady: postgresWorkerLeaseReady,
       backupRestoreReady: postgresBackupRestoreReady,
+      backupRunbookReady: postgresBackupRunbookReady,
       endpointParityReady: postgresEndpointParityReady,
       operationalGatesReady,
       productionGatesReady,
@@ -110,6 +112,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       smokeCommand: "npm run storage:postgres:smoke",
       runtimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
       productionSmokeCommand: "npm run storage:postgres:production-smoke",
+      backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
       defaultRolloutCommand: "npm run storage:postgres:default-rollout-smoke",
       productionProfileCommand: "npm run storage:postgres:profile-contract"
     },
