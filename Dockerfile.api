@@ -9,7 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     WEFELLA_UPLOAD_STORE_PATH=/app/data/uploads \
     WEFELLA_BROWSER_SANDBOX_PROVIDER=local_cdp \
     WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=0 \
-    WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE=project/deployment/browser-sandbox-provider.example.json
+    WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE=project/deployment/browser-sandbox-provider.example.json \
+    WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE=project/deployment/browser-sandbox-provider.selection.example.json \
+    WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER="" \
+    WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY=0
 
 WORKDIR /app
 

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "brainstyworkers.browser-sandbox-provider-selection.v1",
+  "status": "selection_contract_only",
+  "environment": "staging",
+  "recommendedNextProviderKey": "custom_webrtc",
+  "candidateProviders": [
+    {
+      "key": "custom_webrtc",
+      "status": "candidate",
+      "fit": "Best first live adapter when a private provider endpoint supports the existing provider-style lifecycle contract.",
+      "requiredCapabilities": {
+        "ephemeralSessions": true,
+        "streamFrames": true,
+        "screenshot": true,
+        "ocrCaption": true,
+        "humanTakeover": true,
+        "approvedInputRelay": true,
+        "teardown": true,
+        "offsiteFailClosed": true,
+        "providerHealthEndpoint": true
+      },
+      "publicApiCompatible": true,
+      "privateConfigRequired": true,
+      "secretsInGit": false,
+      "rawEndpointInGit": false
+    },
+    {
+      "key": "browserbase",
+      "status": "candidate",
+      "fit": "Useful if provider supports browser sessions, frame or screenshot streaming, and human takeover with approval metadata.",
+      "requiredCapabilities": {
+        "ephemeralSessions": true,
+        "streamFrames": true,
+        "screenshot": true,
+        "ocrCaption": true,
+        "humanTakeover": true,
+        "approvedInputRelay": true,
+        "teardown": true,
+        "offsiteFailClosed": true,
+        "providerHealthEndpoint": true
+      },
+      "publicApiCompatible": true,
+      "privateConfigRequired": true,
+      "secretsInGit": false,
+      "rawEndpointInGit": false
+    },
+    {
+      "key": "vercel_sandbox",
+      "status": "candidate",
+      "fit": "Useful for remote sandbox workloads if the browser stream/takeover boundary can be wrapped behind the provider contract.",
+      "requiredCapabilities": {
+        "ephemeralSessions": true,
+        "streamFrames": true,
+        "screenshot": true,
+        "ocrCaption": true,
+        "humanTakeover": true,
+        "approvedInputRelay": true,
+        "teardown": true,
+        "offsiteFailClosed": true,
+        "providerHealthEndpoint": true
+      },
+      "publicApiCompatible": true,
+      "privateConfigRequired": true,
+      "secretsInGit": false,
+      "rawEndpointInGit": false
+    }
+  ],
+  "selectionPolicy": {
+    "privateConfigRequired": true,
+    "publicApiOnly": true,
+    "noProviderSecretsInGit": true,
+    "liveProviderVerificationRequired": true,
+    "guiOcrProofRequired": true,
+    "hostedRemoteScoreMustRemainBlockedUntilLive": true
+  },
+  "preflightRequiredEnv": {
+    "selectionFile": "env:WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE",
+    "selectedProvider": "env:WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER",
+    "selectionReady": "env:WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY",
+    "liveVerified": "env:WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+  },
+  "visualProof": {
+    "dashboardRequired": true,
+    "mobilePwaRequired": true,
+    "liveWorkerBlockRequired": true,
+    "ocrCaptionRequired": true
+  }
+}

@@ -661,3 +661,24 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_provider_live_lifecycle` can reach `95 / 95` when resolver refs are configured, adapter contract is ready, HTTP adapter harness is ready, and `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY=1`.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes live stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+## Phase 21 Hosted Browser Sandbox Provider Selection And Preflight Update
+
+Implementation:
+- Added a non-secret hosted browser provider-selection matrix with candidates for `custom_webrtc`, `browserbase`, and `vercel_sandbox`.
+- Added `npm run sandbox:browser:provider-selection`.
+- Added a separate `hosted_browser_sandbox_provider_selection` FastAPI and dashboard score.
+- Selection preflight can pass without making a provider network call, storing provider endpoints/tokens, or enabling live hosted-browser readiness.
+- `hosted_remote_browser_sandbox` remains blocked until real provider live proof passes.
+
+Focused verification:
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-selection` passed with `hosted_browser_sandbox_provider_selection_contract_ready`, `providerSelectionContractReady=true`, and `hostedProviderReady=false`.
+- Focused browser-sandbox/compose contract tests passed with 10/10 tests.
+- Focused FastAPI provider-selection proof test passed.
+- Full gate passed: provider contract smoke, adapter harness smoke, provider resolver smoke, provider adapter smoke, provider HTTP adapter harness smoke, provider live lifecycle harness smoke, provider selection smoke, `npm run build`, `npm run test:docker:contract` with 26/26 tests, FastAPI facade regression with 42 tests and 2 expected skips, and `npm run test:local` with 210 total tests, 208 passed, 0 failed, and 2 expected skips.
+- In-app browser dashboard proof passed with `hosted_browser_sandbox_provider_selection`, `hosted_browser_sandbox_provider_selection_preflight_ready`, and `hosted_remote_browser_sandbox` visible; the hosted remote browser score remained `0 / 100`; console issues were 0; fake provider endpoints/tokens were absent.
+
+Score decision:
+- `hosted_browser_sandbox_provider_selection` can reach `70 / 90` from the checked-in contract and `90 / 90` only when `WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER` is a known candidate and `WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY=1`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes live stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.

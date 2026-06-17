@@ -10,6 +10,7 @@ from uuid import uuid4
 SANDBOX_CONTRACT_VERSION = "browser-sandbox-provider.v1"
 HOSTED_SANDBOX_CONTRACT_VERSION = "brainstyworkers.browser-sandbox-provider.v1"
 DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json"
+DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
@@ -374,6 +375,7 @@ def describe_browser_sandbox_provider_contract(
         DEFAULT_PROVIDER_CONFIG_PATH
     )
     selected_ready = bool(ready if ready is not None else os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_READY") == "1")
+    selection_contract = describe_browser_sandbox_provider_selection_contract()
     config = None
     config_ok = False
     failures: list[str] = []
@@ -467,6 +469,9 @@ def describe_browser_sandbox_provider_contract(
         "ready": provider_ready,
         "adapterHarnessReady": adapter_harness_ready,
         "hostedProviderResolverReady": hosted_resolution["resolverReady"],
+        "hostedProviderSelectionReady": selection_contract["contractReady"],
+        "hostedProviderSelectionPreflightReady": selection_contract["preflightReady"],
+        "hostedProviderSelection": selection_contract,
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
         "hostedProviderLiveLifecycleHarnessReady": live_lifecycle_harness_ready,
@@ -480,6 +485,78 @@ def describe_browser_sandbox_provider_contract(
             "agentCredentialEntryAllowed": False,
             "externalWriteActionsAllowed": False
         }
+    }
+
+
+def describe_browser_sandbox_provider_selection_contract(
+    *,
+    config_path: str | None = None,
+    environ: dict[str, str] | None = None
+) -> dict[str, Any]:
+    env = environ if environ is not None else os.environ
+    selected_config_path = config_path or env.get(
+        "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE",
+        DEFAULT_PROVIDER_SELECTION_CONFIG_PATH
+    )
+    failures: list[str] = []
+    config: dict[str, Any] | None = None
+    try:
+        with open(selected_config_path, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+    except Exception as exc:
+        failures.append(f"selection_config_unreadable:{exc}")
+    candidate_keys: list[str] = []
+    if isinstance(config, dict):
+        candidates = config.get("candidateProviders")
+        candidate_list = candidates if isinstance(candidates, list) else []
+        candidate_keys = [str(candidate.get("key")) for candidate in candidate_list if isinstance(candidate, dict) and candidate.get("key")]
+        required_policy = config.get("selectionPolicy", {})
+        required_visual = config.get("visualProof", {})
+        contract_ok = (
+            config.get("schemaVersion") == "brainstyworkers.browser-sandbox-provider-selection.v1"
+            and config.get("status") == "selection_contract_only"
+            and config.get("environment") in {"staging", "production"}
+            and len(candidate_keys) >= 3
+            and required_policy.get("privateConfigRequired") is True
+            and required_policy.get("publicApiOnly") is True
+            and required_policy.get("noProviderSecretsInGit") is True
+            and required_policy.get("liveProviderVerificationRequired") is True
+            and required_policy.get("guiOcrProofRequired") is True
+            and required_policy.get("hostedRemoteScoreMustRemainBlockedUntilLive") is True
+            and required_visual.get("dashboardRequired") is True
+            and required_visual.get("mobilePwaRequired") is True
+            and required_visual.get("liveWorkerBlockRequired") is True
+            and required_visual.get("ocrCaptionRequired") is True
+            and not any("://" in str(candidate) for candidate in candidate_list)
+        )
+    else:
+        contract_ok = False
+    if not contract_ok and "selection_config_unreadable" not in ",".join(failures):
+        failures.append("selection_contract_failed")
+    selected_provider = env.get("WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER")
+    selected_provider_known = bool(selected_provider and selected_provider in candidate_keys)
+    preflight_ready = bool(
+        contract_ok
+        and env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY") == "1"
+        and selected_provider_known
+    )
+    return {
+        "status": (
+            "hosted_browser_sandbox_provider_selection_preflight_ready"
+            if preflight_ready
+            else "hosted_browser_sandbox_provider_selection_contract_ready" if contract_ok
+            else "hosted_browser_sandbox_provider_selection_missing_or_invalid"
+        ),
+        "contractReady": contract_ok,
+        "preflightReady": preflight_ready,
+        "configPath": selected_config_path,
+        "candidateKeys": candidate_keys,
+        "selectedProviderKnown": selected_provider_known,
+        "selectedProviderKey": selected_provider if selected_provider_known else None,
+        "rawEndpointReturned": False,
+        "rawSecretReturned": False,
+        "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+        "failures": failures
     }
 
 

@@ -18,6 +18,8 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.storageRuntime.providerBackupPolicyCommand, "npm run storage:postgres:provider-backup-policy-smoke");
   assert.equal(result.browserSandbox.defaultProvider, "local_cdp");
   assert.equal(result.browserSandbox.providerContractCommand, "npm run sandbox:browser:provider-contract");
+  assert.equal(result.browserSandbox.providerSelectionCommand, "npm run sandbox:browser:provider-selection");
+  assert.equal(result.browserSandbox.providerSelectionContract, "project/deployment/browser-sandbox-provider.selection.example.json");
   assert.equal(result.browserSandbox.adapterHarnessCommand, "npm run sandbox:browser:adapter-harness");
   assert.equal(result.browserSandbox.adapterHarnessContract, "project/deployment/browser-sandbox-provider.contract-harness.json");
   assert.equal(result.browserSandbox.providerResolverCommand, "npm run sandbox:browser:provider-resolver");

@@ -2233,3 +2233,22 @@ This closes the next implementation gap without leaking secrets or pretending a 
 
 Cost of changing later:
 Low. A selected provider can replace the local lifecycle handlers with provider HTTPS/WebRTC calls while preserving the same proof fields, redaction policy, approval boundaries, and FastAPI public API contract.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Selection Before Live Provider Enablement
+
+Context:
+The lifecycle harness proves the hosted-browser provider shape, but the project still needed an explicit decision gate between "we can exercise a local provider-compatible lifecycle" and "we selected a real provider and are ready to configure live credentials." Without that gate, the next implementation could either stay vague or accidentally treat any private provider config as production readiness.
+
+Options considered:
+- Jump directly from lifecycle harness to a vendor-specific implementation.
+- Treat the existing hosted-provider example config as the provider-selection record.
+- Add a non-secret provider-selection matrix plus preflight smoke that proves candidate/capability readiness separately from live hosted-browser readiness.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.selection.example.json`, `npm run sandbox:browser:provider-selection`, FastAPI/Node proof fields, and a separate `hosted_browser_sandbox_provider_selection` score. Selection preflight can pass only when the selected provider env matches a known candidate and an explicit readiness env is set. `hosted_remote_browser_sandbox` remains blocked until real provider live proof passes.
+
+Reason:
+This records the provider choice boundary in code and dashboard proof while preserving secret hygiene and score honesty. It also gives the future iOS/PWA remote-client work a stable expectation: the browser provider may change, but the public `/api/v1/browser/*` contract and visual proof requirements do not.
+
+Cost of changing later:
+Low. Candidate fields can be expanded for a real vendor due-diligence checklist, and the selected provider adapter can reuse the existing resolver, HTTP, lifecycle, redaction, and dashboard proof structure.

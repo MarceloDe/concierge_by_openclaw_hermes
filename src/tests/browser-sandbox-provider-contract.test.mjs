@@ -4,7 +4,9 @@ import { readFile } from "node:fs/promises";
 import {
   BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
   validateBrowserSandboxProviderContract,
+  validateBrowserSandboxProviderSelectionContract,
   runBrowserSandboxProviderContractSmoke,
+  runBrowserSandboxProviderSelectionSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -43,6 +45,51 @@ test("hosted browser sandbox smoke does not claim readiness from the example con
   assert.equal(result.safety.rawSecretFilePathWritten, false);
   assert.equal(result.safety.rawOcrTextReturned, false);
   assert.equal(result.safety.frameRecordingEnabled, false);
+});
+
+test("hosted browser sandbox provider selection contract is non-secret and separate from live readiness", async () => {
+  const validation = await validateBrowserSandboxProviderSelectionContract();
+  assert.equal(validation.ok, true);
+  assert.equal(validation.sanitizedConfig.status, "selection_contract_only");
+  assert.equal(validation.sanitizedConfig.candidateCount >= 3, true);
+  assert.equal(validation.sanitizedConfig.selectionPolicy.privateConfigRequired, true);
+  assert.equal(validation.sanitizedConfig.selectionPolicy.publicApiOnly, true);
+  assert.equal(validation.sanitizedConfig.selectionPolicy.hostedRemoteScoreMustRemainBlockedUntilLive, true);
+  assert.equal(validation.sanitizedConfig.visualProof.dashboardRequired, true);
+
+  const result = await runBrowserSandboxProviderSelectionSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-selection-smoke-test.json",
+    env: {}
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.providerSelectionContractReady, true);
+  assert.equal(result.providerSelectionPreflightReady, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_selection_contract_ready");
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.doesNotMatch(serialized, /https?:\/\//);
+  assert.doesNotMatch(serialized, /Bearer\s+|sk-[A-Za-z0-9]/);
+});
+
+test("hosted browser sandbox provider selection preflight can pass without overclaiming live provider", async () => {
+  const result = await runBrowserSandboxProviderSelectionSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-selection-preflight-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1"
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.providerSelectionContractReady, true);
+  assert.equal(result.providerSelectionPreflightReady, true);
+  assert.equal(result.selectedProviderKnown, true);
+  assert.equal(result.selectedProviderKey, "custom_webrtc");
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_selection_preflight_ready");
+  assert.equal(result.hostedRemoteScoreMayPassOnlyAfterLiveVerified, true);
+  assert.deepEqual(result.requiredLiveProofBeforeHostedReady.includes("dashboard visual proof"), true);
 });
 
 test("hosted browser sandbox adapter harness proves lifecycle shape without claiming live provider", async () => {

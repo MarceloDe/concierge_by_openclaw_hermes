@@ -1143,6 +1143,32 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(http_adapter_score["score"], 85)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_selection_preflight_never_overclaims_live_provider(self):
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json",
+            "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER": "custom_webrtc",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY": "1"
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_provider_selection_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-selection", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn("https://", proof_text)
+        self.assertNotIn("Bearer ", proof_text)
+        proof = proof_response.json()
+        selection_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_selection")
+        selection_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_selection")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(selection_check["status"], "hosted_browser_sandbox_provider_selection_preflight_ready")
+        self.assertTrue(selection_check["preflightReady"])
+        self.assertEqual(selection_check["selectedProviderKey"], "custom_webrtc")
+        self.assertEqual(selection_score["score"], 90)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized(self):
         app = create_app(inline_tasks=True)
         app.state.node_client = FakeNodeRuntimeClient()

@@ -104,7 +104,11 @@ import {
   listWorkerContinuations,
   requestWorkerContinuation
 } from "../concierge/workerContinuations.mjs";
-import { resolveBrowserSandboxHostedProvider, validateBrowserSandboxProviderContract } from "../../scripts/browser-sandbox-provider-contract.mjs";
+import {
+  resolveBrowserSandboxHostedProvider,
+  validateBrowserSandboxProviderContract,
+  validateBrowserSandboxProviderSelectionContract
+} from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 const PORT = Number(process.env.PORT ?? 4173);
 const HOST = process.env.HOST ?? "127.0.0.1";
@@ -184,6 +188,7 @@ async function safeDeploymentContractStatus() {
     "compose.yaml",
     "compose.postgres.yaml",
     "scripts/browser-sandbox-provider-contract.mjs",
+    "scripts/browser-sandbox-provider-selection-smoke.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -196,6 +201,7 @@ async function safeDeploymentContractStatus() {
     "scripts/postgres-provider-backup-policy-smoke.mjs",
     "project/deployment/postgres-provider-backup-policy.example.json",
     "project/deployment/browser-sandbox-provider.example.json",
+    "project/deployment/browser-sandbox-provider.selection.example.json",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -279,7 +285,10 @@ async function safeDeploymentContractStatus() {
   const hostedBrowserSandboxContractReady = [
     "WEFELLA_BROWSER_SANDBOX_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_PROVIDER:-local_cdp}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_READY:-0}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE:-project/deployment/browser-sandbox-provider.selection.example.json}",
+    "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER:-}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY:-0}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -302,6 +311,25 @@ async function safeDeploymentContractStatus() {
     providerReady: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
     provider: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "local_cdp"
   });
+  const hostedBrowserSandboxProviderSelectionFile =
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE ?? "project/deployment/browser-sandbox-provider.selection.example.json";
+  const hostedBrowserSandboxProviderSelectionValidation = await validateBrowserSandboxProviderSelectionContract({
+    configPath: hostedBrowserSandboxProviderSelectionFile
+  }).catch((error) => ({
+    ok: false,
+    failures: [error.message],
+    sanitizedConfig: { candidateKeys: [] }
+  }));
+  const hostedBrowserSandboxSelectedProvider = process.env.WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER ?? null;
+  const hostedBrowserSandboxProviderSelectionReady =
+    Boolean(hostedBrowserSandboxProviderSelectionValidation.ok);
+  const hostedBrowserSandboxProviderSelectionPreflightReady =
+    hostedBrowserSandboxProviderSelectionReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY === "1" &&
+    Boolean(
+      hostedBrowserSandboxSelectedProvider &&
+      hostedBrowserSandboxProviderSelectionValidation.sanitizedConfig.candidateKeys.includes(hostedBrowserSandboxSelectedProvider)
+    );
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -354,6 +382,21 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxAdapterHarnessReady,
     hostedBrowserSandboxProviderResolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
     hostedBrowserSandboxProviderResolver,
+    hostedBrowserSandboxProviderSelectionReady,
+    hostedBrowserSandboxProviderSelectionPreflightReady,
+    hostedBrowserSandboxProviderSelection: {
+      status: hostedBrowserSandboxProviderSelectionPreflightReady
+        ? "hosted_browser_sandbox_provider_selection_preflight_ready"
+        : hostedBrowserSandboxProviderSelectionReady
+          ? "hosted_browser_sandbox_provider_selection_contract_ready"
+          : "hosted_browser_sandbox_provider_selection_missing_or_invalid",
+      selectedProviderKnown: hostedBrowserSandboxProviderSelectionPreflightReady,
+      selectedProviderKey: hostedBrowserSandboxProviderSelectionPreflightReady ? hostedBrowserSandboxSelectedProvider : null,
+      candidateKeys: hostedBrowserSandboxProviderSelectionValidation.sanitizedConfig.candidateKeys ?? [],
+      failures: hostedBrowserSandboxProviderSelectionValidation.failures ?? [],
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -375,6 +418,7 @@ async function safeDeploymentContractStatus() {
         ? "hosted_browser_sandbox_contract_valid_not_configured"
         : "hosted_browser_sandbox_contract_missing",
     browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
+    browserSandboxProviderSelectionCommand: "npm run sandbox:browser:provider-selection",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -463,6 +507,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider",
         status: deployment.hostedBrowserSandboxProviderStatus,
         target: "Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_selection",
+        status: deployment.hostedBrowserSandboxProviderSelection?.status,
+        target: "A provider-selection/preflight gate chooses a live sandbox candidate without storing provider URLs or secrets in Git."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -568,6 +617,19 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         liveVerified: deployment.hostedBrowserSandboxProviderResolver?.liveVerified ?? false,
         rawEndpointReturned: false,
         rawSecretReturned: false
+      },
+      {
+        key: "hosted_browser_sandbox_provider_selection",
+        status: deployment.hostedBrowserSandboxProviderSelection?.status,
+        ok: deployment.hostedBrowserSandboxProviderSelectionReady,
+        command: deployment.browserSandboxProviderSelectionCommand,
+        preflightReady: deployment.hostedBrowserSandboxProviderSelectionPreflightReady,
+        selectedProviderKnown: deployment.hostedBrowserSandboxProviderSelection?.selectedProviderKnown ?? false,
+        selectedProviderKey: deployment.hostedBrowserSandboxProviderSelection?.selectedProviderKey ?? null,
+        candidateKeys: deployment.hostedBrowserSandboxProviderSelection?.candidateKeys ?? [],
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",
@@ -686,6 +748,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderResolverReady ? 50 : 0,
         target: 50,
         status: deployment.hostedBrowserSandboxProviderResolver?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_selection",
+        score: deployment.hostedBrowserSandboxProviderSelectionPreflightReady
+          ? 90
+          : deployment.hostedBrowserSandboxProviderSelectionReady
+            ? 70
+            : 0,
+        target: 90,
+        status: deployment.hostedBrowserSandboxProviderSelection?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",

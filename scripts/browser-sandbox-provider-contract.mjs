@@ -7,6 +7,7 @@ export const BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION = "2026-06-17.browser-san
 
 const DEFAULT_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json";
 const HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.hosted-provider.example.json";
+const PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -116,6 +117,188 @@ function assertNoSecretLeak(payload) {
     rawSecretFilePathWritten: /\/run\/secrets\/|project\/deployment\/secrets\/\.runtime|\/var\/folders/i.test(text),
     rawOcrTextReturned: false,
     frameRecordingEnabled: text.includes("\"recordFrames\":true")
+  };
+}
+
+function sanitizeProviderSelectionConfig(config, configPath) {
+  return {
+    schemaVersion: config.schemaVersion ?? null,
+    status: config.status ?? null,
+    environment: config.environment ?? null,
+    candidateCount: Array.isArray(config.candidateProviders) ? config.candidateProviders.length : 0,
+    candidateKeys: Array.isArray(config.candidateProviders)
+      ? config.candidateProviders.map((candidate) => candidate.key).filter(Boolean)
+      : [],
+    recommendedNextProviderKey: config.recommendedNextProviderKey ?? null,
+    selectionPolicy: {
+      privateConfigRequired: Boolean(config.selectionPolicy?.privateConfigRequired),
+      publicApiOnly: Boolean(config.selectionPolicy?.publicApiOnly),
+      noProviderSecretsInGit: Boolean(config.selectionPolicy?.noProviderSecretsInGit),
+      liveProviderVerificationRequired: Boolean(config.selectionPolicy?.liveProviderVerificationRequired),
+      guiOcrProofRequired: Boolean(config.selectionPolicy?.guiOcrProofRequired),
+      hostedRemoteScoreMustRemainBlockedUntilLive: Boolean(config.selectionPolicy?.hostedRemoteScoreMustRemainBlockedUntilLive)
+    },
+    visualProof: {
+      dashboardRequired: Boolean(config.visualProof?.dashboardRequired),
+      mobilePwaRequired: Boolean(config.visualProof?.mobilePwaRequired),
+      liveWorkerBlockRequired: Boolean(config.visualProof?.liveWorkerBlockRequired),
+      ocrCaptionRequired: Boolean(config.visualProof?.ocrCaptionRequired)
+    },
+    source: {
+      configPath,
+      exampleConfig: configPath === PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH
+    }
+  };
+}
+
+function validateProviderSelectionConfig(config, configPath) {
+  const failures = [];
+  if (config.schemaVersion !== "brainstyworkers.browser-sandbox-provider-selection.v1") failures.push("selection_schema_version_missing_or_unknown");
+  if (config.status !== "selection_contract_only") failures.push("selection_status_must_be_contract_only");
+  if (!["staging", "production"].includes(config.environment)) failures.push("selection_environment_must_be_staging_or_production");
+  if (!Array.isArray(config.candidateProviders) || config.candidateProviders.length < 3) failures.push("selection_requires_three_or_more_candidates");
+  const candidateKeys = new Set();
+  for (const candidate of Array.isArray(config.candidateProviders) ? config.candidateProviders : []) {
+    if (!ALLOWED_PROVIDERS.has(candidate.key)) failures.push(`selection_candidate_not_allowed:${candidate.key ?? "missing"}`);
+    if (candidateKeys.has(candidate.key)) failures.push(`selection_candidate_duplicate:${candidate.key}`);
+    candidateKeys.add(candidate.key);
+    const capabilities = candidate.requiredCapabilities ?? {};
+    for (const capability of [
+      "ephemeralSessions",
+      "streamFrames",
+      "screenshot",
+      "ocrCaption",
+      "humanTakeover",
+      "approvedInputRelay",
+      "teardown",
+      "offsiteFailClosed",
+      "providerHealthEndpoint"
+    ]) {
+      if (capabilities[capability] !== true) failures.push(`selection_candidate_missing_capability:${candidate.key}:${capability}`);
+    }
+    if (candidate.secretsInGit === true) failures.push(`selection_candidate_secrets_in_git:${candidate.key}`);
+    if (candidate.rawEndpointInGit === true) failures.push(`selection_candidate_raw_endpoint_in_git:${candidate.key}`);
+  }
+  if (config.recommendedNextProviderKey && !candidateKeys.has(config.recommendedNextProviderKey)) {
+    failures.push("selection_recommended_provider_not_in_candidates");
+  }
+  const policy = config.selectionPolicy ?? {};
+  for (const [key, expected] of [
+    ["privateConfigRequired", true],
+    ["publicApiOnly", true],
+    ["noProviderSecretsInGit", true],
+    ["liveProviderVerificationRequired", true],
+    ["guiOcrProofRequired", true],
+    ["hostedRemoteScoreMustRemainBlockedUntilLive", true]
+  ]) {
+    if (policy[key] !== expected) failures.push(`selection_policy_${key}_required`);
+  }
+  const visualProof = config.visualProof ?? {};
+  for (const [key, expected] of [
+    ["dashboardRequired", true],
+    ["mobilePwaRequired", true],
+    ["liveWorkerBlockRequired", true],
+    ["ocrCaptionRequired", true]
+  ]) {
+    if (visualProof[key] !== expected) failures.push(`selection_visual_${key}_required`);
+  }
+  const serialized = JSON.stringify(config);
+  if (/https?:\/\/[^"\\\s]+/i.test(serialized)) failures.push("selection_raw_provider_url_forbidden");
+  for (const candidate of Array.isArray(config.candidateProviders) ? config.candidateProviders : []) {
+    for (const value of Object.values(candidate)) {
+      if (typeof value === "string" && /bearer\s+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]/i.test(value)) {
+        failures.push(`selection_secret_literal_forbidden:${candidate.key ?? "missing"}`);
+      }
+    }
+  }
+  return {
+    ok: failures.length === 0,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    configPath,
+    failures,
+    sanitizedConfig: sanitizeProviderSelectionConfig(config, configPath)
+  };
+}
+
+export async function validateBrowserSandboxProviderSelectionContract({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH
+} = {}) {
+  const text = await readFile(resolve(configPath), "utf8");
+  return validateProviderSelectionConfig(JSON.parse(text), configPath);
+}
+
+export async function runBrowserSandboxProviderSelectionSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-selection-smoke.json"),
+  env = process.env
+} = {}) {
+  const text = await readFile(resolve(configPath), "utf8");
+  const config = JSON.parse(text);
+  const validation = validateProviderSelectionConfig(config, configPath);
+  const candidateKeys = new Set(validation.sanitizedConfig.candidateKeys);
+  const selectedProvider = env.WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER ?? null;
+  const selectedProviderKnown = Boolean(selectedProvider && candidateKeys.has(selectedProvider));
+  const selectionGateEnabled = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY === "1";
+  const preflightReady = Boolean(validation.ok && selectionGateEnabled && selectedProviderKnown);
+  const result = {
+    ok: validation.ok,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: preflightReady
+      ? "hosted_browser_sandbox_provider_selection_preflight_ready"
+      : "hosted_browser_sandbox_provider_selection_contract_ready",
+    providerSelectionContractReady: validation.ok,
+    providerSelectionPreflightReady: preflightReady,
+    selectedProviderKnown,
+    selectedProviderKey: selectedProviderKnown ? selectedProvider : null,
+    hostedProviderReady: false,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    validation,
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_selection",
+      scoreKey: "hosted_browser_sandbox_provider_selection",
+      selectionFileEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE",
+      selectedProviderEnv: "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER",
+      preflightReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY",
+      liveVerifiedEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    requiredLiveProofBeforeHostedReady: [
+      "private provider config outside Git",
+      "provider HTTPS/WebRTC stream",
+      "screenshot ref",
+      "OCR/caption ref",
+      "approval-gated takeover",
+      "redacted approved input relay",
+      "offsite navigation fail-closed",
+      "teardown",
+      "dashboard visual proof",
+      "mobile PWA live worker proof"
+    ],
+    safety: {
+      ...assertNoSecretLeak(validation),
+      rawEndpointUrlWritten: /https?:\/\/[^"\\\s]+/i.test(JSON.stringify(resultSafeForLeakCheck(config))),
+      rawSecretReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: false
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+function resultSafeForLeakCheck(config) {
+  return {
+    ...config,
+    candidateProviders: Array.isArray(config.candidateProviders)
+      ? config.candidateProviders.map((candidate) => ({
+        key: candidate.key,
+        status: candidate.status,
+        requiredCapabilities: candidate.requiredCapabilities,
+        secretsInGit: candidate.secretsInGit,
+        rawEndpointInGit: candidate.rawEndpointInGit
+      }))
+      : []
   };
 }
 

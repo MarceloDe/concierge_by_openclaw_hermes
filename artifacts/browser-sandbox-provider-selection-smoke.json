@@ -1,0 +1,77 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_provider_selection_contract_ready",
+  "providerSelectionContractReady": true,
+  "providerSelectionPreflightReady": false,
+  "selectedProviderKnown": false,
+  "selectedProviderKey": null,
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.selection.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider-selection.v1",
+      "status": "selection_contract_only",
+      "environment": "staging",
+      "candidateCount": 3,
+      "candidateKeys": [
+        "custom_webrtc",
+        "browserbase",
+        "vercel_sandbox"
+      ],
+      "recommendedNextProviderKey": "custom_webrtc",
+      "selectionPolicy": {
+        "privateConfigRequired": true,
+        "publicApiOnly": true,
+        "noProviderSecretsInGit": true,
+        "liveProviderVerificationRequired": true,
+        "guiOcrProofRequired": true,
+        "hostedRemoteScoreMustRemainBlockedUntilLive": true
+      },
+      "visualProof": {
+        "dashboardRequired": true,
+        "mobilePwaRequired": true,
+        "liveWorkerBlockRequired": true,
+        "ocrCaptionRequired": true
+      },
+      "source": {
+        "configPath": "project/deployment/browser-sandbox-provider.selection.example.json",
+        "exampleConfig": true
+      }
+    }
+  },
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_selection",
+    "scoreKey": "hosted_browser_sandbox_provider_selection",
+    "selectionFileEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE",
+    "selectedProviderEnv": "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER",
+    "preflightReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY",
+    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+  },
+  "requiredLiveProofBeforeHostedReady": [
+    "private provider config outside Git",
+    "provider HTTPS/WebRTC stream",
+    "screenshot ref",
+    "OCR/caption ref",
+    "approval-gated takeover",
+    "redacted approved input relay",
+    "offsite navigation fail-closed",
+    "teardown",
+    "dashboard visual proof",
+    "mobile PWA live worker proof"
+  ],
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawSecretReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "liveProviderOverclaimed": false
+  }
+}
