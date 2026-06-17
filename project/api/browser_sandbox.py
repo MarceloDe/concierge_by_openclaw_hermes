@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
+import os
 from typing import Any
 from uuid import uuid4
 
 
 SANDBOX_CONTRACT_VERSION = "browser-sandbox-provider.v1"
+HOSTED_SANDBOX_CONTRACT_VERSION = "brainstyworkers.browser-sandbox-provider.v1"
 
 
 def now_iso() -> str:
@@ -197,7 +200,117 @@ class LocalCdpBrowserSandboxProvider(BrowserSandboxProvider):
         )
 
 
+class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
+    provider_key = "hosted_remote"
+
+    def __init__(self, *, config_path: str | None = None, ready: bool | None = None):
+        self.config_path = config_path or os.environ.get(
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE",
+            "project/deployment/browser-sandbox-provider.example.json"
+        )
+        self.ready = bool(ready if ready is not None else os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_READY") == "1")
+
+    def describe(self) -> dict[str, Any]:
+        return describe_browser_sandbox_provider_contract(config_path=self.config_path, ready=self.ready)
+
+    async def create_session(
+        self,
+        *,
+        node_client: Any,
+        user_id: str,
+        session_id: str,
+        target_url: str | None = None,
+        options: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        contract = self.describe()
+        if not contract["ready"]:
+            raise BrowserSandboxError(
+                "Hosted browser sandbox provider is not configured. "
+                "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1 after hosted proof passes."
+            )
+        raise BrowserSandboxError("Hosted browser sandbox provider adapter is configured but not implemented in this local runtime.")
+
+    async def request_takeover(self, *, node_client: Any, browser_session: dict[str, Any], reason: str | None = None) -> dict[str, Any]:
+        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+
+    async def grant_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str, approved_by: str | None = None) -> dict[str, Any]:
+        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+
+    async def end_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str) -> dict[str, Any]:
+        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+
+    async def send_input(
+        self,
+        *,
+        node_client: Any,
+        browser_session: dict[str, Any],
+        takeover_id: str,
+        grant_token: str,
+        input_payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        raise BrowserSandboxError("Hosted browser sandbox input is unavailable until the hosted adapter is implemented.")
+
+
+def describe_browser_sandbox_provider_contract(
+    *,
+    provider: str | None = None,
+    config_path: str | None = None,
+    ready: bool | None = None
+) -> dict[str, Any]:
+    selected_provider = provider or os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER", "local_cdp")
+    selected_config_path = config_path or os.environ.get(
+        "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE",
+        "project/deployment/browser-sandbox-provider.example.json"
+    )
+    selected_ready = bool(ready if ready is not None else os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_READY") == "1")
+    config = None
+    config_ok = False
+    failures: list[str] = []
+    try:
+        with open(selected_config_path, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+    except Exception as exc:
+        failures.append(f"config_unreadable:{exc}")
+    if isinstance(config, dict):
+        config_ok = (
+            config.get("schemaVersion") == HOSTED_SANDBOX_CONTRACT_VERSION
+            and config.get("provider") == "hosted_remote"
+            and config.get("endpointRef")
+            and not str(config.get("endpointRef")).startswith(("http://", "https://"))
+            and config.get("approvalPolicy", {}).get("agentCredentialEntryAllowed") is False
+            and config.get("approvalPolicy", {}).get("externalWriteActionsAllowed") is False
+            and config.get("sessionPolicy", {}).get("recordFrames") is False
+            and config.get("sessionPolicy", {}).get("persistRawOcrText") is False
+        )
+        if not config_ok:
+            failures.append("config_contract_failed")
+    return {
+        "version": HOSTED_SANDBOX_CONTRACT_VERSION,
+        "provider": selected_provider,
+        "configPath": selected_config_path,
+        "configOk": config_ok,
+        "ready": bool(selected_provider == "hosted_remote" and selected_ready and config_ok and selected_config_path != "project/deployment/browser-sandbox-provider.example.json"),
+        "status": (
+            "hosted_browser_sandbox_provider_ready"
+            if selected_provider == "hosted_remote" and selected_ready and config_ok and selected_config_path != "project/deployment/browser-sandbox-provider.example.json"
+            else "local_cdp_default" if selected_provider == "local_cdp"
+            else "hosted_browser_sandbox_contract_valid_not_configured" if config_ok
+            else "hosted_browser_sandbox_contract_missing_or_invalid"
+        ),
+        "failures": failures,
+        "safety": {
+            "rawEndpointReturned": False,
+            "rawOcrTextReturned": False,
+            "agentCredentialEntryAllowed": False,
+            "externalWriteActionsAllowed": False
+        }
+    }
+
+
 def get_browser_sandbox_provider(provider: str | None) -> BrowserSandboxProvider:
     if provider in {None, "local_cdp"}:
         return LocalCdpBrowserSandboxProvider()
+    if provider == "hosted_remote":
+        return HostedRemoteBrowserSandboxProvider()
     raise BrowserSandboxError(f"Unsupported browser sandbox provider: {provider}")

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .auth import PROVIDER_AUTH_MODES, UserPrincipal, auth_metadata, auth_mode, create_access_token, local_auth_enabled, require_operator, require_user
-from .browser_sandbox import BrowserSandboxError, get_browser_sandbox_provider
+from .browser_sandbox import BrowserSandboxError, describe_browser_sandbox_provider_contract, get_browser_sandbox_provider
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
 from .models import (
     ChatAcceptedResponse,
@@ -913,6 +913,7 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
     auth_ready = bool(checks.get("auth", {}).get("ok"))
     cors_ready = bool(checks.get("cors", {}).get("ok"))
     uploads_ready = bool(checks.get("uploads", {}).get("ok"))
+    browser_sandbox_contract = describe_browser_sandbox_provider_contract()
     status = "passing" if node_ready and auth_ready and cors_ready and uploads_ready else "blocked"
     return {
         "version": VERSION,
@@ -931,7 +932,8 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "auth", **checks.get("auth", {})},
             {"key": "cors", **checks.get("cors", {})},
             {"key": "uploads", **checks.get("uploads", {})},
-            {"key": "source_grounding", **checks.get("source_grounding", {})}
+            {"key": "source_grounding", **checks.get("source_grounding", {})},
+            {"key": "hosted_browser_sandbox_provider", **browser_sandbox_contract}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
@@ -943,7 +945,13 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "api_readiness", "score": 90 if node_ready and auth_ready else 50, "target": 90},
             {"key": "database_product_ready_architecture", "score": 100 if uploads_ready else 75, "target": 100},
             {"key": "gui_visual_test_required", "score": 0, "target": 100, "status": "must_run_after_server_start"},
-            {"key": "remote_browser_controls", "score": 90 if node_ready else 40, "target": 90}
+            {"key": "remote_browser_controls", "score": 90 if node_ready else 40, "target": 90},
+            {
+                "key": "hosted_remote_browser_sandbox",
+                "score": 100 if browser_sandbox_contract.get("ready") else 0,
+                "target": 100,
+                "status": browser_sandbox_contract.get("status")
+            }
         ],
         "safety": {
             "actorUserId": actor_user_id,

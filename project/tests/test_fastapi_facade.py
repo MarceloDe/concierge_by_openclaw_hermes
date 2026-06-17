@@ -906,6 +906,30 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(stream_response.status_code, 200)
         self.assertIn("runtime.stream.opened", stream_response.text)
 
+    def test_hosted_browser_sandbox_provider_fails_closed_until_configured(self):
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        client = TestClient(app)
+        headers = self.bearer_headers("v1_hosted_browser_user")
+
+        browser_response = client.post(
+            "/api/v1/browser/sessions",
+            headers=headers,
+            json={"session_id": "session_hosted_browser", "target_url": "https://health.aetna.com/", "provider": "hosted_remote"}
+        )
+        self.assertEqual(browser_response.status_code, 400)
+        self.assertIn("Hosted browser sandbox provider is not configured", browser_response.json()["detail"])
+
+        proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider", headers=headers)
+        self.assertEqual(proof_response.status_code, 200)
+        proof = proof_response.json()
+        hosted_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(hosted_check["status"], "local_cdp_default")
+        self.assertFalse(hosted_check["safety"]["rawOcrTextReturned"])
+        self.assertFalse(hosted_check["safety"]["agentCredentialEntryAllowed"])
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_upload_requires_bearer_token(self):
         response = self.client.post(
             "/api/uploads",

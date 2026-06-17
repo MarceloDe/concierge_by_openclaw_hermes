@@ -150,14 +150,14 @@ class V1ApprovalRequest(BaseModel):
 class V1BrowserSessionRequest(BaseModel):
     session_id: str = Field(min_length=1)
     target_url: str | None = None
-    provider: Literal["local_cdp"] = "local_cdp"
+    provider: Literal["local_cdp", "hosted_remote"] = "local_cdp"
     options: dict[str, Any] = Field(default_factory=dict)
 
 
 class V1BrowserSessionResponse(BaseModel):
     version: str
     browser_session_id: str
-    provider: Literal["local_cdp"]
+    provider: Literal["local_cdp", "hosted_remote"]
     session_id: str
     user_id: str
     stream_url: str

@@ -2230,3 +2230,26 @@ Remaining follow-up:
 - Create the real provider policy file outside Git after selecting the hosted database provider.
 - Configure provider-native backup/PITR and secret management.
 - Run the provider policy smoke with `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE` pointing at the real policy and set `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1` only after hosted proof passes.
+
+## Hosted Browser Sandbox Provider Cycle - 2026-06-17
+
+Goal:
+- Promote the remote browser sandbox from local CDP proof to a hosted-provider-ready contract without claiming a provider is already configured.
+
+Implemented slice:
+- Add `project/deployment/browser-sandbox-provider.example.json` as the required hosted sandbox policy shape.
+- Add `scripts/browser-sandbox-provider-contract.mjs` and `npm run sandbox:browser:provider-contract`.
+- Add `src/tests/browser-sandbox-provider-contract.test.mjs` and wire it into `npm run test:docker:contract`.
+- Extend FastAPI `get_browser_sandbox_provider()` to recognize `hosted_remote` and fail closed until configured.
+- Expose `hosted_browser_sandbox_provider` and `hosted_remote_browser_sandbox` through FastAPI proof and the Node dashboard proof.
+
+Acceptance:
+- The smoke validates provider, environment, endpoint reference, secret source, stream transport, approval-gated human-only input, ephemeral sessions, no frame recording, no raw OCR persistence, read-only approval, takeover approval, offsite fail-closed behavior, and audit redaction.
+- The checked-in example config never counts as hosted provider readiness.
+- FastAPI `/api/v1/browser/sessions` accepts the `hosted_remote` enum but returns a setup-required error until provider configuration is supplied.
+- Dashboard/API proof reports hosted sandbox provider status separately from the existing passing local-CDP remote-browser control score.
+
+Remaining follow-up:
+- Select and configure the hosted browser sandbox provider.
+- Supply the real provider config outside Git with `WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE`.
+- Set `WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote` and `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1` only after hosted stream, screenshot/OCR, takeover, input, and teardown proof passes.

@@ -517,3 +517,34 @@ Score decision:
 - `database_provider_backup_policy` remains `0 / 100` until a non-example hosted provider policy file is configured and `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1`.
 - The example policy validates the contract and intentionally reports `provider_policy_contract_valid_not_hosted`.
 - Remaining production work is selecting the hosted provider, configuring provider-native backup/PITR and secret management, then running the policy smoke against the private provider policy.
+
+## Phase 15 Hosted Browser Sandbox Provider Update
+
+Implementation:
+- Added `project/deployment/browser-sandbox-provider.example.json`.
+- Added `scripts/browser-sandbox-provider-contract.mjs` and package script `sandbox:browser:provider-contract`.
+- Added `src/tests/browser-sandbox-provider-contract.test.mjs` and included it in `npm run test:docker:contract`.
+- FastAPI now accepts the `hosted_remote` browser provider enum and fails closed until hosted provider configuration exists.
+- Node and FastAPI proof payloads now expose `hosted_browser_sandbox_provider` and `hosted_remote_browser_sandbox`.
+
+Verification:
+- Focused JS syntax checks passed.
+- Python compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 3/3 tests.
+- Focused FastAPI hosted-provider fail-closed test passed.
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 19/19 tests.
+- FastAPI facade regression passed with 35 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- In-app browser proof loaded the dashboard at `http://127.0.0.1:4200/?phase=hosted-browser-sandbox-provider`, clicked `Load Connector Proof`, verified hosted sandbox proof strings, and found 0 console errors.
+- Screenshot/proof artifacts:
+  - `artifacts/phase15-hosted-browser-sandbox-provider-dashboard-proof.png`
+  - `artifacts/phase15-hosted-browser-sandbox-provider-proof.json`
+  - `artifacts/browser-sandbox-provider-contract-smoke.json`
+
+Score decision:
+- Existing `remote_browser_controls` remains `90 / 90` for the local-CDP live-frame path.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real hosted provider config is supplied and `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1`.
+- The example provider contract intentionally reports `hosted_browser_sandbox_contract_valid_not_configured`.

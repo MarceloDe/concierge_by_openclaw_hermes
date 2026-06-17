@@ -16,6 +16,7 @@ const REQUIRED_FILES = [
   "apps/mobile-next/Dockerfile",
   "compose.yaml",
   "compose.postgres.yaml",
+  "scripts/browser-sandbox-provider-contract.mjs",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
@@ -27,6 +28,7 @@ const REQUIRED_FILES = [
   "scripts/postgres-provider-backup-policy-smoke.mjs",
   "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
   "project/deployment/postgres-provider-backup-policy.example.json",
+  "project/deployment/browser-sandbox-provider.example.json",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
   "project/db/postgres-init/001_storage_readiness.sql",
@@ -36,6 +38,7 @@ const REQUIRED_FILES = [
   "src/concierge/workerLeases.mjs",
   "src/concierge/storageReadiness.mjs",
   "src/tests/deployment-storage.test.mjs",
+  "src/tests/browser-sandbox-provider-contract.test.mjs",
   "src/tests/postgres-production-profile-contract.test.mjs",
   "src/tests/postgres-production-profile-live-contract.test.mjs",
   "src/tests/postgres-backup-runbook-contract.test.mjs",
@@ -56,6 +59,9 @@ const COMPOSE_FRAGMENTS = [
   "postgres:",
   "postgres:16-alpine",
   "WEFELLA_NODE_RUNTIME_URL: http://node-runtime:4173",
+  "WEFELLA_BROWSER_SANDBOX_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_PROVIDER:-local_cdp}",
+  "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_READY:-0}",
+  "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}",
   "BRAINSTY_CONNECTOR_API_BASE: http://fastapi:8000",
   "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
@@ -144,7 +150,7 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
         "compose.postgres.yaml"
       ]
     ],
-    ["Dockerfile.api", apiDockerfile, ["python:3.12-slim", "project/requirements.txt", "USER app", "HEALTHCHECK", "/api/v1/health"]],
+    ["Dockerfile.api", apiDockerfile, ["python:3.12-slim", "project/requirements.txt", "USER app", "HEALTHCHECK", "/api/v1/health", "WEFELLA_BROWSER_SANDBOX_PROVIDER"]],
     ["apps/mobile-next/Dockerfile", mobileDockerfile, ["npm run build", "BRAINSTY_CONNECTOR_API_BASE=http://fastapi:8000", "USER node", "HEALTHCHECK", "server.js"]]
   ]) {
     const missing = expected.filter((fragment) => !body.includes(fragment));
@@ -198,6 +204,12 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       productionProfileLiveCommand: "npm run storage:postgres:profile-live-smoke",
       backupRunbookCommand: "npm run storage:postgres:backup-runbook-smoke",
       providerBackupPolicyCommand: "npm run storage:postgres:provider-backup-policy-smoke"
+    },
+    browserSandbox: {
+      defaultProvider: "local_cdp",
+      hostedProviderContract: "project/deployment/browser-sandbox-provider.example.json",
+      providerContractCommand: "npm run sandbox:browser:provider-contract",
+      readyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY"
     },
     postgresProductionProfile,
     graphitiRuntime: {

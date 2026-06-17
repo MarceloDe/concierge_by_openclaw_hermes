@@ -32,6 +32,7 @@
     "graphiti:falkordb": "bash scripts/start-graphiti-falkordb.sh",
     "docker:config": "docker compose config",
     "docker:contract": "node scripts/compose-contract.mjs",
+    "sandbox:browser:provider-contract": "node scripts/browser-sandbox-provider-contract.mjs",
     "docker:memory:smoke": "node scripts/compose-memory-smoke.mjs",
     "storage:contract": "node scripts/storage-contract.mjs",
     "storage:postgres:smoke": "node scripts/storage-contract.mjs --live",
@@ -44,7 +45,7 @@
     "storage:postgres:backup-runbook-smoke": "node scripts/postgres-backup-runbook-smoke.mjs",
     "storage:postgres:provider-backup-policy-smoke": "node scripts/postgres-provider-backup-policy-smoke.mjs",
     "test:db:postgres": "node --test src/tests/postgres-store-contract.test.mjs src/tests/postgres-production-readiness-contract.test.mjs src/tests/worker-leases.test.mjs",
-    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs src/tests/postgres-production-profile-contract.test.mjs src/tests/postgres-production-profile-live-contract.test.mjs src/tests/postgres-backup-runbook-contract.test.mjs src/tests/postgres-provider-backup-policy-contract.test.mjs",
+    "test:docker:contract": "node --test src/tests/deployment-compose.test.mjs src/tests/deployment-graphiti-compose.test.mjs src/tests/deployment-storage.test.mjs src/tests/postgres-production-profile-contract.test.mjs src/tests/postgres-production-profile-live-contract.test.mjs src/tests/postgres-backup-runbook-contract.test.mjs src/tests/postgres-provider-backup-policy-contract.test.mjs src/tests/browser-sandbox-provider-contract.test.mjs",
     "build": "node src/server/build-check.mjs"
   },
   "engines": {

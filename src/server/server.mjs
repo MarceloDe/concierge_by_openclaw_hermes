@@ -174,6 +174,7 @@ async function safeDeploymentContractStatus() {
     "apps/mobile-next/Dockerfile",
     "compose.yaml",
     "compose.postgres.yaml",
+    "scripts/browser-sandbox-provider-contract.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -185,6 +186,7 @@ async function safeDeploymentContractStatus() {
     "scripts/postgres-backup-runbook-smoke.mjs",
     "scripts/postgres-provider-backup-policy-smoke.mjs",
     "project/deployment/postgres-provider-backup-policy.example.json",
+    "project/deployment/browser-sandbox-provider.example.json",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -265,6 +267,18 @@ async function safeDeploymentContractStatus() {
     "source: brainsty_database_url",
     "file: ${BRAINSTY_DATABASE_URL_SECRET_FILE:-./project/deployment/secrets/database-url.example}"
   ].every((fragment) => postgresProfileFile.includes(fragment));
+  const hostedBrowserSandboxContractReady = [
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_PROVIDER:-local_cdp}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}"
+  ].every((fragment) => composeFile.includes(fragment));
+  const hostedBrowserSandboxProviderConfigFile =
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
+  const hostedBrowserSandboxProviderSelected = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER === "hosted_remote";
+  const hostedBrowserSandboxProviderReady =
+    hostedBrowserSandboxProviderSelected &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
+    hostedBrowserSandboxProviderConfigFile !== "project/deployment/browser-sandbox-provider.example.json";
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -289,6 +303,14 @@ async function safeDeploymentContractStatus() {
     postgresProductionProfileStatus: postgresProductionProfileReady
       ? "postgres_docker_secret_runtime_profile_present"
       : "postgres_docker_secret_runtime_profile_missing",
+    hostedBrowserSandboxContractReady,
+    hostedBrowserSandboxProviderReady,
+    hostedBrowserSandboxProviderStatus: hostedBrowserSandboxProviderReady
+      ? "hosted_browser_sandbox_provider_ready"
+      : hostedBrowserSandboxContractReady
+        ? "hosted_browser_sandbox_contract_valid_not_configured"
+        : "hosted_browser_sandbox_contract_missing",
+    browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
@@ -340,8 +362,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "browser_sandbox_gateway",
-        status: "implemented_local_cdp_adapter",
-        target: "Live worker browser sessions are represented as remote sandbox sessions."
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        target: "Live worker browser sessions are represented as remote sandbox sessions, with hosted provider readiness separate from local CDP proof."
       },
       {
         key: "dashboard_visual_proof",
@@ -367,6 +389,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "postgres_docker_secret_runtime_profile",
         status: deployment.postgresProductionProfileStatus,
         target: "A dedicated compose override selects Postgres runtime through a Docker-secret database URL without bypassing proof gates."
+      },
+      {
+        key: "hosted_browser_sandbox_provider",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        target: "Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract."
       }
     ],
     checks: [
@@ -440,6 +467,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         ok: deployment.postgresProductionProfileReady,
         command: deployment.postgresProductionProfileLiveCommand
       },
+      {
+        key: "hosted_browser_sandbox_provider",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        ok: deployment.hostedBrowserSandboxProviderReady,
+        command: deployment.browserSandboxProviderContractCommand
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -500,6 +533,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },
+      {
+        key: "hosted_remote_browser_sandbox",
+        score: deployment.hostedBrowserSandboxProviderReady ? 100 : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderStatus
+      },
       { key: "approval_audit_scaffolding", score: 85, target: 85, status: "pass_existing_gate" }
     ],
     safety: {

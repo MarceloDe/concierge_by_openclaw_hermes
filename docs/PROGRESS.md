@@ -7073,3 +7073,76 @@ Known risks or gaps:
 - A real hosted provider has not been selected in this repo.
 - Provider-native backup/PITR has not been configured.
 - A private provider policy file and deployment secret manager must be supplied outside Git before this score can pass.
+
+## Phase 15 Hosted Browser Sandbox Provider Update
+
+Status: Implemented and contract-smoked. Hosted browser provider configuration remains intentionally not claimed.
+
+Slice name:
+- Hosted remote browser sandbox provider contract and fail-closed readiness gate.
+
+Code changes:
+- Added `project/deployment/browser-sandbox-provider.example.json`.
+- Added `scripts/browser-sandbox-provider-contract.mjs`.
+- Added package script `sandbox:browser:provider-contract`.
+- Added `src/tests/browser-sandbox-provider-contract.test.mjs`.
+- Updated compose defaults, FastAPI image env, FastAPI browser provider selection, FastAPI proof, Node dashboard proof, build guard, compose contract, and deployment tests.
+
+Safety decision:
+- Local CDP remains the default browser sandbox provider.
+- `hosted_remote` is accepted by the public API schema but returns a setup-required error until a real non-example provider config and readiness gate are present.
+- The example config validates the provider contract but cannot mark hosted readiness.
+- Agent credential entry, external write actions, frame recording, and raw OCR persistence remain disabled in the provider contract.
+
+Verification commands:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/server/build-check.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py project/api/models.py`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_fails_closed_until_configured`
+- `npm run sandbox:browser:provider-contract`
+- `npm run build`
+- `node --test src/tests/final-system-verification-report.test.mjs`
+- `npm run test:docker:contract`
+- `python3 -m unittest project.tests.test_fastapi_facade`
+- `npm run test:local`
+- In-app browser proof at `http://127.0.0.1:4200/?phase=hosted-browser-sandbox-provider`
+- Headless Chrome DevTools screenshot capture after clicking `Load Connector Proof`
+
+Verification result:
+- Focused syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 3/3 tests.
+- Focused FastAPI fail-closed hosted provider test passed.
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 19/19 tests.
+- FastAPI facade regression passed with 35 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- The smoke reported:
+  - `status=hosted_browser_sandbox_contract_valid_not_configured`;
+  - `hostedProviderReady=false`;
+  - no validation failures;
+  - `rawEndpointUrlWritten=false`;
+  - `rawSecretFilePathWritten=false`;
+  - `rawOcrTextReturned=false`;
+  - `frameRecordingEnabled=false`;
+  - `externalActions=false`;
+  - `phiSeeded=false`;
+  - `agentCredentialEntryAllowed=false`.
+- API proof at `/api/proof/runs/hosted-browser-sandbox-provider` reported:
+  - `hosted_browser_sandbox_provider=hosted_browser_sandbox_contract_valid_not_configured`;
+  - `hosted_remote_browser_sandbox=0 / 100`;
+  - `remote_browser_controls=90 / 90`.
+- In-app browser verification passed with required hosted-browser-sandbox proof strings present in the dashboard DOM and 0 console errors.
+- Screenshot and proof artifacts:
+  - `artifacts/phase15-hosted-browser-sandbox-provider-dashboard-proof.png`;
+  - `artifacts/phase15-hosted-browser-sandbox-provider-proof.json`;
+  - `artifacts/browser-sandbox-provider-contract-smoke.json`.
+
+Known risks or gaps:
+- A hosted browser sandbox provider has not been selected in this repo.
+- No hosted WebRTC/SSE provider credentials are configured.
+- Real hosted provider proof still needs create-session, stream-frame, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.

@@ -2119,3 +2119,22 @@ This lets the project verify the exact production policy shape without storing s
 
 Cost of changing later:
 Low. The selected provider can provide a private policy file through `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_FILE` and set `BRAINSTY_POSTGRES_PROVIDER_BACKUP_POLICY_READY=1` after provider-native backup/PITR proof, without changing the connector API or Postgres adapter.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Contract
+
+Context:
+The MVP already has a working local-CDP browser stream, screenshot fallback, takeover, and human-only input relay. The remaining production gap is a hosted sandbox/WebRTC provider. No provider or credentials are configured in the repo, so implementing a real hosted adapter would either block or overclaim readiness.
+
+Options considered:
+- Integrate a hosted sandbox immediately.
+- Keep local CDP only and leave hosted sandbox undefined.
+- Add a hosted provider contract and fail-closed FastAPI provider path now, while keeping local CDP as the default provider.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.example.json`, `npm run sandbox:browser:provider-contract`, FastAPI `hosted_remote` recognition, and separate proof keys `hosted_browser_sandbox_provider` and `hosted_remote_browser_sandbox`.
+
+Reason:
+This makes the hosted sandbox requirement testable without weakening the current local-CDP proof. Remote clients still use the same `/api/v1/browser/*` contract, and a later provider can replace the backend adapter without changing the PWA or public API.
+
+Cost of changing later:
+Low to moderate. The real provider implementation can satisfy the same create-session, stream, screenshot/OCR, takeover, input, and teardown contract. Transport may move to WebRTC, but ownership checks and approval gates remain stable.

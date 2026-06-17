@@ -1844,3 +1844,56 @@ Current proof status:
   - `artifacts/phase14-postgres-provider-backup-policy-dashboard-proof.png`;
   - `artifacts/phase14-postgres-provider-backup-policy-proof.json`;
   - `artifacts/postgres-provider-backup-policy-smoke.json`.
+
+## Hosted Browser Sandbox Provider Acceptance
+
+This slice is acceptable when:
+
+- A hosted browser sandbox provider example exists without storing provider endpoints, credentials, screenshots, OCR text, or PHI.
+- `npm run sandbox:browser:provider-contract` validates:
+  - provider allowlist;
+  - staging/production environment;
+  - endpoint reference is not a raw URL;
+  - managed or file-backed secret source;
+  - WebRTC or SSE-frame stream transport;
+  - approval-gated human-only input relay;
+  - screenshot and OCR/caption contract;
+  - user-scoped and session-scoped ephemeral browser sessions;
+  - max session and idle timeout limits;
+  - frame recording disabled;
+  - raw OCR persistence disabled;
+  - read-only approval required;
+  - human takeover approval required;
+  - agent credential entry blocked;
+  - external write actions blocked;
+  - network allowlist, offsite fail-closed, and credential pages user-only;
+  - lifecycle/takeover audit events and redaction.
+- FastAPI accepts `provider=hosted_remote` at the schema level but fails closed until the hosted provider config is non-example and readiness is explicitly set.
+- Connector proof exposes `hosted_browser_sandbox_provider` and `hosted_remote_browser_sandbox`.
+- The local CDP adapter remains the default working provider.
+
+Current proof status:
+
+- Focused JS syntax checks passed.
+- Python compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 3/3 tests.
+- Focused FastAPI fail-closed hosted provider test passed.
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 19/19 tests.
+- FastAPI facade regression passed with 35 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- The smoke reported:
+  - `status=hosted_browser_sandbox_contract_valid_not_configured`;
+  - `hostedProviderReady=false`;
+  - `rawEndpointUrlWritten=false`;
+  - `rawSecretFilePathWritten=false`;
+  - `rawOcrTextReturned=false`;
+  - `frameRecordingEnabled=false`;
+  - `externalActions=false`;
+  - `phiSeeded=false`;
+  - `agentCredentialEntryAllowed=false`.
+- API proof at `/api/proof/runs/hosted-browser-sandbox-provider` reported `hosted_browser_sandbox_provider=hosted_browser_sandbox_contract_valid_not_configured`, `hosted_remote_browser_sandbox=0 / 100`, and `remote_browser_controls=90 / 90`.
+- In-app browser verification passed with required hosted-browser-sandbox proof strings present in the dashboard DOM and 0 console errors.
+- Visual/proof artifacts were saved at `artifacts/phase15-hosted-browser-sandbox-provider-dashboard-proof.png`, `artifacts/phase15-hosted-browser-sandbox-provider-proof.json`, and `artifacts/browser-sandbox-provider-contract-smoke.json`.
