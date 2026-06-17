@@ -142,6 +142,14 @@ async function readJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
+async function readJsonIfExists(path) {
+  try {
+    return JSON.parse(await readFile(resolve(path), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function sendSse(res, event) {
   res.write(`event: ${event.eventType ?? "message"}\n`);
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -275,10 +283,20 @@ async function safeDeploymentContractStatus() {
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
   const hostedBrowserSandboxProviderSelected = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER === "hosted_remote";
+  const hostedBrowserSandboxConfig = await readJsonIfExists(hostedBrowserSandboxProviderConfigFile);
+  const hostedBrowserSandboxAdapterMode = hostedBrowserSandboxConfig?.adapter?.mode ?? "contract_only";
+  const hostedBrowserSandboxConfigIsExample =
+    hostedBrowserSandboxProviderConfigFile === "project/deployment/browser-sandbox-provider.example.json";
+  const hostedBrowserSandboxAdapterHarnessReady =
+    hostedBrowserSandboxProviderSelected &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
+    !hostedBrowserSandboxConfigIsExample &&
+    hostedBrowserSandboxAdapterMode === "contract_harness";
   const hostedBrowserSandboxProviderReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
-    hostedBrowserSandboxProviderConfigFile !== "project/deployment/browser-sandbox-provider.example.json";
+    !hostedBrowserSandboxConfigIsExample &&
+    hostedBrowserSandboxAdapterMode === "hosted_provider";
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -304,13 +322,18 @@ async function safeDeploymentContractStatus() {
       ? "postgres_docker_secret_runtime_profile_present"
       : "postgres_docker_secret_runtime_profile_missing",
     hostedBrowserSandboxContractReady,
+    hostedBrowserSandboxAdapterMode,
+    hostedBrowserSandboxAdapterHarnessReady,
     hostedBrowserSandboxProviderReady,
     hostedBrowserSandboxProviderStatus: hostedBrowserSandboxProviderReady
       ? "hosted_browser_sandbox_provider_ready"
+      : hostedBrowserSandboxAdapterHarnessReady
+        ? "hosted_browser_sandbox_adapter_harness_ready"
       : hostedBrowserSandboxContractReady
         ? "hosted_browser_sandbox_contract_valid_not_configured"
         : "hosted_browser_sandbox_contract_missing",
     browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
+    browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
@@ -394,6 +417,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider",
         status: deployment.hostedBrowserSandboxProviderStatus,
         target: "Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract."
+      },
+      {
+        key: "hosted_browser_sandbox_adapter_harness",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        target: "The hosted adapter lifecycle can be contract-tested without provider credentials or live frames."
       }
     ],
     checks: [
@@ -473,6 +501,13 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         ok: deployment.hostedBrowserSandboxProviderReady,
         command: deployment.browserSandboxProviderContractCommand
       },
+      {
+        key: "hosted_browser_sandbox_adapter_harness",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        ok: deployment.hostedBrowserSandboxAdapterHarnessReady,
+        command: deployment.browserSandboxAdapterHarnessCommand,
+        adapterMode: deployment.hostedBrowserSandboxAdapterMode
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -533,6 +568,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       { key: "gui_visual_test", score: 100, target: 100, status: "pass_visual_browser_proof" },
       { key: "remote_browser_controls", score: 90, target: 90, status: "pass_live_frame_local_cdp", readinessStatus: liveReadiness.status },
+      {
+        key: "hosted_browser_sandbox_adapter_harness",
+        score: deployment.hostedBrowserSandboxAdapterHarnessReady ? 75 : 0,
+        target: 75,
+        status: deployment.hostedBrowserSandboxProviderStatus
+      },
       {
         key: "hosted_remote_browser_sandbox",
         score: deployment.hostedBrowserSandboxProviderReady ? 100 : 0,

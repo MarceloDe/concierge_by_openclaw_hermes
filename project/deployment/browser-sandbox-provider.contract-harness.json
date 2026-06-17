@@ -1,26 +1,26 @@
 {
   "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
   "provider": "hosted_remote",
-  "environment": "production",
-  "endpointRef": "provider-managed-browser-sandbox-endpoint-ref",
+  "environment": "staging",
+  "endpointRef": "contract-harness-browser-sandbox-endpoint-ref",
   "secretSource": "managed_env",
   "transport": {
-    "stream": "webrtc_or_sse_frames",
+    "stream": "sse_frames",
     "inputRelay": "approval_gated_human_only",
-    "screenshot": "provider_screenshot_api",
-    "ocrCaption": "provider_or_local_ocr"
+    "screenshot": "contract_harness_screenshot_placeholder",
+    "ocrCaption": "contract_harness_caption_placeholder"
   },
   "adapter": {
-    "mode": "contract_only",
+    "mode": "contract_harness",
     "providerLiveConnected": false,
-    "contractHarnessOnly": false
+    "contractHarnessOnly": true
   },
   "sessionPolicy": {
     "userScoped": true,
     "sessionScoped": true,
     "ephemeralBrowser": true,
-    "maxSessionMinutes": 30,
-    "idleTimeoutMinutes": 5,
+    "maxSessionMinutes": 15,
+    "idleTimeoutMinutes": 3,
     "recordFrames": false,
     "persistRawOcrText": false
   },

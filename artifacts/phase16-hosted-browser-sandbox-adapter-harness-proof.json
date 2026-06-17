@@ -1,0 +1,90 @@
+{
+  "createdAt": "2026-06-17T15:59:46.550Z",
+  "route": "http://127.0.0.1:4201/?phase=hosted-browser-sandbox-adapter-harness",
+  "screenshot": "artifacts/phase16-hosted-browser-sandbox-adapter-harness-dashboard-proof.png",
+  "visibleProof": {
+    "hasHarnessGoal": true,
+    "hasHarnessReady": true,
+    "hasHarnessScore": true,
+    "hasHostedProviderBlocked": true,
+    "hasHarnessCommand": true,
+    "excerpt": [
+      "Browser boundary",
+      "browser_sandbox_gatewayhosted_browser_sandbox_adapter_harness_ready · Live worker browser sessions are represented as remote sandbox sessions, with hosted provider readiness separate from local CDP proof.",
+      "hosted_browser_sandbox_providerhosted_browser_sandbox_adapter_harness_ready · Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract.",
+      "hosted_browser_sandbox_adapter_harnesshosted_browser_sandbox_adapter_harness_ready · The hosted adapter lifecycle can be contract-tested without provider credentials or live frames.",
+      "hosted_browser_sandbox_providerhosted_browser_sandbox_adapter_harness_ready",
+      "hosted_browser_sandbox_adapter_harnesshosted_browser_sandbox_adapter_harness_ready",
+      "remote_browser_controls90 / 90 · pass_live_frame_local_cdp",
+      "hosted_browser_sandbox_adapter_harness75 / 75 · hosted_browser_sandbox_adapter_harness_ready",
+      "hosted_remote_browser_sandbox0 / 100 · hosted_browser_sandbox_adapter_harness_ready",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\",",
+      "      \"key\": \"hosted_browser_sandbox_provider\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\",",
+      "      \"key\": \"hosted_browser_sandbox_adapter_harness\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\",",
+      "      \"key\": \"hosted_browser_sandbox_provider\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\",",
+      "      \"key\": \"hosted_browser_sandbox_adapter_harness\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\",",
+      "      \"command\": \"npm run sandbox:browser:adapter-harness\",",
+      "      \"key\": \"remote_browser_controls\",",
+      "      \"key\": \"hosted_browser_sandbox_adapter_harness\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\"",
+      "      \"key\": \"hosted_remote_browser_sandbox\",",
+      "      \"status\": \"hosted_browser_sandbox_adapter_harness_ready\""
+    ]
+  },
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "apiProof": {
+    "status": "cycle_contract_ready",
+    "cycle": "server_connector_next_mobile_mvp",
+    "hostedProviderCheck": {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_adapter_harness_ready",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-contract"
+    },
+    "harnessCheck": {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "status": "hosted_browser_sandbox_adapter_harness_ready",
+      "ok": true,
+      "command": "npm run sandbox:browser:adapter-harness",
+      "adapterMode": "contract_harness"
+    },
+    "harnessScore": {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "score": 75,
+      "target": 75,
+      "status": "hosted_browser_sandbox_adapter_harness_ready"
+    },
+    "hostedRemoteScore": {
+      "key": "hosted_remote_browser_sandbox",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_adapter_harness_ready"
+    },
+    "remoteBrowserScore": {
+      "key": "remote_browser_controls",
+      "score": 90,
+      "target": 90,
+      "status": "pass_live_frame_local_cdp",
+      "readinessStatus": "auth_required"
+    },
+    "deployment": {
+      "hostedBrowserSandboxProviderStatus": "hosted_browser_sandbox_adapter_harness_ready",
+      "hostedBrowserSandboxAdapterHarnessReady": true,
+      "hostedBrowserSandboxProviderReady": false,
+      "hostedBrowserSandboxAdapterMode": "contract_harness"
+    },
+    "safety": {
+      "fastApiIsPublicConnector": true,
+      "nodeIsInternalRuntime": true,
+      "publicApi": "/api/v1",
+      "frontendDirectNodeCallsAllowedForPwa": false,
+      "externalWriteActionsWithoutApproval": false,
+      "rawOcrTextReturned": false
+    }
+  }
+}

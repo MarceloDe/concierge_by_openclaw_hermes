@@ -2253,3 +2253,27 @@ Remaining follow-up:
 - Select and configure the hosted browser sandbox provider.
 - Supply the real provider config outside Git with `WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE`.
 - Set `WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote` and `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1` only after hosted stream, screenshot/OCR, takeover, input, and teardown proof passes.
+
+## Hosted Browser Sandbox Adapter Harness Cycle - 2026-06-17
+
+Goal:
+- Move from a hosted provider contract to a testable hosted adapter lifecycle harness without pretending a real hosted browser provider is connected.
+
+Implemented slice:
+- Add `project/deployment/browser-sandbox-provider.contract-harness.json` as a non-secret staging harness config.
+- Add `scripts/browser-sandbox-adapter-harness.mjs` and `npm run sandbox:browser:adapter-harness`.
+- Extend `scripts/browser-sandbox-provider-contract.mjs` so adapter modes are explicit: `contract_only`, `contract_harness`, and `hosted_provider`.
+- Extend FastAPI `HostedRemoteBrowserSandboxProvider` with a contract-harness lifecycle for create session, SSE frame event, takeover request/grant/end, and sanitized human input.
+- Expose `hosted_browser_sandbox_adapter_harness` separately from `hosted_remote_browser_sandbox` in FastAPI proof and the Node dashboard proof.
+
+Acceptance:
+- The harness smoke validates the non-example harness config and reports `adapterHarnessReady=true` while `hostedProviderReady=false`.
+- FastAPI `/api/v1/browser/sessions` can create a hosted-style harness session when `WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote`, `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1`, and the config points to the harness file.
+- The harness stream emits a safe SSE event with no raw frame and no raw OCR text.
+- Takeover and input routes return sanitized, approval-gated contract responses and do not relay to any external provider.
+- The production hosted-provider score remains `0 / 100` until a real `hosted_provider` config and hosted proof exist.
+
+Remaining follow-up:
+- Replace the contract harness with a real provider adapter after provider selection.
+- Add provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown proof.
+- Keep the harness as a CI/regression contract even after the hosted provider is live.

@@ -7146,3 +7146,70 @@ Known risks or gaps:
 - A hosted browser sandbox provider has not been selected in this repo.
 - No hosted WebRTC/SSE provider credentials are configured.
 - Real hosted provider proof still needs create-session, stream-frame, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.
+
+## Phase 16 Hosted Browser Sandbox Adapter Harness Update
+
+Status: Implemented, regression-tested, and visually proved.
+
+Slice name:
+- Hosted remote browser sandbox adapter lifecycle harness.
+
+Code changes:
+- Added `project/deployment/browser-sandbox-provider.contract-harness.json`.
+- Added `scripts/browser-sandbox-adapter-harness.mjs`.
+- Added package script `sandbox:browser:adapter-harness`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with explicit adapter modes and harness readiness.
+- Extended FastAPI hosted provider behavior with contract-harness create-session, stream, takeover, input, and end responses.
+- Exposed `hosted_browser_sandbox_adapter_harness` in FastAPI proof and the Node dashboard proof.
+
+Safety decision:
+- The harness is not a real hosted provider and never sets `hostedProviderReady=true`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real hosted provider config uses `adapter.mode=hosted_provider`.
+- Harness stream events return no raw frame, no raw OCR text, no credentials, and no external/write actions.
+- Human input relay returns only sanitized metadata, never the raw input value.
+
+Focused verification commands:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-adapter-harness.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/server/build-check.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py project/api/models.py`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_fails_closed_until_configured project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized`
+- `npm run sandbox:browser:provider-contract`
+- `npm run sandbox:browser:adapter-harness`
+- `npm run build`
+- `node --test src/tests/final-system-verification-report.test.mjs`
+- `npm run test:docker:contract`
+- `python3 -m unittest project.tests.test_fastapi_facade`
+- `npm run test:local`
+- Browser proof at `http://127.0.0.1:4201/?phase=hosted-browser-sandbox-adapter-harness`
+- Headless Chrome DevTools screenshot capture after clicking `Load Connector Proof`
+
+Focused verification result:
+- Focused syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 4/4 tests.
+- Focused FastAPI hosted-provider fail-closed and hosted harness lifecycle tests passed.
+- Provider contract smoke passed with `hostedProviderReady=false`.
+- Adapter harness smoke passed with `status=hosted_browser_sandbox_adapter_harness_ready`, `adapterHarnessReady=true`, `hostedProviderReady=false`, no raw endpoint URL, no raw secret path, no raw OCR text, no frame recording, no external actions, no PHI seed, and no agent credential entry.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 20/20 tests.
+- FastAPI facade regression passed with 36 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- API proof at `/api/proof/runs/hosted-browser-sandbox-adapter-harness` reported:
+  - `hosted_browser_sandbox_adapter_harness=75 / 75`;
+  - `hosted_remote_browser_sandbox=0 / 100`;
+  - `hosted_browser_sandbox_provider=hosted_browser_sandbox_adapter_harness_ready`;
+  - `remote_browser_controls=90 / 90`.
+- Browser verification passed with required adapter-harness proof strings present in the dashboard and 0 console errors in the proof artifact.
+- Screenshot and proof artifacts:
+  - `artifacts/phase16-hosted-browser-sandbox-adapter-harness-dashboard-proof.png`;
+  - `artifacts/phase16-hosted-browser-sandbox-adapter-harness-proof.json`;
+  - `artifacts/browser-sandbox-adapter-harness-smoke.json`.
+
+Known risks or gaps:
+- The harness is a deterministic contract path only.
+- No hosted WebRTC/SSE provider credentials are configured.
+- Real hosted provider proof still needs provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.

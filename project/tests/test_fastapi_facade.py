@@ -930,6 +930,92 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertFalse(hosted_check["safety"]["agentCredentialEntryAllowed"])
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized(self):
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        client = TestClient(app)
+        headers = self.bearer_headers("v1_hosted_harness_user")
+        harness_config = "project/deployment/browser-sandbox-provider.contract-harness.json"
+
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": harness_config
+        }, clear=False):
+            browser_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_hosted_harness",
+                    "target_url": "https://health.aetna.com/member",
+                    "provider": "hosted_remote"
+                }
+            )
+            self.assertEqual(browser_response.status_code, 200)
+            browser = browser_response.json()
+            self.assertEqual(browser["provider"], "hosted_remote")
+            self.assertEqual(browser["readiness"]["status"], "hosted_browser_sandbox_adapter_harness_ready")
+            self.assertEqual(browser["readiness"]["adapterMode"], "contract_harness")
+            self.assertFalse(browser["readiness"]["providerLiveConnected"])
+            self.assertFalse(browser["ocr_caption"]["rawOcrTextReturned"])
+            self.assertEqual(browser["screencast"]["status"], "hosted_adapter_harness_session_created")
+
+            stream_response = client.get(browser["stream_url"], headers=headers)
+            self.assertEqual(stream_response.status_code, 200)
+            self.assertIn("hosted.sandbox.contract_frame", stream_response.text)
+            self.assertIn('"rawOcrTextReturned":false', stream_response.text)
+
+            takeover_response = client.post(
+                f"/api/v1/browser/sessions/{browser['browser_session_id']}/takeover",
+                headers=headers,
+                json={"mode": "request", "reason": "user_password_or_captcha"}
+            )
+            self.assertEqual(takeover_response.status_code, 200)
+            takeover = takeover_response.json()
+            self.assertEqual(takeover["status"], "interactive_takeover_pending_approval")
+            self.assertFalse(takeover["providerLiveConnected"])
+
+            grant_response = client.post(
+                f"/api/v1/browser/sessions/{browser['browser_session_id']}/takeover",
+                headers=headers,
+                json={"mode": "grant", "takeover_id": takeover["takeoverId"], "approved_by": "user"}
+            )
+            self.assertEqual(grant_response.status_code, 200)
+            grant = grant_response.json()
+            self.assertTrue(grant["grantToken"].startswith("hosted_grant_"))
+
+            input_response = client.post(
+                f"/api/v1/browser/sessions/{browser['browser_session_id']}/input",
+                headers=headers,
+                json={
+                    "takeover_id": takeover["takeoverId"],
+                    "grant_token": grant["grantToken"],
+                    "input": {"type": "key", "key": "Tab", "text": "should_not_be_returned"}
+                }
+            )
+            self.assertEqual(input_response.status_code, 200)
+            input_result = input_response.json()
+            self.assertTrue(input_result["inputAccepted"])
+            self.assertFalse(input_result["rawInputReturned"])
+            self.assertNotIn("should_not_be_returned", json.dumps(input_result))
+
+            end_response = client.post(
+                f"/api/v1/browser/sessions/{browser['browser_session_id']}/takeover",
+                headers=headers,
+                json={"mode": "end", "takeover_id": takeover["takeoverId"]}
+            )
+            self.assertEqual(end_response.status_code, 200)
+            self.assertEqual(end_response.json()["status"], "interactive_takeover_ended")
+
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-adapter-harness", headers=headers)
+            self.assertEqual(proof_response.status_code, 200)
+            proof = proof_response.json()
+            harness_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_adapter_harness")
+            hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+            self.assertEqual(harness_score["score"], 75)
+            self.assertEqual(harness_score["status"], "hosted_browser_sandbox_adapter_harness_ready")
+            self.assertEqual(hosted_score["score"], 0)
+
     def test_upload_requires_bearer_token(self):
         response = self.client.post(
             "/api/uploads",

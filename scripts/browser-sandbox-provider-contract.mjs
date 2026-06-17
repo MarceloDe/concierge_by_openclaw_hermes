@@ -7,6 +7,7 @@ export const BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION = "2026-06-17.browser-san
 const DEFAULT_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
+const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
 
 function sanitizeConfig(config, configPath) {
   return {
@@ -20,6 +21,11 @@ function sanitizeConfig(config, configPath) {
       inputRelay: config.transport?.inputRelay ?? null,
       screenshot: config.transport?.screenshot ?? null,
       ocrCaption: config.transport?.ocrCaption ?? null
+    },
+    adapter: {
+      mode: config.adapter?.mode ?? "contract_only",
+      providerLiveConnected: Boolean(config.adapter?.providerLiveConnected),
+      contractHarnessOnly: Boolean(config.adapter?.contractHarnessOnly)
     },
     sessionPolicy: {
       userScoped: Boolean(config.sessionPolicy?.userScoped),
@@ -64,6 +70,10 @@ function validateConfig(config, configPath) {
   if (!["webrtc_or_sse_frames", "webrtc", "sse_frames"].includes(config.transport?.stream)) failures.push("stream_transport_not_allowed");
   if (config.transport?.inputRelay !== "approval_gated_human_only") failures.push("input_relay_must_be_human_only");
   if (!config.transport?.screenshot || !config.transport?.ocrCaption) failures.push("screenshot_and_ocr_contract_required");
+  const adapterMode = config.adapter?.mode ?? "contract_only";
+  if (!ALLOWED_ADAPTER_MODES.has(adapterMode)) failures.push("adapter_mode_not_allowed");
+  if (adapterMode === "contract_harness" && config.adapter?.providerLiveConnected) failures.push("contract_harness_must_not_claim_live_provider");
+  if (adapterMode === "hosted_provider" && config.adapter?.contractHarnessOnly) failures.push("hosted_provider_must_not_be_harness_only");
   if (!config.sessionPolicy?.userScoped || !config.sessionPolicy?.sessionScoped) failures.push("sessions_must_be_user_and_session_scoped");
   if (!config.sessionPolicy?.ephemeralBrowser) failures.push("ephemeral_browser_required");
   if (Number(config.sessionPolicy?.maxSessionMinutes ?? Infinity) > 30) failures.push("max_session_minutes_must_be_30_or_less");
@@ -111,12 +121,20 @@ export async function runBrowserSandboxProviderContractSmoke({
   providerReady = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1"
 } = {}) {
   const validation = await validateBrowserSandboxProviderContract({ configPath });
-  const hostedProviderReady = Boolean(providerReady && validation.ok && configPath !== DEFAULT_CONFIG_PATH);
+  const adapterMode = validation.sanitizedConfig.adapter.mode;
+  const nonExampleConfig = configPath !== DEFAULT_CONFIG_PATH;
+  const adapterHarnessReady = Boolean(providerReady && validation.ok && nonExampleConfig && adapterMode === "contract_harness");
+  const hostedProviderReady = Boolean(providerReady && validation.ok && nonExampleConfig && adapterMode === "hosted_provider");
   const result = {
     ok: validation.ok,
     version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
-    status: hostedProviderReady ? "hosted_browser_sandbox_provider_ready" : "hosted_browser_sandbox_contract_valid_not_configured",
+    status: hostedProviderReady
+      ? "hosted_browser_sandbox_provider_ready"
+      : adapterHarnessReady
+        ? "hosted_browser_sandbox_adapter_harness_ready"
+        : "hosted_browser_sandbox_contract_valid_not_configured",
     hostedProviderReady,
+    adapterHarnessReady,
     validation,
     dashboard: {
       readinessKey: "hosted_browser_sandbox_provider",
@@ -135,6 +153,33 @@ export async function runBrowserSandboxProviderContractSmoke({
   await mkdir(dirname(artifactPath), { recursive: true });
   await writeFile(artifactPath, JSON.stringify(result, null, 2));
   return result;
+}
+
+export async function runBrowserSandboxAdapterHarnessSmoke({
+  configPath = "project/deployment/browser-sandbox-provider.contract-harness.json",
+  artifactPath = resolve("artifacts/browser-sandbox-adapter-harness-smoke.json")
+} = {}) {
+  const result = await runBrowserSandboxProviderContractSmoke({
+    configPath,
+    artifactPath,
+    providerReady: true
+  });
+  if (!result.adapterHarnessReady || result.hostedProviderReady) {
+    result.ok = false;
+    result.validation.failures.push("adapter_harness_not_ready_or_overclaimed_provider");
+  }
+  return {
+    ...result,
+    lifecycle: {
+      createSession: "contract_harness_session_created",
+      streamFrames: "contract_harness_sse_event_available",
+      screenshot: "contract_harness_placeholder_only",
+      ocrCaption: "caption_contract_ready_no_raw_text",
+      takeover: "approval_gated_human_only",
+      inputRelay: "sanitized_no_external_action",
+      teardown: "ephemeral_session_contract_only"
+    }
+  };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import os
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import uuid4
 
 
@@ -213,6 +213,12 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
     def describe(self) -> dict[str, Any]:
         return describe_browser_sandbox_provider_contract(config_path=self.config_path, ready=self.ready)
 
+    def _require_harness(self) -> dict[str, Any]:
+        contract = self.describe()
+        if not contract.get("adapterHarnessReady"):
+            raise BrowserSandboxError("Hosted browser sandbox adapter harness is not enabled for this session.")
+        return contract
+
     async def create_session(
         self,
         *,
@@ -223,22 +229,86 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         options: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         contract = self.describe()
-        if not contract["ready"]:
+        if not contract["ready"] and not contract.get("adapterHarnessReady"):
             raise BrowserSandboxError(
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1 after hosted proof passes."
             )
+        if contract.get("adapterHarnessReady"):
+            return {
+                "browser_session_id": f"hosted_browser_{uuid4()}",
+                "contract_version": HOSTED_SANDBOX_CONTRACT_VERSION,
+                "provider": self.provider_key,
+                "adapter_mode": "contract_harness",
+                "provider_live_connected": False,
+                "session_id": session_id,
+                "user_id": user_id,
+                "target_url": target_url,
+                "created_at": now_iso(),
+                "takeover_state": "not_requested",
+                "readiness": {
+                    "status": "hosted_browser_sandbox_adapter_harness_ready",
+                    "ready": True,
+                    "adapterMode": "contract_harness",
+                    "providerLiveConnected": False,
+                    "userActionRequired": None,
+                    "nextAction": "configure_real_hosted_provider_for_production",
+                    "safetyBoundary": "read_only_approval_required"
+                },
+                "current_url": target_url,
+                "current_title": "Hosted browser sandbox contract harness",
+                "ocr_caption": {
+                    "status": "caption_contract_ready",
+                    "requiredForEvidence": True,
+                    "rawOcrTextReturned": False,
+                    "frameSource": "hosted_contract_harness",
+                    "lastFrameAt": now_iso()
+                },
+                "screencast": {
+                    "ok": True,
+                    "status": "hosted_adapter_harness_session_created",
+                    "frameSource": "hosted_contract_harness",
+                    "streamTransport": "sse_frames",
+                    "rawFrameRecorded": False,
+                    "providerLiveConnected": False
+                }
+            }
         raise BrowserSandboxError("Hosted browser sandbox provider adapter is configured but not implemented in this local runtime.")
 
     async def request_takeover(self, *, node_client: Any, browser_session: dict[str, Any], reason: str | None = None) -> dict[str, Any]:
-        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+        self._require_harness()
+        return {
+            "ok": True,
+            "status": "interactive_takeover_pending_approval",
+            "takeoverId": f"hosted_takeover_{uuid4()}",
+            "approvalRequired": True,
+            "reason": reason or "user_password_or_captcha",
+            "providerLiveConnected": False,
+            "actionsTaken": []
+        }
 
     async def grant_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str, approved_by: str | None = None) -> dict[str, Any]:
-        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+        self._require_harness()
+        return {
+            "ok": True,
+            "status": "interactive_takeover_granted",
+            "takeoverId": takeover_id,
+            "grantToken": f"hosted_grant_{uuid4()}",
+            "approvedBy": approved_by or "user",
+            "providerLiveConnected": False,
+            "actionsTaken": []
+        }
 
     async def end_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str) -> dict[str, Any]:
-        raise BrowserSandboxError("Hosted browser sandbox takeover is unavailable until the hosted adapter is implemented.")
+        self._require_harness()
+        return {
+            "ok": True,
+            "status": "interactive_takeover_ended",
+            "takeoverId": takeover_id,
+            "providerLiveConnected": False,
+            "actionsTaken": []
+        }
 
     async def send_input(
         self,
@@ -249,7 +319,20 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         grant_token: str,
         input_payload: dict[str, Any]
     ) -> dict[str, Any]:
-        raise BrowserSandboxError("Hosted browser sandbox input is unavailable until the hosted adapter is implemented.")
+        self._require_harness()
+        if not grant_token.startswith("hosted_grant_"):
+            raise BrowserSandboxError("Hosted browser sandbox input requires a valid harness grant token.")
+        return {
+            "ok": True,
+            "status": "interactive_takeover_input_relayed",
+            "takeoverId": takeover_id,
+            "inputAccepted": True,
+            "inputRelay": "sanitized_contract_harness",
+            "inputType": input_payload.get("type"),
+            "rawInputReturned": False,
+            "providerLiveConnected": False,
+            "actionsTaken": []
+        }
 
 
 def describe_browser_sandbox_provider_contract(
@@ -273,11 +356,17 @@ def describe_browser_sandbox_provider_contract(
     except Exception as exc:
         failures.append(f"config_unreadable:{exc}")
     if isinstance(config, dict):
+        adapter_mode = config.get("adapter", {}).get("mode", "contract_only")
+        provider_live_connected = config.get("adapter", {}).get("providerLiveConnected") is True
+        contract_harness_only = config.get("adapter", {}).get("contractHarnessOnly") is True
         config_ok = (
             config.get("schemaVersion") == HOSTED_SANDBOX_CONTRACT_VERSION
             and config.get("provider") == "hosted_remote"
             and config.get("endpointRef")
             and not str(config.get("endpointRef")).startswith(("http://", "https://"))
+            and adapter_mode in {"contract_only", "contract_harness", "hosted_provider"}
+            and not (adapter_mode == "contract_harness" and provider_live_connected)
+            and not (adapter_mode == "hosted_provider" and contract_harness_only)
             and config.get("approvalPolicy", {}).get("agentCredentialEntryAllowed") is False
             and config.get("approvalPolicy", {}).get("externalWriteActionsAllowed") is False
             and config.get("sessionPolicy", {}).get("recordFrames") is False
@@ -285,15 +374,34 @@ def describe_browser_sandbox_provider_contract(
         )
         if not config_ok:
             failures.append("config_contract_failed")
+    adapter_mode = config.get("adapter", {}).get("mode", "contract_only") if isinstance(config, dict) else "missing"
+    non_example_config = selected_config_path != "project/deployment/browser-sandbox-provider.example.json"
+    adapter_harness_ready = bool(
+        selected_provider == "hosted_remote"
+        and selected_ready
+        and config_ok
+        and non_example_config
+        and adapter_mode == "contract_harness"
+    )
+    provider_ready = bool(
+        selected_provider == "hosted_remote"
+        and selected_ready
+        and config_ok
+        and non_example_config
+        and adapter_mode == "hosted_provider"
+    )
     return {
         "version": HOSTED_SANDBOX_CONTRACT_VERSION,
         "provider": selected_provider,
         "configPath": selected_config_path,
         "configOk": config_ok,
-        "ready": bool(selected_provider == "hosted_remote" and selected_ready and config_ok and selected_config_path != "project/deployment/browser-sandbox-provider.example.json"),
+        "adapterMode": adapter_mode,
+        "ready": provider_ready,
+        "adapterHarnessReady": adapter_harness_ready,
         "status": (
             "hosted_browser_sandbox_provider_ready"
-            if selected_provider == "hosted_remote" and selected_ready and config_ok and selected_config_path != "project/deployment/browser-sandbox-provider.example.json"
+            if provider_ready
+            else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
             else "local_cdp_default" if selected_provider == "local_cdp"
             else "hosted_browser_sandbox_contract_valid_not_configured" if config_ok
             else "hosted_browser_sandbox_contract_missing_or_invalid"
@@ -306,6 +414,28 @@ def describe_browser_sandbox_provider_contract(
             "externalWriteActionsAllowed": False
         }
     }
+
+
+async def hosted_browser_sandbox_harness_stream(browser_session: dict[str, Any]) -> AsyncIterator[str]:
+    payload = {
+        "eventType": "hosted.sandbox.contract_frame",
+        "browserSessionId": browser_session.get("browser_session_id"),
+        "sessionId": browser_session.get("session_id"),
+        "provider": "hosted_remote",
+        "adapterMode": "contract_harness",
+        "providerLiveConnected": False,
+        "frameSource": "hosted_contract_harness",
+        "caption": {
+            "status": "caption_contract_ready",
+            "rawOcrTextReturned": False
+        },
+        "safety": {
+            "rawFrameReturned": False,
+            "rawOcrTextReturned": False,
+            "externalWriteActionsWithoutApproval": False
+        }
+    }
+    yield f"event: hosted.sandbox.contract_frame\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
 def get_browser_sandbox_provider(provider: str | None) -> BrowserSandboxProvider:

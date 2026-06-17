@@ -1897,3 +1897,47 @@ Current proof status:
 - API proof at `/api/proof/runs/hosted-browser-sandbox-provider` reported `hosted_browser_sandbox_provider=hosted_browser_sandbox_contract_valid_not_configured`, `hosted_remote_browser_sandbox=0 / 100`, and `remote_browser_controls=90 / 90`.
 - In-app browser verification passed with required hosted-browser-sandbox proof strings present in the dashboard DOM and 0 console errors.
 - Visual/proof artifacts were saved at `artifacts/phase15-hosted-browser-sandbox-provider-dashboard-proof.png`, `artifacts/phase15-hosted-browser-sandbox-provider-proof.json`, and `artifacts/browser-sandbox-provider-contract-smoke.json`.
+
+## Hosted Browser Sandbox Adapter Harness Acceptance
+
+This slice is acceptable when:
+
+- A non-secret hosted browser sandbox harness config exists for staging/contract tests.
+- The provider contract validates adapter modes and prevents the harness from claiming live provider readiness.
+- `npm run sandbox:browser:adapter-harness` writes a sanitized artifact with:
+  - `status=hosted_browser_sandbox_adapter_harness_ready`;
+  - `adapterHarnessReady=true`;
+  - `hostedProviderReady=false`;
+  - no raw endpoint URL;
+  - no raw secret path;
+  - no raw OCR text;
+  - no frame recording;
+  - no external action;
+  - no PHI seed;
+  - no agent credential entry.
+- FastAPI proves the hosted harness lifecycle through `/api/v1/browser/*`:
+  - session creation;
+  - SSE stream event;
+  - takeover request;
+  - takeover grant;
+  - sanitized input relay;
+  - takeover end.
+- Connector proof exposes `hosted_browser_sandbox_adapter_harness` separately from `hosted_remote_browser_sandbox`.
+- The real hosted-provider score stays blocked until a real provider config is supplied.
+
+Current proof status:
+
+- Focused JS syntax checks passed.
+- Python compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 4/4 tests.
+- Focused FastAPI hosted-provider fail-closed and hosted harness lifecycle tests passed.
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 20/20 tests.
+- FastAPI facade regression passed with 36 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- API proof at `/api/proof/runs/hosted-browser-sandbox-adapter-harness` reported `hosted_browser_sandbox_adapter_harness=75 / 75`, `hosted_remote_browser_sandbox=0 / 100`, and `remote_browser_controls=90 / 90`.
+- Browser verification passed with the adapter harness rows visible in the dashboard proof and 0 console errors in the proof artifact.
+- Visual/proof artifacts were saved at `artifacts/phase16-hosted-browser-sandbox-adapter-harness-dashboard-proof.png`, `artifacts/phase16-hosted-browser-sandbox-adapter-harness-proof.json`, and `artifacts/browser-sandbox-adapter-harness-smoke.json`.

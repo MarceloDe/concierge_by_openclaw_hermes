@@ -2138,3 +2138,22 @@ This makes the hosted sandbox requirement testable without weakening the current
 
 Cost of changing later:
 Low to moderate. The real provider implementation can satisfy the same create-session, stream, screenshot/OCR, takeover, input, and teardown contract. Transport may move to WebRTC, but ownership checks and approval gates remain stable.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Adapter Harness Without Claiming Provider Readiness
+
+Context:
+The hosted browser sandbox provider contract made the production requirement visible, but the FastAPI `hosted_remote` path still stopped at a setup-required error. The next useful step is to prove the public connector lifecycle shape for hosted sessions before provider credentials exist.
+
+Options considered:
+- Wait until a real hosted provider is selected.
+- Mark the existing contract as hosted readiness.
+- Add a deterministic contract harness that exercises the same public API lifecycle but remains visibly separate from real provider readiness.
+
+Decision:
+Add a `contract_harness` adapter mode, a non-secret harness config, an adapter-harness smoke script, and FastAPI lifecycle responses for hosted-style session creation, safe SSE stream events, approval-gated takeover, sanitized input, and teardown-style ending. Keep `hosted_remote_browser_sandbox` blocked until `adapter.mode=hosted_provider` with real proof.
+
+Reason:
+This makes the next hosted adapter implementation concrete and testable without storing credentials or pretending a provider exists. Remote clients can rely on the same `/api/v1/browser/*` shapes, and the dashboard can show harness progress separately from production provider status.
+
+Cost of changing later:
+Low. A real provider adapter can replace the harness internals while preserving the public API, ownership checks, approval gates, and proof keys. The harness can remain as a CI fallback contract.

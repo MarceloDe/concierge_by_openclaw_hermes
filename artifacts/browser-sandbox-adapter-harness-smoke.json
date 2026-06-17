@@ -1,37 +1,37 @@
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_contract_valid_not_configured",
+  "status": "hosted_browser_sandbox_adapter_harness_ready",
   "hostedProviderReady": false,
-  "adapterHarnessReady": false,
+  "adapterHarnessReady": true,
   "validation": {
     "ok": true,
     "version": "2026-06-17.browser-sandbox-provider.v1",
-    "configPath": "project/deployment/browser-sandbox-provider.example.json",
+    "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
     "failures": [],
     "sanitizedConfig": {
       "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
       "provider": "hosted_remote",
-      "environment": "production",
+      "environment": "staging",
       "endpointRefPresent": true,
       "secretSource": "managed_env",
       "transport": {
-        "stream": "webrtc_or_sse_frames",
+        "stream": "sse_frames",
         "inputRelay": "approval_gated_human_only",
-        "screenshot": "provider_screenshot_api",
-        "ocrCaption": "provider_or_local_ocr"
+        "screenshot": "contract_harness_screenshot_placeholder",
+        "ocrCaption": "contract_harness_caption_placeholder"
       },
       "adapter": {
-        "mode": "contract_only",
+        "mode": "contract_harness",
         "providerLiveConnected": false,
-        "contractHarnessOnly": false
+        "contractHarnessOnly": true
       },
       "sessionPolicy": {
         "userScoped": true,
         "sessionScoped": true,
         "ephemeralBrowser": true,
-        "maxSessionMinutes": 30,
-        "idleTimeoutMinutes": 5,
+        "maxSessionMinutes": 15,
+        "idleTimeoutMinutes": 3,
         "recordFrames": false,
         "persistRawOcrText": false
       },
@@ -53,8 +53,8 @@
         "redactFrameContent": true
       },
       "source": {
-        "configPath": "project/deployment/browser-sandbox-provider.example.json",
-        "exampleConfig": true
+        "configPath": "project/deployment/browser-sandbox-provider.contract-harness.json",
+        "exampleConfig": false
       }
     }
   },

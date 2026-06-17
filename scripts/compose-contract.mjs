@@ -17,6 +17,7 @@ const REQUIRED_FILES = [
   "compose.yaml",
   "compose.postgres.yaml",
   "scripts/browser-sandbox-provider-contract.mjs",
+  "scripts/browser-sandbox-adapter-harness.mjs",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",
@@ -29,6 +30,7 @@ const REQUIRED_FILES = [
   "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
   "project/deployment/postgres-provider-backup-policy.example.json",
   "project/deployment/browser-sandbox-provider.example.json",
+  "project/deployment/browser-sandbox-provider.contract-harness.json",
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
   "project/db/postgres-init/001_storage_readiness.sql",
@@ -208,7 +210,9 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
     browserSandbox: {
       defaultProvider: "local_cdp",
       hostedProviderContract: "project/deployment/browser-sandbox-provider.example.json",
+      adapterHarnessContract: "project/deployment/browser-sandbox-provider.contract-harness.json",
       providerContractCommand: "npm run sandbox:browser:provider-contract",
+      adapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
       readyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY"
     },
     postgresProductionProfile,

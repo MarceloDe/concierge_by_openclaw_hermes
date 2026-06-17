@@ -548,3 +548,34 @@ Score decision:
 - Existing `remote_browser_controls` remains `90 / 90` for the local-CDP live-frame path.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real hosted provider config is supplied and `WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1`.
 - The example provider contract intentionally reports `hosted_browser_sandbox_contract_valid_not_configured`.
+
+## Phase 16 Hosted Browser Sandbox Adapter Harness Update
+
+Implementation:
+- Added `project/deployment/browser-sandbox-provider.contract-harness.json`.
+- Added `scripts/browser-sandbox-adapter-harness.mjs` and package script `sandbox:browser:adapter-harness`.
+- Extended browser sandbox contract validation with explicit adapter modes.
+- FastAPI `hosted_remote` now has a contract-harness lifecycle for session creation, safe SSE stream, takeover, sanitized input, and ending takeover.
+- Node and FastAPI proof payloads now expose `hosted_browser_sandbox_adapter_harness`.
+
+Focused verification:
+- Focused JS syntax checks passed.
+- Python compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 4/4 tests.
+- Focused FastAPI hosted-provider fail-closed and hosted harness lifecycle tests passed.
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 20/20 tests.
+- FastAPI facade regression passed with 36 tests, including 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser proof loaded the dashboard at `http://127.0.0.1:4201/?phase=hosted-browser-sandbox-adapter-harness`, clicked `Load Connector Proof`, verified adapter-harness proof strings, and saved the visual artifact.
+- Screenshot/proof artifacts:
+  - `artifacts/phase16-hosted-browser-sandbox-adapter-harness-dashboard-proof.png`
+  - `artifacts/phase16-hosted-browser-sandbox-adapter-harness-proof.json`
+  - `artifacts/browser-sandbox-adapter-harness-smoke.json`
+
+Score decision:
+- `hosted_browser_sandbox_adapter_harness` can reach `75 / 75` when the harness config and readiness env are selected.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real hosted provider config with `adapter.mode=hosted_provider` is supplied and live hosted proof passes.
