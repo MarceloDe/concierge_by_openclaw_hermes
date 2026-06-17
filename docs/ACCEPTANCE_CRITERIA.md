@@ -2017,3 +2017,36 @@ Full proof status:
 - During visual proof, a duplicate-click race in the connector proof panel was found and fixed with a shared in-flight request and visible error recovery.
 - Fresh headless Chrome dashboard proof at `http://127.0.0.1:4203/?phase=hosted-browser-sandbox-provider-adapter` verified `hosted_browser_sandbox_provider_adapter`, `hosted_browser_sandbox_provider_adapter_contract_ready`, `hosted_remote_browser_sandbox`, and no fake endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase18-hosted-browser-sandbox-provider-adapter-dashboard-proof.png`, `artifacts/phase18-hosted-browser-sandbox-provider-adapter-proof.json`, and `artifacts/browser-sandbox-provider-adapter-smoke.json`.
+
+## Hosted Browser Sandbox Provider HTTP Adapter Harness Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider HTTP adapter harness smoke command exists and makes a real HTTP POST to a local provider-compatible harness.
+- The HTTP adapter request path proves authorization, contract version, target URL reference, and safety contracts without writing the raw endpoint or token to artifacts.
+- The provider response validator still rejects raw frames, raw OCR text, credential entry, external writes, actions taken, raw URLs, and raw secrets.
+- FastAPI proves the HTTP-adapter-harness-ready state still cannot create real hosted sessions.
+- Connector proof exposes `hosted_browser_sandbox_provider_http_adapter` separately from adapter-envelope readiness and live hosted provider readiness.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 7/7 tests.
+- Focused FastAPI HTTP-adapter-harness and adapter-contract tests passed with 2/2 tests.
+- HTTP adapter harness smoke passed with `hosted_browser_sandbox_provider_http_adapter_harness_ready`, `hostedProviderHttpAdapterReady=true`, `providerNetworkCalled=true`, `localHarnessOnly=true`, `hostedProviderReady=false`, and no local harness endpoint/token or fake provider endpoint/token leak.
+
+Full proof status:
+
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run sandbox:browser:provider-adapter` passed.
+- `npm run sandbox:browser:provider-http-adapter` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 23/23 tests.
+- FastAPI facade regression passed with 40 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- In-app browser DOM proof at `http://127.0.0.1:4204/?phase=hosted-browser-sandbox-provider-http-adapter` verified the HTTP adapter score/status, `hosted_remote_browser_sandbox`, and no fake provider endpoint/token leak.
+- Fresh headless Chrome dashboard proof saved the visual artifact after clicking `Load Connector Proof`.
+- Visual/proof artifacts were saved at `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-dashboard-proof.png`, `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-proof.json`, and `artifacts/browser-sandbox-provider-http-adapter-harness-smoke.json`.

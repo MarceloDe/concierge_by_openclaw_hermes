@@ -1,4 +1,5 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -271,6 +272,46 @@ export function validateHostedProviderAdapterResponse(response) {
   };
 }
 
+export async function callHostedProviderCreateSession({
+  endpointUrl,
+  apiToken,
+  request,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!endpointUrl || !apiToken) {
+    throw new Error("Hosted provider endpoint and API token are required for HTTP adapter calls.");
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new Error("A fetch implementation is required for hosted provider HTTP adapter calls.");
+  }
+  const url = new URL("browser/sessions", endpointUrl.endsWith("/") ? endpointUrl : `${endpointUrl}/`);
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiToken}`,
+      "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+    },
+    body: JSON.stringify(request.body)
+  });
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`Hosted provider returned invalid JSON: ${error.message}`);
+  }
+  const responseValidation = validateHostedProviderAdapterResponse(payload);
+  return {
+    ok: Boolean(response.ok && responseValidation.ok),
+    statusCode: response.status,
+    response: payload,
+    responseValidation,
+    providerNetworkCalled: true,
+    endpointRedacted: true,
+    authorizationRedacted: true
+  };
+}
+
 export async function validateBrowserSandboxProviderContract({
   configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || DEFAULT_CONFIG_PATH
 } = {}) {
@@ -463,6 +504,152 @@ export async function runBrowserSandboxProviderAdapterSmoke({
   await mkdir(dirname(artifactPath), { recursive: true });
   await writeFile(artifactPath, JSON.stringify(result, null, 2));
   return result;
+}
+
+export async function runBrowserSandboxProviderHttpAdapterHarnessSmoke({
+  configPath = HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-http-adapter-harness-smoke.json"),
+  providerReady = true
+} = {}) {
+  const previousProvider = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER;
+  const previousEndpoint = process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL;
+  const previousToken = process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN;
+  const previousAdapter = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY;
+  const apiToken = "local-harness-token-redacted";
+  const received = {};
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      const parsed = body ? JSON.parse(body) : {};
+      received.method = request.method;
+      received.path = request.url;
+      received.authorizationPresent = Boolean(request.headers.authorization);
+      received.authorizationMatches = request.headers.authorization === `Bearer ${apiToken}`;
+      received.contractVersion = request.headers["x-brainstyworkers-contract-version"];
+      received.rawTargetUrlReceived = /^https?:\/\//i.test(String(parsed.targetUrlRef ?? ""));
+      received.agentCredentialEntryAllowed = Boolean(parsed.safetyContract?.agentCredentialEntryAllowed);
+      received.externalWriteActionsAllowed = Boolean(parsed.safetyContract?.externalWriteActionsAllowed);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+        status: "hosted_provider_http_adapter_harness_ready",
+        providerSessionRef: "provider-http-session-ref-redacted",
+        providerLiveConnected: false,
+        stream: {
+          transport: "webrtc_or_sse_frames",
+          streamRef: "provider-http-stream-ref-redacted",
+          rawFrameReturned: false,
+          frameRecordingEnabled: false
+        },
+        screenshot: {
+          screenshotRef: "provider-http-screenshot-ref-redacted",
+          rawImageReturned: false
+        },
+        ocrCaption: {
+          captionRef: "provider-http-caption-ref-redacted",
+          rawOcrTextReturned: false
+        },
+        takeover: {
+          state: "not_requested",
+          approvalRequired: true,
+          inputRelay: "approval_gated_human_only"
+        },
+        safety: {
+          agentCredentialEntryAllowed: false,
+          externalWriteActionsWithoutApproval: false,
+          offsiteFailClosed: true,
+          credentialPagesUserOnly: true
+        },
+        actionsTaken: []
+      }));
+    });
+  });
+  await new Promise((resolveStart, rejectStart) => {
+    server.once("error", rejectStart);
+    server.listen(0, "127.0.0.1", resolveStart);
+  });
+  try {
+    const address = server.address();
+    const endpointUrl = `http://127.0.0.1:${address.port}`;
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER = "hosted_remote";
+    process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL = "https://provider-harness.invalid/api";
+    process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN = "provider-harness-token-must-not-leak";
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY = "1";
+    const adapter = await runBrowserSandboxProviderAdapterSmoke({
+      configPath,
+      artifactPath,
+      providerReady
+    });
+    const httpResult = await callHostedProviderCreateSession({
+      endpointUrl,
+      apiToken,
+      request: adapter.adapterContract.request
+    });
+    const httpAdapterHarnessReady = Boolean(
+      adapter.hostedProviderAdapterReady &&
+      httpResult.ok &&
+      received.method === "POST" &&
+      received.path === "/browser/sessions" &&
+      received.authorizationMatches &&
+      !received.rawTargetUrlReceived &&
+      !received.agentCredentialEntryAllowed &&
+      !received.externalWriteActionsAllowed
+    );
+    const result = {
+      ...adapter,
+      ok: Boolean(adapter.ok && httpAdapterHarnessReady),
+      status: httpAdapterHarnessReady
+        ? "hosted_browser_sandbox_provider_http_adapter_harness_ready"
+        : adapter.status,
+      hostedProviderHttpAdapterReady: httpAdapterHarnessReady,
+      hostedProviderReady: false,
+      adapterContract: {
+        ...adapter.adapterContract,
+        httpAdapterHarness: {
+          ok: httpAdapterHarnessReady,
+          status: httpResult.response?.status ?? "unknown",
+          statusCode: httpResult.statusCode,
+          providerNetworkCalled: true,
+          localHarnessOnly: true,
+          endpointRedacted: true,
+          authorizationRedacted: true,
+          requestMethod: received.method,
+          requestPath: received.path,
+          authorizationPresent: received.authorizationPresent,
+          rawTargetUrlReceived: received.rawTargetUrlReceived,
+          responseValidation: httpResult.responseValidation,
+          providerLiveConnected: false,
+          liveProviderScoreMayPassOnlyAfterLiveVerified: true
+        }
+      }
+    };
+    const serialized = JSON.stringify(result);
+    result.safety = {
+      ...result.safety,
+      ...assertNoSecretLeak(result),
+      rawEndpointUrlWritten: /provider-harness\.invalid|127\.0\.0\.1|localhost/i.test(serialized),
+      rawSecretReturned: /provider-harness-token-must-not-leak|local-harness-token-redacted/.test(serialized),
+      externalActions: false,
+      agentCredentialEntryAllowed: false
+    };
+    await mkdir(dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, JSON.stringify(result, null, 2));
+    return result;
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER", previousProvider);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL", previousEndpoint);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY", previousAdapter);
+  }
+}
+
+function restoreProcessEnv(key, value) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -7341,3 +7341,68 @@ Known risks or gaps:
 - This is an adapter-envelope proof, not a live provider implementation.
 - No hosted provider endpoint/token is configured for production.
 - Live provider proof still needs provider-backed create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.
+
+## Phase 19 Hosted Browser Sandbox Provider HTTP Adapter Harness Update
+
+Status: Implemented, regression-tested, and visually proved.
+
+Slice name:
+- Hosted browser sandbox provider HTTP adapter harness.
+
+Code changes:
+- Added `scripts/browser-sandbox-provider-http-adapter-harness-smoke.mjs` and package script `sandbox:browser:provider-http-adapter`.
+- Added `callHostedProviderCreateSession` to exercise a provider-style HTTP create-session request.
+- Extended the hosted provider contract smoke with an in-process provider-compatible HTTP harness.
+- Exposed `hosted_browser_sandbox_provider_http_adapter` in FastAPI proof and Node dashboard proof.
+- Kept FastAPI `/api/v1/browser/sessions` fail-closed when only the HTTP adapter harness is ready.
+- Updated deployment/build contracts and focused tests.
+
+Safety decision:
+- The HTTP adapter harness makes a real local HTTP call, but only to an in-process harness.
+- The proof writes no local harness endpoint, fake provider endpoint, local harness token, or fake provider token.
+- The provider response still uses opaque refs only and never returns raw frames, raw OCR text, external actions, credential entry, or provider live-connected status.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real provider passes live stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-http-adapter-harness-smoke.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py project/tests/test_fastapi_facade.py`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_http_adapter_harness_never_overclaims_live_provider project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_adapter_contract_never_overclaims_live_provider`
+- `node scripts/browser-sandbox-provider-http-adapter-harness-smoke.mjs`
+
+Focused verification result:
+- JS and Python syntax/compile checks passed.
+- Focused browser-sandbox/compose contract tests passed with 7/7 tests.
+- Focused FastAPI HTTP adapter harness and adapter-contract tests passed with 2/2 tests.
+- HTTP adapter harness reported `hosted_browser_sandbox_provider_http_adapter_harness_ready`, `hostedProviderHttpAdapterReady=true`, `hostedProviderReady=false`, `providerNetworkCalled=true`, `localHarnessOnly=true`, and no local/fake endpoint or token leak.
+
+Full verification result:
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run sandbox:browser:provider-adapter` passed.
+- `npm run sandbox:browser:provider-http-adapter` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 23/23 tests.
+- FastAPI facade regression passed with 40 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- In-app browser DOM proof passed at `http://127.0.0.1:4204/?phase=hosted-browser-sandbox-provider-http-adapter`:
+  - HTTP adapter score row visible;
+  - `hosted_browser_sandbox_provider_http_adapter_harness_ready` visible;
+  - `hosted_remote_browser_sandbox` visible;
+  - fake provider endpoint and token absent from the page;
+  - console errors/warnings absent.
+- Fresh headless Chrome visual proof passed and captured the screenshot artifact after the connector proof loaded.
+- Screenshot and proof artifacts:
+  - `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-dashboard-proof.png`;
+  - `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-proof.json`;
+  - `artifacts/browser-sandbox-provider-http-adapter-harness-smoke.json`.
+
+Known risks or gaps:
+- This is a local provider-compatible HTTP harness, not a selected production hosted browser provider.
+- No hosted provider endpoint/token is configured for production.
+- Live provider proof still needs real provider create-session, stream-frame/WebRTC, screenshot/OCR, takeover, human input, offsite fail-closed, and teardown tests.

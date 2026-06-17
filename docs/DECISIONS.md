@@ -2195,3 +2195,22 @@ This makes the provider implementation target concrete while preserving truthful
 
 Cost of changing later:
 Low. The real provider client can reuse the request and response validator, swapping the deterministic mock transport for HTTPS/WebRTC calls once credentials and provider-specific endpoints are available.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider HTTP Adapter Harness Before Live Provider Integration
+
+Context:
+The adapter contract proved the create-session request and response envelope, but it did not yet prove that the runtime could actually send a provider-style HTTP request and validate the provider response. A real provider is still not selected or credentialed, so using production endpoints would either block or overclaim live readiness.
+
+Options considered:
+- Wait for a selected hosted browser provider.
+- Treat the deterministic adapter envelope as enough implementation proof.
+- Add a local provider-compatible HTTP harness that exercises the request plumbing and response validator without exposing secrets or claiming live provider readiness.
+
+Decision:
+Add `npm run sandbox:browser:provider-http-adapter`, an in-process provider-compatible HTTP harness, and a separate `hosted_browser_sandbox_provider_http_adapter` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed proof.
+
+Reason:
+This closes the next meaningful implementation gap while preserving truthfulness. The connector now proves provider-style network plumbing and strict response validation, but the dashboard still clearly distinguishes local harness readiness from production hosted browser readiness.
+
+Cost of changing later:
+Low. The selected provider adapter can replace the local harness endpoint with the provider endpoint while keeping the request contract, response validator, redaction policy, and FastAPI public API stable.

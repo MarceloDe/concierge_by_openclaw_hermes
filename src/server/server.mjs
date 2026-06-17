@@ -319,6 +319,9 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxAdapterMode === "hosted_provider" &&
     hostedBrowserSandboxProviderResolver.resolverReady &&
     !hostedBrowserSandboxProviderReady;
+  const hostedBrowserSandboxProviderHttpAdapterReady =
+    hostedBrowserSandboxProviderAdapterReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY === "1";
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -349,11 +352,14 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderResolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
     hostedBrowserSandboxProviderResolver,
     hostedBrowserSandboxProviderAdapterReady,
+    hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderReady,
     hostedBrowserSandboxProviderStatus: hostedBrowserSandboxProviderReady
       ? "hosted_browser_sandbox_provider_ready"
       : hostedBrowserSandboxAdapterHarnessReady
         ? "hosted_browser_sandbox_adapter_harness_ready"
+      : hostedBrowserSandboxProviderHttpAdapterReady
+        ? "hosted_browser_sandbox_provider_http_adapter_harness_ready"
       : hostedBrowserSandboxProviderAdapterReady
         ? "hosted_browser_sandbox_provider_adapter_contract_ready"
       : hostedBrowserSandboxProviderResolver.status === "hosted_browser_sandbox_provider_configured_unverified" ||
@@ -366,6 +372,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
+    browserSandboxProviderHttpAdapterCommand: "npm run sandbox:browser:provider-http-adapter",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
@@ -454,6 +461,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_adapter_harness",
         status: deployment.hostedBrowserSandboxProviderStatus,
         target: "The hosted adapter lifecycle can be contract-tested without provider credentials or live frames."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_http_adapter",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        target: "The hosted provider HTTP create-session adapter can be exercised against a local provider-compatible harness without leaking secrets."
       }
     ],
     checks: [
@@ -556,6 +568,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         rawSecretReturned: false
       },
       {
+        key: "hosted_browser_sandbox_provider_http_adapter",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        ok: deployment.hostedBrowserSandboxProviderHttpAdapterReady,
+        command: deployment.browserSandboxProviderHttpAdapterCommand,
+        providerNetworkCalled: deployment.hostedBrowserSandboxProviderHttpAdapterReady,
+        localHarnessOnly: true,
+        providerLiveConnected: false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false
+      },
+      {
         key: "hosted_browser_sandbox_adapter_harness",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxAdapterHarnessReady,
@@ -638,6 +661,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_adapter",
         score: deployment.hostedBrowserSandboxProviderAdapterReady ? 75 : 0,
         target: 75,
+        status: deployment.hostedBrowserSandboxProviderStatus
+      },
+      {
+        key: "hosted_browser_sandbox_provider_http_adapter",
+        score: deployment.hostedBrowserSandboxProviderHttpAdapterReady ? 85 : 0,
+        target: 85,
         status: deployment.hostedBrowserSandboxProviderStatus
       },
       {

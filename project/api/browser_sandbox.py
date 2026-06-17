@@ -247,6 +247,11 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
                     "Hosted browser sandbox provider adapter contract is ready, but live provider verification has not passed. "
                     "The adapter smoke does not create real hosted sessions until live stream, screenshot/OCR, takeover, input, and teardown proof passes."
                 )
+            if contract.get("status") == "hosted_browser_sandbox_provider_http_adapter_harness_ready":
+                raise BrowserSandboxError(
+                    "Hosted browser sandbox provider HTTP adapter harness is ready, but live provider verification has not passed. "
+                    "The local provider-compatible harness proves request plumbing only and does not create real hosted sessions."
+                )
             raise BrowserSandboxError(
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
@@ -428,10 +433,15 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["resolverReady"]
         and not provider_ready
     )
+    http_adapter_harness_ready = bool(
+        adapter_contract_ready
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY") == "1"
+    )
     status = (
         "hosted_browser_sandbox_provider_ready"
         if provider_ready
         else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
+        else "hosted_browser_sandbox_provider_http_adapter_harness_ready" if http_adapter_harness_ready
         else "hosted_browser_sandbox_provider_adapter_contract_ready" if adapter_contract_ready
         else "local_cdp_default" if selected_provider == "local_cdp"
         else hosted_resolution["status"] if adapter_mode == "hosted_provider" and config_ok
@@ -448,6 +458,7 @@ def describe_browser_sandbox_provider_contract(
         "adapterHarnessReady": adapter_harness_ready,
         "hostedProviderResolverReady": hosted_resolution["resolverReady"],
         "hostedProviderAdapterReady": adapter_contract_ready,
+        "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
         "hostedProviderResolver": hosted_resolution,
         "status": status,
         "failures": failures,

@@ -972,6 +972,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("status")
             },
             {
+                "key": "hosted_browser_sandbox_provider_http_adapter",
+                "score": 85 if browser_sandbox_contract.get("hostedProviderHttpAdapterReady") else 0,
+                "target": 85,
+                "status": browser_sandbox_contract.get("status")
+            },
+            {
                 "key": "hosted_remote_browser_sandbox",
                 "score": 100 if browser_sandbox_contract.get("ready") else 0,
                 "target": 100,

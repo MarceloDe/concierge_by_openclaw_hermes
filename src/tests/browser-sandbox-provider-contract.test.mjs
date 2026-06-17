@@ -7,7 +7,8 @@ import {
   runBrowserSandboxProviderContractSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
-  runBrowserSandboxProviderAdapterSmoke
+  runBrowserSandboxProviderAdapterSmoke,
+  runBrowserSandboxProviderHttpAdapterHarnessSmoke
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 test("hosted browser sandbox provider contract validates the safe remote provider shape", async () => {
@@ -124,6 +125,32 @@ test("hosted browser sandbox provider adapter smoke proves request and response 
     restoreEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
     restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY", previousAdapter);
   }
+});
+
+test("hosted browser sandbox provider HTTP adapter harness makes a redacted provider-style call", async () => {
+  const result = await runBrowserSandboxProviderHttpAdapterHarnessSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-http-adapter-harness-smoke-test.json"
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderAdapterReady, true);
+  assert.equal(result.hostedProviderHttpAdapterReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_http_adapter_harness_ready");
+  assert.equal(result.adapterContract.httpAdapterHarness.providerNetworkCalled, true);
+  assert.equal(result.adapterContract.httpAdapterHarness.localHarnessOnly, true);
+  assert.equal(result.adapterContract.httpAdapterHarness.endpointRedacted, true);
+  assert.equal(result.adapterContract.httpAdapterHarness.authorizationRedacted, true);
+  assert.equal(result.adapterContract.httpAdapterHarness.requestMethod, "POST");
+  assert.equal(result.adapterContract.httpAdapterHarness.requestPath, "/browser/sessions");
+  assert.equal(result.adapterContract.httpAdapterHarness.providerLiveConnected, false);
+  assert.equal(result.adapterContract.httpAdapterHarness.responseValidation.ok, true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.doesNotMatch(serialized, /provider-harness\.invalid/);
+  assert.doesNotMatch(serialized, /provider-harness-token-must-not-leak/);
+  assert.doesNotMatch(serialized, /local-harness-token-redacted/);
+  assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost/);
 });
 
 function restoreEnv(key, value) {

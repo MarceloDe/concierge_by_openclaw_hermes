@@ -2325,3 +2325,34 @@ Remaining follow-up:
 - Replace the deterministic adapter smoke with provider-specific HTTP/WebRTC implementation.
 - Add live provider create-session, stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed tests.
 - Keep the adapter smoke as CI regression even after the live provider exists.
+
+## Hosted Browser Sandbox Provider HTTP Adapter Harness Cycle - 2026-06-17
+
+Goal:
+- Move from a deterministic adapter envelope to an actual provider-style HTTP create-session call against a local harness, without using production provider credentials or claiming live hosted browser readiness.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-http-adapter-harness-smoke.mjs` and `npm run sandbox:browser:provider-http-adapter`.
+- Add `callHostedProviderCreateSession` as the provider HTTP adapter client shape.
+- Spin up an in-process provider-compatible harness that accepts `POST /browser/sessions` with a redacted bearer authorization path.
+- Validate the harness request and response:
+  - POST method and provider path;
+  - authorization present but never written;
+  - no raw target URL in the request body;
+  - no credential-entry allowance;
+  - no external-write allowance;
+  - opaque provider refs only in the response.
+- Expose `hosted_browser_sandbox_provider_http_adapter` through FastAPI proof and Node dashboard proof.
+- Keep FastAPI session creation fail-closed when only the HTTP adapter harness is ready.
+
+Acceptance:
+- HTTP adapter harness smoke proves `providerNetworkCalled=true` against a local harness and `localHarnessOnly=true`.
+- Proof artifacts do not contain the local harness endpoint, fake provider endpoint, local harness token, or fake provider token.
+- The HTTP adapter score can reach `85 / 85`.
+- The adapter-contract score can stay `75 / 75`.
+- The live hosted provider score remains `0 / 100` until a real provider is connected, live-verified, and visually/OCR tested.
+
+Remaining follow-up:
+- Replace the local harness transport with the selected provider's HTTPS/WebRTC implementation.
+- Add provider-backed stream proxying, screenshot/OCR, takeover, input relay, teardown, and offsite-fail-closed tests.
+- Add a live provider visual proof before allowing `hosted_remote_browser_sandbox` to pass.
