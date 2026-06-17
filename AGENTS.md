@@ -1,8 +1,34 @@
 # Codex Project Instructions
 
-This repository is governed by `brainstyworkers_ai_concierge_prompt.md`.
+## Cortex is the canonical source
 
-Before implementation, Codex must read that file completely and treat it as the primary product, architecture, and behavior source for the Brainstyworkers AI Concierge.
+Before any implementation, every agent (Codex, Claude Code, OpenClaw, Hermes, Cursor, Perplexity Computer) MUST first:
+
+1. Pull the latest `cortex/main`.
+2. Read `semantic/projects/workerprototype-openclaw-late-implementation-architecture.md` — the **authoritative product source** for the current phase.
+3. Read the most recent `episodic/<YYYY>/<MM>/*--codex--workerprototype-openclaw--late-implementation-alignment-consolidation.md` — supersedes any earlier architecture note on conflict.
+
+The Cortex semantic note is the single source of truth for the next implementation phase. `brainstyworkers_ai_concierge_prompt.md` is historical context only. Any conflict between this repo's docs and Cortex is resolved in favor of Cortex.
+
+After a phase is implemented and verified in this repo, the implementing agent MUST:
+
+- Write a new episodic note to Cortex on its own `memory/<agent>/<date>` branch.
+- Update the semantic late-implementation-architecture note via `supersedes`.
+- Open a PR on the Cortex repo to land both on `cortex/main` **before** marking the phase done.
+
+A phase is not done until both the project commit lands on `concierge_by_openclaw_hermes/main` AND the Cortex notes land on `cortex/main`.
+
+## Branch hygiene
+
+- Start each phase from a fresh branch off `origin/main`: `git checkout -b phase-<N>-<slug> origin/main`.
+- Do not push new phase commits onto an already-merged feature branch.
+- Open a PR against `main` at session end. CI green is the merge gate.
+
+## Historical context
+
+This repository was originally governed by `brainstyworkers_ai_concierge_prompt.md`.
+
+Before implementation, Codex must read that file completely and treat it as historical product, architecture, and behavior source for the Brainstyworkers AI Concierge.
 
 ## Required Startup Workflow
 
