@@ -35,6 +35,7 @@
     "sandbox:browser:provider-contract": "node scripts/browser-sandbox-provider-contract.mjs",
     "sandbox:browser:provider-selection": "node scripts/browser-sandbox-provider-selection-smoke.mjs",
     "sandbox:browser:provider-live-preflight": "node scripts/browser-sandbox-provider-live-preflight-smoke.mjs",
+    "sandbox:browser:provider-live-verification": "node scripts/browser-sandbox-provider-live-verification-smoke.mjs",
     "sandbox:browser:adapter-harness": "node scripts/browser-sandbox-adapter-harness.mjs",
     "sandbox:browser:provider-resolver": "node scripts/browser-sandbox-provider-resolver.mjs",
     "sandbox:browser:provider-adapter": "node scripts/browser-sandbox-provider-adapter-smoke.mjs",

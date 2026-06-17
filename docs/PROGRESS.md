@@ -7601,3 +7601,70 @@ Known risks or gaps:
 - This phase validates the live-preflight gate, not a production hosted browser provider.
 - Real provider endpoint/token still must live outside Git.
 - Live provider proof still needs selected-provider HTTPS/WebRTC lifecycle implementation and GUI/OCR testing.
+
+## Phase 23 Hosted Browser Sandbox Provider Live Verification Update
+
+Status: Implemented, full regression-tested, and visually/API proved with the hosted remote score still honestly blocked.
+
+Slice name:
+- Hosted browser sandbox provider live verification.
+
+Code changes:
+- Added `scripts/browser-sandbox-provider-live-verification-smoke.mjs` and package script `sandbox:browser:provider-live-verification`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with selected-provider live verification for create session, stream, screenshot, OCR/caption, takeover, approved input, offsite fail-closed navigation, and teardown.
+- Added `project/deployment/browser-sandbox-provider.live-verification.example.env` as a non-secret operator template for private provider verification.
+- Extended compose, build, and deployment contract checks with the live-verification env gate and command.
+- Added FastAPI hosted-provider runtime support for provider HTTPS create-session, provider-backed takeover/input, and sanitized SSE stream proxying.
+- Exposed `hosted_browser_sandbox_provider_live_verification` in FastAPI proof and Node dashboard proof.
+- Kept `hosted_remote_browser_sandbox` blocked unless live verification is ready, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` is set, and the private provider config reports `adapter.providerLiveConnected=true`.
+
+Safety decision:
+- Private endpoint, token, and provider runtime JSON remain outside Git.
+- The default verification command is blocked and safe when live provider config is absent.
+- The live-verification score can prove the lifecycle contract, but it does not by itself enable the hosted remote browser score.
+- Provider-backed input remains gated by human-only `interactive_takeover`; raw input values are redacted before provider relay.
+- Provider endpoint, token, raw frame payload, raw OCR text, raw input values, and credential material must not appear in dashboard text or proof artifacts.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-live-verification-smoke.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m compileall -q project`
+- `npm run sandbox:browser:provider-live-verification`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_live_preflight_never_overclaims_live_provider project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_live_verification_is_separate_from_hosted_ready`
+
+Focused verification result:
+- Syntax/compile checks passed.
+- Live verification smoke reported `hosted_browser_sandbox_provider_live_verification_blocked`, `hostedProviderLiveVerificationReady=false`, and `hostedProviderReady=false` in default safe mode.
+- Focused browser-sandbox/compose contract tests passed with 14/14 tests.
+- Focused FastAPI live-verification regressions passed with 2/2 tests.
+
+Full verification result:
+- Full sandbox smoke chain passed:
+  - `npm run sandbox:browser:provider-contract`
+  - `npm run sandbox:browser:provider-selection`
+  - `npm run sandbox:browser:provider-live-preflight`
+  - `npm run sandbox:browser:provider-live-verification`
+  - `npm run sandbox:browser:adapter-harness`
+  - `npm run sandbox:browser:provider-resolver`
+  - `npm run sandbox:browser:provider-adapter`
+  - `npm run sandbox:browser:provider-http-adapter`
+  - `npm run sandbox:browser:provider-live-lifecycle`
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 30/30 tests.
+- `npm run test:facade` passed with 44 tests and 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Dashboard visual/API proof passed on `http://127.0.0.1:4208/?phase=hosted-browser-sandbox-provider-live-verification`.
+- Browser/API assertion proved `hosted_browser_sandbox_provider_live_verification` at `100 / 100`, `hosted_browser_sandbox_provider_live_preflight` at `80 / 80`, `hosted_remote_browser_sandbox` still at `0 / 100`, and no fake endpoint/token leakage.
+- Proof artifacts:
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-dashboard-proof.png`
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-visual-proof.json`
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-proof.json`
+  - `artifacts/browser-sandbox-provider-live-verification-smoke.json`
+
+Known risks or gaps:
+- This phase adds the selected-provider integration path and proof gate, but the local environment still does not include real provider credentials.
+- Real provider endpoint/token/config must stay outside Git and be supplied by the operator.
+- `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider returns live connected proof plus GUI/OCR evidence.

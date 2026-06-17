@@ -6,9 +6,12 @@ import os
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
+import httpx
+
 
 SANDBOX_CONTRACT_VERSION = "browser-sandbox-provider.v1"
 HOSTED_SANDBOX_CONTRACT_VERSION = "brainstyworkers.browser-sandbox-provider.v1"
+HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION = "2026-06-17.browser-sandbox-provider.v1"
 DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json"
 DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
@@ -222,6 +225,146 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
             raise BrowserSandboxError("Hosted browser sandbox adapter harness is not enabled for this session.")
         return contract
 
+    def _load_private_config(self) -> dict[str, Any]:
+        with open(self.config_path, "r", encoding="utf-8") as handle:
+            config = json.load(handle)
+        if not isinstance(config, dict):
+            raise BrowserSandboxError("Hosted browser sandbox provider config is not a JSON object.")
+        return config
+
+    def _endpoint_and_token(self, config: dict[str, Any]) -> tuple[str, str]:
+        endpoint_env = _env_name_from_ref(config.get("endpointRef"))
+        token_env = _env_name_from_ref(config.get("auth", {}).get("tokenRef", DEFAULT_HOSTED_AUTH_TOKEN_REF))
+        endpoint = os.environ.get(endpoint_env or "")
+        token = os.environ.get(token_env or "")
+        if not endpoint or not _is_https_endpoint(endpoint):
+            raise BrowserSandboxError("Hosted browser sandbox provider endpoint is not resolved to an HTTPS URL.")
+        if not token:
+            raise BrowserSandboxError("Hosted browser sandbox provider auth token is not resolved.")
+        return endpoint.rstrip("/") + "/", token
+
+    async def _provider_json(self, *, path: str, method: str = "POST", body: dict[str, Any] | None = None) -> dict[str, Any]:
+        config = self._load_private_config()
+        endpoint, token = self._endpoint_and_token(config)
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.request(
+                method,
+                str(httpx.URL(endpoint).join(path.lstrip("/"))),
+                headers={
+                    "content-type": "application/json",
+                    "authorization": f"Bearer {token}",
+                    "x-brainstyworkers-contract-version": HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION
+                },
+                json=body if method != "GET" else None
+            )
+        try:
+            payload = response.json()
+        except Exception as exc:
+            raise BrowserSandboxError(f"Hosted browser sandbox provider returned invalid JSON: {exc}") from exc
+        return {"status_code": response.status_code, "payload": payload}
+
+    def _assert_live_create_response(self, payload: dict[str, Any]) -> None:
+        serialized = json.dumps(payload, separators=(",", ":"))
+        failures: list[str] = []
+        if payload.get("contractVersion") != HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION:
+            failures.append("contract_version_mismatch")
+        if not payload.get("providerSessionRef"):
+            failures.append("provider_session_ref_required")
+        if payload.get("providerLiveConnected") is not True:
+            failures.append("provider_live_connected_required")
+        if payload.get("stream", {}).get("rawFrameReturned") is True:
+            failures.append("raw_frame_returned")
+        if payload.get("ocrCaption", {}).get("rawOcrTextReturned") is True:
+            failures.append("raw_ocr_text_returned")
+        if payload.get("takeover", {}).get("inputRelay") != "approval_gated_human_only":
+            failures.append("input_relay_not_human_only")
+        if payload.get("safety", {}).get("agentCredentialEntryAllowed") is True:
+            failures.append("agent_credential_entry_allowed")
+        if payload.get("safety", {}).get("externalWriteActionsWithoutApproval") is True:
+            failures.append("external_write_actions_without_approval")
+        if any(marker in serialized.lower() for marker in ["data:image", "<html", "member id", "subscriber id", "password", "captcha"]):
+            failures.append("raw_frame_or_ocr_or_secret_content_returned")
+        if failures:
+            raise BrowserSandboxError(f"Hosted browser sandbox provider live response failed contract: {', '.join(failures)}")
+
+    async def _create_live_session(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        target_url: str | None = None,
+        options: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        request_body = {
+            "sessionId": session_id,
+            "userId": user_id,
+            "targetUrlRef": (options or {}).get("targetUrlRef", "approved-target-url-ref-redacted"),
+            "options": {"liveProvider": True, **{k: v for k, v in (options or {}).items() if k != "targetUrlRef"}},
+            "approvalContract": {
+                "readOnlyApprovalRequired": True,
+                "humanTakeoverApprovalRequired": True,
+                "humanInputRelay": "approval_gated_human_only"
+            },
+            "safetyContract": {
+                "agentCredentialEntryAllowed": False,
+                "externalWriteActionsAllowed": False,
+                "frameRecordingAllowed": False,
+                "rawOcrPersistenceAllowed": False,
+                "offsiteFailClosed": True,
+                "credentialPagesUserOnly": True
+            }
+        }
+        result = await self._provider_json(path="browser/sessions", body=request_body)
+        if result["status_code"] >= 400:
+            raise BrowserSandboxError("Hosted browser sandbox provider rejected session creation.")
+        payload = result["payload"]
+        self._assert_live_create_response(payload)
+        provider_session_ref = str(payload["providerSessionRef"])
+        return {
+            "browser_session_id": f"hosted_browser_{uuid4()}",
+            "contract_version": HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION,
+            "provider": self.provider_key,
+            "adapter_mode": "hosted_provider",
+            "provider_live_connected": True,
+            "provider_session_ref": provider_session_ref,
+            "provider_paths": {
+                "stream": payload.get("stream", {}).get("streamPath") or f"browser/sessions/{provider_session_ref}/stream",
+                "takeover": payload.get("takeover", {}).get("takeoverPath") or f"browser/sessions/{provider_session_ref}/takeover",
+                "input": payload.get("takeover", {}).get("inputPath") or f"browser/sessions/{provider_session_ref}/input",
+                "teardown": f"browser/sessions/{provider_session_ref}/teardown"
+            },
+            "session_id": session_id,
+            "user_id": user_id,
+            "target_url": target_url,
+            "created_at": now_iso(),
+            "takeover_state": payload.get("takeover", {}).get("state", "not_requested"),
+            "readiness": {
+                "status": "hosted_browser_sandbox_provider_ready",
+                "ready": True,
+                "adapterMode": "hosted_provider",
+                "providerLiveConnected": True,
+                "userActionRequired": None,
+                "nextAction": "use_public_stream_and_takeover_routes",
+                "safetyBoundary": "read_only_approval_required"
+            },
+            "current_url": None,
+            "current_title": "Hosted remote browser session",
+            "ocr_caption": {
+                "status": "provider_caption_ref_ready" if payload.get("ocrCaption", {}).get("captionRef") else "pending_provider_caption",
+                "requiredForEvidence": True,
+                "rawOcrTextReturned": False,
+                "captionRefPresent": bool(payload.get("ocrCaption", {}).get("captionRef"))
+            },
+            "screencast": {
+                "ok": True,
+                "status": "hosted_provider_session_created",
+                "frameSource": "hosted_provider_stream_ref",
+                "streamTransport": payload.get("stream", {}).get("transport", "webrtc_or_sse_frames"),
+                "rawFrameRecorded": False,
+                "providerLiveConnected": True
+            }
+        }
+
     async def create_session(
         self,
         *,
@@ -262,6 +405,13 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1 after hosted proof passes."
+            )
+        if contract.get("ready"):
+            return await self._create_live_session(
+                user_id=user_id,
+                session_id=session_id,
+                target_url=target_url,
+                options=options
             )
         if contract.get("adapterHarnessReady"):
             return {
@@ -305,6 +455,19 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         raise BrowserSandboxError("Hosted browser sandbox provider adapter is configured but not implemented in this local runtime.")
 
     async def request_takeover(self, *, node_client: Any, browser_session: dict[str, Any], reason: str | None = None) -> dict[str, Any]:
+        if browser_session.get("provider_live_connected") is True:
+            path = browser_session.get("provider_paths", {}).get("takeover") or f"browser/sessions/{browser_session['provider_session_ref']}/takeover"
+            result = await self._provider_json(path=path, body={"reason": reason or "user_password_or_captcha"})
+            payload = result["payload"]
+            return {
+                "ok": result["status_code"] < 400 and payload.get("approvalRequired") is True,
+                "status": payload.get("status", "interactive_takeover_pending_approval"),
+                "takeoverId": payload.get("takeoverId"),
+                "approvalRequired": payload.get("approvalRequired") is True,
+                "inputRelay": payload.get("inputRelay", "approval_gated_human_only"),
+                "providerLiveConnected": True,
+                "actionsTaken": []
+            }
         self._require_harness()
         return {
             "ok": True,
@@ -317,6 +480,17 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         }
 
     async def grant_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str, approved_by: str | None = None) -> dict[str, Any]:
+        if browser_session.get("provider_live_connected") is True:
+            return {
+                "ok": True,
+                "status": "interactive_takeover_granted",
+                "takeoverId": takeover_id,
+                "grantToken": f"hosted_provider_grant_{uuid4()}",
+                "approvedBy": approved_by or "user",
+                "providerLiveConnected": True,
+                "inputRelay": "approval_gated_human_only",
+                "actionsTaken": []
+            }
         self._require_harness()
         return {
             "ok": True,
@@ -329,6 +503,16 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         }
 
     async def end_takeover(self, *, node_client: Any, browser_session: dict[str, Any], takeover_id: str) -> dict[str, Any]:
+        if browser_session.get("provider_live_connected") is True:
+            path = f"browser/sessions/{browser_session['provider_session_ref']}/takeover/end"
+            result = await self._provider_json(path=path, body={"takeoverId": takeover_id})
+            return {
+                "ok": result["status_code"] < 400,
+                "status": result["payload"].get("status", "interactive_takeover_ended"),
+                "takeoverId": takeover_id,
+                "providerLiveConnected": True,
+                "actionsTaken": []
+            }
         self._require_harness()
         return {
             "ok": True,
@@ -347,6 +531,30 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
         grant_token: str,
         input_payload: dict[str, Any]
     ) -> dict[str, Any]:
+        if browser_session.get("provider_live_connected") is True:
+            if not grant_token.startswith("hosted_provider_grant_"):
+                raise BrowserSandboxError("Hosted browser sandbox input requires a valid human takeover grant token.")
+            path = browser_session.get("provider_paths", {}).get("input") or f"browser/sessions/{browser_session['provider_session_ref']}/input"
+            result = await self._provider_json(
+                path=path,
+                body={
+                    "takeoverId": takeover_id,
+                    "approvalGrantRef": "approval-grant-ref-redacted",
+                    "inputType": input_payload.get("type"),
+                    "inputValue": "[redacted]"
+                }
+            )
+            payload = result["payload"]
+            return {
+                "ok": result["status_code"] < 400 and payload.get("rawInputReturned") is not True,
+                "status": payload.get("status", "interactive_takeover_input_relayed"),
+                "takeoverId": takeover_id,
+                "inputAccepted": payload.get("inputAccepted") is True,
+                "inputRelay": "approval_gated_human_only",
+                "rawInputReturned": False,
+                "providerLiveConnected": True,
+                "actionsTaken": []
+            }
         self._require_harness()
         if not grant_token.startswith("hosted_grant_"):
             raise BrowserSandboxError("Hosted browser sandbox input requires a valid harness grant token.")
@@ -429,6 +637,7 @@ def describe_browser_sandbox_provider_contract(
         and adapter_mode == "hosted_provider"
         and hosted_resolution["resolverReady"]
         and hosted_resolution["liveVerified"]
+        and hosted_resolution["liveVerificationReady"]
         and hosted_resolution["providerLiveConnected"]
     )
     adapter_contract_ready = bool(
@@ -452,6 +661,11 @@ def describe_browser_sandbox_provider_contract(
         selection_contract["preflightReady"]
         and hosted_resolution["resolverReady"]
         and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY") == "1"
+    )
+    live_verification_ready = bool(
+        live_preflight_ready
+        and hosted_resolution["resolverReady"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
     )
     status = (
         "hosted_browser_sandbox_provider_ready"
@@ -489,6 +703,23 @@ def describe_browser_sandbox_provider_contract(
             "resolverReady": hosted_resolution["resolverReady"],
             "selectionPreflightReady": selection_contract["preflightReady"],
             "liveProbeEnabled": os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE") == "1",
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False
+        },
+        "hostedProviderLiveVerificationReady": live_verification_ready,
+        "hostedProviderLiveVerification": {
+            "status": (
+                "hosted_browser_sandbox_provider_live_verification_ready"
+                if live_verification_ready
+                else "hosted_browser_sandbox_provider_live_verification_requires_explicit_gate"
+                if live_preflight_ready
+                else "hosted_browser_sandbox_provider_live_verification_blocked"
+            ),
+            "resolverReady": hosted_resolution["resolverReady"],
+            "livePreflightReady": live_preflight_ready,
+            "providerLiveConnected": hosted_resolution.get("providerLiveConnected") is True,
+            "liveVerified": hosted_resolution.get("liveVerified") is True,
             "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
             "rawEndpointReturned": False,
             "rawSecretReturned": False
@@ -623,6 +854,7 @@ def resolve_hosted_browser_sandbox_provider_config(
     endpoint_resolved = bool(endpoint_env_name and _is_https_endpoint(env.get(endpoint_env_name)))
     auth_resolved = bool(auth_env_name and env.get(auth_env_name))
     live_verified = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED") == "1"
+    live_verification_ready = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
     provider_live_connected = bool(isinstance(config, dict) and config.get("adapter", {}).get("providerLiveConnected") is True)
     resolver_ready = bool(
         selected_provider == "hosted_remote"
@@ -635,7 +867,7 @@ def resolve_hosted_browser_sandbox_provider_config(
     )
     status = (
         "hosted_browser_sandbox_provider_ready"
-        if resolver_ready and live_verified and provider_live_connected
+        if resolver_ready and live_verified and live_verification_ready and provider_live_connected
         else "hosted_browser_sandbox_provider_configured_unverified" if resolver_ready
         else "hosted_browser_sandbox_provider_missing_endpoint_or_secret"
         if selected_provider == "hosted_remote" and selected_ready and config_ok and non_example_config and adapter_mode == "hosted_provider"
@@ -647,6 +879,7 @@ def resolve_hosted_browser_sandbox_provider_config(
         "endpointResolved": endpoint_resolved,
         "authResolved": auth_resolved,
         "liveVerified": live_verified,
+        "liveVerificationReady": live_verification_ready,
         "providerLiveConnected": provider_live_connected,
         "endpointRefKind": _ref_kind(endpoint_ref),
         "authTokenRefKind": _ref_kind(auth_token_ref),
@@ -678,6 +911,49 @@ async def hosted_browser_sandbox_harness_stream(browser_session: dict[str, Any])
         }
     }
     yield f"event: hosted.sandbox.contract_frame\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
+
+async def hosted_browser_sandbox_provider_stream(browser_session: dict[str, Any]) -> AsyncIterator[str]:
+    provider = HostedRemoteBrowserSandboxProvider()
+    config = provider._load_private_config()
+    endpoint, token = provider._endpoint_and_token(config)
+    stream_path = browser_session.get("provider_paths", {}).get("stream") or f"browser/sessions/{browser_session['provider_session_ref']}/stream"
+    async with httpx.AsyncClient(timeout=None) as client:
+        async with client.stream(
+            "GET",
+            str(httpx.URL(endpoint).join(str(stream_path).lstrip("/"))),
+            headers={
+                "accept": "text/event-stream",
+                "authorization": f"Bearer {token}",
+                "x-brainstyworkers-contract-version": HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION
+            }
+        ) as response:
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    event_payload = json.loads(line.removeprefix("data:").strip())
+                except Exception:
+                    continue
+                safe_payload = {
+                    "eventType": event_payload.get("eventType", "hosted.sandbox.provider_frame"),
+                    "browserSessionId": browser_session.get("browser_session_id"),
+                    "sessionId": browser_session.get("session_id"),
+                    "provider": "hosted_remote",
+                    "adapterMode": "hosted_provider",
+                    "providerLiveConnected": event_payload.get("providerLiveConnected") is True,
+                    "frameRefPresent": bool(event_payload.get("frameRef")),
+                    "captionRefPresent": bool(event_payload.get("ocrCaption", {}).get("captionRef")),
+                    "safety": {
+                        "rawFrameReturned": event_payload.get("rawFrameReturned") is True,
+                        "rawOcrTextReturned": event_payload.get("ocrCaption", {}).get("rawOcrTextReturned") is True,
+                        "externalWriteActionsWithoutApproval": False
+                    }
+                }
+                if safe_payload["safety"]["rawFrameReturned"] or safe_payload["safety"]["rawOcrTextReturned"]:
+                    yield f"event: hosted.sandbox.provider_blocked\ndata: {json.dumps({'eventType': 'hosted.sandbox.provider_blocked', 'reason': 'raw_frame_or_ocr_blocked'}, separators=(',', ':'))}\n\n"
+                    return
+                yield f"event: hosted.sandbox.provider_frame\ndata: {json.dumps(safe_payload, separators=(',', ':'))}\n\n"
 
 
 def get_browser_sandbox_provider(provider: str | None) -> BrowserSandboxProvider:

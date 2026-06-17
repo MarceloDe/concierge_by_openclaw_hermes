@@ -398,6 +398,300 @@ export async function runBrowserSandboxProviderLivePreflightSmoke({
   return result;
 }
 
+export async function runBrowserSandboxProviderLiveVerificationSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-live-verification-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [validation, configText, preflight] = await Promise.all([
+    validateBrowserSandboxProviderContract({ configPath }),
+    readFile(resolve(configPath), "utf8"),
+    runBrowserSandboxProviderLivePreflightSmoke({
+      configPath,
+      selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-live-preflight-smoke.json"),
+      env,
+      providerReady,
+      fetchImpl
+    })
+  ]);
+  const config = JSON.parse(configText);
+  const resolver = resolveBrowserSandboxHostedProvider({
+    config,
+    configPath,
+    validation,
+    env,
+    providerReady,
+    provider: env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "hosted_remote"
+  });
+  const liveVerificationGate = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
+  const canAttemptLiveProvider = Boolean(
+    validation.ok &&
+    preflight.hostedProviderLivePreflightReady &&
+    resolver.resolverReady &&
+    liveVerificationGate
+  );
+  const liveLifecycle = canAttemptLiveProvider
+    ? await callSelectedHostedProviderLiveLifecycle({
+      endpointUrl: env[envNameFromRef(config.endpointRef)],
+      apiToken: env[envNameFromRef(config.auth?.tokenRef ?? DEFAULT_HOSTED_AUTH_TOKEN_REF)],
+      resolver,
+      fetchImpl
+    })
+    : {
+      attempted: false,
+      ok: false,
+      status: preflight.hostedProviderLivePreflightReady
+        ? "hosted_browser_sandbox_provider_live_verification_requires_explicit_gate"
+        : "hosted_browser_sandbox_provider_live_verification_blocked",
+      providerNetworkCalled: false,
+      localHarnessOnly: false
+    };
+  const liveVerified = Boolean(
+    liveLifecycle.ok &&
+    liveLifecycle.providerNetworkCalled &&
+    liveLifecycle.providerLiveConnected &&
+    !liveLifecycle.localHarnessOnly
+  );
+  const hostedProviderReady = Boolean(
+    liveVerified &&
+    resolver.resolverReady &&
+    env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED === "1" &&
+    config?.adapter?.providerLiveConnected === true
+  );
+  const result = {
+    ok: Boolean(validation.ok && preflight.ok && (!canAttemptLiveProvider || liveLifecycle.ok)),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: liveVerified
+      ? "hosted_browser_sandbox_provider_live_verified"
+      : liveLifecycle.status,
+    hostedProviderLiveVerificationReady: liveVerified,
+    hostedProviderReady,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    validation,
+    preflight: {
+      hostedProviderLivePreflightReady: preflight.hostedProviderLivePreflightReady,
+      status: preflight.status,
+      selectedProviderKey: preflight.selection?.selectedProviderKey ?? null
+    },
+    resolver,
+    liveLifecycle,
+    requiredLiveProofBeforeHostedReady: [
+      "selected provider endpoint and auth refs resolved from private config",
+      "real provider create session",
+      "provider stream frame reference",
+      "provider screenshot reference",
+      "provider OCR/caption reference",
+      "approval-gated takeover request",
+      "redacted approved human input relay",
+      "offsite navigation fail-closed",
+      "teardown",
+      "dashboard GUI/OCR proof"
+    ],
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_live_verification",
+      scoreKey: "hosted_browser_sandbox_provider_live_verification",
+      liveVerificationReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY",
+      hostedReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(resolver),
+      ...assertNoSecretLeak(preflight),
+      ...assertNoSecretLeak(liveLifecycle),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: Boolean(liveLifecycle?.stream?.rawFrameReturned),
+      rawOcrTextReturned: Boolean(liveLifecycle?.ocrCaption?.rawOcrTextReturned),
+      rawInputReturned: Boolean(liveLifecycle?.input?.rawInputReturned),
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: !hostedProviderReady && resolver.ready
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+async function callSelectedHostedProviderLiveLifecycle({
+  endpointUrl,
+  apiToken,
+  resolver,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const request = buildHostedProviderAdapterRequest({
+    providerResolution: resolver,
+    targetUrlRef: "approved-target-url-ref-redacted",
+    options: { liveVerification: true }
+  });
+  const createSession = await callHostedProviderCreateLiveSession({
+    endpointUrl,
+    apiToken,
+    request,
+    fetchImpl
+  });
+  const providerSessionRef = createSession.response?.providerSessionRef;
+  const stream = await callHostedProviderStreamOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/stream`,
+    fetchImpl
+  });
+  const screenshot = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/screenshot`,
+    body: { screenshotRef: "provider-screenshot-ref-redacted" },
+    fetchImpl
+  });
+  const ocrCaption = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/ocr-caption`,
+    body: { screenshotRef: "provider-screenshot-ref-redacted" },
+    fetchImpl
+  });
+  const takeover = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/takeover`,
+    body: { reason: "user_controlled_auth_or_captcha" },
+    fetchImpl
+  });
+  const input = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/input`,
+    body: {
+      takeoverId: takeover.response?.takeoverId,
+      approvalGrantRef: "approval-grant-ref-redacted",
+      inputType: "click",
+      inputValue: "[redacted]"
+    },
+    fetchImpl
+  });
+  const offsite = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/navigate`,
+    body: { targetUrlRef: "offsite-target-url-ref-redacted" },
+    fetchImpl
+  });
+  const teardown = await callHostedProviderJsonOperation({
+    endpointUrl,
+    apiToken,
+    path: `/browser/sessions/${providerSessionRef}/teardown`,
+    body: { reason: "live_verification_complete" },
+    fetchImpl
+  });
+  const ok = Boolean(
+    createSession.ok &&
+    createSession.response?.providerLiveConnected === true &&
+    stream.ok &&
+    stream.providerLiveConnected === true &&
+    screenshot.ok &&
+    screenshot.response?.providerLiveConnected === true &&
+    screenshot.response?.screenshotRef &&
+    screenshot.response?.rawImageReturned === false &&
+    ocrCaption.ok &&
+    ocrCaption.response?.providerLiveConnected === true &&
+    ocrCaption.response?.captionRef &&
+    ocrCaption.response?.rawOcrTextReturned === false &&
+    takeover.ok &&
+    takeover.response?.providerLiveConnected === true &&
+    takeover.response?.approvalRequired === true &&
+    takeover.response?.inputRelay === "approval_gated_human_only" &&
+    input.ok &&
+    input.response?.providerLiveConnected === true &&
+    input.response?.inputAccepted === true &&
+    input.response?.rawInputReturned === false &&
+    input.response?.externalWriteActionsWithoutApproval === false &&
+    offsite.statusCode === 403 &&
+    offsite.response?.providerLiveConnected === true &&
+    offsite.response?.offsiteFailClosed === true &&
+    offsite.response?.rawTargetUrlReturned === false &&
+    teardown.ok &&
+    teardown.response?.providerLiveConnected === true &&
+    teardown.response?.teardownComplete === true &&
+    teardown.response?.rawFramePersisted === false &&
+    teardown.response?.rawOcrTextPersisted === false
+  );
+  return {
+    attempted: true,
+    ok,
+    status: ok
+      ? "hosted_browser_sandbox_provider_live_lifecycle_verified"
+      : "hosted_browser_sandbox_provider_live_lifecycle_failed",
+    providerNetworkCalled: true,
+    localHarnessOnly: false,
+    providerLiveConnected: Boolean(createSession.response?.providerLiveConnected),
+    createSession: {
+      ok: createSession.ok,
+      statusCode: createSession.statusCode,
+      responseValidation: createSession.responseValidation,
+      providerLiveConnected: Boolean(createSession.response?.providerLiveConnected)
+    },
+    stream: {
+      ok: stream.ok,
+      statusCode: stream.statusCode,
+      eventType: stream.eventType,
+      frameRefPresent: stream.frameRefPresent,
+      rawFrameReturned: stream.rawFrameReturned,
+      rawOcrTextReturned: stream.rawOcrTextReturned,
+      providerLiveConnected: stream.providerLiveConnected
+    },
+    screenshot: {
+      ok: screenshot.ok,
+      statusCode: screenshot.statusCode,
+      screenshotRefPresent: Boolean(screenshot.response?.screenshotRef),
+      rawImageReturned: Boolean(screenshot.response?.rawImageReturned),
+      providerLiveConnected: Boolean(screenshot.response?.providerLiveConnected)
+    },
+    ocrCaption: {
+      ok: ocrCaption.ok,
+      statusCode: ocrCaption.statusCode,
+      captionRefPresent: Boolean(ocrCaption.response?.captionRef),
+      rawOcrTextReturned: Boolean(ocrCaption.response?.rawOcrTextReturned),
+      providerLiveConnected: Boolean(ocrCaption.response?.providerLiveConnected)
+    },
+    takeover: {
+      ok: takeover.ok,
+      statusCode: takeover.statusCode,
+      approvalRequired: Boolean(takeover.response?.approvalRequired),
+      inputRelay: takeover.response?.inputRelay ?? null,
+      providerLiveConnected: Boolean(takeover.response?.providerLiveConnected)
+    },
+    input: {
+      ok: input.ok,
+      statusCode: input.statusCode,
+      inputAccepted: Boolean(input.response?.inputAccepted),
+      rawInputReturned: Boolean(input.response?.rawInputReturned),
+      externalWriteActionsWithoutApproval: Boolean(input.response?.externalWriteActionsWithoutApproval),
+      providerLiveConnected: Boolean(input.response?.providerLiveConnected)
+    },
+    offsite: {
+      ok: offsite.statusCode === 403,
+      statusCode: offsite.statusCode,
+      offsiteFailClosed: Boolean(offsite.response?.offsiteFailClosed),
+      rawTargetUrlReturned: Boolean(offsite.response?.rawTargetUrlReturned),
+      providerLiveConnected: Boolean(offsite.response?.providerLiveConnected)
+    },
+    teardown: {
+      ok: teardown.ok,
+      statusCode: teardown.statusCode,
+      teardownComplete: Boolean(teardown.response?.teardownComplete),
+      rawFramePersisted: Boolean(teardown.response?.rawFramePersisted),
+      rawOcrTextPersisted: Boolean(teardown.response?.rawOcrTextPersisted),
+      providerLiveConnected: Boolean(teardown.response?.providerLiveConnected)
+    }
+  };
+}
+
 async function callHostedProviderHealthProbe({
   endpointUrl,
   apiToken,
@@ -520,6 +814,7 @@ export function resolveBrowserSandboxHostedProvider({
   const endpointResolved = Boolean(endpointValue && isHttpsEndpoint(endpointValue));
   const authResolved = Boolean(authValue);
   const liveVerified = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED === "1";
+  const liveVerificationReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
   const resolverReady = Boolean(
     provider === "hosted_remote" &&
     providerReady &&
@@ -529,7 +824,7 @@ export function resolveBrowserSandboxHostedProvider({
     endpointResolved &&
     authResolved
   );
-  const ready = Boolean(resolverReady && liveVerified && config?.adapter?.providerLiveConnected === true);
+  const ready = Boolean(resolverReady && liveVerified && liveVerificationReady && config?.adapter?.providerLiveConnected === true);
   const status = ready
     ? "hosted_browser_sandbox_provider_ready"
     : resolverReady
@@ -544,6 +839,7 @@ export function resolveBrowserSandboxHostedProvider({
     endpointResolved,
     authResolved,
     liveVerified,
+    liveVerificationReady,
     endpointRefKind: refKind(config?.endpointRef),
     authTokenRefKind: refKind(authTokenRef),
     endpointEnvPresent: Boolean(endpointEnvName),
@@ -631,6 +927,36 @@ export function validateHostedProviderAdapterResponse(response) {
   };
 }
 
+export function validateHostedProviderLiveAdapterResponse(response) {
+  const failures = [];
+  if (response?.contractVersion !== BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION) failures.push("contract_version_mismatch");
+  if (!response?.providerSessionRef || typeof response.providerSessionRef !== "string") failures.push("provider_session_ref_required");
+  if (response?.providerLiveConnected !== true) failures.push("live_provider_connection_required");
+  if (response?.stream?.rawFrameReturned) failures.push("raw_frame_must_not_be_returned");
+  if (response?.stream?.frameRecordingEnabled) failures.push("frame_recording_must_be_disabled");
+  if (response?.ocrCaption?.rawOcrTextReturned) failures.push("raw_ocr_text_must_not_be_returned");
+  if (response?.takeover?.inputRelay !== "approval_gated_human_only") failures.push("input_relay_must_be_human_only");
+  if (response?.takeover?.approvalRequired !== true) failures.push("takeover_approval_required");
+  if (response?.safety?.externalWriteActionsWithoutApproval) failures.push("external_write_actions_without_approval");
+  if (response?.safety?.agentCredentialEntryAllowed) failures.push("agent_credential_entry_allowed");
+  const serialized = JSON.stringify(response ?? {});
+  if (/https?:\/\/[^"\\\s]+/i.test(serialized)) failures.push("raw_provider_url_returned");
+  if (/test-token-that-must-not-leak|Bearer\s+[A-Za-z0-9._-]+/.test(serialized)) failures.push("raw_provider_secret_returned");
+  if (/data:image|<html|member id|subscriber id|password|captcha/i.test(serialized)) failures.push("raw_frame_or_ocr_or_secret_content_returned");
+  return {
+    ok: failures.length === 0,
+    failures,
+    safety: {
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: Boolean(response?.stream?.rawFrameReturned),
+      rawOcrTextReturned: Boolean(response?.ocrCaption?.rawOcrTextReturned),
+      externalWriteActionsWithoutApproval: Boolean(response?.safety?.externalWriteActionsWithoutApproval),
+      agentCredentialEntryAllowed: Boolean(response?.safety?.agentCredentialEntryAllowed)
+    }
+  };
+}
+
 export async function callHostedProviderCreateSession({
   endpointUrl,
   apiToken,
@@ -660,6 +986,46 @@ export async function callHostedProviderCreateSession({
     throw new Error(`Hosted provider returned invalid JSON: ${error.message}`);
   }
   const responseValidation = validateHostedProviderAdapterResponse(payload);
+  return {
+    ok: Boolean(response.ok && responseValidation.ok),
+    statusCode: response.status,
+    response: payload,
+    responseValidation,
+    providerNetworkCalled: true,
+    endpointRedacted: true,
+    authorizationRedacted: true
+  };
+}
+
+export async function callHostedProviderCreateLiveSession({
+  endpointUrl,
+  apiToken,
+  request,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!endpointUrl || !apiToken) {
+    throw new Error("Hosted provider endpoint and API token are required for live provider calls.");
+  }
+  if (typeof fetchImpl !== "function") {
+    throw new Error("A fetch implementation is required for live provider calls.");
+  }
+  const url = new URL("browser/sessions", endpointUrl.endsWith("/") ? endpointUrl : `${endpointUrl}/`);
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiToken}`,
+      "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+    },
+    body: JSON.stringify(request.body)
+  });
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`Hosted live provider returned invalid JSON: ${error.message}`);
+  }
+  const responseValidation = validateHostedProviderLiveAdapterResponse(payload);
   return {
     ok: Boolean(response.ok && responseValidation.ok),
     statusCode: response.status,
@@ -739,6 +1105,7 @@ async function callHostedProviderStreamOperation({
     frameRefPresent: Boolean(eventPayload?.frameRef),
     rawFrameReturned: Boolean(eventPayload?.rawFrameReturned),
     rawOcrTextReturned: Boolean(eventPayload?.ocrCaption?.rawOcrTextReturned),
+    providerLiveConnected: Boolean(eventPayload?.providerLiveConnected),
     endpointRedacted: true,
     authorizationRedacted: true
   };

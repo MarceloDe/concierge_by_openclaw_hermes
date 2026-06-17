@@ -2083,3 +2083,32 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - In-app browser dashboard proof at `http://127.0.0.1:4205/?phase=hosted-browser-sandbox-provider-live-lifecycle` verified the lifecycle score/status, HTTP adapter score/status, `hosted_remote_browser_sandbox`, zero console issues, and no fake provider endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase20-hosted-browser-sandbox-provider-live-lifecycle-harness-dashboard-proof.png`, `artifacts/phase20-hosted-browser-sandbox-provider-live-lifecycle-harness-proof.json`, and `artifacts/browser-sandbox-provider-live-lifecycle-harness-smoke.json`.
+
+## Hosted Browser Sandbox Provider Live Verification Acceptance
+
+This slice is acceptable when:
+
+- A selected-provider live verification smoke command exists and is safe-blocked by default.
+- The live verification path can exercise create session, stream, screenshot, OCR/caption, takeover, approved input relay, offsite fail-closed navigation, and teardown through a provider-compatible transport.
+- FastAPI can use a private hosted-provider config for HTTPS provider session creation and sanitized provider stream proxying.
+- Provider-backed input relay requires the human-only `interactive_takeover` approval scope.
+- Proof artifacts and dashboard text do not contain provider endpoints, bearer tokens, raw frame data, raw OCR text, raw input values, credentials, or private provider config.
+- Connector proof exposes `hosted_browser_sandbox_provider_live_verification` separately from `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real selected-provider private config reports `adapter.providerLiveConnected=true`, live verification is explicitly marked verified, and GUI/OCR evidence exists.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-live-verification` passed in default blocked mode without provider network calls or secret leakage.
+- Focused browser-sandbox/compose contract tests passed with 14/14 tests.
+- Focused FastAPI live-verification tests passed with 2/2 tests.
+
+Full proof status:
+
+- Full sandbox smoke chain passed, including provider contract, selection, live preflight, live verification, adapter harness, resolver, adapter, HTTP adapter, and live lifecycle.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 30/30 tests.
+- `npm run test:facade` passed with 44 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser dashboard proof at `http://127.0.0.1:4208/?phase=hosted-browser-sandbox-provider-live-verification` verified `hosted_browser_sandbox_provider_live_verification`, `hosted_browser_sandbox_provider_live_preflight`, `hosted_remote_browser_sandbox`, and no fake provider endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-dashboard-proof.png`, `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-visual-proof.json`, `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-proof.json`, and `artifacts/browser-sandbox-provider-live-verification-smoke.json`.

@@ -8,6 +8,7 @@ import {
   runBrowserSandboxProviderContractSmoke,
   runBrowserSandboxProviderSelectionSmoke,
   runBrowserSandboxProviderLivePreflightSmoke,
+  runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -132,6 +133,77 @@ test("hosted browser sandbox provider live preflight can pass without enabling h
   assert.equal(result.safety.rawSecretReturned, false);
   assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
   assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+});
+
+test("hosted browser sandbox provider live verification proves selected provider lifecycle without leaking secrets", async () => {
+  const result = await runBrowserSandboxProviderLiveVerificationSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-live-verification-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1"
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderLiveVerificationReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_live_verified");
+  assert.equal(result.liveLifecycle.providerNetworkCalled, true);
+  assert.equal(result.liveLifecycle.localHarnessOnly, false);
+  assert.equal(result.liveLifecycle.providerLiveConnected, true);
+  assert.equal(result.liveLifecycle.stream.frameRefPresent, true);
+  assert.equal(result.liveLifecycle.screenshot.screenshotRefPresent, true);
+  assert.equal(result.liveLifecycle.ocrCaption.captionRefPresent, true);
+  assert.equal(result.liveLifecycle.takeover.approvalRequired, true);
+  assert.equal(result.liveLifecycle.takeover.inputRelay, "approval_gated_human_only");
+  assert.equal(result.liveLifecycle.input.rawInputReturned, false);
+  assert.equal(result.liveLifecycle.offsite.offsiteFailClosed, true);
+  assert.equal(result.liveLifecycle.teardown.teardownComplete, true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.equal(result.safety.rawFrameReturned, false);
+  assert.equal(result.safety.rawOcrTextReturned, false);
+  assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+  assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password/i);
+});
+
+test("hosted browser sandbox provider readiness requires live verification gate even when live verified is set", async () => {
+  const previousProvider = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER;
+  const previousEndpoint = process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL;
+  const previousToken = process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN;
+  const previousLive = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED;
+  const previousLiveVerification = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY;
+  try {
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER = "hosted_remote";
+    process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL = "https://sandbox-provider.invalid/api";
+    process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN = "test-token-that-must-not-leak";
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED = "1";
+    delete process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY;
+    const result = await runBrowserSandboxProviderContractSmoke({
+      configPath: "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+      artifactPath: "/tmp/brainsty-browser-sandbox-provider-live-verification-required-test.json",
+      providerReady: true
+    });
+    assert.equal(result.hostedProviderResolverReady, true);
+    assert.equal(result.hostedProviderReady, false);
+    assert.equal(result.hostedProviderResolver.ready, false);
+    assert.equal(result.hostedProviderResolver.liveVerified, true);
+    assert.equal(result.hostedProviderResolver.liveVerificationReady, false);
+  } finally {
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER", previousProvider);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL", previousEndpoint);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED", previousLive);
+    restoreEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY", previousLiveVerification);
+  }
 });
 
 test("hosted browser sandbox adapter harness proves lifecycle shape without claiming live provider", async () => {
@@ -285,4 +357,97 @@ test("hosted browser sandbox provider live lifecycle harness proves full lifecyc
 function restoreEnv(key, value) {
   if (value === undefined) delete process.env[key];
   else process.env[key] = value;
+}
+
+async function fakeLiveProviderFetch(url, options = {}) {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname.replace(/^\/api/, "");
+  const json = (payload, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return payload;
+    },
+    async text() {
+      return JSON.stringify(payload);
+    }
+  });
+  const liveBase = {
+    contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    providerLiveConnected: true
+  };
+  if (options.method === "POST" && path === "/browser/sessions") {
+    return json({
+      ...liveBase,
+      status: "hosted_provider_live_session_created",
+      providerSessionRef: "provider-live-session-ref-redacted",
+      stream: {
+        transport: "webrtc_or_sse_frames",
+        streamRef: "provider-live-stream-ref-redacted",
+        rawFrameReturned: false,
+        frameRecordingEnabled: false
+      },
+      screenshot: {
+        screenshotRef: "provider-live-screenshot-ref-redacted",
+        rawImageReturned: false
+      },
+      ocrCaption: {
+        captionRef: "provider-live-caption-ref-redacted",
+        rawOcrTextReturned: false
+      },
+      takeover: {
+        state: "not_requested",
+        approvalRequired: true,
+        inputRelay: "approval_gated_human_only"
+      },
+      safety: {
+        agentCredentialEntryAllowed: false,
+        externalWriteActionsWithoutApproval: false,
+        offsiteFailClosed: true,
+        credentialPagesUserOnly: true
+      },
+      actionsTaken: []
+    });
+  }
+  if (options.method === "GET" && path === "/browser/sessions/provider-live-session-ref-redacted/stream") {
+    const payload = {
+      ...liveBase,
+      eventType: "provider.live.frame",
+      frameRef: "provider-live-frame-ref-redacted",
+      rawFrameReturned: false,
+      ocrCaption: {
+        captionRef: "provider-live-caption-ref-redacted",
+        rawOcrTextReturned: false
+      }
+    };
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return payload;
+      },
+      async text() {
+        return `event: frame\ndata: ${JSON.stringify(payload)}\n\n`;
+      }
+    };
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/screenshot") {
+    return json({ status: "screenshot_ref_ready", screenshotRef: "provider-live-screenshot-ref-redacted", rawImageReturned: false, providerLiveConnected: true });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/ocr-caption") {
+    return json({ status: "ocr_caption_ref_ready", captionRef: "provider-live-caption-ref-redacted", rawOcrTextReturned: false, providerLiveConnected: true });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/takeover") {
+    return json({ status: "takeover_pending_approval", takeoverId: "provider-live-takeover-ref-redacted", approvalRequired: true, inputRelay: "approval_gated_human_only", providerLiveConnected: true });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/input") {
+    return json({ status: "input_relayed", inputAccepted: true, rawInputReturned: false, inputValueRedacted: true, providerLiveConnected: true, externalWriteActionsWithoutApproval: false });
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/navigate") {
+    return json({ status: "offsite_navigation_blocked", offsiteFailClosed: true, rawTargetUrlReturned: false, providerLiveConnected: true }, 403);
+  }
+  if (options.method === "POST" && path === "/browser/sessions/provider-live-session-ref-redacted/teardown") {
+    return json({ status: "session_torn_down", teardownComplete: true, rawFramePersisted: false, rawOcrTextPersisted: false, providerLiveConnected: true });
+  }
+  return json({ status: "not_found" }, 404);
 }

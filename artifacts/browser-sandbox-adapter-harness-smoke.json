@@ -12,6 +12,7 @@
     "endpointResolved": false,
     "authResolved": false,
     "liveVerified": false,
+    "liveVerificationReady": false,
     "endpointRefKind": "logical_ref",
     "authTokenRefKind": "env",
     "endpointEnvPresent": false,

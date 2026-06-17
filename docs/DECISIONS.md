@@ -2271,3 +2271,22 @@ This creates a concrete operational bridge from provider selection to live integ
 
 Cost of changing later:
 Low. The live preflight can gain provider-specific health fields or secret-source types without changing the public `/api/v1/browser/*` contract or the existing lifecycle harness.
+
+## 2026-06-17 - Require Selected-Provider Live Verification Before Hosted Remote Browser Readiness
+
+Context:
+The live-preflight gate proves selected-provider config and optional health probing, but it still does not prove the browser lifecycle that a remote user needs: create session, live stream, screenshot/OCR, takeover, approved input, offsite fail-closed behavior, and teardown. The hosted provider implementation must therefore support real HTTPS provider calls without putting provider secrets in Git or letting the dashboard overclaim readiness.
+
+Options considered:
+- Let live preflight imply hosted remote browser readiness.
+- Wait for final provider credentials before adding any runtime integration code.
+- Add a selected-provider live verification command and FastAPI hosted-provider runtime path, but keep `hosted_remote_browser_sandbox` blocked until private config reports a real provider live connection.
+
+Decision:
+Add `npm run sandbox:browser:provider-live-verification`, a selected-provider live verification contract, a non-secret env example, and a FastAPI provider runtime path for HTTPS create-session, stream, screenshot/OCR, takeover, input, and teardown operations. Expose a separate `hosted_browser_sandbox_provider_live_verification` score. Keep `hosted_remote_browser_sandbox` at `0 / 100` unless the explicit live-verification env gate, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private config `adapter.providerLiveConnected=true` all agree.
+
+Reason:
+This gives remote clients and operators the real integration surface without committing secrets or treating a test harness as a production sandbox. It also preserves the safety model: input relay remains human-approved, raw frames/OCR/input are redacted, offsite navigation fails closed, and Codex must not enter credentials.
+
+Cost of changing later:
+Moderate but contained. Provider-specific WebRTC signaling, streaming transport details, or secret-manager support can be added behind the provider client and stream proxy without changing the public `/api/v1/browser/*` contract, the proof keys, or the approval boundary.
