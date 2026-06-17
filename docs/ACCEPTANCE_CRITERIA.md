@@ -2050,3 +2050,36 @@ Full proof status:
 - In-app browser DOM proof at `http://127.0.0.1:4204/?phase=hosted-browser-sandbox-provider-http-adapter` verified the HTTP adapter score/status, `hosted_remote_browser_sandbox`, and no fake provider endpoint/token leak.
 - Fresh headless Chrome dashboard proof saved the visual artifact after clicking `Load Connector Proof`.
 - Visual/proof artifacts were saved at `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-dashboard-proof.png`, `artifacts/phase19-hosted-browser-sandbox-provider-http-adapter-harness-proof.json`, and `artifacts/browser-sandbox-provider-http-adapter-harness-smoke.json`.
+
+## Hosted Browser Sandbox Provider Live Lifecycle Harness Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider live lifecycle harness smoke command exists and exercises provider-style lifecycle calls against a local provider-compatible harness.
+- The lifecycle harness proves create session, stream frame event, screenshot ref, OCR/caption ref, approval-gated takeover, redacted input relay, offsite fail-closed behavior, and teardown.
+- The lifecycle harness request and response artifacts do not write raw provider endpoints, local harness endpoints, tokens, raw frames, raw OCR text, raw input values, or raw portal/private data.
+- FastAPI proves the lifecycle-harness-ready state still cannot create real hosted sessions.
+- Connector proof exposes `hosted_browser_sandbox_provider_live_lifecycle` separately from HTTP adapter readiness and live hosted provider readiness.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 8/8 tests.
+- Focused FastAPI lifecycle-harness and HTTP-adapter-harness tests passed with 2/2 tests.
+- Lifecycle harness smoke passed with `hosted_browser_sandbox_provider_live_lifecycle_harness_ready`, `hostedProviderLiveLifecycleHarnessReady=true`, `hostedProviderHttpAdapterReady=true`, `providerNetworkCalled=true`, `localHarnessOnly=true`, `hostedProviderReady=false`, and no local/fake endpoint or token leak.
+
+Full proof status:
+
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run sandbox:browser:provider-adapter` passed.
+- `npm run sandbox:browser:provider-http-adapter` passed.
+- `npm run sandbox:browser:provider-live-lifecycle` passed.
+- `npm run build` passed.
+- Final-system verification report coverage passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 24/24 tests.
+- FastAPI facade regression passed with 41 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- In-app browser dashboard proof at `http://127.0.0.1:4205/?phase=hosted-browser-sandbox-provider-live-lifecycle` verified the lifecycle score/status, HTTP adapter score/status, `hosted_remote_browser_sandbox`, zero console issues, and no fake provider endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase20-hosted-browser-sandbox-provider-live-lifecycle-harness-dashboard-proof.png`, `artifacts/phase20-hosted-browser-sandbox-provider-live-lifecycle-harness-proof.json`, and `artifacts/browser-sandbox-provider-live-lifecycle-harness-smoke.json`.

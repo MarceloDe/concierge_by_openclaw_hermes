@@ -1096,6 +1096,53 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(adapter_score["score"], 75)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_live_lifecycle_harness_never_overclaims_live_provider(self):
+        hosted_config = "project/deployment/browser-sandbox-provider.hosted-provider.example.json"
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": hosted_config,
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY": "1"
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_live_lifecycle_user")
+            browser_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_hosted_live_lifecycle",
+                    "target_url": "https://health.aetna.com/member",
+                    "provider": "hosted_remote"
+                }
+            )
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-live-lifecycle", headers=headers)
+
+        self.assertEqual(browser_response.status_code, 400)
+        self.assertIn("live lifecycle harness is ready", browser_response.json()["detail"])
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        proof = proof_response.json()
+        hosted_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider")
+        live_lifecycle_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_live_lifecycle")
+        http_adapter_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_http_adapter")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(hosted_check["status"], "hosted_browser_sandbox_provider_live_lifecycle_harness_ready")
+        self.assertTrue(hosted_check["hostedProviderAdapterReady"])
+        self.assertTrue(hosted_check["hostedProviderHttpAdapterReady"])
+        self.assertTrue(hosted_check["hostedProviderLiveLifecycleHarnessReady"])
+        self.assertEqual(live_lifecycle_score["score"], 95)
+        self.assertEqual(http_adapter_score["score"], 85)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized(self):
         app = create_app(inline_tasks=True)
         app.state.node_client = FakeNodeRuntimeClient()

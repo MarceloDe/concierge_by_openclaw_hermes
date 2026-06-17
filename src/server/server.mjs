@@ -322,6 +322,9 @@ async function safeDeploymentContractStatus() {
   const hostedBrowserSandboxProviderHttpAdapterReady =
     hostedBrowserSandboxProviderAdapterReady &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY === "1";
+  const hostedBrowserSandboxProviderLiveLifecycleHarnessReady =
+    hostedBrowserSandboxProviderHttpAdapterReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY === "1";
   return {
     ok: missing.length === 0,
     status: missing.length === 0 ? "compose_contract_present" : "compose_contract_missing_files",
@@ -353,11 +356,14 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderResolver,
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
+    hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
     hostedBrowserSandboxProviderReady,
     hostedBrowserSandboxProviderStatus: hostedBrowserSandboxProviderReady
       ? "hosted_browser_sandbox_provider_ready"
       : hostedBrowserSandboxAdapterHarnessReady
         ? "hosted_browser_sandbox_adapter_harness_ready"
+      : hostedBrowserSandboxProviderLiveLifecycleHarnessReady
+        ? "hosted_browser_sandbox_provider_live_lifecycle_harness_ready"
       : hostedBrowserSandboxProviderHttpAdapterReady
         ? "hosted_browser_sandbox_provider_http_adapter_harness_ready"
       : hostedBrowserSandboxProviderAdapterReady
@@ -373,6 +379,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
     browserSandboxProviderHttpAdapterCommand: "npm run sandbox:browser:provider-http-adapter",
+    browserSandboxProviderLiveLifecycleCommand: "npm run sandbox:browser:provider-live-lifecycle",
     storageSmokeCommand: "npm run storage:postgres:smoke",
     postgresRuntimeSmokeCommand: "npm run storage:postgres:runtime-smoke",
     postgresProductionSmokeCommand: "npm run storage:postgres:production-smoke",
@@ -466,6 +473,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_http_adapter",
         status: deployment.hostedBrowserSandboxProviderStatus,
         target: "The hosted provider HTTP create-session adapter can be exercised against a local provider-compatible harness without leaking secrets."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_lifecycle",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        target: "The hosted provider stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed lifecycle can be contract-tested before live provider enablement."
       }
     ],
     checks: [
@@ -579,6 +591,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         rawSecretReturned: false
       },
       {
+        key: "hosted_browser_sandbox_provider_live_lifecycle",
+        status: deployment.hostedBrowserSandboxProviderStatus,
+        ok: deployment.hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
+        command: deployment.browserSandboxProviderLiveLifecycleCommand,
+        providerNetworkCalled: deployment.hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
+        localHarnessOnly: true,
+        streamFrames: "sse_frame_ref_only",
+        screenshot: "opaque_screenshot_ref_only",
+        ocrCaption: "opaque_caption_ref_only",
+        takeover: "approval_gated_human_only",
+        inputRelay: "redacted_approved_input_only",
+        teardown: "ephemeral_session_closed",
+        offsiteFailClosed: true,
+        providerLiveConnected: false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false
+      },
+      {
         key: "hosted_browser_sandbox_adapter_harness",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxAdapterHarnessReady,
@@ -667,6 +697,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_http_adapter",
         score: deployment.hostedBrowserSandboxProviderHttpAdapterReady ? 85 : 0,
         target: 85,
+        status: deployment.hostedBrowserSandboxProviderStatus
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_lifecycle",
+        score: deployment.hostedBrowserSandboxProviderLiveLifecycleHarnessReady ? 95 : 0,
+        target: 95,
         status: deployment.hostedBrowserSandboxProviderStatus
       },
       {

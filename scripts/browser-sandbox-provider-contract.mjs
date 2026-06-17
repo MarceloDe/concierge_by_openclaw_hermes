@@ -312,6 +312,89 @@ export async function callHostedProviderCreateSession({
   };
 }
 
+async function callHostedProviderJsonOperation({
+  endpointUrl,
+  apiToken,
+  path,
+  method = "POST",
+  body = {},
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!endpointUrl || !apiToken || !path) {
+    throw new Error("Hosted provider endpoint, API token, and operation path are required.");
+  }
+  const response = await fetchImpl(new URL(path.replace(/^\//, ""), endpointUrl.endsWith("/") ? endpointUrl : `${endpointUrl}/`), {
+    method,
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiToken}`,
+      "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+    },
+    body: method === "GET" ? undefined : JSON.stringify(body)
+  });
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`Hosted provider operation returned invalid JSON: ${error.message}`);
+  }
+  return {
+    ok: Boolean(response.ok),
+    statusCode: response.status,
+    response: payload,
+    endpointRedacted: true,
+    authorizationRedacted: true
+  };
+}
+
+async function callHostedProviderStreamOperation({
+  endpointUrl,
+  apiToken,
+  path,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!endpointUrl || !apiToken || !path) {
+    throw new Error("Hosted provider endpoint, API token, and stream path are required.");
+  }
+  const response = await fetchImpl(new URL(path.replace(/^\//, ""), endpointUrl.endsWith("/") ? endpointUrl : `${endpointUrl}/`), {
+    method: "GET",
+    headers: {
+      accept: "text/event-stream",
+      authorization: `Bearer ${apiToken}`,
+      "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+    }
+  });
+  const text = await response.text();
+  const eventPayload = parseSseDataPayload(text);
+  const serialized = JSON.stringify(eventPayload);
+  return {
+    ok: Boolean(
+      response.ok &&
+      eventPayload?.contractVersion === BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION &&
+      eventPayload?.rawFrameReturned === false &&
+      eventPayload?.ocrCaption?.rawOcrTextReturned === false &&
+      !/data:image|<html|member id|subscriber id|password|captcha/i.test(serialized)
+    ),
+    statusCode: response.status,
+    eventType: eventPayload?.eventType ?? null,
+    frameRefPresent: Boolean(eventPayload?.frameRef),
+    rawFrameReturned: Boolean(eventPayload?.rawFrameReturned),
+    rawOcrTextReturned: Boolean(eventPayload?.ocrCaption?.rawOcrTextReturned),
+    endpointRedacted: true,
+    authorizationRedacted: true
+  };
+}
+
+function parseSseDataPayload(text) {
+  const line = String(text).split(/\r?\n/).find((entry) => entry.startsWith("data:"));
+  if (!line) return null;
+  try {
+    return JSON.parse(line.slice("data:".length).trim());
+  } catch {
+    return null;
+  }
+}
+
 export async function validateBrowserSandboxProviderContract({
   configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || DEFAULT_CONFIG_PATH
 } = {}) {
@@ -644,6 +727,345 @@ export async function runBrowserSandboxProviderHttpAdapterHarnessSmoke({
     restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL", previousEndpoint);
     restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
     restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY", previousAdapter);
+  }
+}
+
+export async function runBrowserSandboxProviderLiveLifecycleHarnessSmoke({
+  configPath = HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-live-lifecycle-harness-smoke.json"),
+  providerReady = true
+} = {}) {
+  const previousProvider = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER;
+  const previousEndpoint = process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL;
+  const previousToken = process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN;
+  const previousAdapter = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY;
+  const previousHttpAdapter = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY;
+  const apiToken = "local-lifecycle-harness-token-redacted";
+  const received = { paths: [], offsiteFailClosed: false };
+  let createdSessionRef = "provider-lifecycle-session-ref-redacted";
+  let takeoverId = "provider-lifecycle-takeover-ref-redacted";
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      const parsed = body ? JSON.parse(body) : {};
+      const authOk = request.headers.authorization === `Bearer ${apiToken}`;
+      received.paths.push({ method: request.method, path: request.url, authOk });
+      if (!authOk) {
+        response.writeHead(401, { "content-type": "application/json" });
+        response.end(JSON.stringify({ status: "unauthorized" }));
+        return;
+      }
+      if (request.method === "POST" && request.url === "/browser/sessions") {
+        received.rawTargetUrlReceived = /^https?:\/\//i.test(String(parsed.targetUrlRef ?? ""));
+        createdSessionRef = "provider-lifecycle-session-ref-redacted";
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+          status: "hosted_provider_lifecycle_session_created",
+          providerSessionRef: createdSessionRef,
+          providerLiveConnected: false,
+          stream: {
+            transport: "webrtc_or_sse_frames",
+            streamRef: "provider-lifecycle-stream-ref-redacted",
+            rawFrameReturned: false,
+            frameRecordingEnabled: false
+          },
+          screenshot: {
+            screenshotRef: "provider-lifecycle-screenshot-ref-redacted",
+            rawImageReturned: false
+          },
+          ocrCaption: {
+            captionRef: "provider-lifecycle-caption-ref-redacted",
+            rawOcrTextReturned: false
+          },
+          takeover: {
+            state: "not_requested",
+            approvalRequired: true,
+            inputRelay: "approval_gated_human_only"
+          },
+          safety: {
+            agentCredentialEntryAllowed: false,
+            externalWriteActionsWithoutApproval: false,
+            offsiteFailClosed: true,
+            credentialPagesUserOnly: true
+          },
+          actionsTaken: []
+        }));
+        return;
+      }
+      if (request.method === "GET" && request.url === `/browser/sessions/${createdSessionRef}/stream`) {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(`event: frame\ndata: ${JSON.stringify({
+          contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+          eventType: "provider.lifecycle.frame",
+          browserSessionRef: createdSessionRef,
+          frameRef: "provider-lifecycle-frame-ref-redacted",
+          rawFrameReturned: false,
+          frameRecordingEnabled: false,
+          ocrCaption: {
+            captionRef: "provider-lifecycle-caption-ref-redacted",
+            rawOcrTextReturned: false
+          },
+          providerLiveConnected: false
+        })}\n\n`);
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/screenshot`) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "screenshot_ref_ready",
+          screenshotRef: "provider-lifecycle-screenshot-ref-redacted",
+          rawImageReturned: false,
+          providerLiveConnected: false
+        }));
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/ocr-caption`) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "ocr_caption_ref_ready",
+          captionRef: "provider-lifecycle-caption-ref-redacted",
+          rawOcrTextReturned: false,
+          providerLiveConnected: false
+        }));
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/takeover`) {
+        takeoverId = "provider-lifecycle-takeover-ref-redacted";
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "takeover_pending_approval",
+          takeoverId,
+          approvalRequired: true,
+          inputRelay: "approval_gated_human_only",
+          providerLiveConnected: false
+        }));
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/input`) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "input_relayed",
+          takeoverId,
+          inputAccepted: parsed.takeoverId === takeoverId && parsed.approvalGrantRef === "approval-grant-ref-redacted",
+          rawInputReturned: false,
+          inputValueRedacted: true,
+          providerLiveConnected: false,
+          externalWriteActionsWithoutApproval: false
+        }));
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/navigate`) {
+        received.offsiteFailClosed = parsed.targetUrlRef === "offsite-target-url-ref-redacted";
+        response.writeHead(403, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "offsite_navigation_blocked",
+          offsiteFailClosed: true,
+          rawTargetUrlReturned: false,
+          providerLiveConnected: false
+        }));
+        return;
+      }
+      if (request.method === "POST" && request.url === `/browser/sessions/${createdSessionRef}/teardown`) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          status: "session_torn_down",
+          teardownComplete: true,
+          rawFramePersisted: false,
+          rawOcrTextPersisted: false,
+          providerLiveConnected: false
+        }));
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ status: "not_found" }));
+    });
+  });
+  await new Promise((resolveStart, rejectStart) => {
+    server.once("error", rejectStart);
+    server.listen(0, "127.0.0.1", resolveStart);
+  });
+  try {
+    const address = server.address();
+    const endpointUrl = `http://127.0.0.1:${address.port}`;
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER = "hosted_remote";
+    process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL = "https://provider-lifecycle.invalid/api";
+    process.env.WEFELLA_BROWSER_SANDBOX_API_TOKEN = "provider-lifecycle-token-must-not-leak";
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY = "1";
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY = "1";
+    const adapter = await runBrowserSandboxProviderAdapterSmoke({
+      configPath,
+      artifactPath,
+      providerReady
+    });
+    const createSession = await callHostedProviderCreateSession({
+      endpointUrl,
+      apiToken,
+      request: adapter.adapterContract.request
+    });
+    const providerSessionRef = createSession.response?.providerSessionRef ?? createdSessionRef;
+    const stream = await callHostedProviderStreamOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/stream`
+    });
+    const screenshot = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/screenshot`,
+      body: { screenshotRef: "provider-lifecycle-screenshot-ref-redacted" }
+    });
+    const ocrCaption = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/ocr-caption`,
+      body: { screenshotRef: "provider-lifecycle-screenshot-ref-redacted" }
+    });
+    const takeover = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/takeover`,
+      body: { reason: "user_controlled_auth_or_captcha" }
+    });
+    const input = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/input`,
+      body: {
+        takeoverId: takeover.response.takeoverId,
+        approvalGrantRef: "approval-grant-ref-redacted",
+        inputType: "click",
+        inputValue: "[redacted]"
+      }
+    });
+    const offsite = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/navigate`,
+      body: { targetUrlRef: "offsite-target-url-ref-redacted" }
+    });
+    const teardown = await callHostedProviderJsonOperation({
+      endpointUrl,
+      apiToken,
+      path: `/browser/sessions/${providerSessionRef}/teardown`,
+      body: { reason: "harness_complete" }
+    });
+    const liveLifecycleHarnessReady = Boolean(
+      adapter.hostedProviderAdapterReady &&
+      createSession.ok &&
+      stream.ok &&
+      screenshot.ok &&
+      screenshot.response?.rawImageReturned === false &&
+      ocrCaption.ok &&
+      ocrCaption.response?.rawOcrTextReturned === false &&
+      takeover.ok &&
+      takeover.response?.approvalRequired === true &&
+      input.ok &&
+      input.response?.rawInputReturned === false &&
+      input.response?.externalWriteActionsWithoutApproval === false &&
+      offsite.statusCode === 403 &&
+      offsite.response?.offsiteFailClosed === true &&
+      teardown.ok &&
+      teardown.response?.teardownComplete === true &&
+      !received.rawTargetUrlReceived &&
+      received.offsiteFailClosed
+    );
+    const result = {
+      ...adapter,
+      ok: Boolean(adapter.ok && liveLifecycleHarnessReady),
+      status: liveLifecycleHarnessReady
+        ? "hosted_browser_sandbox_provider_live_lifecycle_harness_ready"
+        : adapter.status,
+      hostedProviderHttpAdapterReady: true,
+      hostedProviderLiveLifecycleHarnessReady: liveLifecycleHarnessReady,
+      hostedProviderReady: false,
+      adapterContract: {
+        ...adapter.adapterContract,
+        liveLifecycleHarness: {
+          ok: liveLifecycleHarnessReady,
+          localHarnessOnly: true,
+          providerNetworkCalled: true,
+          createSession: {
+            ok: createSession.ok,
+            statusCode: createSession.statusCode,
+            responseValidation: createSession.responseValidation
+          },
+          stream: {
+            ok: stream.ok,
+            statusCode: stream.statusCode,
+            eventType: stream.eventType,
+            frameRefPresent: stream.frameRefPresent,
+            rawFrameReturned: stream.rawFrameReturned,
+            rawOcrTextReturned: stream.rawOcrTextReturned
+          },
+          screenshot: {
+            ok: screenshot.ok,
+            statusCode: screenshot.statusCode,
+            screenshotRefPresent: Boolean(screenshot.response?.screenshotRef),
+            rawImageReturned: Boolean(screenshot.response?.rawImageReturned)
+          },
+          ocrCaption: {
+            ok: ocrCaption.ok,
+            statusCode: ocrCaption.statusCode,
+            captionRefPresent: Boolean(ocrCaption.response?.captionRef),
+            rawOcrTextReturned: Boolean(ocrCaption.response?.rawOcrTextReturned)
+          },
+          takeover: {
+            ok: takeover.ok,
+            statusCode: takeover.statusCode,
+            approvalRequired: Boolean(takeover.response?.approvalRequired),
+            inputRelay: takeover.response?.inputRelay ?? null
+          },
+          input: {
+            ok: input.ok,
+            statusCode: input.statusCode,
+            inputAccepted: Boolean(input.response?.inputAccepted),
+            rawInputReturned: Boolean(input.response?.rawInputReturned),
+            externalWriteActionsWithoutApproval: Boolean(input.response?.externalWriteActionsWithoutApproval)
+          },
+          offsite: {
+            ok: offsite.statusCode === 403,
+            statusCode: offsite.statusCode,
+            offsiteFailClosed: Boolean(offsite.response?.offsiteFailClosed),
+            rawTargetUrlReturned: Boolean(offsite.response?.rawTargetUrlReturned)
+          },
+          teardown: {
+            ok: teardown.ok,
+            statusCode: teardown.statusCode,
+            teardownComplete: Boolean(teardown.response?.teardownComplete),
+            rawFramePersisted: Boolean(teardown.response?.rawFramePersisted),
+            rawOcrTextPersisted: Boolean(teardown.response?.rawOcrTextPersisted)
+          },
+          providerLiveConnected: false,
+          liveProviderScoreMayPassOnlyAfterLiveVerified: true
+        }
+      }
+    };
+    const serialized = JSON.stringify(result);
+    result.safety = {
+      ...result.safety,
+      ...assertNoSecretLeak(result),
+      rawEndpointUrlWritten: /provider-lifecycle\.invalid|127\.0\.0\.1|localhost/i.test(serialized),
+      rawSecretReturned: /provider-lifecycle-token-must-not-leak|local-lifecycle-harness-token-redacted/.test(serialized),
+      rawFrameReturned: /data:image|raw portal frame|<html/i.test(serialized),
+      rawOcrTextReturned: /member id|subscriber id|captcha text/i.test(serialized),
+      rawInputReturned: /secret-click-target|typed-password/i.test(serialized),
+      externalActions: false,
+      agentCredentialEntryAllowed: false
+    };
+    await mkdir(dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, JSON.stringify(result, null, 2));
+    return result;
+  } finally {
+    await new Promise((resolveClose) => server.close(resolveClose));
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER", previousProvider);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL", previousEndpoint);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_API_TOKEN", previousToken);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY", previousAdapter);
+    restoreProcessEnv("WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY", previousHttpAdapter);
   }
 }
 

@@ -41,6 +41,7 @@ const requiredFiles = [
   "scripts/browser-sandbox-provider-resolver.mjs",
   "scripts/browser-sandbox-provider-adapter-smoke.mjs",
   "scripts/browser-sandbox-provider-http-adapter-harness-smoke.mjs",
+  "scripts/browser-sandbox-provider-live-lifecycle-harness-smoke.mjs",
   "scripts/storage-contract.mjs",
   "scripts/postgres-runtime-smoke.mjs",
   "scripts/postgres-production-readiness-smoke.mjs",

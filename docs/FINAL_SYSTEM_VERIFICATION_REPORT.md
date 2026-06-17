@@ -641,3 +641,23 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_provider_http_adapter` can reach `85 / 85` when resolver refs are configured, adapter contract is ready, and `WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY=1`.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until live provider proof passes.
+
+## Phase 20 Hosted Browser Sandbox Provider Live Lifecycle Harness Update
+
+Implementation:
+- Added a provider-style live lifecycle harness that performs local provider-compatible calls for create session, stream frame event, screenshot ref, OCR/caption ref, approval-gated takeover, redacted approved input, offsite fail-closed navigation, and teardown.
+- Added `npm run sandbox:browser:provider-live-lifecycle`.
+- Added a separate `hosted_browser_sandbox_provider_live_lifecycle` FastAPI and dashboard score.
+- FastAPI still blocks real hosted session creation when only the lifecycle harness is ready.
+
+Focused verification:
+- JS and Python syntax checks passed.
+- Focused browser-sandbox/compose contract tests passed with 8/8 tests.
+- Focused FastAPI lifecycle-harness and HTTP-adapter-harness tests passed with 2/2 tests.
+- Lifecycle harness smoke passed with `providerNetworkCalled=true`, `localHarnessOnly=true`, no raw endpoint, no raw token, no raw frame, no raw OCR text, no raw input value, no external action, and no credential-entry allowance.
+- Full gate passed: provider contract smoke, adapter harness smoke, provider resolver smoke, provider adapter smoke, provider HTTP adapter harness smoke, provider live lifecycle harness smoke, `npm run build`, final-report coverage, `npm run test:docker:contract` with 24/24 tests, FastAPI facade regression with 41 tests and 2 expected skips, and `npm run test:local` with 210 total tests, 208 passed, 0 failed, and 2 expected skips.
+- In-app browser dashboard proof passed with `hosted_browser_sandbox_provider_live_lifecycle`, `hosted_browser_sandbox_provider_live_lifecycle_harness_ready`, `hosted_browser_sandbox_provider_http_adapter`, and `hosted_remote_browser_sandbox` visible, zero console issues, and no fake provider endpoint/token leak.
+
+Score decision:
+- `hosted_browser_sandbox_provider_live_lifecycle` can reach `95 / 95` when resolver refs are configured, adapter contract is ready, HTTP adapter harness is ready, and `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY=1`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes live stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.

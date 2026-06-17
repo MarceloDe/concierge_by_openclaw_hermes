@@ -8,7 +8,8 @@ import {
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
-  runBrowserSandboxProviderHttpAdapterHarnessSmoke
+  runBrowserSandboxProviderHttpAdapterHarnessSmoke,
+  runBrowserSandboxProviderLiveLifecycleHarnessSmoke
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 test("hosted browser sandbox provider contract validates the safe remote provider shape", async () => {
@@ -151,6 +152,45 @@ test("hosted browser sandbox provider HTTP adapter harness makes a redacted prov
   assert.doesNotMatch(serialized, /provider-harness-token-must-not-leak/);
   assert.doesNotMatch(serialized, /local-harness-token-redacted/);
   assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost/);
+});
+
+test("hosted browser sandbox provider live lifecycle harness proves full lifecycle without live provider", async () => {
+  const result = await runBrowserSandboxProviderLiveLifecycleHarnessSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-live-lifecycle-harness-smoke-test.json"
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderAdapterReady, true);
+  assert.equal(result.hostedProviderHttpAdapterReady, true);
+  assert.equal(result.hostedProviderLiveLifecycleHarnessReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_live_lifecycle_harness_ready");
+  assert.equal(result.adapterContract.liveLifecycleHarness.localHarnessOnly, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.providerNetworkCalled, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.createSession.responseValidation.ok, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.stream.ok, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.stream.frameRefPresent, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.stream.rawFrameReturned, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.stream.rawOcrTextReturned, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.screenshot.rawImageReturned, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.ocrCaption.rawOcrTextReturned, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.takeover.approvalRequired, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.takeover.inputRelay, "approval_gated_human_only");
+  assert.equal(result.adapterContract.liveLifecycleHarness.input.rawInputReturned, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.input.externalWriteActionsWithoutApproval, false);
+  assert.equal(result.adapterContract.liveLifecycleHarness.offsite.statusCode, 403);
+  assert.equal(result.adapterContract.liveLifecycleHarness.offsite.offsiteFailClosed, true);
+  assert.equal(result.adapterContract.liveLifecycleHarness.teardown.teardownComplete, true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.equal(result.safety.rawFrameReturned, false);
+  assert.equal(result.safety.rawOcrTextReturned, false);
+  assert.equal(result.safety.rawInputReturned, false);
+  assert.doesNotMatch(serialized, /provider-lifecycle\.invalid/);
+  assert.doesNotMatch(serialized, /provider-lifecycle-token-must-not-leak/);
+  assert.doesNotMatch(serialized, /local-lifecycle-harness-token-redacted/);
+  assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost/);
+  assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password/i);
 });
 
 function restoreEnv(key, value) {

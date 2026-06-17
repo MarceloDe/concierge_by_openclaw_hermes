@@ -2356,3 +2356,33 @@ Remaining follow-up:
 - Replace the local harness transport with the selected provider's HTTPS/WebRTC implementation.
 - Add provider-backed stream proxying, screenshot/OCR, takeover, input relay, teardown, and offsite-fail-closed tests.
 - Add a live provider visual proof before allowing `hosted_remote_browser_sandbox` to pass.
+
+## Hosted Browser Sandbox Provider Live Lifecycle Harness Cycle - 2026-06-17
+
+Goal:
+- Move from create-session HTTP plumbing to a full hosted-provider lifecycle harness without using production provider credentials or claiming live hosted browser readiness.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-live-lifecycle-harness-smoke.mjs` and `npm run sandbox:browser:provider-live-lifecycle`.
+- Extend the local provider-compatible harness beyond `POST /browser/sessions` to cover:
+  - stream frame event by opaque frame ref;
+  - screenshot ref;
+  - OCR/caption ref;
+  - approval-gated takeover;
+  - redacted approved input relay;
+  - offsite navigation fail-closed;
+  - teardown.
+- Expose `hosted_browser_sandbox_provider_live_lifecycle` through FastAPI proof and Node dashboard proof.
+- Keep FastAPI session creation fail-closed when only the live lifecycle harness is ready.
+
+Acceptance:
+- Lifecycle harness smoke proves provider-style network calls against a local harness and `localHarnessOnly=true`.
+- Proof artifacts do not contain local harness endpoint, fake provider endpoint, local harness token, fake provider token, raw frame data, raw OCR text, or raw input values.
+- The lifecycle harness score can reach `95 / 95`.
+- The HTTP adapter score can stay `85 / 85`.
+- The live hosted provider score remains `0 / 100` until a real provider is connected, live-verified, and visually/OCR tested.
+
+Remaining follow-up:
+- Select the hosted browser sandbox provider.
+- Replace the local lifecycle harness with the selected provider's HTTPS/WebRTC stream, screenshot, OCR/caption, takeover, input, teardown, and offsite policy implementation.
+- Add provider-backed GUI/OCR visual proof before allowing `hosted_remote_browser_sandbox` to pass.

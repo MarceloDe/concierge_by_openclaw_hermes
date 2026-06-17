@@ -2214,3 +2214,22 @@ This closes the next meaningful implementation gap while preserving truthfulness
 
 Cost of changing later:
 Low. The selected provider adapter can replace the local harness endpoint with the provider endpoint while keeping the request contract, response validator, redaction policy, and FastAPI public API stable.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Live Lifecycle Harness Before Live Provider Enablement
+
+Context:
+The HTTP adapter harness proved provider-style create-session request plumbing, but it did not yet exercise the rest of the hosted-browser lifecycle that a mobile/remote client needs: stream frames, screenshot/OCR, takeover, approved input, teardown, and offsite fail-closed behavior. A real hosted provider is still not selected or credentialed.
+
+Options considered:
+- Wait for a selected hosted browser provider before adding lifecycle tests.
+- Treat create-session HTTP plumbing as enough lifecycle readiness.
+- Add a local provider-compatible lifecycle harness that exercises all required provider operations while keeping live hosted readiness blocked.
+
+Decision:
+Add `npm run sandbox:browser:provider-live-lifecycle`, a local provider-compatible lifecycle harness, and a separate `hosted_browser_sandbox_provider_live_lifecycle` proof score. Keep real `hosted_remote_browser_sandbox` blocked until a live provider passes stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+Reason:
+This closes the next implementation gap without leaking secrets or pretending a production sandbox is connected. The public connector can now prove the full provider lifecycle contract while the dashboard remains honest that the provider is local harness only.
+
+Cost of changing later:
+Low. A selected provider can replace the local lifecycle handlers with provider HTTPS/WebRTC calls while preserving the same proof fields, redaction policy, approval boundaries, and FastAPI public API contract.

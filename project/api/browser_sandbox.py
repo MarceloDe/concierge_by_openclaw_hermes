@@ -252,6 +252,11 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
                     "Hosted browser sandbox provider HTTP adapter harness is ready, but live provider verification has not passed. "
                     "The local provider-compatible harness proves request plumbing only and does not create real hosted sessions."
                 )
+            if contract.get("status") == "hosted_browser_sandbox_provider_live_lifecycle_harness_ready":
+                raise BrowserSandboxError(
+                    "Hosted browser sandbox provider live lifecycle harness is ready, but live provider verification has not passed. "
+                    "The local provider-compatible harness proves stream, screenshot/OCR, takeover, input, teardown, and offsite fail-closed plumbing only."
+                )
             raise BrowserSandboxError(
                 "Hosted browser sandbox provider is not configured. "
                 "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE to a non-example provider config and "
@@ -437,10 +442,15 @@ def describe_browser_sandbox_provider_contract(
         adapter_contract_ready
         and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_HTTP_ADAPTER_HARNESS_READY") == "1"
     )
+    live_lifecycle_harness_ready = bool(
+        http_adapter_harness_ready
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY") == "1"
+    )
     status = (
         "hosted_browser_sandbox_provider_ready"
         if provider_ready
         else "hosted_browser_sandbox_adapter_harness_ready" if adapter_harness_ready
+        else "hosted_browser_sandbox_provider_live_lifecycle_harness_ready" if live_lifecycle_harness_ready
         else "hosted_browser_sandbox_provider_http_adapter_harness_ready" if http_adapter_harness_ready
         else "hosted_browser_sandbox_provider_adapter_contract_ready" if adapter_contract_ready
         else "local_cdp_default" if selected_provider == "local_cdp"
@@ -459,6 +469,7 @@ def describe_browser_sandbox_provider_contract(
         "hostedProviderResolverReady": hosted_resolution["resolverReady"],
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
+        "hostedProviderLiveLifecycleHarnessReady": live_lifecycle_harness_ready,
         "hostedProviderResolver": hosted_resolution,
         "status": status,
         "failures": failures,
