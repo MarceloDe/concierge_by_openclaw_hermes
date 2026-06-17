@@ -7471,3 +7471,133 @@ Known risks or gaps:
 - This is a local provider-compatible lifecycle harness, not a selected production hosted browser provider.
 - No hosted provider endpoint/token is configured for production.
 - Live provider proof still needs real provider WebRTC/SSE stream, screenshot/OCR, takeover, human input, offsite fail-closed, teardown, and GUI/OCR testing.
+
+## Phase 21 Hosted Browser Sandbox Provider Selection And Preflight Update
+
+Status: Implemented, regression-tested, and visually proved.
+
+Slice name:
+- Hosted browser sandbox provider selection and preflight.
+
+Code changes:
+- Added `project/deployment/browser-sandbox-provider.selection.example.json` with non-secret hosted provider candidates and required capabilities.
+- Added `scripts/browser-sandbox-provider-selection-smoke.mjs` and package script `sandbox:browser:provider-selection`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with provider-selection validation, preflight scoring, and safe artifact output.
+- Extended compose/build/deployment contracts with selection-file and selected-provider env gates.
+- Exposed `hosted_browser_sandbox_provider_selection` in FastAPI proof and Node dashboard proof.
+- Added JS and FastAPI tests proving selection preflight does not overclaim live provider readiness.
+
+Safety decision:
+- The selection contract is not a provider config and contains no provider endpoint, token, raw frame, raw OCR text, or raw input value.
+- Selection preflight can only mean "a candidate has been explicitly selected for live integration"; it does not create a browser session and does not set `hosted_remote_browser_sandbox` ready.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until selected-provider live stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR proof passes.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-selection-smoke.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m compileall -q project`
+- `npm run sandbox:browser:provider-selection`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_selection_preflight_never_overclaims_live_provider`
+
+Focused verification result:
+- Syntax/compile checks passed.
+- Selection smoke reported `hosted_browser_sandbox_provider_selection_contract_ready`, `providerSelectionContractReady=true`, `providerSelectionPreflightReady=false`, and `hostedProviderReady=false`.
+- Focused browser-sandbox/compose contract tests passed with 10/10 tests.
+- Focused FastAPI selection-preflight regression passed.
+
+Full verification result:
+- `npm run sandbox:browser:provider-contract` passed.
+- `npm run sandbox:browser:adapter-harness` passed.
+- `npm run sandbox:browser:provider-resolver` passed.
+- `npm run sandbox:browser:provider-adapter` passed.
+- `npm run sandbox:browser:provider-http-adapter` passed.
+- `npm run sandbox:browser:provider-live-lifecycle` passed.
+- `npm run sandbox:browser:provider-selection` passed.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 26/26 tests.
+- `npm run test:facade` passed with 42 tests, including 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- In-app browser dashboard proof passed at `http://127.0.0.1:4206/?phase=hosted-browser-sandbox-provider-selection`:
+  - `hosted_browser_sandbox_provider_selection` visible;
+  - `hosted_browser_sandbox_provider_selection_preflight_ready` visible;
+  - `hosted_remote_browser_sandbox` visible;
+  - `hosted_remote_browser_sandbox` remained `0 / 100`;
+  - fake provider endpoint and token absent from the page;
+  - console errors/warnings absent.
+- Proof API artifact confirmed `hosted_browser_sandbox_provider_selection=90 / 90` and `hosted_remote_browser_sandbox=0 / 100`.
+- Screenshot and proof artifacts:
+  - `artifacts/phase21-hosted-browser-sandbox-provider-selection-dashboard-viewport-proof.png`;
+  - `artifacts/phase21-hosted-browser-sandbox-provider-selection-proof.json`;
+  - `artifacts/browser-sandbox-provider-selection-smoke.json`.
+
+Known risks or gaps:
+- This phase chooses and verifies the provider-selection/preflight gate, not a production hosted browser provider.
+- The real provider endpoint/token still must live outside Git.
+- Live provider proof still needs selected-provider HTTPS/WebRTC stream, screenshot/OCR, takeover, approved input, offsite fail-closed, teardown, and GUI/OCR testing.
+
+## Phase 22 Hosted Browser Sandbox Provider Live Preflight Update
+
+Status: Implemented, full regression-tested, and visually proved.
+
+Slice name:
+- Hosted browser sandbox provider live preflight.
+
+Code changes:
+- Added `scripts/browser-sandbox-provider-live-preflight-smoke.mjs` and package script `sandbox:browser:provider-live-preflight`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with selected-provider live preflight and optional provider health probing.
+- Added `project/deployment/browser-sandbox-provider.live-preflight.example.env`.
+- Added `.gitignore` and `.dockerignore` patterns for private provider runtime JSON files.
+- Extended compose/build/deployment contracts with live-preflight env gates.
+- Exposed `hosted_browser_sandbox_provider_live_preflight` in FastAPI proof and Node dashboard proof.
+- Added JS and FastAPI tests proving live preflight does not overclaim hosted remote browser readiness.
+
+Safety decision:
+- Default live preflight is blocked but safe.
+- Live preflight readiness does not create a browser session and does not set `hosted_remote_browser_sandbox` ready.
+- Optional live provider health probing is explicitly env-gated.
+- Provider endpoints, bearer tokens, raw frames, OCR text, and input values must never appear in proof artifacts or dashboard text.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until selected-provider create-session, stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR proof passes.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-live-preflight-smoke.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `node --check src/server/server.mjs`
+- `python3 -m compileall -q project`
+- `npm run sandbox:browser:provider-live-preflight`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_live_preflight_never_overclaims_live_provider`
+
+Focused verification result:
+- Syntax/compile checks passed.
+- Live preflight smoke reported `hosted_browser_sandbox_provider_live_preflight_blocked`, `hostedProviderLivePreflightReady=false`, and `hostedProviderReady=false`.
+- Focused browser-sandbox/compose contract tests passed with 12/12 tests.
+- Focused FastAPI live-preflight regression passed.
+
+Full verification result:
+- Full sandbox smoke chain passed:
+  - `npm run sandbox:browser:provider-contract`
+  - `npm run sandbox:browser:provider-selection`
+  - `npm run sandbox:browser:provider-live-preflight`
+  - `npm run sandbox:browser:adapter-harness`
+  - `npm run sandbox:browser:provider-resolver`
+  - `npm run sandbox:browser:provider-adapter`
+  - `npm run sandbox:browser:provider-http-adapter`
+  - `npm run sandbox:browser:provider-live-lifecycle`
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 28/28 tests.
+- `npm run test:facade` passed with 43 tests and 2 expected skips.
+- `npm run test:local` passed with 208 passing tests and 2 expected skips.
+- Dashboard visual proof passed on `http://127.0.0.1:4207/?phase=hosted-browser-sandbox-provider-live-preflight`.
+- Browser DOM/visual assertion proved `hosted_browser_sandbox_provider_selection` at `90 / 90`, `hosted_browser_sandbox_provider_live_preflight` at `80 / 80`, `hosted_remote_browser_sandbox` still at `0 / 100`, and no fake endpoint/token leakage.
+- API proof artifact: `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-proof.json`.
+- Visual proof artifact: `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-dashboard-proof.png`.
+- Visual assertion artifact: `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-visual-proof.json`.
+- Smoke artifact: `artifacts/browser-sandbox-provider-live-preflight-smoke.json`.
+
+Known risks or gaps:
+- This phase validates the live-preflight gate, not a production hosted browser provider.
+- Real provider endpoint/token still must live outside Git.
+- Live provider proof still needs selected-provider HTTPS/WebRTC lifecycle implementation and GUI/OCR testing.

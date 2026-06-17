@@ -2233,3 +2233,41 @@ This closes the next implementation gap without leaking secrets or pretending a 
 
 Cost of changing later:
 Low. A selected provider can replace the local lifecycle handlers with provider HTTPS/WebRTC calls while preserving the same proof fields, redaction policy, approval boundaries, and FastAPI public API contract.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Selection Before Live Provider Enablement
+
+Context:
+The lifecycle harness proves the hosted-browser provider shape, but the project still needed an explicit decision gate between "we can exercise a local provider-compatible lifecycle" and "we selected a real provider and are ready to configure live credentials." Without that gate, the next implementation could either stay vague or accidentally treat any private provider config as production readiness.
+
+Options considered:
+- Jump directly from lifecycle harness to a vendor-specific implementation.
+- Treat the existing hosted-provider example config as the provider-selection record.
+- Add a non-secret provider-selection matrix plus preflight smoke that proves candidate/capability readiness separately from live hosted-browser readiness.
+
+Decision:
+Add `project/deployment/browser-sandbox-provider.selection.example.json`, `npm run sandbox:browser:provider-selection`, FastAPI/Node proof fields, and a separate `hosted_browser_sandbox_provider_selection` score. Selection preflight can pass only when the selected provider env matches a known candidate and an explicit readiness env is set. `hosted_remote_browser_sandbox` remains blocked until real provider live proof passes.
+
+Reason:
+This records the provider choice boundary in code and dashboard proof while preserving secret hygiene and score honesty. It also gives the future iOS/PWA remote-client work a stable expectation: the browser provider may change, but the public `/api/v1/browser/*` contract and visual proof requirements do not.
+
+Cost of changing later:
+Low. Candidate fields can be expanded for a real vendor due-diligence checklist, and the selected provider adapter can reuse the existing resolver, HTTP, lifecycle, redaction, and dashboard proof structure.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Live Preflight Before Live Provider Readiness
+
+Context:
+Provider selection can now pass, but the project still needed an explicit gate for private provider config, endpoint/auth resolver readiness, and optional provider health probing. Without this gate, a future live provider integration could jump from selection directly to lifecycle implementation and blur whether credentials/config were ready.
+
+Options considered:
+- Wait for real provider credentials before adding any preflight code.
+- Treat provider selection preflight as enough to start live lifecycle work.
+- Add a live-preflight smoke that proves selected-provider, private config, endpoint/auth, and optional health-probe readiness while keeping live hosted-browser readiness blocked.
+
+Decision:
+Add `npm run sandbox:browser:provider-live-preflight`, a redacted live-preflight proof contract, private provider JSON ignore patterns, and a non-secret example env file. Expose a separate `hosted_browser_sandbox_provider_live_preflight` score in FastAPI and the dashboard. Keep `hosted_remote_browser_sandbox` blocked until the full selected-provider lifecycle and GUI/OCR visual proof pass.
+
+Reason:
+This creates a concrete operational bridge from provider selection to live integration without requiring credentials in Git or overclaiming readiness. It also gives remote-client operators a public proof signal that config/secret wiring is ready before the browser provider is allowed to control sessions.
+
+Cost of changing later:
+Low. The live preflight can gain provider-specific health fields or secret-source types without changing the public `/api/v1/browser/*` contract or the existing lifecycle harness.

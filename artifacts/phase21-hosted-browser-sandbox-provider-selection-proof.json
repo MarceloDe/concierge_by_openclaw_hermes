@@ -1,0 +1,691 @@
+{
+  "version": "server-connector-next-mobile-mvp.v2",
+  "runId": "hosted-browser-sandbox-provider-selection",
+  "status": "cycle_contract_ready",
+  "cycle": "server_connector_next_mobile_mvp",
+  "generatedAt": "2026-06-17T20:34:38.218Z",
+  "goals": [
+    {
+      "key": "fastapi_v1_connector",
+      "status": "implemented",
+      "target": "Remote clients integrate through FastAPI /api/v1 instead of Node internals."
+    },
+    {
+      "key": "next_mobile_pwa",
+      "status": "implemented_visual_verified",
+      "target": "Mobile-first Next.js PWA shell uses only /api/v1 calls."
+    },
+    {
+      "key": "browser_sandbox_gateway",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "Live worker browser sessions are represented as remote sandbox sessions, with hosted provider readiness separate from local CDP proof."
+    },
+    {
+      "key": "dashboard_visual_proof",
+      "status": "implemented",
+      "target": "Operator dashboard exposes API, browser, safety, and visual-test readiness."
+    },
+    {
+      "key": "docker_connector_deployment",
+      "status": "compose_contract_present",
+      "target": "Docker Compose defines the Node runtime, FastAPI connector, Next.js PWA, and FalkorDB dependency services."
+    },
+    {
+      "key": "graphiti_container_product_memory",
+      "status": "graphiti_container_runtime_present",
+      "target": "Node connector image can run real Graphiti/FalkorDB product memory when credentials enable the adapter."
+    },
+    {
+      "key": "postgres_storage_profile",
+      "status": "postgres_compose_profile_present_sqlite_runtime",
+      "target": "Docker Compose defines a Postgres transactional storage target while the current app runtime remains safely on SQLite until migration tests pass."
+    },
+    {
+      "key": "postgres_docker_secret_runtime_profile",
+      "status": "postgres_docker_secret_runtime_profile_present",
+      "target": "A dedicated compose override selects Postgres runtime through a Docker-secret database URL without bypassing proof gates."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "status": "hosted_browser_sandbox_provider_selection_preflight_ready",
+      "target": "A provider-selection/preflight gate chooses a live sandbox candidate without storing provider URLs or secrets in Git."
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted adapter lifecycle can be contract-tested without provider credentials or live frames."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted provider HTTP create-session adapter can be exercised against a local provider-compatible harness without leaking secrets."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted provider stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed lifecycle can be contract-tested before live provider enablement."
+    }
+  ],
+  "checks": [
+    {
+      "key": "node_runtime",
+      "status": "ready",
+      "ok": true,
+      "detail": "db tables 55"
+    },
+    {
+      "key": "fastapi_v1",
+      "status": "available_when_facade_running",
+      "ok": true,
+      "endpoints": [
+        "/api/v1/sessions",
+        "/api/v1/tasks",
+        "/api/v1/browser/sessions",
+        "/api/v1/proof/runs/{run_id}"
+      ]
+    },
+    {
+      "key": "openclaw_readiness",
+      "status": "auth_required",
+      "ok": false,
+      "nextAction": "Open the member portal in the dedicated OpenClaw browser profile and sign in manually. Leave the authenticated tab open."
+    },
+    {
+      "key": "product_memory",
+      "status": "degraded",
+      "ok": false,
+      "adapter": "graphiti",
+      "safeDegraded": true,
+      "replayQueue": {
+        "queueVersion": "2026-06-15.product-memory-replay-queue.v1",
+        "available": true,
+        "pending": 11,
+        "retryableFailed": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "oldestPending": {
+          "id": "pm_replay_32b0ed6d-85aa-4911-a0db-82645cda6a4a",
+          "created_at": "2026-06-15T19:15:56.810Z",
+          "next_attempt_at": "2026-06-15T19:15:56.810Z",
+          "last_error": "Graphiti bridge failed with exit 1: {\"ok\": false, \"contractVersion\": \"2026-05-27.graphiti-product-memory.v1\", \"error\": \"Error 61 connecting to localhost:6380. Connection refused.\", \"errorType\": \"ConnectionError\"}\n"
+        }
+      }
+    },
+    {
+      "key": "graphiti_container_runtime",
+      "status": "graphiti_container_runtime_present",
+      "ok": true,
+      "command": "npm run docker:memory:smoke"
+    },
+    {
+      "key": "database_storage",
+      "status": "postgres_compose_profile_present_sqlite_runtime",
+      "ok": true,
+      "runtimeDriver": "sqlite",
+      "productionTarget": "postgres",
+      "migrationPending": true,
+      "command": "npm run storage:postgres:smoke",
+      "runtimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+      "productionSmokeCommand": "npm run storage:postgres:production-smoke",
+      "defaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+      "productionGates": {
+        "endpointParityReady": false,
+        "workerLeaseReady": false,
+        "backupRestoreReady": false,
+        "backupRunbookReady": false,
+        "providerBackupPolicyReady": false,
+        "secretProfileReady": false,
+        "defaultRolloutReady": false
+      },
+      "productionProfileReady": true,
+      "productionProfileCommand": "npm run storage:postgres:profile-contract"
+    },
+    {
+      "key": "postgres_backup_runbook",
+      "status": "available_runbook_gate",
+      "ok": false,
+      "command": "npm run storage:postgres:backup-runbook-smoke"
+    },
+    {
+      "key": "postgres_provider_backup_policy",
+      "status": "provider_policy_contract_available",
+      "ok": false,
+      "command": "npm run storage:postgres:provider-backup-policy-smoke"
+    },
+    {
+      "key": "postgres_production_profile",
+      "status": "postgres_docker_secret_runtime_profile_present",
+      "ok": true,
+      "command": "npm run storage:postgres:profile-contract"
+    },
+    {
+      "key": "postgres_endpoint_regression",
+      "status": "available_smoke_gate",
+      "ok": true,
+      "command": "npm run storage:postgres:endpoint-regression-smoke"
+    },
+    {
+      "key": "postgres_profile_live_smoke",
+      "status": "available_live_profile_gate",
+      "ok": true,
+      "command": "npm run storage:postgres:profile-live-smoke"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-contract",
+      "resolver": {
+        "status": "hosted_browser_sandbox_provider_not_selected",
+        "resolverReady": false,
+        "ready": false,
+        "endpointResolved": false,
+        "authResolved": false,
+        "liveVerified": false,
+        "endpointRefKind": "logical_ref",
+        "authTokenRefKind": "env",
+        "endpointEnvPresent": false,
+        "authEnvPresent": true,
+        "rawEndpointReturned": false,
+        "rawSecretReturned": false,
+        "rawSecretPathReturned": false
+      }
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_resolver",
+      "status": "hosted_browser_sandbox_provider_not_selected",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-resolver",
+      "endpointResolved": false,
+      "authResolved": false,
+      "liveVerified": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "status": "hosted_browser_sandbox_provider_selection_preflight_ready",
+      "ok": true,
+      "command": "npm run sandbox:browser:provider-selection",
+      "preflightReady": true,
+      "selectedProviderKnown": true,
+      "selectedProviderKey": "custom_webrtc",
+      "candidateKeys": [
+        "custom_webrtc",
+        "browserbase",
+        "vercel_sandbox"
+      ],
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-adapter",
+      "providerNetworkCalled": false,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-http-adapter",
+      "providerNetworkCalled": false,
+      "localHarnessOnly": true,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-live-lifecycle",
+      "providerNetworkCalled": false,
+      "localHarnessOnly": true,
+      "streamFrames": "sse_frame_ref_only",
+      "screenshot": "opaque_screenshot_ref_only",
+      "ocrCaption": "opaque_caption_ref_only",
+      "takeover": "approval_gated_human_only",
+      "inputRelay": "redacted_approved_input_only",
+      "teardown": "ephemeral_session_closed",
+      "offsiteFailClosed": true,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:adapter-harness",
+      "adapterMode": "contract_only"
+    },
+    {
+      "key": "docker_compose_contract",
+      "status": "compose_contract_present",
+      "ok": true,
+      "services": [
+        "node-runtime",
+        "fastapi",
+        "mobile-pwa",
+        "falkordb",
+        "postgres"
+      ],
+      "command": "npm run docker:contract"
+    },
+    {
+      "key": "approval_boundary",
+      "status": "approval_required_for_external_write_or_live_browser_actions",
+      "ok": true
+    }
+  ],
+  "visualArtifacts": [
+    {
+      "route": "/",
+      "required": true,
+      "status": "dashboard_panel_verified",
+      "proof": "Connector Verification panel rendered in browser proof."
+    },
+    {
+      "route": "/mvp",
+      "required": true,
+      "status": "legacy_mvp_verified",
+      "proof": "Static MVP remains the compatibility harness until PWA parity."
+    },
+    {
+      "route": "apps/mobile-next",
+      "required": true,
+      "status": "pwa_mobile_view_verified",
+      "proof": "Next.js mobile viewport visual test passed.",
+      "artifact": "/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png"
+    },
+    {
+      "route": "/api/v1/browser/sessions/{browser_session_id}/stream",
+      "required": true,
+      "status": "live_worker_stream_verified",
+      "proof": "Worker Browser live block rendered a data:image/jpeg frame through FastAPI /api/v1.",
+      "artifact": "/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png"
+    }
+  ],
+  "scores": [
+    {
+      "key": "api_readiness",
+      "score": 90,
+      "target": 90,
+      "status": "pass_contract"
+    },
+    {
+      "key": "deployment_contract",
+      "score": 75,
+      "target": 75,
+      "status": "pass_static_compose_contract"
+    },
+    {
+      "key": "product_memory_deployment",
+      "score": 75,
+      "target": 100,
+      "status": "runtime_present_enable_graphiti_for_live_schema"
+    },
+    {
+      "key": "database_product_ready_architecture",
+      "score": 75,
+      "target": 100,
+      "status": "postgres_compose_profile_present_sqlite_runtime"
+    },
+    {
+      "key": "database_deployment_profile",
+      "score": 100,
+      "target": 100,
+      "status": "postgres_docker_secret_runtime_profile_present"
+    },
+    {
+      "key": "database_backup_restore_runbook",
+      "score": 0,
+      "target": 100,
+      "status": "run_backup_runbook_smoke"
+    },
+    {
+      "key": "database_provider_backup_policy",
+      "score": 0,
+      "target": 100,
+      "status": "configure_hosted_provider_policy"
+    },
+    {
+      "key": "gui_visual_test",
+      "score": 100,
+      "target": 100,
+      "status": "pass_visual_browser_proof"
+    },
+    {
+      "key": "remote_browser_controls",
+      "score": 90,
+      "target": 90,
+      "status": "pass_live_frame_local_cdp",
+      "readinessStatus": "auth_required"
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "score": 0,
+      "target": 75,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_resolver",
+      "score": 0,
+      "target": 50,
+      "status": "hosted_browser_sandbox_provider_not_selected"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "score": 90,
+      "target": 90,
+      "status": "hosted_browser_sandbox_provider_selection_preflight_ready"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_adapter",
+      "score": 0,
+      "target": 75,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "score": 0,
+      "target": 85,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "score": 0,
+      "target": 95,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_remote_browser_sandbox",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "approval_audit_scaffolding",
+      "score": 85,
+      "target": 85,
+      "status": "pass_existing_gate"
+    }
+  ],
+  "safety": {
+    "fastApiIsPublicConnector": true,
+    "nodeIsInternalRuntime": true,
+    "publicApi": "/api/v1",
+    "frontendDirectNodeCallsAllowedForPwa": false,
+    "externalWriteActionsWithoutApproval": false,
+    "rawOcrTextReturned": false
+  },
+  "storage": {
+    "version": "2026-06-15.storage-readiness.v1",
+    "ok": true,
+    "status": "postgres_compose_profile_present_sqlite_runtime",
+    "score": 75,
+    "targetScore": 100,
+    "runtimeDriver": "sqlite",
+    "runtimeAdapterVersion": "2026-06-15.node-sqlite-bound-store.v1",
+    "postgresAdapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+    "appRuntimeMigratedToPostgres": false,
+    "fullMigrationReady": false,
+    "migrationPending": true,
+    "sqlite": {
+      "enabled": true,
+      "dbPath": "/Users/mfelix/projects/workerprototype_openclaw/data/brainstyworkers.sqlite",
+      "boundedParameters": true,
+      "sqliteShellOut": false
+    },
+    "postgres": {
+      "target": true,
+      "configured": true,
+      "composeReady": true,
+      "liveReady": false,
+      "adapterReady": true,
+      "runtimeSmokeReady": false,
+      "productionSmokeReady": false,
+      "workerLeaseReady": false,
+      "backupRestoreReady": false,
+      "backupRunbookReady": false,
+      "providerBackupPolicyReady": false,
+      "endpointParityReady": false,
+      "operationalGatesReady": false,
+      "productionGatesReady": false,
+      "productionProfileReady": true,
+      "defaultRolloutReady": false,
+      "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+      "secretProfile": {
+        "version": "2026-06-16.database-secret-profile.v1",
+        "ready": false,
+        "status": "database_secret_profile_not_ready",
+        "source": "default_dev",
+        "secretBacked": false,
+        "urlPresent": true,
+        "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+        "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+        "fileConfigured": false,
+        "filePathHash": null,
+        "validPostgresUrl": true,
+        "protocol": "postgresql",
+        "host": "127.0.0.1",
+        "port": "55432",
+        "database": "brainstyworkers",
+        "hasUsername": true,
+        "hasPassword": true,
+        "devCredentialDetected": true,
+        "profileReadyClaimed": false,
+        "issues": [
+          "database_url_not_secret_backed"
+        ]
+      },
+      "initContract": "project/db/postgres-init/001_storage_readiness.sql",
+      "smokeCommand": "npm run storage:postgres:smoke",
+      "runtimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+      "productionSmokeCommand": "npm run storage:postgres:production-smoke",
+      "backupRunbookCommand": "npm run storage:postgres:backup-runbook-smoke",
+      "providerBackupPolicyCommand": "npm run storage:postgres:provider-backup-policy-smoke",
+      "defaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+      "productionProfileCommand": "npm run storage:postgres:profile-contract"
+    },
+    "safety": {
+      "secretsRedacted": true,
+      "secretProfileReady": false,
+      "databaseSecretProfile": {
+        "version": "2026-06-16.database-secret-profile.v1",
+        "ready": false,
+        "status": "database_secret_profile_not_ready",
+        "source": "default_dev",
+        "secretBacked": false,
+        "urlPresent": true,
+        "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+        "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+        "fileConfigured": false,
+        "filePathHash": null,
+        "validPostgresUrl": true,
+        "protocol": "postgresql",
+        "host": "127.0.0.1",
+        "port": "55432",
+        "database": "brainstyworkers",
+        "hasUsername": true,
+        "hasPassword": true,
+        "devCredentialDetected": true,
+        "profileReadyClaimed": false,
+        "issues": [
+          "database_url_not_secret_backed"
+        ]
+      },
+      "phiSeeded": false,
+      "transactionalTarget": "postgres",
+      "localRuntimeStillSQLite": true,
+      "boundParameterAdapter": true
+    },
+    "nextAction": "Keep SQLite local runtime stable while expanding Postgres adapter parity, leases, and migration tests."
+  },
+  "deployment": {
+    "ok": true,
+    "status": "compose_contract_present",
+    "files": [
+      ".dockerignore",
+      "Dockerfile.node",
+      "Dockerfile.api",
+      "apps/mobile-next/Dockerfile",
+      "compose.yaml",
+      "compose.postgres.yaml",
+      "scripts/browser-sandbox-provider-contract.mjs",
+      "scripts/browser-sandbox-provider-selection-smoke.mjs",
+      "scripts/compose-contract.mjs",
+      "scripts/storage-contract.mjs",
+      "scripts/postgres-runtime-smoke.mjs",
+      "scripts/postgres-production-readiness-smoke.mjs",
+      "scripts/postgres-default-rollout-smoke.mjs",
+      "scripts/postgres-production-profile-contract.mjs",
+      "scripts/postgres-endpoint-regression-smoke.mjs",
+      "scripts/postgres-production-profile-live-smoke.mjs",
+      "scripts/postgres-backup-runbook-smoke.mjs",
+      "scripts/postgres-provider-backup-policy-smoke.mjs",
+      "project/deployment/postgres-provider-backup-policy.example.json",
+      "project/deployment/browser-sandbox-provider.example.json",
+      "project/deployment/browser-sandbox-provider.selection.example.json",
+      "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
+      "project/deployment/secrets/README.md",
+      "project/deployment/secrets/database-url.example",
+      "scripts/compose-memory-smoke.mjs",
+      "project/db/postgres-init/001_storage_readiness.sql",
+      "src/concierge/databaseFactory.mjs",
+      "src/concierge/databaseSecretProfile.mjs",
+      "src/concierge/postgresStore.mjs",
+      "src/concierge/workerLeases.mjs",
+      "src/concierge/storageReadiness.mjs",
+      "src/tests/deployment-compose.test.mjs",
+      "src/tests/deployment-graphiti-compose.test.mjs",
+      "src/tests/deployment-storage.test.mjs",
+      "src/tests/worker-leases.test.mjs",
+      "src/tests/postgres-production-readiness-contract.test.mjs",
+      "src/tests/postgres-production-profile-contract.test.mjs",
+      "src/tests/postgres-production-profile-live-contract.test.mjs",
+      "tools/graphiti/graphiti_bridge.py",
+      "vendor/getzep-graphiti/pyproject.toml"
+    ],
+    "missing": [],
+    "services": [
+      "node-runtime",
+      "fastapi",
+      "mobile-pwa",
+      "falkordb",
+      "postgres"
+    ],
+    "postgresRuntimeReady": true,
+    "postgresRuntimeStatus": "postgres_compose_profile_present",
+    "postgresLiveReady": false,
+    "postgresAdapterRuntimeReady": true,
+    "postgresRuntimeSmokeReady": false,
+    "postgresProductionSmokeReady": false,
+    "postgresWorkerLeaseReady": false,
+    "postgresBackupRestoreReady": false,
+    "postgresBackupRunbookReady": false,
+    "postgresProviderBackupPolicyReady": false,
+    "postgresEndpointParityReady": false,
+    "databaseSecretProfileReady": false,
+    "databaseSecretProfile": {
+      "version": "2026-06-16.database-secret-profile.v1",
+      "ready": false,
+      "status": "database_secret_profile_not_ready",
+      "source": "default_dev",
+      "secretBacked": false,
+      "urlPresent": true,
+      "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+      "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+      "fileConfigured": false,
+      "filePathHash": null,
+      "validPostgresUrl": true,
+      "protocol": "postgresql",
+      "host": "127.0.0.1",
+      "port": "55432",
+      "database": "brainstyworkers",
+      "hasUsername": true,
+      "hasPassword": true,
+      "devCredentialDetected": true,
+      "profileReadyClaimed": false,
+      "issues": [
+        "database_url_not_secret_backed"
+      ]
+    },
+    "postgresDefaultRolloutReady": false,
+    "postgresProductionProfileReady": true,
+    "postgresProductionProfileStatus": "postgres_docker_secret_runtime_profile_present",
+    "hostedBrowserSandboxContractReady": true,
+    "hostedBrowserSandboxAdapterMode": "contract_only",
+    "hostedBrowserSandboxAdapterHarnessReady": false,
+    "hostedBrowserSandboxProviderResolverReady": false,
+    "hostedBrowserSandboxProviderResolver": {
+      "status": "hosted_browser_sandbox_provider_not_selected",
+      "resolverReady": false,
+      "ready": false,
+      "endpointResolved": false,
+      "authResolved": false,
+      "liveVerified": false,
+      "endpointRefKind": "logical_ref",
+      "authTokenRefKind": "env",
+      "endpointEnvPresent": false,
+      "authEnvPresent": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawSecretPathReturned": false
+    },
+    "hostedBrowserSandboxProviderSelectionReady": true,
+    "hostedBrowserSandboxProviderSelectionPreflightReady": true,
+    "hostedBrowserSandboxProviderSelection": {
+      "status": "hosted_browser_sandbox_provider_selection_preflight_ready",
+      "selectedProviderKnown": true,
+      "selectedProviderKey": "custom_webrtc",
+      "candidateKeys": [
+        "custom_webrtc",
+        "browserbase",
+        "vercel_sandbox"
+      ],
+      "failures": [],
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    "hostedBrowserSandboxProviderAdapterReady": false,
+    "hostedBrowserSandboxProviderHttpAdapterReady": false,
+    "hostedBrowserSandboxProviderLiveLifecycleHarnessReady": false,
+    "hostedBrowserSandboxProviderReady": false,
+    "hostedBrowserSandboxProviderStatus": "hosted_browser_sandbox_contract_valid_not_configured",
+    "browserSandboxProviderContractCommand": "npm run sandbox:browser:provider-contract",
+    "browserSandboxProviderSelectionCommand": "npm run sandbox:browser:provider-selection",
+    "browserSandboxAdapterHarnessCommand": "npm run sandbox:browser:adapter-harness",
+    "browserSandboxProviderResolverCommand": "npm run sandbox:browser:provider-resolver",
+    "browserSandboxProviderAdapterCommand": "npm run sandbox:browser:provider-adapter",
+    "browserSandboxProviderHttpAdapterCommand": "npm run sandbox:browser:provider-http-adapter",
+    "browserSandboxProviderLiveLifecycleCommand": "npm run sandbox:browser:provider-live-lifecycle",
+    "storageSmokeCommand": "npm run storage:postgres:smoke",
+    "postgresRuntimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+    "postgresProductionSmokeCommand": "npm run storage:postgres:production-smoke",
+    "postgresDefaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+    "postgresProductionProfileCommand": "npm run storage:postgres:profile-contract",
+    "postgresEndpointRegressionCommand": "npm run storage:postgres:endpoint-regression-smoke",
+    "postgresProductionProfileLiveCommand": "npm run storage:postgres:profile-live-smoke",
+    "postgresBackupRunbookCommand": "npm run storage:postgres:backup-runbook-smoke",
+    "postgresProviderBackupPolicyCommand": "npm run storage:postgres:provider-backup-policy-smoke",
+    "graphitiRuntimeReady": true,
+    "graphitiRuntimeStatus": "graphiti_container_runtime_present",
+    "memorySmokeCommand": "npm run docker:memory:smoke",
+    "memoryLiveSmokeCommand": "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke",
+    "configCommand": "npm run docker:contract",
+    "liveSmokeCommand": "docker compose up --build"
+  }
+}
