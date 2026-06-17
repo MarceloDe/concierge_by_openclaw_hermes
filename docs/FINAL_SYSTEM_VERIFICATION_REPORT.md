@@ -682,3 +682,34 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_provider_selection` can reach `70 / 90` from the checked-in contract and `90 / 90` only when `WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER` is a known candidate and `WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY=1`.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes live stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+## Phase 22 Hosted Browser Sandbox Provider Live Preflight Update
+
+Implementation:
+- Added `npm run sandbox:browser:provider-live-preflight`.
+- Added private provider runtime JSON ignore patterns and a non-secret live-preflight env example.
+- Added a separate `hosted_browser_sandbox_provider_live_preflight` FastAPI and dashboard score.
+- Live preflight depends on selected-provider preflight, hosted-provider endpoint/auth resolver readiness, and the explicit live-preflight gate.
+- Optional provider health probing is env-gated and must return sanitized capability booleans only.
+- `hosted_remote_browser_sandbox` remains blocked until real provider lifecycle and GUI/OCR proof pass.
+
+Focused verification:
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-live-preflight` passed in blocked/default mode without provider network calls or secret leakage.
+- Focused browser-sandbox/compose contract tests passed with 12/12 tests.
+- Focused FastAPI provider live-preflight proof test passed.
+- Full sandbox smoke chain passed.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 28/28 tests.
+- `npm run test:facade` passed with 43 tests and 2 expected skips.
+- `npm run test:local` passed with 208 passing tests and 2 expected skips.
+- Dashboard browser proof passed with `hosted_browser_sandbox_provider_selection` at `90 / 90`, `hosted_browser_sandbox_provider_live_preflight` at `80 / 80`, `hosted_remote_browser_sandbox` still at `0 / 100`, and no endpoint/token leakage.
+- Proof artifacts:
+  - `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-dashboard-proof.png`
+  - `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-visual-proof.json`
+  - `artifacts/phase22-hosted-browser-sandbox-provider-live-preflight-proof.json`
+  - `artifacts/browser-sandbox-provider-live-preflight-smoke.json`
+
+Score decision:
+- `hosted_browser_sandbox_provider_live_preflight` can reach `80 / 80` only when provider selection preflight is ready, hosted endpoint/auth refs resolve, and `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY=1`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes create-session, stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.

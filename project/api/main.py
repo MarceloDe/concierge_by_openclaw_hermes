@@ -936,6 +936,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("hostedProviderSelection", {}).get("status"),
                 "target": "Provider selection/preflight is explicit before live hosted remote browser enablement."
             },
+            {
+                "key": "hosted_browser_sandbox_provider_live_preflight",
+                "status": browser_sandbox_contract.get("hostedProviderLivePreflight", {}).get("status"),
+                "target": "Selected provider, endpoint, auth, and private config readiness are preflighted before live hosted browser enablement."
+            },
             {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
             {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
         ],
@@ -946,7 +951,8 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "uploads", **checks.get("uploads", {})},
             {"key": "source_grounding", **checks.get("source_grounding", {})},
             {"key": "hosted_browser_sandbox_provider", **browser_sandbox_contract},
-            {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})}
+            {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})},
+            {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
@@ -994,6 +1000,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": 90 if browser_sandbox_contract.get("hostedProviderSelectionPreflightReady") else 70 if browser_sandbox_contract.get("hostedProviderSelectionReady") else 0,
                 "target": 90,
                 "status": browser_sandbox_contract.get("hostedProviderSelection", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_live_preflight",
+                "score": 80 if browser_sandbox_contract.get("hostedProviderLivePreflightReady") else 0,
+                "target": 80,
+                "status": browser_sandbox_contract.get("hostedProviderLivePreflight", {}).get("status")
             },
             {
                 "key": "hosted_remote_browser_sandbox",

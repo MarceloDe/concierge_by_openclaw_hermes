@@ -1,0 +1,129 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
+  "hostedProviderLivePreflightReady": false,
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+      "provider": "hosted_remote",
+      "environment": "staging",
+      "endpointRefPresent": true,
+      "secretSource": "managed_env",
+      "transport": {
+        "stream": "webrtc_or_sse_frames",
+        "inputRelay": "approval_gated_human_only",
+        "screenshot": "provider_screenshot_api",
+        "ocrCaption": "provider_or_local_ocr"
+      },
+      "adapter": {
+        "mode": "hosted_provider",
+        "providerLiveConnected": false,
+        "contractHarnessOnly": false
+      },
+      "auth": {
+        "tokenRefPresent": true,
+        "tokenRefKind": "env"
+      },
+      "sessionPolicy": {
+        "userScoped": true,
+        "sessionScoped": true,
+        "ephemeralBrowser": true,
+        "maxSessionMinutes": 30,
+        "idleTimeoutMinutes": 5,
+        "recordFrames": false,
+        "persistRawOcrText": false
+      },
+      "approvalPolicy": {
+        "requiresReadOnlyApproval": true,
+        "requiresHumanTakeoverApproval": true,
+        "agentCredentialEntryAllowed": false,
+        "externalWriteActionsAllowed": false
+      },
+      "networkPolicy": {
+        "allowlistRequired": true,
+        "offsiteFailClosed": true,
+        "credentialPagesUserOnly": true
+      },
+      "audit": {
+        "emitSessionLifecycleEvents": true,
+        "emitTakeoverEvents": true,
+        "redactInputValues": true,
+        "redactFrameContent": true
+      },
+      "source": {
+        "configPath": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+        "exampleConfig": false
+      }
+    }
+  },
+  "selection": {
+    "providerSelectionPreflightReady": false,
+    "selectedProviderKey": null,
+    "candidateKeys": [
+      "custom_webrtc",
+      "browserbase",
+      "vercel_sandbox"
+    ]
+  },
+  "resolver": {
+    "status": "hosted_browser_sandbox_provider_not_selected",
+    "resolverReady": false,
+    "ready": false,
+    "endpointResolved": false,
+    "authResolved": false,
+    "liveVerified": false,
+    "endpointRefKind": "env",
+    "authTokenRefKind": "env",
+    "endpointEnvPresent": true,
+    "authEnvPresent": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawSecretPathReturned": false
+  },
+  "providerHealthProbe": {
+    "attempted": false,
+    "ok": false,
+    "statusCode": null,
+    "endpointRedacted": true,
+    "authorizationRedacted": true,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false
+  },
+  "requiredNextLiveProof": [
+    "real provider create session",
+    "provider stream frames",
+    "provider screenshot ref",
+    "provider OCR/caption ref",
+    "approval-gated takeover",
+    "redacted approved input relay",
+    "offsite fail-closed navigation",
+    "teardown",
+    "dashboard visual proof",
+    "mobile PWA live worker proof"
+  ],
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_live_preflight",
+    "scoreKey": "hosted_browser_sandbox_provider_live_preflight",
+    "preflightReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY",
+    "liveProbeEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE",
+    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "liveProviderOverclaimed": false
+  }
+}

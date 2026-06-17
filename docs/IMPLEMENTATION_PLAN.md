@@ -2411,3 +2411,28 @@ Remaining follow-up:
 - Store the provider endpoint/token outside Git and point `WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE` at the private provider config.
 - Replace the local lifecycle harness with selected-provider HTTPS/WebRTC calls.
 - Add live provider GUI/OCR proof before allowing `hosted_remote_browser_sandbox` to pass.
+
+## Hosted Browser Sandbox Provider Live Preflight Cycle - 2026-06-17
+
+Goal:
+- Add the last safe gate before real hosted-provider integration: selected-provider, private config, endpoint, auth, and optional provider-health probe readiness, without claiming a live hosted browser provider is complete.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-live-preflight-smoke.mjs` and `npm run sandbox:browser:provider-live-preflight`.
+- Extend the hosted provider contract with live-preflight validation that depends on provider selection, hosted-provider resolver readiness, and an explicit `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY=1` gate.
+- Add optional live provider health probing behind `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE=1`.
+- Add `project/deployment/browser-sandbox-provider.live-preflight.example.env` and ignore private runtime provider JSON patterns.
+- Expose `hosted_browser_sandbox_provider_live_preflight` through FastAPI proof and Node dashboard proof.
+- Keep `hosted_remote_browser_sandbox` blocked even when live preflight passes.
+
+Acceptance:
+- Default live preflight is blocked but safe and redacted.
+- Live preflight can score `80 / 80` only when selection preflight is ready, hosted-provider endpoint/auth refs resolve, and the explicit live-preflight gate is enabled.
+- Optional provider health probe must return only sanitized capability booleans and must not expose provider endpoint, token, frame data, OCR text, or input values.
+- The live hosted provider score remains `0 / 100` until a selected real provider passes create-session, stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+Remaining follow-up:
+- Configure the private selected-provider runtime JSON outside Git.
+- Run live provider preflight with real endpoint/token and, when ready, enable the health probe.
+- Replace local lifecycle harness calls with selected-provider HTTPS/WebRTC calls.
+- Add provider-backed GUI/OCR visual proof before allowing `hosted_remote_browser_sandbox` to pass.

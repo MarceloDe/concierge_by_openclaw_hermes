@@ -18,6 +18,8 @@ concierge_by_openclaw_hermes
 project/deployment/secrets/*
 !project/deployment/secrets/README.md
 !project/deployment/secrets/*.example
+project/deployment/browser-sandbox-provider.*.runtime.json
+project/deployment/browser-sandbox-provider.*.private.json
 vendor/getzep-graphiti/.git
 vendor/getzep-graphiti/.venv
 vendor/getzep-graphiti/tests

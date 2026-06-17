@@ -448,6 +448,11 @@ def describe_browser_sandbox_provider_contract(
         http_adapter_harness_ready
         and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_LIFECYCLE_HARNESS_READY") == "1"
     )
+    live_preflight_ready = bool(
+        selection_contract["preflightReady"]
+        and hosted_resolution["resolverReady"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY") == "1"
+    )
     status = (
         "hosted_browser_sandbox_provider_ready"
         if provider_ready
@@ -472,6 +477,22 @@ def describe_browser_sandbox_provider_contract(
         "hostedProviderSelectionReady": selection_contract["contractReady"],
         "hostedProviderSelectionPreflightReady": selection_contract["preflightReady"],
         "hostedProviderSelection": selection_contract,
+        "hostedProviderLivePreflightReady": live_preflight_ready,
+        "hostedProviderLivePreflight": {
+            "status": (
+                "hosted_browser_sandbox_provider_live_preflight_ready"
+                if live_preflight_ready
+                else "hosted_browser_sandbox_provider_live_preflight_requires_explicit_gate"
+                if selection_contract["preflightReady"] and hosted_resolution["resolverReady"]
+                else "hosted_browser_sandbox_provider_live_preflight_blocked"
+            ),
+            "resolverReady": hosted_resolution["resolverReady"],
+            "selectionPreflightReady": selection_contract["preflightReady"],
+            "liveProbeEnabled": os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE") == "1",
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False
+        },
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
         "hostedProviderLiveLifecycleHarnessReady": live_lifecycle_harness_ready,

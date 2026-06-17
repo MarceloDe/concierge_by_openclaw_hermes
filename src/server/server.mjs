@@ -189,6 +189,7 @@ async function safeDeploymentContractStatus() {
     "compose.postgres.yaml",
     "scripts/browser-sandbox-provider-contract.mjs",
     "scripts/browser-sandbox-provider-selection-smoke.mjs",
+    "scripts/browser-sandbox-provider-live-preflight-smoke.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -202,6 +203,7 @@ async function safeDeploymentContractStatus() {
     "project/deployment/postgres-provider-backup-policy.example.json",
     "project/deployment/browser-sandbox-provider.example.json",
     "project/deployment/browser-sandbox-provider.selection.example.json",
+    "project/deployment/browser-sandbox-provider.live-preflight.example.env",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -288,7 +290,9 @@ async function safeDeploymentContractStatus() {
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE:-project/deployment/browser-sandbox-provider.example.json}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE:-project/deployment/browser-sandbox-provider.selection.example.json}",
     "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER:-}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY:-0}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE:-0}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -330,6 +334,10 @@ async function safeDeploymentContractStatus() {
       hostedBrowserSandboxSelectedProvider &&
       hostedBrowserSandboxProviderSelectionValidation.sanitizedConfig.candidateKeys.includes(hostedBrowserSandboxSelectedProvider)
     );
+  const hostedBrowserSandboxProviderLivePreflightReady =
+    hostedBrowserSandboxProviderSelectionPreflightReady &&
+    hostedBrowserSandboxProviderResolver.resolverReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY === "1";
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -397,6 +405,20 @@ async function safeDeploymentContractStatus() {
       rawEndpointReturned: false,
       rawSecretReturned: false
     },
+    hostedBrowserSandboxProviderLivePreflightReady,
+    hostedBrowserSandboxProviderLivePreflight: {
+      status: hostedBrowserSandboxProviderLivePreflightReady
+        ? "hosted_browser_sandbox_provider_live_preflight_ready"
+        : hostedBrowserSandboxProviderResolver.resolverReady && hostedBrowserSandboxProviderSelectionPreflightReady
+          ? "hosted_browser_sandbox_provider_live_preflight_requires_explicit_gate"
+          : "hosted_browser_sandbox_provider_live_preflight_blocked",
+      resolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
+      selectionPreflightReady: hostedBrowserSandboxProviderSelectionPreflightReady,
+      liveProbeEnabled: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE === "1",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -419,6 +441,7 @@ async function safeDeploymentContractStatus() {
         : "hosted_browser_sandbox_contract_missing",
     browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
     browserSandboxProviderSelectionCommand: "npm run sandbox:browser:provider-selection",
+    browserSandboxProviderLivePreflightCommand: "npm run sandbox:browser:provider-live-preflight",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -512,6 +535,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_selection",
         status: deployment.hostedBrowserSandboxProviderSelection?.status,
         target: "A provider-selection/preflight gate chooses a live sandbox candidate without storing provider URLs or secrets in Git."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_preflight",
+        status: deployment.hostedBrowserSandboxProviderLivePreflight?.status,
+        target: "Private provider config, selected provider, endpoint, and auth refs can be preflighted before live hosted browser enablement."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -627,6 +655,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         selectedProviderKnown: deployment.hostedBrowserSandboxProviderSelection?.selectedProviderKnown ?? false,
         selectedProviderKey: deployment.hostedBrowserSandboxProviderSelection?.selectedProviderKey ?? null,
         candidateKeys: deployment.hostedBrowserSandboxProviderSelection?.candidateKeys ?? [],
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_preflight",
+        status: deployment.hostedBrowserSandboxProviderLivePreflight?.status,
+        ok: deployment.hostedBrowserSandboxProviderLivePreflightReady,
+        command: deployment.browserSandboxProviderLivePreflightCommand,
+        resolverReady: deployment.hostedBrowserSandboxProviderLivePreflight?.resolverReady ?? false,
+        selectionPreflightReady: deployment.hostedBrowserSandboxProviderLivePreflight?.selectionPreflightReady ?? false,
+        liveProbeEnabled: deployment.hostedBrowserSandboxProviderLivePreflight?.liveProbeEnabled ?? false,
         rawEndpointReturned: false,
         rawSecretReturned: false,
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
@@ -758,6 +798,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
             : 0,
         target: 90,
         status: deployment.hostedBrowserSandboxProviderSelection?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_preflight",
+        score: deployment.hostedBrowserSandboxProviderLivePreflightReady ? 80 : 0,
+        target: 80,
+        status: deployment.hostedBrowserSandboxProviderLivePreflight?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",

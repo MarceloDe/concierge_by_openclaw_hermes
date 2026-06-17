@@ -2252,3 +2252,22 @@ This records the provider choice boundary in code and dashboard proof while pres
 
 Cost of changing later:
 Low. Candidate fields can be expanded for a real vendor due-diligence checklist, and the selected provider adapter can reuse the existing resolver, HTTP, lifecycle, redaction, and dashboard proof structure.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Live Preflight Before Live Provider Readiness
+
+Context:
+Provider selection can now pass, but the project still needed an explicit gate for private provider config, endpoint/auth resolver readiness, and optional provider health probing. Without this gate, a future live provider integration could jump from selection directly to lifecycle implementation and blur whether credentials/config were ready.
+
+Options considered:
+- Wait for real provider credentials before adding any preflight code.
+- Treat provider selection preflight as enough to start live lifecycle work.
+- Add a live-preflight smoke that proves selected-provider, private config, endpoint/auth, and optional health-probe readiness while keeping live hosted-browser readiness blocked.
+
+Decision:
+Add `npm run sandbox:browser:provider-live-preflight`, a redacted live-preflight proof contract, private provider JSON ignore patterns, and a non-secret example env file. Expose a separate `hosted_browser_sandbox_provider_live_preflight` score in FastAPI and the dashboard. Keep `hosted_remote_browser_sandbox` blocked until the full selected-provider lifecycle and GUI/OCR visual proof pass.
+
+Reason:
+This creates a concrete operational bridge from provider selection to live integration without requiring credentials in Git or overclaiming readiness. It also gives remote-client operators a public proof signal that config/secret wiring is ready before the browser provider is allowed to control sessions.
+
+Cost of changing later:
+Low. The live preflight can gain provider-specific health fields or secret-source types without changing the public `/api/v1/browser/*` contract or the existing lifecycle harness.

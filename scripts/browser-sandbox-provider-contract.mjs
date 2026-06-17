@@ -287,6 +287,182 @@ export async function runBrowserSandboxProviderSelectionSmoke({
   return result;
 }
 
+export async function runBrowserSandboxProviderLivePreflightSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-live-preflight-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [validation, configText, selection] = await Promise.all([
+    validateBrowserSandboxProviderContract({ configPath }),
+    readFile(resolve(configPath), "utf8"),
+    runBrowserSandboxProviderSelectionSmoke({
+      configPath: selectionConfigPath,
+      artifactPath: resolve("artifacts/browser-sandbox-provider-selection-smoke.json"),
+      env
+    })
+  ]);
+  const config = JSON.parse(configText);
+  const resolver = resolveBrowserSandboxHostedProvider({
+    config,
+    configPath,
+    validation,
+    env,
+    providerReady,
+    provider: env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "hosted_remote"
+  });
+  const configuredPreflightReady = Boolean(
+    validation.ok &&
+    selection.providerSelectionPreflightReady &&
+    resolver.resolverReady &&
+    env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY === "1"
+  );
+  let providerHealthProbe = {
+    attempted: false,
+    ok: false,
+    statusCode: null,
+    endpointRedacted: true,
+    authorizationRedacted: true,
+    rawEndpointReturned: false,
+    rawSecretReturned: false
+  };
+  if (configuredPreflightReady && env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE === "1") {
+    providerHealthProbe = await callHostedProviderHealthProbe({
+      endpointUrl: env[envNameFromRef(config.endpointRef)],
+      apiToken: env[envNameFromRef(config.auth?.tokenRef ?? DEFAULT_HOSTED_AUTH_TOKEN_REF)],
+      fetchImpl
+    });
+  }
+  const livePreflightReady = Boolean(
+    configuredPreflightReady &&
+    (
+      env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE === "1"
+        ? providerHealthProbe.ok
+        : true
+    )
+  );
+  const result = {
+    ok: Boolean(validation.ok && selection.ok),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: livePreflightReady
+      ? "hosted_browser_sandbox_provider_live_preflight_ready"
+      : resolver.resolverReady && selection.providerSelectionPreflightReady
+        ? "hosted_browser_sandbox_provider_live_preflight_requires_explicit_gate"
+        : "hosted_browser_sandbox_provider_live_preflight_blocked",
+    hostedProviderLivePreflightReady: livePreflightReady,
+    hostedProviderReady: false,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    validation,
+    selection: {
+      providerSelectionPreflightReady: selection.providerSelectionPreflightReady,
+      selectedProviderKey: selection.selectedProviderKey,
+      candidateKeys: selection.validation?.sanitizedConfig?.candidateKeys ?? []
+    },
+    resolver,
+    providerHealthProbe,
+    requiredNextLiveProof: [
+      "real provider create session",
+      "provider stream frames",
+      "provider screenshot ref",
+      "provider OCR/caption ref",
+      "approval-gated takeover",
+      "redacted approved input relay",
+      "offsite fail-closed navigation",
+      "teardown",
+      "dashboard visual proof",
+      "mobile PWA live worker proof"
+    ],
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_live_preflight",
+      scoreKey: "hosted_browser_sandbox_provider_live_preflight",
+      preflightReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY",
+      liveProbeEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE",
+      liveVerifiedEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(resolver),
+      ...assertNoSecretLeak(selection),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: false
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+async function callHostedProviderHealthProbe({
+  endpointUrl,
+  apiToken,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!endpointUrl || !apiToken) {
+    return {
+      attempted: false,
+      ok: false,
+      statusCode: null,
+      endpointRedacted: true,
+      authorizationRedacted: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      failure: "endpoint_or_token_missing"
+    };
+  }
+  const response = await fetchImpl(new URL("health", endpointUrl.endsWith("/") ? endpointUrl : `${endpointUrl}/`), {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${apiToken}`,
+      "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+    }
+  });
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  const serialized = JSON.stringify(payload);
+  const ok = Boolean(
+    response.ok &&
+    payload?.contractVersion === BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION &&
+    payload?.status === "provider_health_ready" &&
+    payload?.capabilities?.streamFrames === true &&
+    payload?.capabilities?.screenshot === true &&
+    payload?.capabilities?.ocrCaption === true &&
+    payload?.capabilities?.takeover === true &&
+    payload?.capabilities?.approvedInputRelay === true &&
+    payload?.capabilities?.teardown === true &&
+    payload?.capabilities?.offsiteFailClosed === true &&
+    !/https?:\/\/|Bearer\s+|token|secret|data:image|member id|subscriber id|password|captcha/i.test(serialized)
+  );
+  return {
+    attempted: true,
+    ok,
+    statusCode: response.status,
+    endpointRedacted: true,
+    authorizationRedacted: true,
+    rawEndpointReturned: false,
+    rawSecretReturned: false,
+    capabilities: {
+      streamFrames: Boolean(payload?.capabilities?.streamFrames),
+      screenshot: Boolean(payload?.capabilities?.screenshot),
+      ocrCaption: Boolean(payload?.capabilities?.ocrCaption),
+      takeover: Boolean(payload?.capabilities?.takeover),
+      approvedInputRelay: Boolean(payload?.capabilities?.approvedInputRelay),
+      teardown: Boolean(payload?.capabilities?.teardown),
+      offsiteFailClosed: Boolean(payload?.capabilities?.offsiteFailClosed)
+    }
+  };
+}
+
 function resultSafeForLeakCheck(config) {
   return {
     ...config,
