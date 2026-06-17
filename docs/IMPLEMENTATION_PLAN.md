@@ -2463,3 +2463,30 @@ Remaining follow-up:
 - Run the same live-verification command against the real selected provider with private endpoint/token/config outside Git.
 - Capture real provider GUI/OCR proof for live stream, screenshot, OCR/caption, takeover, approved input, and teardown.
 - Only after real provider proof passes, set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and `adapter.providerLiveConnected=true` in private config to allow `hosted_remote_browser_sandbox` to score above `0 / 100`.
+
+## Hosted Browser Sandbox Provider WebRTC Signaling Cycle - 2026-06-17
+
+Goal:
+- Add the explicit WebRTC signaling proof required by hosted live-block providers while keeping raw SDP, ICE candidates, ICE server credentials, provider endpoints, and tokens out of public API responses, dashboard text, and Git.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs` and `npm run sandbox:browser:provider-webrtc-signaling`.
+- Extend the hosted provider contract with a WebRTC signaling gate that exchanges only opaque offer, answer, and ICE references.
+- Add `project/deployment/browser-sandbox-provider.webrtc-signaling.example.env` as a non-secret operator template; real provider endpoint/token/runtime config remain outside Git.
+- Add FastAPI `POST /api/v1/browser/sessions/{browser_session_id}/webrtc/offer` for hosted provider sessions.
+- Validate that provider signaling responses do not return raw SDP, raw ICE candidates, TURN/STUN credential material, raw frame data, raw OCR text, endpoint URLs, tokens, or portal/private text.
+- Expose `hosted_browser_sandbox_provider_webrtc_signaling` through FastAPI proof and Node dashboard proof.
+- Require WebRTC signaling readiness for WebRTC-capable hosted provider configs, while keeping `hosted_remote_browser_sandbox` blocked until a real provider is live connected and GUI/OCR proof exists.
+
+Acceptance:
+- Default WebRTC signaling smoke is blocked and safe when private provider config is absent.
+- WebRTC signaling can score `100 / 100` only when provider selection, live preflight, live verification, and the explicit signaling gate are ready.
+- Hosted-provider readiness for `webrtc` or `webrtc_or_sse_frames` transports requires `WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY=1`.
+- The public connector accepts opaque offer/candidate refs only and rejects raw SDP or raw ICE-looking payloads.
+- Proof artifacts and dashboard text must not expose provider endpoint, bearer token, raw SDP, raw ICE candidate, raw frame payloads, raw OCR text, raw input values, credentials, or private provider config.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real selected-provider private config reports `adapter.providerLiveConnected=true`, live verification is explicitly marked verified, and GUI/OCR evidence exists.
+
+Remaining follow-up:
+- Run WebRTC signaling against the real selected provider with private endpoint/token/config outside Git.
+- Capture real provider GUI/OCR proof for live WebRTC stream, screenshot, OCR/caption, takeover, approved input, and teardown.
+- Only after real provider proof passes, allow `hosted_remote_browser_sandbox` to score above `0 / 100`.

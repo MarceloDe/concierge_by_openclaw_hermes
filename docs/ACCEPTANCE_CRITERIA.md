@@ -2112,3 +2112,29 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser dashboard proof at `http://127.0.0.1:4208/?phase=hosted-browser-sandbox-provider-live-verification` verified `hosted_browser_sandbox_provider_live_verification`, `hosted_browser_sandbox_provider_live_preflight`, `hosted_remote_browser_sandbox`, and no fake provider endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-dashboard-proof.png`, `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-visual-proof.json`, `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-proof.json`, and `artifacts/browser-sandbox-provider-live-verification-smoke.json`.
+
+## Hosted Browser Sandbox Provider WebRTC Signaling Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider WebRTC signaling smoke command exists and is safe-blocked by default.
+- The signaling path can exchange an opaque offer reference, opaque answer metadata, and opaque ICE candidate references through the selected provider.
+- FastAPI exposes an opaque public connector route for hosted provider WebRTC signaling without returning raw SDP, raw ICE candidates, TURN/STUN credential material, endpoint URLs, bearer tokens, raw frame data, raw OCR text, credentials, or private provider config.
+- WebRTC-capable hosted-provider configs require an explicit signaling readiness gate before provider readiness can pass.
+- Connector proof exposes `hosted_browser_sandbox_provider_webrtc_signaling` separately from `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real selected-provider private config reports `adapter.providerLiveConnected=true`, live verification is explicitly marked verified, WebRTC signaling is ready when required, and GUI/OCR evidence exists.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-webrtc-signaling` passed in default blocked mode without provider network calls or secret leakage.
+- Focused browser-sandbox/compose contract tests passed with 15/15 tests.
+- FastAPI facade regression passed with 46 tests, including 2 expected live-gated skips.
+
+Full proof status:
+
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 31/31 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser dashboard proof at `http://127.0.0.1:4210/?phase=hosted-browser-sandbox-provider-webrtc-signaling` verified `hosted_browser_sandbox_provider_webrtc_signaling`, `hosted_browser_sandbox_provider_live_verification`, `hosted_remote_browser_sandbox`, and no endpoint/token/raw SDP/raw ICE leak.
+- Visual/proof artifacts were saved at `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-dashboard-proof.png`, `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-visual-proof.json`, `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-proof.json`, and `artifacts/browser-sandbox-provider-webrtc-signaling-smoke.json`.

@@ -352,6 +352,23 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         params = {"sessionId": browser_session["session_id"], "userId": principal.user_id}
         return StreamingResponse(node_stream(app, "/api/runtime/browser/frames/stream", params), media_type="text/event-stream")
 
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/webrtc/offer")
+    async def v1_browser_webrtc_offer(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(...), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_webrtc_offer")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        if browser_session.get("provider") != "hosted_remote":
+            raise HTTPException(status_code=400, detail="WebRTC signaling is available only for hosted remote browser sessions.")
+        provider = get_browser_sandbox_provider(browser_session["provider"])
+        try:
+            result = await provider.exchange_webrtc_offer(
+                browser_session=browser_session,
+                offer_ref=str(body.get("offer_ref") or body.get("offerRef") or ""),
+                ice_candidate_ref=body.get("ice_candidate_ref") or body.get("iceCandidateRef")
+            )
+        except BrowserSandboxError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"version": VERSION, **result}
+
     @app.post("/api/v1/browser/sessions/{browser_session_id}/input")
     async def v1_browser_input(browser_session_id: str, request_context: Request, request: V1BrowserInputRequest, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_input")
@@ -949,6 +966,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("hostedProviderLiveVerification", {}).get("status"),
                 "target": "A selected real hosted provider must pass lifecycle and GUI/OCR proof before hosted readiness can score."
             },
+            {
+                "key": "hosted_browser_sandbox_provider_webrtc_signaling",
+                "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status"),
+                "target": "WebRTC live-block signaling must exchange opaque refs only before WebRTC hosted readiness can score."
+            },
             {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
             {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
         ],
@@ -961,13 +983,15 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "hosted_browser_sandbox_provider", **browser_sandbox_contract},
             {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})},
             {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})},
-            {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})}
+            {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})},
+            {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
             {"route": "/mvp", "required": True, "proof": "legacy static MVP remains available during migration"},
             {"route": "apps/mobile-next", "required": True, "proof": "Next.js PWA scaffold for mobile visual tests"},
-            {"route": "/api/v1/browser/sessions/{id}/stream", "required": True, "proof": "remote worker live block stream contract"}
+            {"route": "/api/v1/browser/sessions/{id}/stream", "required": True, "proof": "remote worker live block stream contract"},
+            {"route": "/api/v1/browser/sessions/{id}/webrtc/offer", "required": True, "proof": "hosted provider WebRTC signaling uses opaque offer/answer refs"}
         ],
         "scores": [
             {"key": "api_readiness", "score": 90 if node_ready and auth_ready else 50, "target": 90},
@@ -1021,6 +1045,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": 100 if browser_sandbox_contract.get("hostedProviderLiveVerificationReady") else 0,
                 "target": 100,
                 "status": browser_sandbox_contract.get("hostedProviderLiveVerification", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_webrtc_signaling",
+                "score": 100 if browser_sandbox_contract.get("hostedProviderWebrtcSignalingReady") else 0,
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status")
             },
             {
                 "key": "hosted_remote_browser_sandbox",

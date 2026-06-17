@@ -1239,6 +1239,116 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(live_verification_score["score"], 100)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_webrtc_signaling_is_separate_from_hosted_ready(self):
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json",
+            "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER": "custom_webrtc",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY": "1"
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_provider_webrtc_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-webrtc-signaling", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        proof = proof_response.json()
+        webrtc_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_webrtc_signaling")
+        webrtc_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_webrtc_signaling")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(webrtc_check["status"], "hosted_browser_sandbox_provider_webrtc_signaling_ready")
+        self.assertTrue(webrtc_check["streamRequiresWebrtc"])
+        self.assertEqual(webrtc_score["score"], 100)
+        self.assertEqual(hosted_score["score"], 0)
+
+    def test_hosted_browser_sandbox_webrtc_offer_route_sanitizes_provider_response(self):
+        from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
+
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        client = TestClient(app)
+        user_id = "v1_hosted_provider_webrtc_route_user"
+        headers = self.bearer_headers(user_id)
+        browser_session_id = "hosted_browser_webrtc_route"
+        app.state.browser_sessions[browser_session_id] = {
+            "browser_session_id": browser_session_id,
+            "provider": "hosted_remote",
+            "adapter_mode": "hosted_provider",
+            "provider_live_connected": True,
+            "provider_session_ref": "provider-live-session-ref-redacted",
+            "provider_paths": {
+                "webrtc_offer": "browser/sessions/provider-live-session-ref-redacted/webrtc/offer",
+                "webrtc_ice_candidate": "browser/sessions/provider-live-session-ref-redacted/webrtc/ice-candidate"
+            },
+            "session_id": "session_webrtc_route",
+            "user_id": user_id,
+            "takeover_state": "not_requested"
+        }
+
+        async def fake_provider_json(_provider, *, path, method="POST", body=None):
+            self.assertNotIn("v=0", json.dumps(body or {}))
+            self.assertNotIn("candidate:", json.dumps(body or {}))
+            if path.endswith("/webrtc/offer"):
+                return {
+                    "status_code": 200,
+                    "payload": {
+                        "status": "webrtc_signaling_answer_ready",
+                        "transport": "webrtc",
+                        "answerRef": "provider-sdp-answer-ref-redacted",
+                        "iceServerRefs": ["provider-ice-server-ref-redacted"],
+                        "rawSdpReturned": False,
+                        "rawIceCandidateReturned": False,
+                        "providerLiveConnected": True
+                    }
+                }
+            if path.endswith("/webrtc/ice-candidate"):
+                return {
+                    "status_code": 200,
+                    "payload": {
+                        "status": "webrtc_ice_candidate_relayed",
+                        "candidateAccepted": True,
+                        "rawIceCandidateReturned": False,
+                        "providerLiveConnected": True
+                    }
+                }
+            return {"status_code": 404, "payload": {}}
+
+        with patch.object(HostedRemoteBrowserSandboxProvider, "_provider_json", fake_provider_json):
+            response = client.post(
+                f"/api/v1/browser/sessions/{browser_session_id}/webrtc/offer",
+                headers=headers,
+                json={
+                    "offer_ref": "client-sdp-offer-ref-redacted",
+                    "ice_candidate_ref": "client-ice-candidate-ref-redacted"
+                }
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        serialized = json.dumps(payload)
+        self.assertEqual(payload["status"], "webrtc_signaling_answer_ready")
+        self.assertTrue(payload["answerRefPresent"])
+        self.assertTrue(payload["iceServerRefsPresent"])
+        self.assertTrue(payload["candidateAccepted"])
+        self.assertFalse(payload["rawSdpReturned"])
+        self.assertFalse(payload["rawIceCandidateReturned"])
+        self.assertNotIn("v=0", serialized)
+        self.assertNotIn("candidate:", serialized)
+        self.assertNotIn("provider-sdp-answer-ref-redacted", serialized)
+
     def test_hosted_browser_sandbox_adapter_harness_lifecycle_is_safe_and_sanitized(self):
         app = create_app(inline_tasks=True)
         app.state.node_client = FakeNodeRuntimeClient()

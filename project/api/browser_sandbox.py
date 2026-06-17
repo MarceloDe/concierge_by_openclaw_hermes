@@ -274,6 +274,12 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
             failures.append("provider_live_connected_required")
         if payload.get("stream", {}).get("rawFrameReturned") is True:
             failures.append("raw_frame_returned")
+        if payload.get("stream", {}).get("transport") in {"webrtc", "webrtc_or_sse_frames"}:
+            signaling = payload.get("webrtcSignaling", {})
+            if signaling and signaling.get("rawSdpReturned") is True:
+                failures.append("raw_sdp_returned")
+            if signaling and signaling.get("rawIceCandidateReturned") is True:
+                failures.append("raw_ice_candidate_returned")
         if payload.get("ocrCaption", {}).get("rawOcrTextReturned") is True:
             failures.append("raw_ocr_text_returned")
         if payload.get("takeover", {}).get("inputRelay") != "approval_gated_human_only":
@@ -329,6 +335,8 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
             "provider_session_ref": provider_session_ref,
             "provider_paths": {
                 "stream": payload.get("stream", {}).get("streamPath") or f"browser/sessions/{provider_session_ref}/stream",
+                "webrtc_offer": payload.get("webrtcSignaling", {}).get("offerPath") or f"browser/sessions/{provider_session_ref}/webrtc/offer",
+                "webrtc_ice_candidate": payload.get("webrtcSignaling", {}).get("iceCandidatePath") or f"browser/sessions/{provider_session_ref}/webrtc/ice-candidate",
                 "takeover": payload.get("takeover", {}).get("takeoverPath") or f"browser/sessions/{provider_session_ref}/takeover",
                 "input": payload.get("takeover", {}).get("inputPath") or f"browser/sessions/{provider_session_ref}/input",
                 "teardown": f"browser/sessions/{provider_session_ref}/teardown"
@@ -360,6 +368,12 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
                 "status": "hosted_provider_session_created",
                 "frameSource": "hosted_provider_stream_ref",
                 "streamTransport": payload.get("stream", {}).get("transport", "webrtc_or_sse_frames"),
+                "webrtcSignaling": {
+                    "required": payload.get("stream", {}).get("transport") in {"webrtc", "webrtc_or_sse_frames"},
+                    "offerPathReady": True,
+                    "rawSdpReturned": False,
+                    "rawIceCandidateReturned": False
+                },
                 "rawFrameRecorded": False,
                 "providerLiveConnected": True
             }
@@ -570,6 +584,75 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
             "actionsTaken": []
         }
 
+    async def exchange_webrtc_offer(
+        self,
+        *,
+        browser_session: dict[str, Any],
+        offer_ref: str,
+        ice_candidate_ref: str | None = None
+    ) -> dict[str, Any]:
+        if browser_session.get("provider_live_connected") is not True:
+            raise BrowserSandboxError("WebRTC signaling is available only for a live hosted provider session.")
+        if not offer_ref or any(marker in offer_ref.lower() for marker in ["v=0", "candidate:", "password", "captcha", "member id", "subscriber id"]):
+            raise BrowserSandboxError("WebRTC signaling requires an opaque offer reference, not raw SDP or private data.")
+        if ice_candidate_ref and any(marker in ice_candidate_ref.lower() for marker in ["candidate:", "typ host", "password", "captcha"]):
+            raise BrowserSandboxError("WebRTC signaling requires an opaque ICE candidate reference, not raw candidate text.")
+        offer_path = browser_session.get("provider_paths", {}).get("webrtc_offer") or f"browser/sessions/{browser_session['provider_session_ref']}/webrtc/offer"
+        result = await self._provider_json(
+            path=offer_path,
+            body={
+                "offerRef": offer_ref,
+                "rawSdpReturned": False,
+                "clientCapabilities": {
+                    "receiveVideo": True,
+                    "receiveAudio": False,
+                    "dataChannelInput": True
+                }
+            }
+        )
+        payload = result["payload"]
+        serialized = json.dumps(payload, separators=(",", ":")).lower()
+        if (
+            result["status_code"] >= 400
+            or payload.get("rawSdpReturned") is True
+            or payload.get("rawIceCandidateReturned") is True
+            or any(marker in serialized for marker in ["v=0", "candidate:", "a=fingerprint", "a=ice-ufrag", "turn:", "stun:", "bearer ", "token", "secret", "data:image", "member id", "subscriber id", "password", "captcha"])
+        ):
+            raise BrowserSandboxError("Hosted browser sandbox provider returned unsafe WebRTC signaling payload.")
+        candidate_result: dict[str, Any] | None = None
+        if ice_candidate_ref:
+            candidate_path = browser_session.get("provider_paths", {}).get("webrtc_ice_candidate") or f"browser/sessions/{browser_session['provider_session_ref']}/webrtc/ice-candidate"
+            candidate_result = await self._provider_json(
+                path=candidate_path,
+                body={
+                    "candidateRef": ice_candidate_ref,
+                    "rawIceCandidateReturned": False
+                }
+            )
+            candidate_payload = candidate_result["payload"]
+            candidate_serialized = json.dumps(candidate_payload, separators=(",", ":")).lower()
+            if (
+                candidate_result["status_code"] >= 400
+                or candidate_payload.get("rawIceCandidateReturned") is True
+                or any(marker in candidate_serialized for marker in ["candidate:", "a=fingerprint", "a=ice-ufrag", "turn:", "stun:", "bearer ", "token", "secret", "member id", "subscriber id", "password", "captcha"])
+            ):
+                raise BrowserSandboxError("Hosted browser sandbox provider returned unsafe ICE candidate payload.")
+        return {
+            "ok": True,
+            "status": payload.get("status", "webrtc_signaling_answer_ready"),
+            "browserSessionId": browser_session.get("browser_session_id"),
+            "providerLiveConnected": True,
+            "transport": payload.get("transport", "webrtc"),
+            "answerRefPresent": bool(payload.get("answerRef")),
+            "iceServerRefsPresent": bool(payload.get("iceServerRefs")),
+            "candidateAccepted": bool(candidate_result and candidate_result["payload"].get("candidateAccepted") is True),
+            "rawSdpReturned": False,
+            "rawIceCandidateReturned": False,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False,
+            "actionsTaken": []
+        }
+
 
 def describe_browser_sandbox_provider_contract(
     *,
@@ -638,6 +721,7 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["resolverReady"]
         and hosted_resolution["liveVerified"]
         and hosted_resolution["liveVerificationReady"]
+        and hosted_resolution["webrtcSignalingReady"]
         and hosted_resolution["providerLiveConnected"]
     )
     adapter_contract_ready = bool(
@@ -666,6 +750,12 @@ def describe_browser_sandbox_provider_contract(
         live_preflight_ready
         and hosted_resolution["resolverReady"]
         and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
+    )
+    webrtc_signaling_ready = bool(
+        live_verification_ready
+        and hosted_resolution["resolverReady"]
+        and hosted_resolution["streamRequiresWebrtc"]
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY") == "1"
     )
     status = (
         "hosted_browser_sandbox_provider_ready"
@@ -723,6 +813,26 @@ def describe_browser_sandbox_provider_contract(
             "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
             "rawEndpointReturned": False,
             "rawSecretReturned": False
+        },
+        "hostedProviderWebrtcSignalingReady": webrtc_signaling_ready,
+        "hostedProviderWebrtcSignaling": {
+            "status": (
+                "hosted_browser_sandbox_provider_webrtc_signaling_ready"
+                if webrtc_signaling_ready
+                else "hosted_browser_sandbox_provider_webrtc_signaling_requires_explicit_gate"
+                if live_verification_ready and hosted_resolution["streamRequiresWebrtc"]
+                else "hosted_browser_sandbox_provider_webrtc_signaling_not_required"
+                if not hosted_resolution["streamRequiresWebrtc"]
+                else "hosted_browser_sandbox_provider_webrtc_signaling_blocked"
+            ),
+            "resolverReady": hosted_resolution["resolverReady"],
+            "liveVerificationReady": live_verification_ready,
+            "streamRequiresWebrtc": hosted_resolution["streamRequiresWebrtc"],
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False,
+            "rawSdpReturned": False,
+            "rawIceCandidateReturned": False
         },
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
@@ -856,6 +966,9 @@ def resolve_hosted_browser_sandbox_provider_config(
     live_verified = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED") == "1"
     live_verification_ready = env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY") == "1"
     provider_live_connected = bool(isinstance(config, dict) and config.get("adapter", {}).get("providerLiveConnected") is True)
+    stream_transport = config.get("transport", {}).get("stream") if isinstance(config, dict) else None
+    stream_requires_webrtc = stream_transport in {"webrtc", "webrtc_or_sse_frames"}
+    webrtc_signaling_ready = (not stream_requires_webrtc) or env.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY") == "1"
     resolver_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -867,7 +980,7 @@ def resolve_hosted_browser_sandbox_provider_config(
     )
     status = (
         "hosted_browser_sandbox_provider_ready"
-        if resolver_ready and live_verified and live_verification_ready and provider_live_connected
+        if resolver_ready and live_verified and live_verification_ready and webrtc_signaling_ready and provider_live_connected
         else "hosted_browser_sandbox_provider_configured_unverified" if resolver_ready
         else "hosted_browser_sandbox_provider_missing_endpoint_or_secret"
         if selected_provider == "hosted_remote" and selected_ready and config_ok and non_example_config and adapter_mode == "hosted_provider"
@@ -881,6 +994,8 @@ def resolve_hosted_browser_sandbox_provider_config(
         "liveVerified": live_verified,
         "liveVerificationReady": live_verification_ready,
         "providerLiveConnected": provider_live_connected,
+        "streamRequiresWebrtc": stream_requires_webrtc,
+        "webrtcSignalingReady": webrtc_signaling_ready,
         "endpointRefKind": _ref_kind(endpoint_ref),
         "authTokenRefKind": _ref_kind(auth_token_ref),
         "endpointEnvPresent": bool(endpoint_env_name),

@@ -1,10 +1,12 @@
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+  "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
+  "hostedProviderWebrtcSignalingReady": false,
   "hostedProviderLiveVerificationReady": false,
   "hostedProviderReady": false,
   "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "streamRequiresWebrtc": true,
   "validation": {
     "ok": true,
     "version": "2026-06-17.browser-sandbox-provider.v1",
@@ -63,11 +65,6 @@
       }
     }
   },
-  "preflight": {
-    "hostedProviderLivePreflightReady": false,
-    "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
-    "selectedProviderKey": null
-  },
   "resolver": {
     "status": "hosted_browser_sandbox_provider_not_selected",
     "resolverReady": false,
@@ -86,29 +83,28 @@
     "rawSecretReturned": false,
     "rawSecretPathReturned": false
   },
-  "liveLifecycle": {
+  "liveVerification": {
+    "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+    "hostedProviderLiveVerificationReady": false
+  },
+  "signaling": {
     "attempted": false,
     "ok": false,
-    "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+    "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
     "providerNetworkCalled": false,
     "localHarnessOnly": false
   },
-  "requiredLiveProofBeforeHostedReady": [
-    "selected provider endpoint and auth refs resolved from private config",
-    "real provider create session",
-    "provider stream frame reference",
-    "provider screenshot reference",
-    "provider OCR/caption reference",
-    "approval-gated takeover request",
-    "redacted approved human input relay",
-    "offsite navigation fail-closed",
-    "teardown",
-    "dashboard GUI/OCR proof"
+  "requiredWebrtcProofBeforeHostedReady": [
+    "opaque SDP offer reference sent through public connector",
+    "provider answer reference returned without raw SDP",
+    "provider ICE server references returned without raw credentials",
+    "provider ICE candidate relay accepts opaque candidate references only",
+    "no raw SDP, ICE candidate, frame, OCR, endpoint, token, credential, or portal text is returned"
   ],
   "dashboard": {
-    "readinessKey": "hosted_browser_sandbox_provider_live_verification",
-    "scoreKey": "hosted_browser_sandbox_provider_live_verification",
-    "liveVerificationReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY",
+    "readinessKey": "hosted_browser_sandbox_provider_webrtc_signaling",
+    "scoreKey": "hosted_browser_sandbox_provider_webrtc_signaling",
+    "signalingReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY",
     "hostedReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
   },
   "safety": {
@@ -118,8 +114,9 @@
     "frameRecordingEnabled": false,
     "rawEndpointReturned": false,
     "rawSecretReturned": false,
+    "rawSdpReturned": false,
+    "rawIceCandidateReturned": false,
     "rawFrameReturned": false,
-    "rawInputReturned": false,
     "externalActions": false,
     "agentCredentialEntryAllowed": false,
     "liveProviderOverclaimed": false

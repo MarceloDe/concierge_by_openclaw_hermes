@@ -190,6 +190,8 @@ async function safeDeploymentContractStatus() {
     "scripts/browser-sandbox-provider-contract.mjs",
     "scripts/browser-sandbox-provider-selection-smoke.mjs",
     "scripts/browser-sandbox-provider-live-preflight-smoke.mjs",
+    "scripts/browser-sandbox-provider-live-verification-smoke.mjs",
+    "scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -204,6 +206,8 @@ async function safeDeploymentContractStatus() {
     "project/deployment/browser-sandbox-provider.example.json",
     "project/deployment/browser-sandbox-provider.selection.example.json",
     "project/deployment/browser-sandbox-provider.live-preflight.example.env",
+    "project/deployment/browser-sandbox-provider.live-verification.example.env",
+    "project/deployment/browser-sandbox-provider.webrtc-signaling.example.env",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -292,7 +296,9 @@ async function safeDeploymentContractStatus() {
     "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: ${WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER:-}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY:-0}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE:-0}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY:-0}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -342,6 +348,11 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderLivePreflightReady &&
     hostedBrowserSandboxProviderResolver.resolverReady &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
+  const hostedBrowserSandboxProviderWebrtcSignalingReady =
+    hostedBrowserSandboxProviderLiveVerificationReady &&
+    hostedBrowserSandboxProviderResolver.resolverReady &&
+    hostedBrowserSandboxProviderResolver.streamRequiresWebrtc &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY === "1";
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -438,6 +449,24 @@ async function safeDeploymentContractStatus() {
       rawEndpointReturned: false,
       rawSecretReturned: false
     },
+    hostedBrowserSandboxProviderWebrtcSignalingReady,
+    hostedBrowserSandboxProviderWebrtcSignaling: {
+      status: hostedBrowserSandboxProviderWebrtcSignalingReady
+        ? "hosted_browser_sandbox_provider_webrtc_signaling_ready"
+        : hostedBrowserSandboxProviderLiveVerificationReady && hostedBrowserSandboxProviderResolver.streamRequiresWebrtc
+          ? "hosted_browser_sandbox_provider_webrtc_signaling_requires_explicit_gate"
+          : hostedBrowserSandboxProviderResolver.streamRequiresWebrtc
+            ? "hosted_browser_sandbox_provider_webrtc_signaling_blocked"
+            : "hosted_browser_sandbox_provider_webrtc_signaling_not_required",
+      resolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
+      liveVerificationReady: hostedBrowserSandboxProviderLiveVerificationReady,
+      streamRequiresWebrtc: hostedBrowserSandboxProviderResolver.streamRequiresWebrtc,
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawSdpReturned: false,
+      rawIceCandidateReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -462,6 +491,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderSelectionCommand: "npm run sandbox:browser:provider-selection",
     browserSandboxProviderLivePreflightCommand: "npm run sandbox:browser:provider-live-preflight",
     browserSandboxProviderLiveVerificationCommand: "npm run sandbox:browser:provider-live-verification",
+    browserSandboxProviderWebrtcSignalingCommand: "npm run sandbox:browser:provider-webrtc-signaling",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -565,6 +595,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_live_verification",
         status: deployment.hostedBrowserSandboxProviderLiveVerification?.status,
         target: "A selected real hosted provider must pass create-session, stream, screenshot/OCR, takeover, input, offsite fail-closed, teardown, and GUI/OCR proof before hosted readiness scores."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_webrtc_signaling",
+        status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status,
+        target: "WebRTC live-block signaling must exchange opaque offer/answer/ICE refs before WebRTC hosted readiness scores."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -710,6 +745,20 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
+        key: "hosted_browser_sandbox_provider_webrtc_signaling",
+        status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status,
+        ok: deployment.hostedBrowserSandboxProviderWebrtcSignalingReady,
+        command: deployment.browserSandboxProviderWebrtcSignalingCommand,
+        resolverReady: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.resolverReady ?? false,
+        liveVerificationReady: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.liveVerificationReady ?? false,
+        streamRequiresWebrtc: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.streamRequiresWebrtc ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawSdpReturned: false,
+        rawIceCandidateReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
         key: "hosted_browser_sandbox_provider_adapter",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxProviderAdapterReady,
@@ -848,6 +897,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderLiveVerificationReady ? 100 : 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderLiveVerification?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_webrtc_signaling",
+        score: deployment.hostedBrowserSandboxProviderWebrtcSignalingReady ? 100 : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",
