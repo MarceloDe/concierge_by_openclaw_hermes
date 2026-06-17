@@ -1,8 +1,8 @@
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
-  "hostedProviderLivePreflightReady": false,
+  "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+  "hostedProviderLiveVerificationReady": false,
   "hostedProviderReady": false,
   "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
   "validation": {
@@ -63,14 +63,10 @@
       }
     }
   },
-  "selection": {
-    "providerSelectionPreflightReady": false,
-    "selectedProviderKey": null,
-    "candidateKeys": [
-      "custom_webrtc",
-      "browserbase",
-      "vercel_sandbox"
-    ]
+  "preflight": {
+    "hostedProviderLivePreflightReady": false,
+    "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
+    "selectedProviderKey": null
   },
   "resolver": {
     "status": "hosted_browser_sandbox_provider_not_selected",
@@ -88,33 +84,30 @@
     "rawSecretReturned": false,
     "rawSecretPathReturned": false
   },
-  "providerHealthProbe": {
+  "liveLifecycle": {
     "attempted": false,
     "ok": false,
-    "statusCode": null,
-    "endpointRedacted": true,
-    "authorizationRedacted": true,
-    "rawEndpointReturned": false,
-    "rawSecretReturned": false
+    "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+    "providerNetworkCalled": false,
+    "localHarnessOnly": false
   },
-  "requiredNextLiveProof": [
+  "requiredLiveProofBeforeHostedReady": [
+    "selected provider endpoint and auth refs resolved from private config",
     "real provider create session",
-    "provider stream frames",
-    "provider screenshot ref",
-    "provider OCR/caption ref",
-    "approval-gated takeover",
-    "redacted approved input relay",
-    "offsite fail-closed navigation",
+    "provider stream frame reference",
+    "provider screenshot reference",
+    "provider OCR/caption reference",
+    "approval-gated takeover request",
+    "redacted approved human input relay",
+    "offsite navigation fail-closed",
     "teardown",
-    "dashboard visual proof",
-    "mobile PWA live worker proof"
+    "dashboard GUI/OCR proof"
   ],
   "dashboard": {
-    "readinessKey": "hosted_browser_sandbox_provider_live_preflight",
-    "scoreKey": "hosted_browser_sandbox_provider_live_preflight",
-    "preflightReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY",
-    "liveProbeEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE",
-    "liveVerifiedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    "readinessKey": "hosted_browser_sandbox_provider_live_verification",
+    "scoreKey": "hosted_browser_sandbox_provider_live_verification",
+    "liveVerificationReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY",
+    "hostedReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
   },
   "safety": {
     "rawEndpointUrlWritten": false,
@@ -123,6 +116,8 @@
     "frameRecordingEnabled": false,
     "rawEndpointReturned": false,
     "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawInputReturned": false,
     "externalActions": false,
     "agentCredentialEntryAllowed": false,
     "liveProviderOverclaimed": false

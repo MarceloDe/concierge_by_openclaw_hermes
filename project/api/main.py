@@ -14,7 +14,8 @@ from .browser_sandbox import (
     BrowserSandboxError,
     describe_browser_sandbox_provider_contract,
     get_browser_sandbox_provider,
-    hosted_browser_sandbox_harness_stream
+    hosted_browser_sandbox_harness_stream,
+    hosted_browser_sandbox_provider_stream
 )
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
 from .models import (
@@ -346,6 +347,8 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         browser_session = browser_session_for_user(app, browser_session_id, principal)
         if browser_session.get("provider") == "hosted_remote" and browser_session.get("adapter_mode") == "contract_harness":
             return StreamingResponse(hosted_browser_sandbox_harness_stream(browser_session), media_type="text/event-stream")
+        if browser_session.get("provider") == "hosted_remote" and browser_session.get("provider_live_connected") is True:
+            return StreamingResponse(hosted_browser_sandbox_provider_stream(browser_session), media_type="text/event-stream")
         params = {"sessionId": browser_session["session_id"], "userId": principal.user_id}
         return StreamingResponse(node_stream(app, "/api/runtime/browser/frames/stream", params), media_type="text/event-stream")
 
@@ -941,6 +944,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("hostedProviderLivePreflight", {}).get("status"),
                 "target": "Selected provider, endpoint, auth, and private config readiness are preflighted before live hosted browser enablement."
             },
+            {
+                "key": "hosted_browser_sandbox_provider_live_verification",
+                "status": browser_sandbox_contract.get("hostedProviderLiveVerification", {}).get("status"),
+                "target": "A selected real hosted provider must pass lifecycle and GUI/OCR proof before hosted readiness can score."
+            },
             {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
             {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
         ],
@@ -952,7 +960,8 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "source_grounding", **checks.get("source_grounding", {})},
             {"key": "hosted_browser_sandbox_provider", **browser_sandbox_contract},
             {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})},
-            {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})}
+            {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})},
+            {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
@@ -1006,6 +1015,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": 80 if browser_sandbox_contract.get("hostedProviderLivePreflightReady") else 0,
                 "target": 80,
                 "status": browser_sandbox_contract.get("hostedProviderLivePreflight", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_live_verification",
+                "score": 100 if browser_sandbox_contract.get("hostedProviderLiveVerificationReady") else 0,
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderLiveVerification", {}).get("status")
             },
             {
                 "key": "hosted_remote_browser_sandbox",

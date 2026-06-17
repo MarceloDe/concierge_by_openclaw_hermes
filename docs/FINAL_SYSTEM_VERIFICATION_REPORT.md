@@ -713,3 +713,37 @@ Focused verification:
 Score decision:
 - `hosted_browser_sandbox_provider_live_preflight` can reach `80 / 80` only when provider selection preflight is ready, hosted endpoint/auth refs resolve, and `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY=1`.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a selected real hosted provider passes create-session, stream, screenshot/OCR, takeover, input, teardown, offsite-fail-closed, and GUI/OCR visual proof.
+
+## Phase 23 Hosted Browser Sandbox Provider Live Verification Update
+
+Implementation:
+- Added `npm run sandbox:browser:provider-live-verification`.
+- Added a non-secret live-verification env template and kept real provider endpoint/token/config outside Git.
+- Added a selected-provider live verification contract covering create session, stream attach, screenshot ref, OCR/caption ref, takeover, approved input relay, offsite fail-closed navigation, and teardown.
+- Added FastAPI hosted-provider runtime support for selected-provider HTTPS create-session, provider-backed takeover/input, and sanitized SSE stream proxying.
+- Added a separate `hosted_browser_sandbox_provider_live_verification` FastAPI and dashboard score.
+- Strengthened hosted-provider readiness so `hosted_remote_browser_sandbox` remains blocked unless live verification is ready, live verified is explicitly set, and private provider config reports `adapter.providerLiveConnected=true`.
+
+Focused verification:
+- JS syntax checks passed for provider contract, live-verification smoke, compose contract, and Node server files.
+- Python compile checks passed for `project`.
+- `npm run sandbox:browser:provider-live-verification` passed in default blocked mode without provider calls or secret leakage.
+- Focused browser-sandbox/compose contract tests passed with 14/14 tests.
+- Focused FastAPI live-preflight/live-verification tests passed with 2/2 tests.
+
+Full verification:
+- Full sandbox smoke chain passed, including provider contract, selection, live preflight, live verification, adapter harness, resolver, adapter, HTTP adapter, and live lifecycle.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 30/30 tests.
+- `npm run test:facade` passed with 44 tests and 2 expected skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected skips.
+- Browser dashboard proof at `http://127.0.0.1:4208/?phase=hosted-browser-sandbox-provider-live-verification` verified the live-verification score, live-preflight score, hosted remote score, and no fake endpoint/token leakage.
+- Visual/API artifacts were saved at:
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-dashboard-proof.png`
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-visual-proof.json`
+  - `artifacts/phase23-hosted-browser-sandbox-provider-live-verification-proof.json`
+  - `artifacts/browser-sandbox-provider-live-verification-smoke.json`
+
+Score decision:
+- `hosted_browser_sandbox_provider_live_verification` can reach `100 / 100` only when the explicit live-verification gate and earlier provider-readiness gates pass.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config and passes GUI/OCR proof.

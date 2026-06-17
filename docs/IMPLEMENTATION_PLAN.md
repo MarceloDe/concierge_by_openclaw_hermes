@@ -2436,3 +2436,30 @@ Remaining follow-up:
 - Run live provider preflight with real endpoint/token and, when ready, enable the health probe.
 - Replace local lifecycle harness calls with selected-provider HTTPS/WebRTC calls.
 - Add provider-backed GUI/OCR visual proof before allowing `hosted_remote_browser_sandbox` to pass.
+
+## Hosted Browser Sandbox Provider Live Verification Cycle - 2026-06-17
+
+Goal:
+- Add the selected-provider live verification gate and provider-facing FastAPI runtime path while keeping private config outside Git and preserving the human-only takeover boundary.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-live-verification-smoke.mjs` and `npm run sandbox:browser:provider-live-verification`.
+- Extend the hosted provider contract with selected-provider live verification covering create session, stream attach, screenshot, OCR/caption, takeover, redacted approved input relay, offsite fail-closed navigation, and teardown.
+- Add `project/deployment/browser-sandbox-provider.live-verification.example.env` as a non-secret operator template; real endpoint, token, and runtime provider JSON remain outside Git.
+- Add a FastAPI hosted-provider runtime path that can call the selected provider over HTTPS when the private config is explicitly live-verified and provider-live-connected.
+- Add a sanitized hosted-provider stream proxy for `/api/v1/browser/sessions/{browser_session_id}/stream`.
+- Preserve the existing approval contract: provider-backed input requires a human-only `interactive_takeover` grant and redacts input values before provider relay.
+- Expose `hosted_browser_sandbox_provider_live_verification` through FastAPI proof and Node dashboard proof.
+- Keep `hosted_remote_browser_sandbox` blocked unless live verification is ready, live verified is explicitly set, and the provider config reports `adapter.providerLiveConnected=true`.
+
+Acceptance:
+- Default live verification is blocked but safe and makes no provider network call.
+- Live verification can score `100 / 100` only when selection, resolver, adapter, HTTP adapter, lifecycle harness, live preflight, and the explicit live-verification gate are ready.
+- Hosted-provider readiness still requires `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and private config `adapter.providerLiveConnected=true`.
+- Proof artifacts and dashboard text must not expose provider endpoint, bearer token, raw frame payloads, raw OCR text, raw input values, or credential material.
+- GUI/API proof must show `hosted_browser_sandbox_provider_live_verification` can pass while `hosted_remote_browser_sandbox` remains `0 / 100` until the real provider is fully connected.
+
+Remaining follow-up:
+- Run the same live-verification command against the real selected provider with private endpoint/token/config outside Git.
+- Capture real provider GUI/OCR proof for live stream, screenshot, OCR/caption, takeover, approved input, and teardown.
+- Only after real provider proof passes, set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and `adapter.providerLiveConnected=true` in private config to allow `hosted_remote_browser_sandbox` to score above `0 / 100`.

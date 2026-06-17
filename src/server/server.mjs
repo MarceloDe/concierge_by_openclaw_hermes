@@ -338,6 +338,10 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderSelectionPreflightReady &&
     hostedBrowserSandboxProviderResolver.resolverReady &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY === "1";
+  const hostedBrowserSandboxProviderLiveVerificationReady =
+    hostedBrowserSandboxProviderLivePreflightReady &&
+    hostedBrowserSandboxProviderResolver.resolverReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -419,6 +423,21 @@ async function safeDeploymentContractStatus() {
       rawEndpointReturned: false,
       rawSecretReturned: false
     },
+    hostedBrowserSandboxProviderLiveVerificationReady,
+    hostedBrowserSandboxProviderLiveVerification: {
+      status: hostedBrowserSandboxProviderLiveVerificationReady
+        ? "hosted_browser_sandbox_provider_live_verification_ready"
+        : hostedBrowserSandboxProviderLivePreflightReady
+          ? "hosted_browser_sandbox_provider_live_verification_requires_explicit_gate"
+          : "hosted_browser_sandbox_provider_live_verification_blocked",
+      resolverReady: hostedBrowserSandboxProviderResolver.resolverReady,
+      livePreflightReady: hostedBrowserSandboxProviderLivePreflightReady,
+      providerLiveConnected: Boolean(hostedBrowserSandboxConfig?.adapter?.providerLiveConnected),
+      liveVerified: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED === "1",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -442,6 +461,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderContractCommand: "npm run sandbox:browser:provider-contract",
     browserSandboxProviderSelectionCommand: "npm run sandbox:browser:provider-selection",
     browserSandboxProviderLivePreflightCommand: "npm run sandbox:browser:provider-live-preflight",
+    browserSandboxProviderLiveVerificationCommand: "npm run sandbox:browser:provider-live-verification",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -540,6 +560,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_live_preflight",
         status: deployment.hostedBrowserSandboxProviderLivePreflight?.status,
         target: "Private provider config, selected provider, endpoint, and auth refs can be preflighted before live hosted browser enablement."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_verification",
+        status: deployment.hostedBrowserSandboxProviderLiveVerification?.status,
+        target: "A selected real hosted provider must pass create-session, stream, screenshot/OCR, takeover, input, offsite fail-closed, teardown, and GUI/OCR proof before hosted readiness scores."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -667,6 +692,19 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         resolverReady: deployment.hostedBrowserSandboxProviderLivePreflight?.resolverReady ?? false,
         selectionPreflightReady: deployment.hostedBrowserSandboxProviderLivePreflight?.selectionPreflightReady ?? false,
         liveProbeEnabled: deployment.hostedBrowserSandboxProviderLivePreflight?.liveProbeEnabled ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_verification",
+        status: deployment.hostedBrowserSandboxProviderLiveVerification?.status,
+        ok: deployment.hostedBrowserSandboxProviderLiveVerificationReady,
+        command: deployment.browserSandboxProviderLiveVerificationCommand,
+        resolverReady: deployment.hostedBrowserSandboxProviderLiveVerification?.resolverReady ?? false,
+        livePreflightReady: deployment.hostedBrowserSandboxProviderLiveVerification?.livePreflightReady ?? false,
+        providerLiveConnected: deployment.hostedBrowserSandboxProviderLiveVerification?.providerLiveConnected ?? false,
+        liveVerified: deployment.hostedBrowserSandboxProviderLiveVerification?.liveVerified ?? false,
         rawEndpointReturned: false,
         rawSecretReturned: false,
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
@@ -804,6 +842,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderLivePreflightReady ? 80 : 0,
         target: 80,
         status: deployment.hostedBrowserSandboxProviderLivePreflight?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_live_verification",
+        score: deployment.hostedBrowserSandboxProviderLiveVerificationReady ? 100 : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderLiveVerification?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",
