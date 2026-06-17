@@ -971,6 +971,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status"),
                 "target": "WebRTC live-block signaling must exchange opaque refs only before WebRTC hosted readiness can score."
             },
+            {
+                "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+                "status": browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {}).get("status"),
+                "target": "Operator-supplied dashboard/mobile live-block visual and OCR proof must replay from a private manifest before hosted readiness can score."
+            },
             {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
             {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
         ],
@@ -984,14 +989,16 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})},
             {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})},
             {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})},
-            {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})}
+            {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})},
+            {"key": "hosted_browser_sandbox_provider_visual_ocr_replay", **browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {})}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
             {"route": "/mvp", "required": True, "proof": "legacy static MVP remains available during migration"},
             {"route": "apps/mobile-next", "required": True, "proof": "Next.js PWA scaffold for mobile visual tests"},
             {"route": "/api/v1/browser/sessions/{id}/stream", "required": True, "proof": "remote worker live block stream contract"},
-            {"route": "/api/v1/browser/sessions/{id}/webrtc/offer", "required": True, "proof": "hosted provider WebRTC signaling uses opaque offer/answer refs"}
+            {"route": "/api/v1/browser/sessions/{id}/webrtc/offer", "required": True, "proof": "hosted provider WebRTC signaling uses opaque offer/answer refs"},
+            {"route": "private visual/OCR proof manifest", "required": True, "proof": "hosted provider visual/OCR replay uses only opaque screenshot and caption refs"}
         ],
         "scores": [
             {"key": "api_readiness", "score": 90 if node_ready and auth_ready else 50, "target": 90},
@@ -1051,6 +1058,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": 100 if browser_sandbox_contract.get("hostedProviderWebrtcSignalingReady") else 0,
                 "target": 100,
                 "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+                "score": 100 if browser_sandbox_contract.get("hostedProviderVisualOcrReplayReady") else 0,
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {}).get("status")
             },
             {
                 "key": "hosted_remote_browser_sandbox",

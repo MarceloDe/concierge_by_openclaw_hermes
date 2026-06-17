@@ -106,6 +106,7 @@ import {
 } from "../concierge/workerContinuations.mjs";
 import {
   resolveBrowserSandboxHostedProvider,
+  validateVisualOcrProofManifest,
   validateBrowserSandboxProviderContract,
   validateBrowserSandboxProviderSelectionContract
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
@@ -192,6 +193,7 @@ async function safeDeploymentContractStatus() {
     "scripts/browser-sandbox-provider-live-preflight-smoke.mjs",
     "scripts/browser-sandbox-provider-live-verification-smoke.mjs",
     "scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs",
+    "scripts/browser-sandbox-provider-visual-ocr-replay-smoke.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -208,6 +210,7 @@ async function safeDeploymentContractStatus() {
     "project/deployment/browser-sandbox-provider.live-preflight.example.env",
     "project/deployment/browser-sandbox-provider.live-verification.example.env",
     "project/deployment/browser-sandbox-provider.webrtc-signaling.example.env",
+    "project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -298,7 +301,9 @@ async function safeDeploymentContractStatus() {
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_PROBE:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY:-0}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY:-0}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE:-}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -353,6 +358,28 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderResolver.resolverReady &&
     hostedBrowserSandboxProviderResolver.streamRequiresWebrtc &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY === "1";
+  const hostedBrowserSandboxProviderVisualOcrProofFile =
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE ?? null;
+  const hostedBrowserSandboxProviderVisualOcrProofManifest =
+    hostedBrowserSandboxProviderVisualOcrProofFile
+      ? await readJsonIfExists(hostedBrowserSandboxProviderVisualOcrProofFile)
+      : null;
+  const hostedBrowserSandboxProviderVisualOcrProofValidation =
+    hostedBrowserSandboxProviderVisualOcrProofManifest
+      ? validateVisualOcrProofManifest(hostedBrowserSandboxProviderVisualOcrProofManifest, {
+        proofPath: hostedBrowserSandboxProviderVisualOcrProofFile
+      })
+      : {
+        ok: false,
+        failures: ["visual_ocr_proof_file_required"],
+        sanitizedProof: {}
+      };
+  const hostedBrowserSandboxProviderVisualOcrReplayReady =
+    hostedBrowserSandboxProviderLiveVerificationReady &&
+    (!hostedBrowserSandboxProviderResolver.streamRequiresWebrtc || hostedBrowserSandboxProviderWebrtcSignalingReady) &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1" &&
+    Boolean(hostedBrowserSandboxProviderVisualOcrProofFile) &&
+    hostedBrowserSandboxProviderVisualOcrProofValidation.ok;
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -363,6 +390,7 @@ async function safeDeploymentContractStatus() {
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
     !hostedBrowserSandboxConfigIsExample &&
     hostedBrowserSandboxAdapterMode === "hosted_provider" &&
+    hostedBrowserSandboxProviderVisualOcrReplayReady &&
     hostedBrowserSandboxProviderResolver.ready;
   const hostedBrowserSandboxProviderAdapterReady =
     hostedBrowserSandboxProviderSelected &&
@@ -467,6 +495,28 @@ async function safeDeploymentContractStatus() {
       rawSdpReturned: false,
       rawIceCandidateReturned: false
     },
+    hostedBrowserSandboxProviderVisualOcrReplayReady,
+    hostedBrowserSandboxProviderVisualOcrReplay: {
+      status: hostedBrowserSandboxProviderVisualOcrReplayReady
+        ? "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
+        : process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1"
+          ? "hosted_browser_sandbox_provider_visual_ocr_replay_requires_private_proof"
+          : "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+      liveVerificationReady: hostedBrowserSandboxProviderLiveVerificationReady,
+      webrtcSignalingReady: hostedBrowserSandboxProviderWebrtcSignalingReady,
+      streamRequiresWebrtc: hostedBrowserSandboxProviderResolver.streamRequiresWebrtc,
+      proofFilePresent: Boolean(hostedBrowserSandboxProviderVisualOcrProofFile),
+      proofFileOutsideGit: Boolean(hostedBrowserSandboxProviderVisualOcrProofValidation.sanitizedProof?.proofFileOutsideGit),
+      proofValidationOk: hostedBrowserSandboxProviderVisualOcrProofValidation.ok,
+      failures: hostedBrowserSandboxProviderVisualOcrProofValidation.failures ?? [],
+      sanitizedProof: hostedBrowserSandboxProviderVisualOcrProofValidation.sanitizedProof ?? {},
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -475,6 +525,8 @@ async function safeDeploymentContractStatus() {
       ? "hosted_browser_sandbox_provider_ready"
       : hostedBrowserSandboxAdapterHarnessReady
         ? "hosted_browser_sandbox_adapter_harness_ready"
+      : hostedBrowserSandboxProviderVisualOcrReplayReady
+        ? "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
       : hostedBrowserSandboxProviderLiveLifecycleHarnessReady
         ? "hosted_browser_sandbox_provider_live_lifecycle_harness_ready"
       : hostedBrowserSandboxProviderHttpAdapterReady
@@ -492,6 +544,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderLivePreflightCommand: "npm run sandbox:browser:provider-live-preflight",
     browserSandboxProviderLiveVerificationCommand: "npm run sandbox:browser:provider-live-verification",
     browserSandboxProviderWebrtcSignalingCommand: "npm run sandbox:browser:provider-webrtc-signaling",
+    browserSandboxProviderVisualOcrReplayCommand: "npm run sandbox:browser:provider-visual-ocr-replay",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -600,6 +653,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",
         status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status,
         target: "WebRTC live-block signaling must exchange opaque offer/answer/ICE refs before WebRTC hosted readiness scores."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_visual_ocr_replay",
+        status: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.status,
+        target: "Operator-supplied dashboard/mobile live-block visual and OCR proof must replay from a private manifest before hosted readiness scores."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -759,6 +817,23 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
+        key: "hosted_browser_sandbox_provider_visual_ocr_replay",
+        status: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.status,
+        ok: deployment.hostedBrowserSandboxProviderVisualOcrReplayReady,
+        command: deployment.browserSandboxProviderVisualOcrReplayCommand,
+        liveVerificationReady: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.liveVerificationReady ?? false,
+        webrtcSignalingReady: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.webrtcSignalingReady ?? false,
+        proofFilePresent: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.proofFilePresent ?? false,
+        proofFileOutsideGit: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.proofFileOutsideGit ?? false,
+        proofValidationOk: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.proofValidationOk ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
         key: "hosted_browser_sandbox_provider_adapter",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxProviderAdapterReady,
@@ -903,6 +978,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderWebrtcSignalingReady ? 100 : 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_visual_ocr_replay",
+        score: deployment.hostedBrowserSandboxProviderVisualOcrReplayReady ? 100 : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",

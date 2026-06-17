@@ -1,6 +1,6 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION = "2026-06-17.browser-sandbox-provider.v1";
@@ -8,6 +8,7 @@ export const BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION = "2026-06-17.browser-san
 const DEFAULT_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json";
 const HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.hosted-provider.example.json";
 const PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json";
+const VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -121,6 +122,74 @@ function assertNoSecretLeak(payload) {
     rawSecretFilePathWritten: /\/run\/secrets\/|project\/deployment\/secrets\/\.runtime|\/var\/folders/i.test(text),
     rawOcrTextReturned: false,
     frameRecordingEnabled: text.includes("\"recordFrames\":true")
+  };
+}
+
+function isInsideRepo(pathname) {
+  const relativePath = relative(process.cwd(), resolve(pathname));
+  return Boolean(relativePath && !relativePath.startsWith("..") && !relativePath.startsWith("/"));
+}
+
+export function validateVisualOcrProofManifest(manifest, { proofPath } = {}) {
+  const failures = [];
+  if (manifest?.schemaVersion !== VISUAL_OCR_PROOF_SCHEMA_VERSION) failures.push("visual_ocr_schema_version_missing_or_unknown");
+  if (manifest?.providerLiveConnected !== true) failures.push("provider_live_connected_required");
+  if (manifest?.session?.sessionRefPresent !== true) failures.push("session_ref_required");
+  if (manifest?.session?.rawSessionRefReturned === true) failures.push("raw_session_ref_must_not_be_returned");
+  if (manifest?.stream?.frameRefPresent !== true) failures.push("frame_ref_required");
+  if (manifest?.stream?.rawFrameReturned === true) failures.push("raw_frame_must_not_be_returned");
+  if (manifest?.stream?.rawFramePersisted === true) failures.push("raw_frame_must_not_be_persisted");
+  if (manifest?.screenshot?.screenshotRefPresent !== true) failures.push("screenshot_ref_required");
+  if (manifest?.screenshot?.rawImageReturned === true) failures.push("raw_image_must_not_be_returned");
+  if (manifest?.ocrCaption?.captionRefPresent !== true) failures.push("caption_ref_required");
+  if (manifest?.ocrCaption?.rawOcrTextReturned === true) failures.push("raw_ocr_text_must_not_be_returned");
+  if (manifest?.ocrCaption?.rawOcrTextPersisted === true) failures.push("raw_ocr_text_must_not_be_persisted");
+  if (manifest?.ocrCaption?.visualCaptionSafe !== true) failures.push("visual_caption_safety_required");
+  if (manifest?.takeover?.approvalRequired !== true) failures.push("takeover_approval_required");
+  if (manifest?.takeover?.inputRelay !== "approval_gated_human_only") failures.push("input_relay_must_be_human_only");
+  if (manifest?.input?.rawInputReturned === true) failures.push("raw_input_must_not_be_returned");
+  if (manifest?.input?.externalWriteActionsWithoutApproval === true) failures.push("external_write_actions_without_approval");
+  if (manifest?.teardown?.teardownComplete !== true) failures.push("teardown_required");
+  if (manifest?.teardown?.rawFramePersisted === true) failures.push("raw_frame_must_not_be_persisted");
+  if (manifest?.teardown?.rawOcrTextPersisted === true) failures.push("raw_ocr_text_must_not_be_persisted");
+  if (manifest?.visualProof?.dashboardScreenshotRefPresent !== true) failures.push("dashboard_screenshot_ref_required");
+  if (manifest?.visualProof?.mobileLiveBlockRefPresent !== true) failures.push("mobile_live_block_ref_required");
+  if (manifest?.visualProof?.ocrCaptionRefPresent !== true) failures.push("visual_ocr_caption_ref_required");
+  if (manifest?.safety?.agentCredentialEntryAllowed === true) failures.push("agent_credential_entry_allowed");
+  if (manifest?.safety?.externalWriteActionsWithoutApproval === true) failures.push("external_write_actions_without_approval");
+  if (manifest?.safety?.rawEndpointReturned === true) failures.push("raw_endpoint_returned");
+  if (manifest?.safety?.rawSecretReturned === true) failures.push("raw_secret_returned");
+  if (proofPath && isInsideRepo(proofPath)) failures.push("visual_ocr_proof_file_must_live_outside_git");
+  const serialized = JSON.stringify(manifest ?? {});
+  if (/https?:\/\/[^"\\\s]+/i.test(serialized)) failures.push("raw_provider_url_forbidden");
+  if (/Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]/i.test(serialized)) failures.push("raw_secret_forbidden");
+  if (/data:image|<html|member id|subscriber id|password|captcha|typed-password/i.test(serialized)) {
+    failures.push("raw_frame_ocr_or_credential_content_forbidden");
+  }
+  if (/\/Users\/|\/private\/|\/tmp\/|\/var\/folders|[A-Za-z]:\\/i.test(serialized)) failures.push("raw_local_path_forbidden");
+  return {
+    ok: failures.length === 0,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    schemaVersion: manifest?.schemaVersion ?? null,
+    failures,
+    sanitizedProof: {
+      providerLiveConnected: Boolean(manifest?.providerLiveConnected),
+      sessionRefPresent: Boolean(manifest?.session?.sessionRefPresent),
+      streamFrameRefPresent: Boolean(manifest?.stream?.frameRefPresent),
+      screenshotRefPresent: Boolean(manifest?.screenshot?.screenshotRefPresent),
+      captionRefPresent: Boolean(manifest?.ocrCaption?.captionRefPresent),
+      visualCaptionSafe: Boolean(manifest?.ocrCaption?.visualCaptionSafe),
+      approvalRequired: Boolean(manifest?.takeover?.approvalRequired),
+      inputRelay: manifest?.takeover?.inputRelay ?? null,
+      teardownComplete: Boolean(manifest?.teardown?.teardownComplete),
+      dashboardScreenshotRefPresent: Boolean(manifest?.visualProof?.dashboardScreenshotRefPresent),
+      mobileLiveBlockRefPresent: Boolean(manifest?.visualProof?.mobileLiveBlockRefPresent),
+      rawFrameReturned: Boolean(manifest?.stream?.rawFrameReturned),
+      rawImageReturned: Boolean(manifest?.screenshot?.rawImageReturned),
+      rawOcrTextReturned: Boolean(manifest?.ocrCaption?.rawOcrTextReturned),
+      rawInputReturned: Boolean(manifest?.input?.rawInputReturned),
+      proofFileOutsideGit: Boolean(proofPath && !isInsideRepo(proofPath))
+    }
   };
 }
 
@@ -641,6 +710,151 @@ export async function runBrowserSandboxProviderWebrtcSignalingSmoke({
   return result;
 }
 
+export async function runBrowserSandboxProviderVisualOcrReplaySmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-visual-ocr-replay-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [validation, configText, webrtc] = await Promise.all([
+    validateBrowserSandboxProviderContract({ configPath }),
+    readFile(resolve(configPath), "utf8"),
+    runBrowserSandboxProviderWebrtcSignalingSmoke({
+      configPath,
+      selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-webrtc-signaling-smoke.json"),
+      env,
+      providerReady,
+      fetchImpl
+    })
+  ]);
+  const config = JSON.parse(configText);
+  const resolver = resolveBrowserSandboxHostedProvider({
+    config,
+    configPath,
+    validation,
+    env,
+    providerReady,
+    provider: env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "hosted_remote"
+  });
+  const proofPath = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE;
+  let proofFile = {
+    present: false,
+    outsideGit: false,
+    readable: false,
+    validation: {
+      ok: false,
+      failures: ["visual_ocr_proof_file_required"],
+      sanitizedProof: {}
+    }
+  };
+  if (proofPath) {
+    const outsideGit = !isInsideRepo(proofPath);
+    try {
+      const proofText = await readFile(resolve(proofPath), "utf8");
+      const proofManifest = JSON.parse(proofText);
+      proofFile = {
+        present: true,
+        outsideGit,
+        readable: true,
+        validation: validateVisualOcrProofManifest(proofManifest, { proofPath })
+      };
+    } catch (error) {
+      proofFile = {
+        present: true,
+        outsideGit,
+        readable: false,
+        validation: {
+          ok: false,
+          failures: [`visual_ocr_proof_unreadable:${error.message}`],
+          sanitizedProof: {}
+        }
+      };
+    }
+  }
+  const visualReplayGate = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1";
+  const visualReplayReady = Boolean(
+    visualReplayGate &&
+    validation.ok &&
+    resolver.resolverReady &&
+    webrtc.hostedProviderLiveVerificationReady &&
+    (!resolver.streamRequiresWebrtc || webrtc.hostedProviderWebrtcSignalingReady) &&
+    proofFile.present &&
+    proofFile.outsideGit &&
+    proofFile.readable &&
+    proofFile.validation.ok
+  );
+  const hostedProviderReady = Boolean(
+    visualReplayReady &&
+    webrtc.hostedProviderReady &&
+    resolver.ready
+  );
+  const result = {
+    ok: Boolean(validation.ok && webrtc.ok && (!proofFile.present || proofFile.validation.ok)),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: visualReplayReady
+      ? "hosted_browser_sandbox_provider_visual_ocr_replay_ready"
+      : proofFile.present && !proofFile.validation.ok
+        ? "hosted_browser_sandbox_provider_visual_ocr_replay_invalid"
+        : visualReplayGate
+          ? "hosted_browser_sandbox_provider_visual_ocr_replay_requires_private_proof"
+          : "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+    hostedProviderVisualOcrReplayReady: visualReplayReady,
+    hostedProviderWebrtcSignalingReady: webrtc.hostedProviderWebrtcSignalingReady,
+    hostedProviderLiveVerificationReady: webrtc.hostedProviderLiveVerificationReady,
+    hostedProviderReady,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    validation,
+    resolver,
+    webrtc: {
+      status: webrtc.status,
+      hostedProviderWebrtcSignalingReady: webrtc.hostedProviderWebrtcSignalingReady,
+      hostedProviderLiveVerificationReady: webrtc.hostedProviderLiveVerificationReady,
+      streamRequiresWebrtc: webrtc.streamRequiresWebrtc
+    },
+    proofFile,
+    requiredVisualProofBeforeHostedReady: [
+      "private visual/OCR proof manifest outside Git",
+      "dashboard screenshot reference",
+      "mobile live-worker block screenshot reference",
+      "safe OCR/caption reference",
+      "provider stream frame reference",
+      "provider screenshot reference",
+      "approval-gated human takeover proof",
+      "redacted approved input relay proof",
+      "teardown proof",
+      "no raw frame, image, OCR, local path, endpoint, secret, SDP, ICE, credential, or portal text"
+    ],
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_visual_ocr_replay",
+      scoreKey: "hosted_browser_sandbox_provider_visual_ocr_replay",
+      visualReplayReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY",
+      visualProofFileEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE",
+      hostedReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(resolver),
+      ...assertNoSecretLeak(webrtc),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: Boolean(proofFile.validation.sanitizedProof?.rawFrameReturned),
+      rawImageReturned: Boolean(proofFile.validation.sanitizedProof?.rawImageReturned),
+      rawOcrTextReturned: Boolean(proofFile.validation.sanitizedProof?.rawOcrTextReturned),
+      rawInputReturned: Boolean(proofFile.validation.sanitizedProof?.rawInputReturned),
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: !hostedProviderReady && resolver.ready
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
 async function callSelectedHostedProviderLiveLifecycle({
   endpointUrl,
   apiToken,
@@ -1056,6 +1270,7 @@ export function resolveBrowserSandboxHostedProvider({
   const liveVerificationReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
   const streamRequiresWebrtc = configStreamRequiresWebrtc(config);
   const webrtcSignalingReady = !streamRequiresWebrtc || env.WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY === "1";
+  const visualOcrReplayReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1";
   const resolverReady = Boolean(
     provider === "hosted_remote" &&
     providerReady &&
@@ -1065,7 +1280,14 @@ export function resolveBrowserSandboxHostedProvider({
     endpointResolved &&
     authResolved
   );
-  const ready = Boolean(resolverReady && liveVerified && liveVerificationReady && webrtcSignalingReady && config?.adapter?.providerLiveConnected === true);
+  const ready = Boolean(
+    resolverReady &&
+    liveVerified &&
+    liveVerificationReady &&
+    webrtcSignalingReady &&
+    visualOcrReplayReady &&
+    config?.adapter?.providerLiveConnected === true
+  );
   const status = ready
     ? "hosted_browser_sandbox_provider_ready"
     : resolverReady
@@ -1083,6 +1305,7 @@ export function resolveBrowserSandboxHostedProvider({
     liveVerificationReady,
     streamRequiresWebrtc,
     webrtcSignalingReady,
+    visualOcrReplayReady,
     endpointRefKind: refKind(config?.endpointRef),
     authTokenRefKind: refKind(authTokenRef),
     endpointEnvPresent: Boolean(endpointEnvName),

@@ -2490,3 +2490,25 @@ Remaining follow-up:
 - Run WebRTC signaling against the real selected provider with private endpoint/token/config outside Git.
 - Capture real provider GUI/OCR proof for live WebRTC stream, screenshot, OCR/caption, takeover, approved input, and teardown.
 - Only after real provider proof passes, allow `hosted_remote_browser_sandbox` to score above `0 / 100`.
+
+## Hosted Browser Sandbox Provider Visual/OCR Replay Cycle - 2026-06-17
+
+Goal:
+- Add the final provider-neutral proof gate before hosted remote browser readiness: a private visual/OCR replay manifest that proves dashboard and mobile live-block evidence without committing raw screenshots, OCR text, provider secrets, or portal content.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-visual-ocr-replay-smoke.mjs` and `npm run sandbox:browser:provider-visual-ocr-replay`.
+- Add a visual/OCR replay manifest validator that accepts only opaque refs and sanitized booleans for session, stream frame, screenshot, OCR/caption, takeover, input relay, teardown, dashboard screenshot, and mobile live-block proof.
+- Add `project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env` as the non-secret operator template for private replay proof.
+- Expose `hosted_browser_sandbox_provider_visual_ocr_replay` through Node dashboard proof and FastAPI `/api/v1/proof`.
+- Require visual/OCR replay readiness as part of final hosted-provider readiness while keeping the replay score separate from `hosted_remote_browser_sandbox`.
+
+Acceptance:
+- Default visual/OCR replay is blocked but safe and redacted.
+- Replay can score `100 / 100` only when live verification, WebRTC signaling when required, the explicit replay gate, and a valid proof manifest outside Git are present.
+- The replay validator rejects raw screenshots, `data:image`, raw OCR text, portal/member text, endpoints, tokens, SDP, ICE candidates, local paths, credentials, and raw input.
+- `hosted_remote_browser_sandbox` remains `0 / 100` unless the real selected provider also has `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and private config `adapter.providerLiveConnected=true`.
+
+Remaining follow-up:
+- Run visual/OCR replay against real provider artifacts captured by an operator in a private location.
+- Only after real provider live verification plus visual/OCR replay proof passes, enable the final hosted remote score in the private runtime config.

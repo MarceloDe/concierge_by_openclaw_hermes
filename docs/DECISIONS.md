@@ -2309,3 +2309,22 @@ This creates the missing remote-live-block signaling surface without making the 
 
 Cost of changing later:
 Low to moderate. Provider-specific WebRTC offer/answer and ICE relay details can be added behind the provider client while preserving the public opaque-ref API, proof keys, redaction policy, and human-only takeover boundary.
+
+## 2026-06-17 - Require Private Visual/OCR Replay Proof Before Hosted Remote Browser Readiness
+
+Context:
+Live verification and WebRTC signaling prove provider API behavior, but they still do not prove that a regular user can visually see the hosted worker browser and that OCR/caption proof is safe enough for the operator dashboard. The final hosted remote score therefore needed a separate GUI/OCR artifact gate that can be satisfied by real provider evidence without committing raw screenshots, OCR text, or secrets.
+
+Options considered:
+- Let live verification plus WebRTC signaling imply hosted browser readiness.
+- Store screenshot and OCR artifacts directly in the repo for replay.
+- Add a private proof-manifest replay gate that validates only opaque references and sanitized booleans while keeping raw visual/OCR evidence outside Git.
+
+Decision:
+Add `npm run sandbox:browser:provider-visual-ocr-replay`, a non-secret visual/OCR replay env template, a private proof-manifest validator, and separate Node/FastAPI proof fields for `hosted_browser_sandbox_provider_visual_ocr_replay`. Final `hosted_remote_browser_sandbox` readiness now requires the replay gate in addition to live verification, WebRTC signaling when required, explicit live verification, and private config `adapter.providerLiveConnected=true`.
+
+Reason:
+This closes the GUI/OCR evidence gap without leaking PHI, provider secrets, raw frames, raw OCR, SDP/ICE details, or credential/input values. It also lets operators prove the user-facing remote-browser experience independently while the final production hosted score remains honest.
+
+Cost of changing later:
+Low. Real providers can produce the same manifest from their capture pipeline, and future storage can replace the file reference with a secret-manager or artifact-store reference without changing the public proof keys or approval boundary.

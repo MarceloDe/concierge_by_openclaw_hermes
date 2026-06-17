@@ -2138,3 +2138,28 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser dashboard proof at `http://127.0.0.1:4210/?phase=hosted-browser-sandbox-provider-webrtc-signaling` verified `hosted_browser_sandbox_provider_webrtc_signaling`, `hosted_browser_sandbox_provider_live_verification`, `hosted_remote_browser_sandbox`, and no endpoint/token/raw SDP/raw ICE leak.
 - Visual/proof artifacts were saved at `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-dashboard-proof.png`, `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-visual-proof.json`, `artifacts/phase24-hosted-browser-sandbox-provider-webrtc-signaling-proof.json`, and `artifacts/browser-sandbox-provider-webrtc-signaling-smoke.json`.
+
+## Hosted Browser Sandbox Provider Visual/OCR Replay Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider visual/OCR replay smoke command exists and is safe-blocked by default.
+- A private proof manifest outside Git can prove dashboard screenshot, mobile live-block screenshot, OCR/caption ref, stream frame ref, screenshot ref, takeover approval, approved-input relay, and teardown using only opaque refs and sanitized booleans.
+- The replay validator rejects raw screenshots, `data:image`, raw OCR text, portal/member text, endpoint URLs, bearer tokens, raw SDP, raw ICE candidates, local paths, credentials, and raw input values.
+- Connector proof exposes `hosted_browser_sandbox_provider_visual_ocr_replay` separately from `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real selected-provider private config reports `adapter.providerLiveConnected=true`, live verification is explicitly marked verified, WebRTC signaling is ready when required, and visual/OCR replay proof passes.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-visual-ocr-replay` passed in default blocked mode without provider calls or secret leakage.
+- Browser-sandbox provider contract tests passed with 17/17 tests.
+- FastAPI facade regression passed with 47 tests, including 2 expected live-gated skips.
+
+Full proof status:
+
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 34/34 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser dashboard proof at `http://127.0.0.1:4211/?phase=hosted-browser-sandbox-provider-visual-ocr-replay` verified visual/OCR replay, WebRTC signaling, live verification, final hosted remote score, and no endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase25-hosted-provider-visual-ocr-replay-dashboard-proof.png`, `artifacts/phase25-hosted-provider-visual-ocr-replay-visual-proof.json`, `artifacts/phase25-hosted-provider-visual-ocr-replay-proof.json`, and `artifacts/browser-sandbox-provider-visual-ocr-replay-smoke.json`.

@@ -780,3 +780,35 @@ Full verification:
 Score decision:
 - `hosted_browser_sandbox_provider_webrtc_signaling` can reach `100 / 100` only when the explicit signaling gate and earlier provider-readiness gates pass.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config and passes GUI/OCR proof.
+
+## Phase 25 Hosted Browser Sandbox Provider Visual/OCR Replay Update
+
+Implementation:
+- Added `npm run sandbox:browser:provider-visual-ocr-replay`.
+- Added a non-secret visual/OCR replay env template and kept real proof manifests outside Git.
+- Added a private visual/OCR proof-manifest validator for dashboard screenshot proof, mobile live-block proof, OCR/caption proof, stream frame proof, screenshot proof, takeover proof, approved-input proof, and teardown proof.
+- Added a separate `hosted_browser_sandbox_provider_visual_ocr_replay` FastAPI and dashboard score.
+- Strengthened final hosted-provider readiness so live verification and WebRTC signaling are insufficient without visual/OCR replay plus explicit real-provider live verification.
+- Preserved the human-only `interactive_takeover` approval scope and kept Codex credential entry disallowed.
+
+Focused verification:
+- JS syntax checks passed for the provider contract.
+- Python compile checks passed for `project/api/browser_sandbox.py` and `project/api/main.py`.
+- `npm run sandbox:browser:provider-visual-ocr-replay` passed in default blocked mode without provider calls or secret leakage.
+- Browser-sandbox provider contract regression passed with 17/17 tests.
+- FastAPI facade regression passed with 47 tests and 2 expected skips.
+
+Full verification:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 34/34 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected skips.
+- Browser dashboard proof at `http://127.0.0.1:4211/?phase=hosted-browser-sandbox-provider-visual-ocr-replay` verified the visual/OCR replay score, WebRTC signaling score, live-verification score, hosted remote score, and no endpoint/token leakage.
+- Visual/API artifacts were saved at:
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-dashboard-proof.png`
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-visual-proof.json`
+  - `artifacts/phase25-hosted-provider-visual-ocr-replay-proof.json`
+  - `artifacts/browser-sandbox-provider-visual-ocr-replay-smoke.json`
+
+Score decision:
+- `hosted_browser_sandbox_provider_visual_ocr_replay` can reach `100 / 100` only when the explicit replay gate, earlier provider-readiness gates, and a valid private proof manifest outside Git pass.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config, WebRTC signaling when required, visual/OCR replay proof, and explicit live verification.
