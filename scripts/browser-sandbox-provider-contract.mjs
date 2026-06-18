@@ -9,6 +9,8 @@ const DEFAULT_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example
 const HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.hosted-provider.example.json";
 const PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json";
 const VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1";
+const PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env";
+const PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -848,6 +850,255 @@ export async function runBrowserSandboxProviderVisualOcrReplaySmoke({
       externalActions: false,
       agentCredentialEntryAllowed: false,
       liveProviderOverclaimed: !hostedProviderReady && resolver.ready
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+async function readTextIfExists(pathname) {
+  try {
+    return await readFile(resolve(pathname), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function launchReadinessChecklist({
+  validation,
+  selection,
+  visualReplay,
+  resolver,
+  configPath,
+  selectionConfigPath,
+  envExamplePresent,
+  runbookPresent
+}) {
+  const configOutsideGit = Boolean(configPath && !isInsideRepo(configPath));
+  const proofOutsideGit = Boolean(visualReplay.proofFile?.outsideGit);
+  const items = [
+    {
+      key: "runbook_available",
+      ready: runbookPresent,
+      status: runbookPresent ? "ready" : "missing_runbook",
+      command: "open docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md"
+    },
+    {
+      key: "env_template_available",
+      ready: envExamplePresent,
+      status: envExamplePresent ? "ready" : "missing_env_template",
+      command: `cp ${PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH} /run/secrets/browser-sandbox-provider.launch-readiness.env`
+    },
+    {
+      key: "provider_config_private",
+      ready: configOutsideGit,
+      status: configOutsideGit ? "private_config_outside_git" : "move_runtime_config_outside_git",
+      env: "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE"
+    },
+    {
+      key: "provider_contract_valid",
+      ready: Boolean(validation.ok),
+      status: validation.ok ? "contract_valid" : "contract_invalid",
+      command: "npm run sandbox:browser:provider-contract"
+    },
+    {
+      key: "selection_preflight",
+      ready: Boolean(selection.providerSelectionPreflightReady),
+      status: selection.status,
+      command: "npm run sandbox:browser:provider-selection",
+      env: "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER"
+    },
+    {
+      key: "live_preflight",
+      ready: Boolean(visualReplay.webrtc?.hostedProviderLiveVerificationReady || visualReplay.hostedProviderLiveVerificationReady),
+      status: visualReplay.webrtc?.hostedProviderLiveVerificationReady || visualReplay.hostedProviderLiveVerificationReady
+        ? "live_preflight_chain_ready"
+        : "run_live_preflight_and_verification",
+      command: "npm run sandbox:browser:provider-live-preflight"
+    },
+    {
+      key: "live_verification",
+      ready: Boolean(visualReplay.hostedProviderLiveVerificationReady),
+      status: visualReplay.webrtc?.status ?? visualReplay.status,
+      command: "npm run sandbox:browser:provider-live-verification"
+    },
+    {
+      key: "webrtc_signaling",
+      ready: Boolean(!resolver.streamRequiresWebrtc || visualReplay.hostedProviderWebrtcSignalingReady),
+      status: resolver.streamRequiresWebrtc
+        ? visualReplay.webrtc?.status ?? "webrtc_signaling_required"
+        : "webrtc_signaling_not_required",
+      command: "npm run sandbox:browser:provider-webrtc-signaling"
+    },
+    {
+      key: "visual_ocr_replay_private_proof",
+      ready: Boolean(visualReplay.hostedProviderVisualOcrReplayReady && proofOutsideGit),
+      status: visualReplay.status,
+      command: "npm run sandbox:browser:provider-visual-ocr-replay",
+      env: "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE"
+    },
+    {
+      key: "final_live_verified_switch",
+      ready: Boolean(resolver.liveVerified && resolver.providerLiveConnected && resolver.liveVerificationReady),
+      status: resolver.ready ? "final_enablement_switch_ready" : "keep_final_switch_disabled",
+      env: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    }
+  ];
+  return {
+    items,
+    missing: items.filter((item) => !item.ready).map((item) => item.key),
+    configOutsideGit,
+    selectionConfigPath,
+    proofOutsideGit,
+    runbookPresent,
+    envExamplePresent
+  };
+}
+
+export async function runBrowserSandboxProviderLaunchReadinessSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-launch-readiness-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [validation, configText, selection, visualReplay, envExampleText, runbookText] = await Promise.all([
+    validateBrowserSandboxProviderContract({ configPath }),
+    readFile(resolve(configPath), "utf8"),
+    runBrowserSandboxProviderSelectionSmoke({
+      configPath: selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-selection-smoke.json"),
+      env
+    }),
+    runBrowserSandboxProviderVisualOcrReplaySmoke({
+      configPath,
+      selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-visual-ocr-replay-smoke.json"),
+      env,
+      providerReady,
+      fetchImpl
+    }),
+    readTextIfExists(PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH),
+    readTextIfExists(PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH)
+  ]);
+  const config = JSON.parse(configText);
+  const resolver = resolveBrowserSandboxHostedProvider({
+    config,
+    configPath,
+    validation,
+    env,
+    providerReady,
+    provider: env.WEFELLA_BROWSER_SANDBOX_PROVIDER ?? "hosted_remote"
+  });
+  const envExamplePresent = Boolean(
+    envExampleText &&
+    envExampleText.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=0") &&
+    envExampleText.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0")
+  );
+  const runbookPresent = Boolean(
+    runbookText &&
+    runbookText.includes("Launch Readiness Sequence") &&
+    runbookText.includes("hosted_remote_browser_sandbox")
+  );
+  const checklist = launchReadinessChecklist({
+    validation,
+    selection,
+    visualReplay,
+    resolver,
+    configPath,
+    selectionConfigPath,
+    envExamplePresent,
+    runbookPresent
+  });
+  const privateProofChainReady = Boolean(
+    checklist.configOutsideGit &&
+    selection.providerSelectionPreflightReady &&
+    visualReplay.hostedProviderLiveVerificationReady &&
+    (!resolver.streamRequiresWebrtc || visualReplay.hostedProviderWebrtcSignalingReady) &&
+    visualReplay.hostedProviderVisualOcrReplayReady &&
+    checklist.proofOutsideGit
+  );
+  const explicitLaunchGate = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY === "1";
+  const finalEnablementAllowed = Boolean(
+    explicitLaunchGate &&
+    privateProofChainReady &&
+    resolver.ready &&
+    visualReplay.hostedProviderReady
+  );
+  const runbookReady = Boolean(envExamplePresent && runbookPresent && validation.ok && selection.ok && visualReplay.ok);
+  const result = {
+    ok: runbookReady,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: finalEnablementAllowed
+      ? "hosted_browser_sandbox_provider_launch_ready"
+      : privateProofChainReady
+        ? "hosted_browser_sandbox_provider_launch_waiting_final_enablement"
+        : runbookReady
+          ? "hosted_browser_sandbox_provider_launch_runbook_ready"
+          : "hosted_browser_sandbox_provider_launch_runbook_incomplete",
+    hostedProviderLaunchReadinessRunbookReady: runbookReady,
+    hostedProviderPrivateProofChainReady: privateProofChainReady,
+    hostedProviderFinalEnablementAllowed: finalEnablementAllowed,
+    hostedProviderReady: finalEnablementAllowed,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    validation,
+    selection: {
+      status: selection.status,
+      providerSelectionContractReady: selection.providerSelectionContractReady,
+      providerSelectionPreflightReady: selection.providerSelectionPreflightReady,
+      selectedProviderKnown: selection.selectedProviderKnown,
+      selectedProviderKey: selection.selectedProviderKey,
+      candidateKeys: selection.validation?.sanitizedConfig?.candidateKeys ?? []
+    },
+    liveProof: {
+      liveVerificationReady: visualReplay.hostedProviderLiveVerificationReady,
+      webrtcSignalingReady: visualReplay.hostedProviderWebrtcSignalingReady,
+      streamRequiresWebrtc: resolver.streamRequiresWebrtc,
+      visualOcrReplayReady: visualReplay.hostedProviderVisualOcrReplayReady,
+      visualOcrStatus: visualReplay.status,
+      proofFilePresent: Boolean(visualReplay.proofFile?.present),
+      proofFileOutsideGit: Boolean(visualReplay.proofFile?.outsideGit),
+      proofValidationOk: Boolean(visualReplay.proofFile?.validation?.ok)
+    },
+    resolver,
+    checklist,
+    operatorSequence: [
+      "Copy project/deployment/browser-sandbox-provider.launch-readiness.example.env outside Git and fill it from the selected provider secret manager.",
+      "Run npm run sandbox:browser:provider-selection.",
+      "Run npm run sandbox:browser:provider-live-preflight with the optional provider health probe only after the private endpoint is approved.",
+      "Run npm run sandbox:browser:provider-live-verification against the real selected provider.",
+      "Run npm run sandbox:browser:provider-webrtc-signaling when the selected provider uses WebRTC.",
+      "Capture private dashboard/mobile live-block/OCR refs and run npm run sandbox:browser:provider-visual-ocr-replay.",
+      "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=1 only after the private proof chain is green.",
+      "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1 and private config adapter.providerLiveConnected=true only after human review approves final hosted enablement."
+    ],
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_launch_readiness",
+      scoreKey: "hosted_browser_sandbox_provider_launch_readiness",
+      launchReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY",
+      envExample: PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH,
+      runbook: PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH,
+      hostedReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(selection),
+      ...assertNoSecretLeak(visualReplay),
+      ...assertNoSecretLeak(resolver),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      rawSdpReturned: false,
+      rawIceCandidateReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: !finalEnablementAllowed && Boolean(resolver.ready || visualReplay.hostedProviderReady)
     }
   };
   await mkdir(dirname(artifactPath), { recursive: true });

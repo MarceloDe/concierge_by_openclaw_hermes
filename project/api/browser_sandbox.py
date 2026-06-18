@@ -16,6 +16,8 @@ HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION = "2026-06-17.browser-sandbox-provider.
 VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1"
 DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.example.json"
 DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json"
+PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env"
+PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
@@ -667,6 +669,16 @@ def _read_json_if_present(path: str | None) -> dict[str, Any] | None:
         return None
 
 
+def _read_text_if_present(path: str | None) -> str | None:
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return handle.read()
+    except Exception:
+        return None
+
+
 def _path_is_inside_repo(path: str | None) -> bool:
     if not path:
         return False
@@ -863,6 +875,36 @@ def describe_browser_sandbox_provider_contract(
         and visual_ocr_proof_path
         and visual_ocr_proof_validation["ok"]
     )
+    launch_runbook_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH)
+    launch_env_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH)
+    launch_runbook_ready = bool(
+        launch_runbook_text
+        and "Launch Readiness Sequence" in launch_runbook_text
+        and "hosted_remote_browser_sandbox" in launch_runbook_text
+        and launch_env_text
+        and "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=0" in launch_env_text
+        and "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0" in launch_env_text
+    )
+    private_proof_chain_ready = bool(
+        launch_runbook_ready
+        and selection_contract["preflightReady"]
+        and hosted_resolution["resolverReady"]
+        and live_verification_ready
+        and (not hosted_resolution["streamRequiresWebrtc"] or webrtc_signaling_ready)
+        and visual_ocr_replay_ready
+        and selected_config_path
+        and not _path_is_inside_repo(selected_config_path)
+        and visual_ocr_proof_path
+        and not _path_is_inside_repo(visual_ocr_proof_path)
+    )
+    final_enablement_allowed = bool(
+        os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY") == "1"
+        and private_proof_chain_ready
+        and hosted_resolution["resolverReady"]
+        and hosted_resolution["liveVerified"]
+        and hosted_resolution["liveVerificationReady"]
+        and hosted_resolution["providerLiveConnected"]
+    )
     provider_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -989,6 +1031,43 @@ def describe_browser_sandbox_provider_contract(
             "proofValidationOk": visual_ocr_proof_validation["ok"],
             "failures": visual_ocr_proof_validation.get("failures", []),
             "sanitizedProof": visual_ocr_proof_validation.get("sanitizedProof", {}),
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False,
+            "rawFrameReturned": False,
+            "rawOcrTextReturned": False,
+            "rawInputReturned": False
+        },
+        "hostedProviderLaunchReadinessRunbookReady": launch_runbook_ready,
+        "hostedProviderPrivateProofChainReady": private_proof_chain_ready,
+        "hostedProviderFinalEnablementAllowed": final_enablement_allowed,
+        "hostedProviderLaunchReadiness": {
+            "status": (
+                "hosted_browser_sandbox_provider_launch_ready"
+                if final_enablement_allowed
+                else "hosted_browser_sandbox_provider_launch_waiting_final_enablement"
+                if private_proof_chain_ready
+                else "hosted_browser_sandbox_provider_launch_runbook_ready"
+                if launch_runbook_ready
+                else "hosted_browser_sandbox_provider_launch_runbook_incomplete"
+            ),
+            "runbookReady": launch_runbook_ready,
+            "privateProofChainReady": private_proof_chain_ready,
+            "finalEnablementAllowed": final_enablement_allowed,
+            "envExample": PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH,
+            "runbook": PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH,
+            "command": "npm run sandbox:browser:provider-launch-readiness",
+            "configOutsideGit": bool(selected_config_path and not _path_is_inside_repo(selected_config_path)),
+            "proofFileOutsideGit": bool(visual_ocr_proof_path and not _path_is_inside_repo(visual_ocr_proof_path)),
+            "missing": (
+                ([] if selection_contract["preflightReady"] else ["selection_preflight"])
+                + ([] if live_verification_ready else ["live_verification"])
+                + ([] if (not hosted_resolution["streamRequiresWebrtc"] or webrtc_signaling_ready) else ["webrtc_signaling"])
+                + ([] if visual_ocr_replay_ready else ["visual_ocr_replay_private_proof"])
+                + ([] if selected_config_path and not _path_is_inside_repo(selected_config_path) else ["private_provider_config_outside_git"])
+                + ([] if visual_ocr_proof_path and not _path_is_inside_repo(visual_ocr_proof_path) else ["private_visual_ocr_proof_outside_git"])
+                + ([] if hosted_resolution.get("status") == "hosted_browser_sandbox_provider_ready" else ["final_live_verified_switch"])
+            ),
             "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
             "rawEndpointReturned": False,
             "rawSecretReturned": False,

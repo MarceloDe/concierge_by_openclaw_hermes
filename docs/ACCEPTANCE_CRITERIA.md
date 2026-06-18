@@ -2163,3 +2163,33 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser dashboard proof at `http://127.0.0.1:4211/?phase=hosted-browser-sandbox-provider-visual-ocr-replay` verified visual/OCR replay, WebRTC signaling, live verification, final hosted remote score, and no endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase25-hosted-provider-visual-ocr-replay-dashboard-proof.png`, `artifacts/phase25-hosted-provider-visual-ocr-replay-visual-proof.json`, `artifacts/phase25-hosted-provider-visual-ocr-replay-proof.json`, and `artifacts/browser-sandbox-provider-visual-ocr-replay-smoke.json`.
+
+## Hosted Browser Sandbox Provider Launch Readiness Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider launch-readiness smoke command exists and is safe in default local mode.
+- A non-secret launch env template and launch runbook exist for private selected-provider operation.
+- The aggregate proof lists runbook readiness, private proof-chain readiness, final enablement allowance, and missing private requirements.
+- A private proof-chain harness can reach `hosted_browser_sandbox_provider_launch_waiting_final_enablement` while `hostedProviderReady=false`.
+- Connector proof exposes `hosted_browser_sandbox_provider_launch_readiness` separately from `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real selected-provider private config reports `adapter.providerLiveConnected=true`, live verification is explicitly marked verified, WebRTC signaling is ready when required, visual/OCR replay proof passes, and final human enablement is approved.
+- Proof artifacts and dashboard text do not contain provider endpoints, bearer tokens, raw screenshots, raw OCR text, raw SDP, raw ICE candidates, local private paths, credentials, or raw input values.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-launch-readiness` reported `hosted_browser_sandbox_provider_launch_runbook_ready`.
+- `npm run sandbox:browser:provider-visual-ocr-replay` remained safe-blocked by default.
+- Browser-sandbox provider contract tests passed with 19/19 tests.
+- Deployment compose contract test passed after linking the temp worktree to the existing local Graphiti vendor checkout.
+- Focused FastAPI launch-readiness and visual/OCR replay tests passed with 2/2 tests.
+
+Full proof status:
+
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 36/36 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 48 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser dashboard/API proof at `http://127.0.0.1:4212/?phase=hosted-browser-sandbox-provider-launch-readiness` verified launch readiness, final hosted remote score, and no fake endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase26-hosted-provider-launch-readiness-dashboard-proof.png`, `artifacts/phase26-hosted-provider-launch-readiness-visual-proof.json`, `artifacts/phase26-hosted-provider-launch-readiness-proof.json`, and `artifacts/browser-sandbox-provider-launch-readiness-smoke.json`.

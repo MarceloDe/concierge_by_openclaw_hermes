@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { access, readFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { extname, join, relative, resolve } from "node:path";
 import { listAuditEvents } from "../concierge/audit.mjs";
 import { createDatabaseStore } from "../concierge/databaseFactory.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
@@ -156,6 +156,19 @@ async function readJsonIfExists(path) {
   }
 }
 
+async function readTextIfExists(path) {
+  try {
+    return await readFile(resolve(path), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function isPathInsideRepo(path) {
+  const relativePath = relative(process.cwd(), resolve(path));
+  return Boolean(relativePath && !relativePath.startsWith("..") && !relativePath.startsWith("/"));
+}
+
 function sendSse(res, event) {
   res.write(`event: ${event.eventType ?? "message"}\n`);
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -303,7 +316,8 @@ async function safeDeploymentContractStatus() {
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY:-0}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE:-}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE:-}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY:-0}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -380,6 +394,30 @@ async function safeDeploymentContractStatus() {
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1" &&
     Boolean(hostedBrowserSandboxProviderVisualOcrProofFile) &&
     hostedBrowserSandboxProviderVisualOcrProofValidation.ok;
+  const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
+  const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
+  const hostedBrowserSandboxProviderLaunchReadinessRunbookReady = Boolean(
+    hostedBrowserSandboxProviderLaunchRunbookText?.includes("Launch Readiness Sequence") &&
+    hostedBrowserSandboxProviderLaunchRunbookText?.includes("hosted_remote_browser_sandbox") &&
+    hostedBrowserSandboxProviderLaunchEnvText?.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=0") &&
+    hostedBrowserSandboxProviderLaunchEnvText?.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0")
+  );
+  const hostedBrowserSandboxProviderPrivateProofChainReady = Boolean(
+    hostedBrowserSandboxProviderLaunchReadinessRunbookReady &&
+    hostedBrowserSandboxProviderSelectionPreflightReady &&
+    hostedBrowserSandboxProviderResolver.resolverReady &&
+    hostedBrowserSandboxProviderLiveVerificationReady &&
+    (!hostedBrowserSandboxProviderResolver.streamRequiresWebrtc || hostedBrowserSandboxProviderWebrtcSignalingReady) &&
+    hostedBrowserSandboxProviderVisualOcrReplayReady &&
+    Boolean(hostedBrowserSandboxProviderVisualOcrProofFile) &&
+    !isPathInsideRepo(hostedBrowserSandboxProviderConfigFile) &&
+    !isPathInsideRepo(hostedBrowserSandboxProviderVisualOcrProofFile)
+  );
+  const hostedBrowserSandboxProviderFinalEnablementAllowed = Boolean(
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY === "1" &&
+    hostedBrowserSandboxProviderPrivateProofChainReady &&
+    hostedBrowserSandboxProviderResolver.ready
+  );
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -517,6 +555,41 @@ async function safeDeploymentContractStatus() {
       rawOcrTextReturned: false,
       rawInputReturned: false
     },
+    hostedBrowserSandboxProviderLaunchReadinessRunbookReady,
+    hostedBrowserSandboxProviderPrivateProofChainReady,
+    hostedBrowserSandboxProviderFinalEnablementAllowed,
+    hostedBrowserSandboxProviderLaunchReadiness: {
+      status: hostedBrowserSandboxProviderFinalEnablementAllowed
+        ? "hosted_browser_sandbox_provider_launch_ready"
+        : hostedBrowserSandboxProviderPrivateProofChainReady
+          ? "hosted_browser_sandbox_provider_launch_waiting_final_enablement"
+          : hostedBrowserSandboxProviderLaunchReadinessRunbookReady
+            ? "hosted_browser_sandbox_provider_launch_runbook_ready"
+            : "hosted_browser_sandbox_provider_launch_runbook_incomplete",
+      runbookReady: hostedBrowserSandboxProviderLaunchReadinessRunbookReady,
+      privateProofChainReady: hostedBrowserSandboxProviderPrivateProofChainReady,
+      finalEnablementAllowed: hostedBrowserSandboxProviderFinalEnablementAllowed,
+      envExample: "project/deployment/browser-sandbox-provider.launch-readiness.example.env",
+      runbook: "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md",
+      command: "npm run sandbox:browser:provider-launch-readiness",
+      configOutsideGit: Boolean(hostedBrowserSandboxProviderConfigFile && !isPathInsideRepo(hostedBrowserSandboxProviderConfigFile)),
+      proofFileOutsideGit: Boolean(hostedBrowserSandboxProviderVisualOcrProofFile && !isPathInsideRepo(hostedBrowserSandboxProviderVisualOcrProofFile)),
+      missing: [
+        ...(!hostedBrowserSandboxProviderSelectionPreflightReady ? ["selection_preflight"] : []),
+        ...(!hostedBrowserSandboxProviderLiveVerificationReady ? ["live_verification"] : []),
+        ...(hostedBrowserSandboxProviderResolver.streamRequiresWebrtc && !hostedBrowserSandboxProviderWebrtcSignalingReady ? ["webrtc_signaling"] : []),
+        ...(!hostedBrowserSandboxProviderVisualOcrReplayReady ? ["visual_ocr_replay_private_proof"] : []),
+        ...(hostedBrowserSandboxProviderConfigFile && isPathInsideRepo(hostedBrowserSandboxProviderConfigFile) ? ["private_provider_config_outside_git"] : []),
+        ...(!hostedBrowserSandboxProviderVisualOcrProofFile || isPathInsideRepo(hostedBrowserSandboxProviderVisualOcrProofFile) ? ["private_visual_ocr_proof_outside_git"] : []),
+        ...(!hostedBrowserSandboxProviderResolver.ready ? ["final_live_verified_switch"] : [])
+      ],
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -545,6 +618,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderLiveVerificationCommand: "npm run sandbox:browser:provider-live-verification",
     browserSandboxProviderWebrtcSignalingCommand: "npm run sandbox:browser:provider-webrtc-signaling",
     browserSandboxProviderVisualOcrReplayCommand: "npm run sandbox:browser:provider-visual-ocr-replay",
+    browserSandboxProviderLaunchReadinessCommand: "npm run sandbox:browser:provider-launch-readiness",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -658,6 +732,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_visual_ocr_replay",
         status: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.status,
         target: "Operator-supplied dashboard/mobile live-block visual and OCR proof must replay from a private manifest before hosted readiness scores."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_launch_readiness",
+        status: deployment.hostedBrowserSandboxProviderLaunchReadiness?.status,
+        target: "Operator launch readiness aggregates private config, live provider, WebRTC, visual/OCR, and final enablement gates without leaking secrets."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -834,6 +913,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
+        key: "hosted_browser_sandbox_provider_launch_readiness",
+        status: deployment.hostedBrowserSandboxProviderLaunchReadiness?.status,
+        ok: deployment.hostedBrowserSandboxProviderLaunchReadinessRunbookReady,
+        command: deployment.browserSandboxProviderLaunchReadinessCommand,
+        runbookReady: deployment.hostedBrowserSandboxProviderLaunchReadiness?.runbookReady ?? false,
+        privateProofChainReady: deployment.hostedBrowserSandboxProviderLaunchReadiness?.privateProofChainReady ?? false,
+        finalEnablementAllowed: deployment.hostedBrowserSandboxProviderLaunchReadiness?.finalEnablementAllowed ?? false,
+        missing: deployment.hostedBrowserSandboxProviderLaunchReadiness?.missing ?? [],
+        configOutsideGit: deployment.hostedBrowserSandboxProviderLaunchReadiness?.configOutsideGit ?? false,
+        proofFileOutsideGit: deployment.hostedBrowserSandboxProviderLaunchReadiness?.proofFileOutsideGit ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
         key: "hosted_browser_sandbox_provider_adapter",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxProviderAdapterReady,
@@ -984,6 +1081,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderVisualOcrReplayReady ? 100 : 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderVisualOcrReplay?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_launch_readiness",
+        score: deployment.hostedBrowserSandboxProviderFinalEnablementAllowed
+          ? 100
+          : deployment.hostedBrowserSandboxProviderPrivateProofChainReady
+            ? 90
+            : deployment.hostedBrowserSandboxProviderLaunchReadinessRunbookReady
+              ? 60
+              : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderLaunchReadiness?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",

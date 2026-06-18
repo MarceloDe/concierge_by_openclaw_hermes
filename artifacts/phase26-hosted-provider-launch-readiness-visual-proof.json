@@ -1,0 +1,33 @@
+{
+  "url": "http://127.0.0.1:4212/?phase=hosted-browser-sandbox-provider-launch-readiness",
+  "title": "Brainstyworkers AI Concierge",
+  "launchScore": {
+    "key": "hosted_browser_sandbox_provider_launch_readiness",
+    "score": 60,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_launch_runbook_ready"
+  },
+  "hostedScore": {
+    "key": "hosted_remote_browser_sandbox",
+    "score": 0,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_configured_unverified"
+  },
+  "launchCheck": {
+    "status": "hosted_browser_sandbox_provider_launch_runbook_ready",
+    "runbookReady": true,
+    "privateProofChainReady": false,
+    "finalEnablementAllowed": false,
+    "missing": [
+      "visual_ocr_replay_private_proof",
+      "private_provider_config_outside_git",
+      "private_visual_ocr_proof_outside_git",
+      "final_live_verified_switch"
+    ]
+  },
+  "dashboardHasLaunchReadiness": true,
+  "dashboardHasHostedRemoteZero": true,
+  "noEndpointOrTokenLeak": true,
+  "screenshot": "artifacts/phase26-hosted-provider-launch-readiness-dashboard-proof.png",
+  "screenshotMethod": "delayed_headless_chrome_after_iab_screenshot_timeout"
+}
