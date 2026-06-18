@@ -967,6 +967,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "target": "A selected real hosted provider must pass lifecycle and GUI/OCR proof before hosted readiness can score."
             },
             {
+                "key": "hosted_browser_sandbox_provider_steel_self_host",
+                "status": browser_sandbox_contract.get("hostedProviderSteelSelfHostProof", {}).get("status"),
+                "target": "Self-hosted Steel Browser proves the selected-provider lifecycle locally without leaking raw browser content."
+            },
+            {
                 "key": "hosted_browser_sandbox_provider_webrtc_signaling",
                 "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status"),
                 "target": "WebRTC live-block signaling must exchange opaque refs only before WebRTC hosted readiness can score."
@@ -999,6 +1004,7 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "hosted_browser_sandbox_provider_selection", **browser_sandbox_contract.get("hostedProviderSelection", {})},
             {"key": "hosted_browser_sandbox_provider_live_preflight", **browser_sandbox_contract.get("hostedProviderLivePreflight", {})},
             {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})},
+            {"key": "hosted_browser_sandbox_provider_steel_self_host", **browser_sandbox_contract.get("hostedProviderSteelSelfHostProof", {})},
             {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})},
             {"key": "hosted_browser_sandbox_provider_visual_ocr_replay", **browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {})},
             {"key": "hosted_browser_sandbox_provider_launch_readiness", **browser_sandbox_contract.get("hostedProviderLaunchReadiness", {})},
@@ -1064,6 +1070,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": 100 if browser_sandbox_contract.get("hostedProviderLiveVerificationReady") else 0,
                 "target": 100,
                 "status": browser_sandbox_contract.get("hostedProviderLiveVerification", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_steel_self_host",
+                "score": browser_sandbox_contract.get("hostedProviderSteelSelfHostProof", {}).get("score", 0),
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderSteelSelfHostProof", {}).get("status")
             },
             {
                 "key": "hosted_browser_sandbox_provider_webrtc_signaling",

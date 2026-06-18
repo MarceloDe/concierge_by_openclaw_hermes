@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { listAuditEvents } from "../concierge/audit.mjs";
 import { createDatabaseStore } from "../concierge/databaseFactory.mjs";
@@ -169,6 +169,72 @@ function isPathInsideRepo(path) {
   return Boolean(relativePath && !relativePath.startsWith("..") && !relativePath.startsWith("/"));
 }
 
+async function readLatestSteelSelfHostProof() {
+  const explicitProofPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_SELF_HOST_PROOF_FILE;
+  if (explicitProofPath) {
+    return {
+      artifactRef: isPathInsideRepo(explicitProofPath)
+        ? relative(process.cwd(), resolve(explicitProofPath))
+        : "[private-steel-self-host-proof-outside-git]",
+      proof: await readJsonIfExists(explicitProofPath)
+    };
+  }
+  const artifactDir = resolve("artifacts/phase28");
+  try {
+    const files = (await readdir(artifactDir))
+      .filter((file) => /^steel-self-host-live-lifecycle-.*\.json$/.test(file))
+      .sort();
+    const latest = files.at(-1);
+    if (!latest) return { artifactRef: null, proof: null };
+    const artifactPath = join(artifactDir, latest);
+    return {
+      artifactRef: relative(process.cwd(), artifactPath),
+      proof: await readJsonIfExists(artifactPath)
+    };
+  } catch {
+    return { artifactRef: null, proof: null };
+  }
+}
+
+function summarizeSteelSelfHostProof({ artifactRef, proof } = {}) {
+  const lifecycle = proof?.liveLifecycle ?? {};
+  const checks = [
+    ["session_create", lifecycle.createSession?.ok === true && lifecycle.providerLiveConnected === true],
+    ["cdp_connect", lifecycle.createSession?.cdpConnected === true],
+    ["live_viewer_stream_ref", lifecycle.stream?.ok === true && lifecycle.stream?.viewerUrlAvailable === true],
+    ["screenshot_ref", lifecycle.screenshot?.ok === true && lifecycle.screenshot?.screenshotRefPresent === true && lifecycle.screenshot?.rawImageReturned === false],
+    ["ocr_caption_ref", lifecycle.ocrCaption?.ok === true && lifecycle.ocrCaption?.captionRefPresent === true && lifecycle.ocrCaption?.rawOcrTextReturned === false],
+    ["approved_input_relay", lifecycle.input?.ok === true && lifecycle.input?.inputAccepted === true && lifecycle.input?.rawInputReturned === false],
+    ["takeover_approval_scope", lifecycle.takeover?.ok === true && lifecycle.takeover?.approvalRequired === true && lifecycle.takeover?.inputRelay === "approval_gated_human_only"],
+    ["teardown_release", lifecycle.teardown?.ok === true && lifecycle.teardown?.teardownComplete === true],
+    ["offsite_fail_closed", lifecycle.offsite?.ok === true && lifecycle.offsite?.statusCode === 403 && lifecycle.offsite?.offsiteFailClosed === true],
+    ["phi_redaction_policy", lifecycle.safety?.rawFrameReturned === false && lifecycle.safety?.rawImageReturned === false && lifecycle.safety?.rawOcrTextReturned === false && lifecycle.safety?.rawInputReturned === false]
+  ].map(([key, ok]) => ({ key, ok: Boolean(ok) }));
+  const passed = checks.filter((check) => check.ok).length;
+  return {
+    status: passed === checks.length
+      ? "steel_self_host_live_proof_ready"
+      : artifactRef
+        ? "steel_self_host_live_proof_incomplete"
+        : "steel_self_host_live_proof_missing",
+    ok: passed === checks.length,
+    score: passed * 10,
+    target: 100,
+    passed,
+    total: checks.length,
+    checks,
+    artifactRef,
+    providerStrategy: lifecycle.providerStrategy ?? null,
+    viewerUrlEnvRef: "WEFELLA_BROWSER_SANDBOX_VIEWER_URL",
+    lifecycleRefPresent: Boolean(lifecycle.status),
+    rawEndpointReturned: false,
+    rawSecretReturned: false,
+    rawFrameReturned: false,
+    rawOcrTextReturned: false,
+    rawInputReturned: false
+  };
+}
+
 function sendSse(res, event) {
   res.write(`event: ${event.eventType ?? "message"}\n`);
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -224,6 +290,8 @@ async function safeDeploymentContractStatus() {
     "project/deployment/browser-sandbox-provider.live-verification.example.env",
     "project/deployment/browser-sandbox-provider.webrtc-signaling.example.env",
     "project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env",
+    "infra/steel/compose.yaml",
+    "infra/steel/README.md",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
     "project/deployment/secrets/README.md",
     "project/deployment/secrets/database-url.example",
@@ -396,6 +464,8 @@ async function safeDeploymentContractStatus() {
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY === "1" &&
     Boolean(hostedBrowserSandboxProviderVisualOcrProofFile) &&
     hostedBrowserSandboxProviderVisualOcrProofValidation.ok;
+  const hostedBrowserSandboxProviderSteelSelfHostProof =
+    summarizeSteelSelfHostProof(await readLatestSteelSelfHostProof());
   const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
   const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText =
@@ -517,6 +587,8 @@ async function safeDeploymentContractStatus() {
       rawEndpointReturned: false,
       rawSecretReturned: false
     },
+    hostedBrowserSandboxProviderSteelSelfHostProofReady: hostedBrowserSandboxProviderSteelSelfHostProof.ok,
+    hostedBrowserSandboxProviderSteelSelfHostProof,
     hostedBrowserSandboxProviderLiveVerificationReady,
     hostedBrowserSandboxProviderLiveVerification: {
       status: hostedBrowserSandboxProviderLiveVerificationReady
@@ -770,6 +842,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: "A selected real hosted provider must pass create-session, stream, screenshot/OCR, takeover, input, offsite fail-closed, teardown, and GUI/OCR proof before hosted readiness scores."
       },
       {
+        key: "hosted_browser_sandbox_provider_steel_self_host",
+        status: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.status,
+        target: "Self-hosted Steel Browser proves the selected-provider lifecycle locally without exposing raw frames, OCR text, endpoints, or input values."
+      },
+      {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",
         status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status,
         target: "WebRTC live-block signaling must exchange opaque offer/answer/ICE refs before WebRTC hosted readiness scores."
@@ -930,6 +1007,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         liveVerified: deployment.hostedBrowserSandboxProviderLiveVerification?.liveVerified ?? false,
         rawEndpointReturned: false,
         rawSecretReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_self_host",
+        status: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.status,
+        ok: deployment.hostedBrowserSandboxProviderSteelSelfHostProofReady,
+        command: "npm run sandbox:browser:provider-live-verification",
+        artifactRef: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.artifactRef ?? null,
+        score: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.score ?? 0,
+        target: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.target ?? 100,
+        checks: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.checks ?? [],
+        viewerUrlEnvRef: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.viewerUrlEnvRef ?? null,
+        lifecycleRefPresent: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.lifecycleRefPresent ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
@@ -1137,6 +1232,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderLiveVerificationReady ? 100 : 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderLiveVerification?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_self_host",
+        score: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.score ?? 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",

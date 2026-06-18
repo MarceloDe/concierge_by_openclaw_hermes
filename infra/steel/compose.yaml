@@ -1,0 +1,29 @@
+services:
+  steel-api:
+    image: ghcr.io/steel-dev/steel-browser-api@sha256:6b65d776e17950c804c92fa49b66b5b1a335e997786fbc2a80cc11cdd650982e
+    container_name: phase28_steel_api
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:9223:9223"
+    environment:
+      - DOMAIN=localhost:3000
+      - CDP_DOMAIN=localhost:9223
+      - LOG_STORAGE_ENABLED=true
+      - LOG_STORAGE_PATH=/data/logs/browser-logs.duckdb
+      - SKIP_FINGERPRINT_INJECTION=true
+    volumes:
+      - steel-logs:/data/logs
+    restart: unless-stopped
+
+  steel-ui:
+    image: ghcr.io/steel-dev/steel-browser-ui@sha256:d356f19d0dba3297f5b3a3d431650477b20e3fe95be8b201092eda2af41e624b
+    container_name: phase28_steel_ui
+    ports:
+      - "127.0.0.1:5173:80"
+    environment:
+      - API_URL=http://steel-api:3000
+    depends_on:
+      - steel-api
+
+volumes:
+  steel-logs:
