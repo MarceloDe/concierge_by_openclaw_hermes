@@ -1,0 +1,96 @@
+{
+  "url": "http://127.0.0.1:4214/?phase=steel-self-host-operations-hardening",
+  "title": "Brainstyworkers AI Concierge",
+  "steelOperationsScore": {
+    "key": "hosted_browser_sandbox_provider_steel_operations",
+    "score": 85,
+    "target": 100,
+    "status": "steel_self_host_operations_contract_ready"
+  },
+  "steelOperationsCheck": {
+    "key": "hosted_browser_sandbox_provider_steel_operations",
+    "status": "steel_self_host_operations_contract_ready",
+    "ok": false,
+    "contractReady": true,
+    "command": "npm run sandbox:browser:steel-operations",
+    "score": 85,
+    "target": 100,
+    "checks": [
+      {
+        "key": "api_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "ui_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "no_latest_tags",
+        "ok": true
+      },
+      {
+        "key": "api_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "cdp_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "viewer_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "log_storage_disabled_by_default",
+        "ok": true
+      },
+      {
+        "key": "fingerprint_injection_skip_documented",
+        "ok": true
+      },
+      {
+        "key": "fastapi_remote_boundary_documented",
+        "ok": true
+      },
+      {
+        "key": "cleanup_documented",
+        "ok": true
+      },
+      {
+        "key": "operations_gate",
+        "ok": false
+      },
+      {
+        "key": "live_probe_requested",
+        "ok": false
+      },
+      {
+        "key": "live_probe_config_present",
+        "ok": false
+      }
+    ],
+    "composeFile": "infra/steel/compose.yaml",
+    "configFile": "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+    "runbook": "infra/steel/README.md",
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawOcrTextReturned": false,
+    "rawInputReturned": false,
+    "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+  },
+  "steelSelfHostScore": {
+    "key": "hosted_browser_sandbox_provider_steel_self_host",
+    "score": 0,
+    "target": 100,
+    "status": "steel_self_host_live_proof_missing"
+  },
+  "hostedRemoteScore": {
+    "key": "hosted_remote_browser_sandbox",
+    "score": 0,
+    "target": 100,
+    "status": "hosted_browser_sandbox_contract_valid_not_configured"
+  },
+  "hasRawLocalEndpointLeak": false,
+  "hasBearerLeak": false
+}

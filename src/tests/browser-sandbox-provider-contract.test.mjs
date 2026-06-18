@@ -7,8 +7,10 @@ import {
   BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
   validateBrowserSandboxProviderContract,
   validateBrowserSandboxProviderSelectionContract,
+  validateBrowserSandboxProviderSteelOperationsContract,
   runBrowserSandboxProviderContractSmoke,
   runBrowserSandboxProviderSelectionSmoke,
+  runBrowserSandboxProviderSteelOperationsSmoke,
   runBrowserSandboxProviderLivePreflightSmoke,
   runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxProviderWebrtcSignalingSmoke,
@@ -225,6 +227,71 @@ test("steel self-host provider strategy verifies local API, CDP, viewer, input, 
     if (originalWebSocket === undefined) delete globalThis.WebSocket;
     else globalThis.WebSocket = originalWebSocket;
   }
+});
+
+test("steel self-host operations contract proves hardening without hosted-readiness overclaim", async () => {
+  const validation = await validateBrowserSandboxProviderSteelOperationsContract();
+  assert.equal(validation.ok, true);
+  assert.equal(validation.sanitizedConfig.providerStrategy, "steel-self-host");
+  assert.equal(validation.sanitizedConfig.sessionPolicy.maxConcurrentSessions, 2);
+  assert.equal(validation.sanitizedConfig.retentionPolicy.recordFrames, false);
+  assert.equal(validation.sanitizedConfig.retentionPolicy.persistRawOcrText, false);
+  assert.equal(validation.sanitizedConfig.retentionPolicy.browserLogStorageEnabled, false);
+  assert.equal(validation.sanitizedConfig.networkPolicy.directPublicCdpAllowed, false);
+
+  const result = await runBrowserSandboxProviderSteelOperationsSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-operations-smoke-test.json",
+    env: {}
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "steel_self_host_operations_contract_ready");
+  assert.equal(result.steelOperationsReady, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.hostedRemoteScoreMayPassOnlyAfterLiveVerified, true);
+  assert.equal(result.score, 85);
+  assert.equal(result.compose.ok, true);
+  assert.equal(result.safety.hostedReadinessOverclaimed, false);
+  assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost:|local-dev-token|Bearer\s+|data:image/i);
+});
+
+test("steel self-host operations gate can reach 100 with explicit local live probes", async () => {
+  const result = await runBrowserSandboxProviderSteelOperationsSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-operations-live-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "http://127.0.0.1:3000",
+      WEFELLA_BROWSER_SANDBOX_CDP_URL: "ws://127.0.0.1:9223",
+      WEFELLA_BROWSER_SANDBOX_VIEWER_URL: "http://127.0.0.1:5173"
+    },
+    fetchImpl: fakeSteelOperationsFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "steel_self_host_operations_ready");
+  assert.equal(result.steelOperationsReady, true);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.score, 100);
+  assert.equal(result.liveProbe.attempted, true);
+  assert.equal(result.liveProbe.healthOk, true);
+  assert.equal(result.liveProbe.cdpOk, true);
+  assert.equal(result.liveProbe.viewerOk, true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost:|Bearer\s+|data:image/i);
+});
+
+test("steel self-host operations contract rejects public CDP and retained browser logs", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "steel-operations-bad-"));
+  const configPath = join(dir, "bad-steel-operations.json");
+  const good = JSON.parse(await readFile(new URL("../../project/deployment/browser-sandbox-provider.steel-operations.example.json", import.meta.url), "utf8"));
+  good.networkPolicy.directPublicCdpAllowed = true;
+  good.retentionPolicy.browserLogStorageEnabled = true;
+  await writeFile(configPath, JSON.stringify(good), "utf8");
+  const validation = await validateBrowserSandboxProviderSteelOperationsContract({ configPath });
+  assert.equal(validation.ok, false);
+  assert.ok(validation.failures.includes("steel_operations_network_directPublicCdpAllowed_invalid"));
+  assert.ok(validation.failures.includes("steel_operations_browser_log_storage_must_be_disabled_by_default"));
 });
 
 test("hosted browser sandbox provider WebRTC signaling uses opaque refs and does not overclaim hosted readiness", async () => {
@@ -905,6 +972,35 @@ async function fakeSteelSelfHostFetch(url, options = {}) {
     return json({ success: true });
   }
   return json({ error: "not_found", path }, 404);
+}
+
+async function fakeSteelOperationsFetch(url, options = {}) {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname;
+  const method = options.method ?? "GET";
+  const json = (payload, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return payload;
+    },
+    async text() {
+      return JSON.stringify(payload);
+    }
+  });
+  if (method === "GET" && path === "/v1/health") {
+    return json({ status: "ok" });
+  }
+  if (method === "GET" && path === "/json/version") {
+    return json({
+      Browser: "Chrome/148.0.0.0",
+      webSocketDebuggerUrl: "ws://127.0.0.1/devtools/browser/fake"
+    });
+  }
+  if (method === "GET" && path === "/") {
+    return json({ status: "viewer_ready" });
+  }
+  return json({ error: "not_found" }, 404);
 }
 
 class FakeSteelWebSocket {

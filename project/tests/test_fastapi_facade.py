@@ -1169,6 +1169,58 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(selection_score["score"], 90)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_steel_self_host_operations_visible_without_hosted_remote_overclaim(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_steel_operations_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-steel-operations", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn("http://127.0.0.1", proof_text)
+        self.assertNotIn("ws://127.0.0.1", proof_text)
+        self.assertNotIn("Bearer ", proof_text)
+        proof = proof_response.json()
+        operations_goal = next(goal for goal in proof["goals"] if goal["key"] == "hosted_browser_sandbox_provider_steel_operations")
+        operations_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_steel_operations")
+        operations_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_steel_operations")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(operations_goal["status"], "steel_self_host_operations_contract_ready")
+        self.assertEqual(operations_check["status"], "steel_self_host_operations_contract_ready")
+        self.assertTrue(operations_check["contractReady"])
+        self.assertFalse(operations_check["ok"])
+        self.assertEqual(operations_score["score"], 85)
+        self.assertEqual(hosted_score["score"], 0)
+
+    def test_steel_self_host_operations_gate_scores_without_hosted_remote_overclaim(self):
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE": "1",
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": "http://127.0.0.1:3000",
+            "WEFELLA_BROWSER_SANDBOX_CDP_URL": "ws://127.0.0.1:9223",
+            "WEFELLA_BROWSER_SANDBOX_VIEWER_URL": "http://127.0.0.1:5173"
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_steel_operations_gate_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-steel-operations-ready", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn("http://127.0.0.1", proof_text)
+        self.assertNotIn("ws://127.0.0.1", proof_text)
+        proof = proof_response.json()
+        operations_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_steel_operations")
+        operations_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_steel_operations")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(operations_check["status"], "steel_self_host_operations_ready")
+        self.assertTrue(operations_check["ok"])
+        self.assertEqual(operations_score["score"], 100)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_provider_live_preflight_never_overclaims_live_provider(self):
         fake_endpoint = "https://sandbox-provider.invalid/api"
         fake_token = "test-token-that-must-not-leak"

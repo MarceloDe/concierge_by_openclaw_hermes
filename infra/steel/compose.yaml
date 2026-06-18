@@ -8,11 +8,8 @@ services:
     environment:
       - DOMAIN=localhost:3000
       - CDP_DOMAIN=localhost:9223
-      - LOG_STORAGE_ENABLED=true
-      - LOG_STORAGE_PATH=/data/logs/browser-logs.duckdb
+      - LOG_STORAGE_ENABLED=false
       - SKIP_FINGERPRINT_INJECTION=true
-    volumes:
-      - steel-logs:/data/logs
     restart: unless-stopped
 
   steel-ui:
@@ -24,6 +21,3 @@ services:
       - API_URL=http://steel-api:3000
     depends_on:
       - steel-api
-
-volumes:
-  steel-logs:

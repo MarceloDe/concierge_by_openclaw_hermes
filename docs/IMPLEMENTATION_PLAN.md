@@ -2609,3 +2609,35 @@ Remaining follow-up:
 - Run browser/UI visual checks on the operator dashboard and Steel UI.
 - Decide whether to flip private runtime `adapter.providerLiveConnected=true` after human review of the local Steel proof.
 - Add deployment-scale planning for concurrency, patch cadence, artifact storage, and secure remote access before treating self-hosted Steel as production infrastructure.
+
+## Steel Self-Host Operations Hardening Cycle - 2026-06-18
+
+Goal:
+- Add an operations-readiness gate for the self-hosted Steel provider before anyone treats local Steel lifecycle proof as production infrastructure.
+
+Implemented slice:
+- Add `project/deployment/browser-sandbox-provider.steel-operations.example.json` with concurrency, TTL, idle timeout, teardown, retention, network, image, monitoring, and approval policy.
+- Add `scripts/browser-sandbox-provider-steel-operations-smoke.mjs` and `npm run sandbox:browser:steel-operations`.
+- Disable Steel browser log storage by default in `infra/steel/compose.yaml`.
+- Extend `infra/steel/README.md` with loopback-only, FastAPI-connector, stale-session cleanup, and operations-gate instructions.
+- Expose `hosted_browser_sandbox_provider_steel_operations` through Node dashboard proof and FastAPI `/api/v1/proof`.
+
+Acceptance:
+- Static operations hardening scores `85 / 100` without enabling `hosted_remote_browser_sandbox`.
+- Explicit `WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY=1` can score `100 / 100`; if live probe mode is enabled, local API/CDP/viewer config must be present.
+- The operations validator rejects direct public CDP, retained browser logs, frame/OCR persistence, raw endpoint literals, secret literals, unbounded concurrency, missing teardown, and unpinned images.
+- Public proof exposes only paths, booleans, commands, and score metadata. It must not expose local endpoint values, tokens, raw screenshots, frames, OCR text, or input values.
+
+Verification:
+- `npm run sandbox:browser:steel-operations`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+- `npm run build`
+- `npm run test:docker:contract`
+- `npm run test:local`
+- Browser dashboard/API proof showing Steel operations and final hosted remote score.
+
+Remaining follow-up:
+- If Steel is chosen for a remote deployment, add the deployment-specific secret manager, reverse proxy/tunnel, scaling limits, patch-review cadence, and monitoring integration behind the same operations policy.
+- Keep final hosted remote readiness blocked until private launch execution and final human review pass.

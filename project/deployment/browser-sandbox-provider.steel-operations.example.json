@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "brainstyworkers.browser-sandbox-provider-steel-operations.v1",
+  "providerStrategy": "steel-self-host",
+  "status": "operations_contract_only",
+  "environment": "staging",
+  "composeFile": "infra/steel/compose.yaml",
+  "runbook": "infra/steel/README.md",
+  "sessionPolicy": {
+    "maxConcurrentSessions": 2,
+    "maxSessionMinutes": 30,
+    "idleTimeoutMinutes": 5,
+    "releaseOnTeardown": true,
+    "releaseStaleSessions": true,
+    "teardownOnFailure": true
+  },
+  "retentionPolicy": {
+    "recordFrames": false,
+    "persistRawOcrText": false,
+    "rawScreenshotsInGit": false,
+    "browserLogStorageEnabled": false,
+    "logStorageContainsPhi": false,
+    "proofArtifactRetentionDays": 14
+  },
+  "networkPolicy": {
+    "apiLoopbackOnly": true,
+    "cdpLoopbackOnly": true,
+    "viewerLoopbackOnly": true,
+    "directPublicCdpAllowed": false,
+    "remoteAccessViaFastApiOnly": true
+  },
+  "imagePolicy": {
+    "pinnedByDigest": true,
+    "latestTagsAllowed": false,
+    "patchReviewRequired": true
+  },
+  "monitoringPolicy": {
+    "healthProbeRequired": true,
+    "cdpProbeRequired": true,
+    "viewerProbeRequired": true,
+    "dashboardScoreRequired": true
+  },
+  "approvalPolicy": {
+    "requiresReadOnlyApproval": true,
+    "requiresHumanTakeoverApproval": true,
+    "agentCredentialEntryAllowed": false,
+    "externalWriteActionsAllowed": false
+  }
+}
