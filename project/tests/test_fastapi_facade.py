@@ -689,6 +689,35 @@ class FastApiFacadeTest(unittest.TestCase):
     def bearer_headers(self, user_id, *, extra_claims=None):
         return {"Authorization": f"Bearer {create_access_token(user_id, extra_claims=extra_claims)}"}
 
+    def valid_visual_ocr_manifest(self):
+        return {
+            "schemaVersion": "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1",
+            "providerLiveConnected": True,
+            "session": {"sessionRefPresent": True, "rawSessionRefReturned": False},
+            "stream": {"frameRefPresent": True, "rawFrameReturned": False, "rawFramePersisted": False},
+            "screenshot": {"screenshotRefPresent": True, "rawImageReturned": False},
+            "ocrCaption": {
+                "captionRefPresent": True,
+                "rawOcrTextReturned": False,
+                "rawOcrTextPersisted": False,
+                "visualCaptionSafe": True
+            },
+            "takeover": {"approvalRequired": True, "inputRelay": "approval_gated_human_only"},
+            "input": {"rawInputReturned": False, "externalWriteActionsWithoutApproval": False},
+            "teardown": {"teardownComplete": True, "rawFramePersisted": False, "rawOcrTextPersisted": False},
+            "visualProof": {
+                "dashboardScreenshotRefPresent": True,
+                "mobileLiveBlockRefPresent": True,
+                "ocrCaptionRefPresent": True
+            },
+            "safety": {
+                "agentCredentialEntryAllowed": False,
+                "externalWriteActionsWithoutApproval": False,
+                "rawEndpointReturned": False,
+                "rawSecretReturned": False
+            }
+        }
+
     def operator_headers(self, user_id="operator_user"):
         return self.bearer_headers(user_id, extra_claims={"roles": ["operator"]})
 
@@ -1219,6 +1248,80 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(operations_check["status"], "steel_self_host_operations_ready")
         self.assertTrue(operations_check["ok"])
         self.assertEqual(operations_score["score"], 100)
+        self.assertEqual(hosted_score["score"], 0)
+
+    def test_steel_remote_host_readiness_visible_without_hosted_remote_overclaim(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_steel_remote_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-steel-remote-host", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn("STEEL_REMOTE_HOST/v1", proof_text)
+        self.assertNotIn("Bearer ", proof_text)
+        proof = proof_response.json()
+        remote_goal = next(goal for goal in proof["goals"] if goal["key"] == "hosted_browser_sandbox_provider_steel_remote_host")
+        remote_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_steel_remote_host")
+        remote_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_steel_remote_host")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(remote_goal["status"], "steel_remote_host_contract_ready_waiting_live_10_of_10")
+        self.assertEqual(remote_check["status"], "steel_remote_host_contract_ready_waiting_live_10_of_10")
+        self.assertTrue(remote_check["contractReady"])
+        self.assertFalse(remote_check["ok"])
+        self.assertEqual(remote_score["score"], 0)
+        self.assertEqual(hosted_score["score"], 0)
+
+    def test_hosted_remote_readiness_requires_phase30_steel_remote_artifact(self):
+        fake_endpoint = "https://steel-remote.invalid"
+        fake_token = "test-token-that-must-not-leak"
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = os.path.join(tmp, "browser-sandbox-provider.runtime.json")
+            visual_path = os.path.join(tmp, "visual-ocr-proof.json")
+            with open("project/deployment/browser-sandbox-provider.hosted-provider.example.json", "r", encoding="utf-8") as handle:
+                config = json.load(handle)
+            config["adapter"]["providerLiveConnected"] = True
+            with open(config_path, "w", encoding="utf-8") as handle:
+                json.dump(config, handle)
+            with open(visual_path, "w", encoding="utf-8") as handle:
+                json.dump(self.valid_visual_ocr_manifest(), handle)
+            with patch.dict(os.environ, {
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": config_path,
+                "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+                "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json",
+                "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER": "custom_webrtc",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE": visual_path,
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED": "1"
+            }, clear=True):
+                app = create_app(inline_tasks=True)
+                app.state.node_client = FakeNodeRuntimeClient()
+                client = TestClient(app)
+                headers = self.bearer_headers("v1_steel_remote_gate_user")
+                proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-steel-remote-required", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        proof = proof_response.json()
+        private_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_private_launch_execution")
+        remote_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_steel_remote_host")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(private_score["score"], 100)
+        self.assertEqual(remote_score["score"], 0)
         self.assertEqual(hosted_score["score"], 0)
 
     def test_hosted_browser_sandbox_provider_live_preflight_never_overclaims_live_provider(self):

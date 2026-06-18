@@ -2641,3 +2641,29 @@ Verification:
 Remaining follow-up:
 - If Steel is chosen for a remote deployment, add the deployment-specific secret manager, reverse proxy/tunnel, scaling limits, patch-review cadence, and monitoring integration behind the same operations policy.
 - Keep final hosted remote readiness blocked until private launch execution and final human review pass.
+
+## Steel Remote Hardening Cycle - 2026-06-18
+
+Goal:
+- Make the Phase 29 `steel-self-host` provider deployable on infrastructure the operator owns while preserving the existing provider-pluggable adapter contract and preventing hosted readiness overclaims.
+
+Implemented slice:
+- Add remote Steel compose with pinned images, loopback-only API/CDP/UI ports, healthcheck, restart policy, and encrypted-volume log mount placeholder.
+- Select option (a) with Akamai Connected Cloud as the Phase 30 candidate host posture, pending operator BAA/legal confirmation before PHI.
+- Add TLS reverse-proxy config with backend IP allowlist and a narrow Steel route surface.
+- Add firewall and WireGuard runbooks for defense-in-depth and private debugger access.
+- Add recovery script for container restart health/smoke proof.
+- Add `npm run sandbox:browser:steel-remote-readiness`.
+- Add dashboard/API proof key `hosted_browser_sandbox_provider_steel_remote_host`.
+- Require remote-host proof before final `hosted_remote_browser_sandbox` can score.
+
+Acceptance:
+- Static remote hardening contract is visible and passes.
+- Remote-host readiness remains `0 / 100` until the owned remote Steel host passes all ten lifecycle checks.
+- The accepted lifecycle artifact is only written to `artifacts/phase30/steel-remote-live-lifecycle-<ISO8601>.json` when the live remote gate is enabled, TLS endpoint/private CDP config is present, host firewall proof is present, and all ten checks pass.
+- Public proof exposes only booleans, paths, refs, labels, and commands. It must not expose endpoints, tokens, raw screenshots, raw OCR text, raw frames, credentials, or input values.
+
+Remaining follow-up:
+- Provision the owned remote host, TLS hostname, backend egress allowlist, and WireGuard tunnel.
+- Run the live Phase 30 harness against `https://example.com` from the backend network position.
+- Only after 10/10, flip private runtime JSON to `environment=production-candidate` and `transport.tls=true`, then write the Cortex episodic, semantic, and procedural notes required by Phase 30.

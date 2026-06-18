@@ -23,6 +23,11 @@ PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/browser
 STEEL_OPERATIONS_CONFIG_PATH = "project/deployment/browser-sandbox-provider.steel-operations.example.json"
 STEEL_COMPOSE_PATH = "infra/steel/compose.yaml"
 STEEL_RUNBOOK_PATH = "infra/steel/README.md"
+STEEL_REMOTE_COMPOSE_PATH = "infra/steel/remote/compose.yaml"
+STEEL_REMOTE_CADDYFILE_PATH = "infra/steel/remote/Caddyfile"
+STEEL_REMOTE_FIREWALL_PATH = "infra/steel/remote/firewall.md"
+STEEL_REMOTE_WIREGUARD_PATH = "infra/steel/remote/wireguard.md"
+STEEL_REMOTE_RECOVERY_SCRIPT_PATH = "infra/steel/remote/recover.sh"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
@@ -882,6 +887,78 @@ def _summarize_steel_operations() -> dict[str, Any]:
     }
 
 
+def _latest_steel_remote_proof() -> tuple[str | None, dict[str, Any] | None]:
+    explicit_path = os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_REMOTE_PROOF_FILE")
+    if explicit_path:
+        return _public_path_ref(explicit_path, private_label="[private-steel-remote-proof-outside-git]"), _read_json_if_present(explicit_path)
+    candidates = sorted(glob.glob(os.path.join("artifacts", "phase30", "steel-remote-live-lifecycle-*.json")))
+    if not candidates:
+        return None, None
+    latest = candidates[-1]
+    return latest, _read_json_if_present(latest)
+
+
+def _summarize_steel_remote_host() -> dict[str, Any]:
+    compose_text = _read_text_if_present(STEEL_REMOTE_COMPOSE_PATH) or ""
+    caddy_text = _read_text_if_present(STEEL_REMOTE_CADDYFILE_PATH) or ""
+    firewall_text = _read_text_if_present(STEEL_REMOTE_FIREWALL_PATH) or ""
+    wireguard_text = _read_text_if_present(STEEL_REMOTE_WIREGUARD_PATH) or ""
+    recovery_text = _read_text_if_present(STEEL_REMOTE_RECOVERY_SCRIPT_PATH) or ""
+    deployment_checks = [
+        {"key": "remote_api_image_pinned_digest", "ok": bool(re.search(r"ghcr\.io/steel-dev/steel-browser-api@sha256:[a-f0-9]{64}", compose_text))},
+        {"key": "remote_ui_image_pinned_digest", "ok": bool(re.search(r"ghcr\.io/steel-dev/steel-browser-ui@sha256:[a-f0-9]{64}", compose_text))},
+        {"key": "remote_no_latest_tags", "ok": ":latest" not in compose_text},
+        {"key": "remote_api_loopback_only", "ok": '"127.0.0.1:3000:3000"' in compose_text},
+        {"key": "remote_cdp_loopback_only", "ok": '"127.0.0.1:9223:9223"' in compose_text},
+        {"key": "remote_healthcheck_local", "ok": "http://127.0.0.1:3000/v1/health" in compose_text},
+        {"key": "remote_encrypted_logs_mount_documented", "ok": "/srv/workerprototype_openclaw/steel/logs:/data/steel/logs" in compose_text},
+        {"key": "remote_tls_placeholder_host", "ok": "STEEL_REMOTE_HOST" in caddy_text and ":443" in caddy_text},
+        {"key": "remote_ip_allowlist_matcher", "ok": "@allow_backend" in caddy_text and "remote_ip" in caddy_text},
+        {"key": "remote_blocks_everything_else", "ok": "respond 404" in caddy_text},
+        {"key": "remote_no_cdp_proxy", "ok": not re.search(r"9223|cdp", caddy_text, re.I)},
+        {"key": "remote_firewall_inbound_documented", "ok": all(fragment in firewall_text for fragment in ["22/tcp", "443/tcp", "backend egress", "9223"])},
+        {"key": "remote_firewall_outbound_allowlist_documented", "ok": all(fragment in firewall_text for fragment in ["outbound", "allowlist", "ACME", "ghcr.io", "drop"])},
+        {"key": "remote_wireguard_private_cdp_documented", "ok": all(fragment in wireguard_text for fragment in ["WireGuard", "127.0.0.1:9223", "ssh -L 9223:127.0.0.1:9223"])},
+        {"key": "remote_recovery_script_health_and_smoke", "ok": all(fragment in recovery_text for fragment in ["v1/health", "v1/sessions", "release", "recovery"])}
+    ]
+    deployment_ready = all(check["ok"] for check in deployment_checks)
+    artifact_ref, proof = _latest_steel_remote_proof()
+    ten_checks = proof.get("tenChecks", {}).get("checks", []) if isinstance(proof, dict) else []
+    ten_passed = sum(1 for check in ten_checks if isinstance(check, dict) and check.get("ok") is True)
+    lifecycle_ready = bool(isinstance(proof, dict) and proof.get("ok") is True and ten_passed == 10 and len(ten_checks) == 10)
+    return {
+        "status": (
+            "steel_remote_host_lifecycle_verified"
+            if lifecycle_ready
+            else "steel_remote_host_contract_ready_waiting_live_10_of_10"
+            if deployment_ready
+            else "steel_remote_host_contract_incomplete"
+        ),
+        "ok": lifecycle_ready,
+        "contractReady": deployment_ready,
+        "score": 100 if lifecycle_ready else 0,
+        "target": 100,
+        "checks": deployment_checks,
+        "tenChecks": ten_checks,
+        "lifecycleArtifactRef": artifact_ref,
+        "composeFile": STEEL_REMOTE_COMPOSE_PATH,
+        "proxyConfig": STEEL_REMOTE_CADDYFILE_PATH,
+        "firewallRunbook": STEEL_REMOTE_FIREWALL_PATH,
+        "tunnelRunbook": STEEL_REMOTE_WIREGUARD_PATH,
+        "recoveryScript": STEEL_REMOTE_RECOVERY_SCRIPT_PATH,
+        "command": "npm run sandbox:browser:steel-remote-readiness",
+        "contractReadinessLabel": "contract readiness",
+        "localHostReadinessLabel": "local-host readiness",
+        "remoteHostReadinessLabel": "remote-host readiness",
+        "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+        "rawEndpointReturned": False,
+        "rawSecretReturned": False,
+        "rawFrameReturned": False,
+        "rawOcrTextReturned": False,
+        "rawInputReturned": False
+    }
+
+
 def validate_visual_ocr_proof_manifest(manifest: dict[str, Any], *, proof_path: str | None = None) -> dict[str, Any]:
     failures: list[str] = []
     if manifest.get("schemaVersion") != VISUAL_OCR_PROOF_SCHEMA_VERSION:
@@ -1070,6 +1147,7 @@ def describe_browser_sandbox_provider_contract(
     )
     steel_self_host_proof = _summarize_steel_self_host_proof()
     steel_operations = _summarize_steel_operations()
+    steel_remote_host = _summarize_steel_remote_host()
     launch_runbook_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH)
     launch_env_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH)
     launch_runbook_ready = bool(
@@ -1128,6 +1206,7 @@ def describe_browser_sandbox_provider_contract(
         and visual_ocr_replay_ready
         and hosted_resolution["providerLiveConnected"]
         and private_launch_execution_ready
+        and steel_remote_host["ok"]
     )
     adapter_contract_ready = bool(
         selected_provider == "hosted_remote"
@@ -1208,6 +1287,8 @@ def describe_browser_sandbox_provider_contract(
         "hostedProviderSteelSelfHostProof": steel_self_host_proof,
         "hostedProviderSteelOperationsReady": steel_operations["ok"],
         "hostedProviderSteelOperations": steel_operations,
+        "hostedProviderSteelRemoteHostReady": steel_remote_host["ok"],
+        "hostedProviderSteelRemoteHost": steel_remote_host,
         "hostedProviderWebrtcSignalingReady": webrtc_signaling_ready,
         "hostedProviderWebrtcSignaling": {
             "status": (

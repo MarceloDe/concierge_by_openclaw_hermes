@@ -7976,3 +7976,47 @@ Verification result:
   - `artifacts/browser-sandbox-provider-steel-operations-smoke.json`
   - `artifacts/phase29-steel-operations-dashboard-proof.png`
   - `artifacts/phase29-steel-operations-visual-proof.json`
+
+## Phase 30 Steel Remote Hardening Update
+
+Status: Implemented as static remote-hardening scaffolding and proof gates; live remote 10/10 is blocked until an owned remote Steel host, TLS hostname, backend allowlist, and private debugger tunnel are available.
+
+Slice name:
+- Steel Browser remote hardening for infrastructure owned by the operator.
+
+Code changes:
+- Added `infra/steel/remote/compose.yaml` with Phase 29 pinned Steel API/UI image digests, loopback API/CDP/UI bindings, restart policies, healthcheck, and encrypted-volume log mount placeholder.
+- Added `infra/steel/remote/Caddyfile` with TLS hostname placeholder, backend egress allowlist matcher, restricted Steel routes, 403 for non-allowlisted clients, and 404 for all other routes.
+- Added `infra/steel/remote/firewall.md` and `infra/steel/remote/wireguard.md` for host firewall, outbound allowlist, and private CDP tunnel procedures.
+- Added `infra/steel/remote/recover.sh` for health wait, one-session non-PHI smoke, release, and recovery event emission.
+- Added `npm run sandbox:browser:steel-remote-readiness` and `scripts/browser-sandbox-provider-steel-remote-readiness-smoke.mjs`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with `production-candidate` and additive `transport.tls` support, remote deployment validation, remote ten-check summarization, and accepted lifecycle artifact writing under `artifacts/phase30/` only when live proof passes.
+- Exposed `hosted_browser_sandbox_provider_steel_remote_host` in Node dashboard proof and FastAPI `/api/v1/proof`.
+- Required the Phase 30 remote-host gate before final `hosted_remote_browser_sandbox` can score above `0 / 100`.
+
+Safety decision:
+- CDP remains private-only through loopback/tunnel. It is not reverse-proxied.
+- `recordFrames=false`, `persistRawOcrText=false`, human-only takeover, no agent credential entry, and no external/write actions remain preserved.
+- No real hostname, IP, token, WireGuard key, BAA identifier, or private runtime endpoint was committed.
+- The runtime JSON was not flipped to `production-candidate`, and no Cortex Phase 30 semantic/episodic promotion was written, because the real remote lifecycle did not pass 10/10 in this environment.
+
+Verification plan:
+- `npm run sandbox:browser:steel-remote-readiness`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_steel_remote_host_readiness_visible_without_hosted_remote_overclaim project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_remote_readiness_requires_phase30_steel_remote_artifact`
+- `npm run build`
+- `npm run test:docker:contract`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+- `npm run test:local`
+
+Verification result:
+- `npm run sandbox:browser:steel-remote-readiness` passed the static remote deployment contract with 20/20 checks, reported `steel_remote_host_contract_ready_waiting_live_10_of_10`, and kept the remote-host score at `0 / 100`.
+- Focused JS provider/deployment tests passed with 28/28 tests.
+- Focused FastAPI remote-host tests passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 44/44 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 53 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips after linking the clean worktree to the existing local Graphiti venv for verification only.
+
+Known gap:
+- Task 4 acceptance remains blocked by missing real remote Steel host/TLS/tunnel. The remote-host score must stay `0 / 100` until the Phase 29 ten-check lifecycle harness passes against `https://example.com` from the backend network position and host-firewall offsite proof is recorded.

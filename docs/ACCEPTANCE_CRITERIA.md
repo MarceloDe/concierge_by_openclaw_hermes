@@ -2246,3 +2246,33 @@ Current proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
 - Browser dashboard/API proof at `http://127.0.0.1:4214/?phase=steel-self-host-operations-hardening` verified Steel operations `85 / 100`, final hosted remote browser `0 / 100`, and no local endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase29-steel-operations-dashboard-proof.png`, `artifacts/phase29-steel-operations-visual-proof.json`, and `artifacts/browser-sandbox-provider-steel-operations-smoke.json`.
+
+## Steel Remote Hardening Acceptance
+
+This slice is acceptable in static mode when:
+
+- Remote Steel compose pins API/UI images by digest and contains no `latest` tags.
+- Steel API and CDP bind only to loopback on the remote host.
+- The reverse proxy terminates TLS, restricts inbound access by backend egress allowlist, exposes only required Steel routes, and does not proxy CDP.
+- Firewall and WireGuard runbooks document private debugger access, host-level inbound/outbound allowlists, default drop policy, and no committed secrets.
+- Recovery script waits for health, creates one non-PHI session, releases it, and emits a recovery event.
+- Dashboard/API proof exposes `contract readiness`, `local-host readiness`, and `remote-host readiness` as separate gates.
+- `hosted_remote_browser_sandbox` remains `0 / 100` unless the Phase 30 remote-host lifecycle artifact proves 10/10.
+
+Live acceptance requires:
+
+- Session create returns websocket and viewer refs.
+- CDP connects through the private tunnel.
+- Live stream ref is reachable over TLS.
+- Screenshot and local OCR/caption refs are produced without raw image/OCR persistence.
+- Synthetic approved input relay passes without credentials.
+- Human takeover event is recorded.
+- Teardown removes the session.
+- Offsite navigation is blocked by adapter policy and host firewall.
+- Redaction holds for input values and frame content.
+- The accepted artifact is saved under `artifacts/phase30/steel-remote-live-lifecycle-<ISO8601>.json`.
+
+Current proof status:
+
+- Static implementation is present.
+- Live remote acceptance is not complete because no owned remote Steel host/TLS/tunnel was available in this session.

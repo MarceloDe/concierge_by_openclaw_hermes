@@ -1,0 +1,177 @@
+{
+  "ok": false,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "steel_remote_host_contract_ready_waiting_live_10_of_10",
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "steelRemoteReadinessReady": false,
+  "score": 0,
+  "target": 100,
+  "deployment": {
+    "ok": true,
+    "checks": [
+      {
+        "key": "remote_api_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "remote_ui_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "remote_no_latest_tags",
+        "ok": true
+      },
+      {
+        "key": "remote_api_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "remote_cdp_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "remote_no_public_cdp_or_api_bind",
+        "ok": true
+      },
+      {
+        "key": "remote_restart_unless_stopped",
+        "ok": true
+      },
+      {
+        "key": "remote_healthcheck_local",
+        "ok": true
+      },
+      {
+        "key": "remote_encrypted_logs_mount_documented",
+        "ok": true
+      },
+      {
+        "key": "remote_tls_placeholder_host",
+        "ok": true
+      },
+      {
+        "key": "remote_ip_allowlist_matcher",
+        "ok": true
+      },
+      {
+        "key": "remote_forbid_non_allowlisted",
+        "ok": true
+      },
+      {
+        "key": "remote_only_expected_steel_routes",
+        "ok": true
+      },
+      {
+        "key": "remote_blocks_everything_else",
+        "ok": true
+      },
+      {
+        "key": "remote_no_cdp_proxy",
+        "ok": true
+      },
+      {
+        "key": "remote_firewall_inbound_documented",
+        "ok": true
+      },
+      {
+        "key": "remote_firewall_outbound_allowlist_documented",
+        "ok": true
+      },
+      {
+        "key": "remote_wireguard_private_cdp_documented",
+        "ok": true
+      },
+      {
+        "key": "remote_recovery_script_health_and_smoke",
+        "ok": true
+      },
+      {
+        "key": "remote_no_secrets_or_runtime_values",
+        "ok": true
+      }
+    ],
+    "passed": 20,
+    "total": 20
+  },
+  "liveGate": false,
+  "remoteTransportReady": false,
+  "liveVerification": {
+    "status": "steel_remote_live_verification_not_requested",
+    "hostedProviderLiveVerificationReady": false,
+    "hostedProviderReady": false
+  },
+  "tenChecks": {
+    "ok": false,
+    "passed": 0,
+    "total": 10,
+    "checks": [
+      {
+        "key": "session_create_returns_websocket_and_viewer_refs",
+        "ok": false
+      },
+      {
+        "key": "cdp_connect_over_private_tunnel",
+        "ok": false
+      },
+      {
+        "key": "live_stream_ref_reachable_over_tls",
+        "ok": false
+      },
+      {
+        "key": "screenshot_ref_only",
+        "ok": false
+      },
+      {
+        "key": "local_ocr_caption_ref_only",
+        "ok": false
+      },
+      {
+        "key": "approved_synthetic_input_relay",
+        "ok": false
+      },
+      {
+        "key": "human_takeover_event_required",
+        "ok": false
+      },
+      {
+        "key": "teardown_removes_session",
+        "ok": false
+      },
+      {
+        "key": "offsite_fail_closed_and_host_firewall_proof",
+        "ok": false
+      },
+      {
+        "key": "phi_redaction_policy_holds",
+        "ok": false
+      }
+    ]
+  },
+  "acceptedLifecycleArtifactRef": null,
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_steel_remote_host",
+    "scoreKey": "hosted_browser_sandbox_provider_steel_remote_host",
+    "command": "npm run sandbox:browser:steel-remote-readiness",
+    "contractReadinessLabel": "contract readiness",
+    "localHostReadinessLabel": "local-host readiness",
+    "remoteHostReadinessLabel": "remote-host readiness",
+    "remoteLiveReadyEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_LIVE_READY",
+    "hostFirewallProofEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_HOST_FIREWALL_PROOF",
+    "lifecycleArtifact": null
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawInputReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "hostedReadinessOverclaimed": false
+  }
+}

@@ -110,7 +110,8 @@ import {
   validateBrowserSandboxProviderContract,
   validateBrowserSandboxProviderSelectionContract,
   validateBrowserSandboxProviderSteelOperationsContract,
-  validateSteelComposeOperations
+  validateSteelComposeOperations,
+  validateSteelRemoteDeploymentFiles
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 const PORT = Number(process.env.PORT ?? 4173);
@@ -294,6 +295,126 @@ async function summarizeSteelOperationsReadiness() {
       target: 100,
       checks: [{ key: "operations_contract_readable", ok: false, error: error.message }],
       command: "npm run sandbox:browser:steel-operations",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    };
+  }
+}
+
+async function readLatestSteelRemoteProof() {
+  const explicitProofPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_REMOTE_PROOF_FILE;
+  if (explicitProofPath) {
+    return {
+      artifactRef: isPathInsideRepo(explicitProofPath)
+        ? relative(process.cwd(), resolve(explicitProofPath))
+        : "[private-steel-remote-proof-outside-git]",
+      proof: await readJsonIfExists(explicitProofPath)
+    };
+  }
+  const artifactDir = resolve("artifacts/phase30");
+  try {
+    const files = (await readdir(artifactDir))
+      .filter((file) => /^steel-remote-live-lifecycle-.*\.json$/.test(file))
+      .sort();
+    const latest = files.at(-1);
+    if (!latest) return { artifactRef: null, proof: null };
+    const artifactPath = join(artifactDir, latest);
+    return {
+      artifactRef: relative(process.cwd(), artifactPath),
+      proof: await readJsonIfExists(artifactPath)
+    };
+  } catch {
+    return { artifactRef: null, proof: null };
+  }
+}
+
+function summarizeSteelRemoteProof({ artifactRef, proof } = {}) {
+  const tenChecks = proof?.tenChecks ?? {};
+  const checks = Array.isArray(tenChecks.checks) ? tenChecks.checks : [];
+  const passed = checks.filter((check) => check.ok).length;
+  const total = checks.length || 10;
+  const accepted = Boolean(proof?.ok && tenChecks.ok && passed === total && total === 10);
+  return {
+    status: accepted
+      ? "steel_remote_host_lifecycle_verified"
+      : artifactRef
+        ? "steel_remote_host_lifecycle_incomplete"
+        : "steel_remote_host_lifecycle_missing",
+    ok: accepted,
+    score: accepted ? 100 : 0,
+    target: 100,
+    passed,
+    total,
+    checks,
+    artifactRef,
+    contractReadinessLabel: "contract readiness",
+    localHostReadinessLabel: "local-host readiness",
+    remoteHostReadinessLabel: "remote-host readiness",
+    rawEndpointReturned: false,
+    rawSecretReturned: false,
+    rawFrameReturned: false,
+    rawOcrTextReturned: false,
+    rawInputReturned: false
+  };
+}
+
+async function summarizeSteelRemoteReadiness() {
+  try {
+    const [composeText, caddyText, firewallText, wireguardText, recoveryText, proof] = await Promise.all([
+      readFile(resolve("infra/steel/remote/compose.yaml"), "utf8"),
+      readFile(resolve("infra/steel/remote/Caddyfile"), "utf8"),
+      readFile(resolve("infra/steel/remote/firewall.md"), "utf8"),
+      readFile(resolve("infra/steel/remote/wireguard.md"), "utf8"),
+      readFile(resolve("infra/steel/remote/recover.sh"), "utf8"),
+      readLatestSteelRemoteProof()
+    ]);
+    const deployment = validateSteelRemoteDeploymentFiles({
+      composeText,
+      caddyText,
+      firewallText,
+      wireguardText,
+      recoveryText
+    });
+    const lifecycle = summarizeSteelRemoteProof(proof);
+    return {
+      status: lifecycle.ok
+        ? "steel_remote_host_lifecycle_verified"
+        : deployment.ok
+          ? "steel_remote_host_contract_ready_waiting_live_10_of_10"
+          : "steel_remote_host_contract_incomplete",
+      ok: lifecycle.ok,
+      contractReady: deployment.ok,
+      score: lifecycle.ok ? 100 : 0,
+      target: 100,
+      checks: deployment.checks,
+      tenChecks: lifecycle.checks,
+      lifecycleArtifactRef: lifecycle.artifactRef,
+      composeFile: "infra/steel/remote/compose.yaml",
+      proxyConfig: "infra/steel/remote/Caddyfile",
+      firewallRunbook: "infra/steel/remote/firewall.md",
+      tunnelRunbook: "infra/steel/remote/wireguard.md",
+      recoveryScript: "infra/steel/remote/recover.sh",
+      command: "npm run sandbox:browser:steel-remote-readiness",
+      contractReadinessLabel: "contract readiness",
+      localHostReadinessLabel: "local-host readiness",
+      remoteHostReadinessLabel: "remote-host readiness",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    };
+  } catch (error) {
+    return {
+      status: "steel_remote_host_contract_unreadable",
+      ok: false,
+      contractReady: false,
+      score: 0,
+      target: 100,
+      checks: [{ key: "remote_contract_readable", ok: false, error: error.message }],
+      command: "npm run sandbox:browser:steel-remote-readiness",
       hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
       rawEndpointReturned: false,
       rawSecretReturned: false
@@ -536,6 +657,8 @@ async function safeDeploymentContractStatus() {
     summarizeSteelSelfHostProof(await readLatestSteelSelfHostProof());
   const hostedBrowserSandboxProviderSteelOperations =
     await summarizeSteelOperationsReadiness();
+  const hostedBrowserSandboxProviderSteelRemoteHost =
+    await summarizeSteelRemoteReadiness();
   const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
   const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText =
@@ -586,7 +709,8 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxAdapterMode === "hosted_provider" &&
     hostedBrowserSandboxProviderVisualOcrReplayReady &&
     hostedBrowserSandboxProviderResolver.ready &&
-    hostedBrowserSandboxProviderPrivateLaunchExecutionReady;
+    hostedBrowserSandboxProviderPrivateLaunchExecutionReady &&
+    hostedBrowserSandboxProviderSteelRemoteHost.ok;
   const hostedBrowserSandboxProviderAdapterReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY === "1" &&
@@ -661,6 +785,8 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderSteelSelfHostProof,
     hostedBrowserSandboxProviderSteelOperationsReady: hostedBrowserSandboxProviderSteelOperations.ok,
     hostedBrowserSandboxProviderSteelOperations,
+    hostedBrowserSandboxProviderSteelRemoteHostReady: hostedBrowserSandboxProviderSteelRemoteHost.ok,
+    hostedBrowserSandboxProviderSteelRemoteHost,
     hostedBrowserSandboxProviderLiveVerificationReady,
     hostedBrowserSandboxProviderLiveVerification: {
       status: hostedBrowserSandboxProviderLiveVerificationReady
@@ -809,6 +935,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderVisualOcrReplayCommand: "npm run sandbox:browser:provider-visual-ocr-replay",
     browserSandboxProviderLaunchReadinessCommand: "npm run sandbox:browser:provider-launch-readiness",
     browserSandboxProviderPrivateLaunchExecutionCommand: "npm run sandbox:browser:provider-private-launch-execution",
+    browserSandboxProviderSteelRemoteReadinessCommand: "npm run sandbox:browser:steel-remote-readiness",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -922,6 +1049,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_steel_operations",
         status: deployment.hostedBrowserSandboxProviderSteelOperations?.status,
         target: "Self-hosted Steel Browser operations are hardened for loopback-only networking, cleanup, retention, monitoring, digest-pinned images, and no hosted-readiness overclaim."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_remote_host",
+        status: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status,
+        target: "Remote self-hosted Steel must prove TLS API access, private CDP tunnel, host firewall defense in depth, and ten-check lifecycle proof before remote-host readiness scores."
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",
@@ -1116,6 +1248,29 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         composeFile: deployment.hostedBrowserSandboxProviderSteelOperations?.composeFile ?? null,
         configFile: deployment.hostedBrowserSandboxProviderSteelOperations?.configFile ?? null,
         runbook: deployment.hostedBrowserSandboxProviderSteelOperations?.runbook ?? null,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_remote_host",
+        status: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status,
+        ok: deployment.hostedBrowserSandboxProviderSteelRemoteHostReady,
+        contractReady: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.contractReady ?? false,
+        command: deployment.browserSandboxProviderSteelRemoteReadinessCommand,
+        score: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.score ?? 0,
+        target: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.target ?? 100,
+        checks: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.checks ?? [],
+        tenChecks: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.tenChecks ?? [],
+        lifecycleArtifactRef: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.lifecycleArtifactRef ?? null,
+        labels: {
+          contractReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.contractReadinessLabel ?? "contract readiness",
+          localHostReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.localHostReadinessLabel ?? "local-host readiness",
+          remoteHostReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.remoteHostReadinessLabel ?? "remote-host readiness"
+        },
         rawEndpointReturned: false,
         rawSecretReturned: false,
         rawFrameReturned: false,
@@ -1340,6 +1495,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderSteelOperations?.score ?? 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderSteelOperations?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_remote_host",
+        score: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.score ?? 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",

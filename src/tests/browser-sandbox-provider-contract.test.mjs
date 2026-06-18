@@ -11,6 +11,7 @@ import {
   runBrowserSandboxProviderContractSmoke,
   runBrowserSandboxProviderSelectionSmoke,
   runBrowserSandboxProviderSteelOperationsSmoke,
+  runBrowserSandboxProviderSteelRemoteReadinessSmoke,
   runBrowserSandboxProviderLivePreflightSmoke,
   runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxProviderWebrtcSignalingSmoke,
@@ -279,6 +280,73 @@ test("steel self-host operations gate can reach 100 with explicit local live pro
   assert.equal(result.liveProbe.viewerOk, true);
   assert.equal(result.safety.rawEndpointUrlWritten, false);
   assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost:|Bearer\s+|data:image/i);
+});
+
+test("steel remote readiness contract is visible but blocked until remote 10 of 10 passes", async () => {
+  const result = await runBrowserSandboxProviderSteelRemoteReadinessSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-remote-readiness-blocked-smoke-test.json",
+    env: {}
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "steel_remote_host_contract_ready_waiting_live_10_of_10");
+  assert.equal(result.score, 0);
+  assert.equal(result.deployment.ok, true);
+  assert.equal(result.liveGate, false);
+  assert.equal(result.remoteTransportReady, false);
+  assert.equal(result.tenChecks.ok, false);
+  assert.equal(result.acceptedLifecycleArtifactRef, null);
+  assert.equal(result.dashboard.contractReadinessLabel, "contract readiness");
+  assert.equal(result.dashboard.localHostReadinessLabel, "local-host readiness");
+  assert.equal(result.dashboard.remoteHostReadinessLabel, "remote-host readiness");
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.safety.hostedReadinessOverclaimed, false);
+  assert.doesNotMatch(serialized, /Bearer\s+|sk-[A-Za-z0-9]|data:image|member id|subscriber id/i);
+});
+
+test("steel remote readiness can pass only with TLS endpoint, private CDP, firewall proof, and ten checks", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = FakeSteelWebSocket;
+  try {
+    const acceptanceDir = await mkdtemp(join(tmpdir(), "steel-remote-accepted-"));
+    const result = await runBrowserSandboxProviderSteelRemoteReadinessSmoke({
+      artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-remote-readiness-live-smoke-test.json",
+      acceptanceArtifactDir: acceptanceDir,
+      env: {
+        WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME: "steel-self-host",
+        WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://steel-remote.invalid",
+        WEFELLA_BROWSER_SANDBOX_CDP_URL: "ws://127.0.0.1:9223",
+        WEFELLA_BROWSER_SANDBOX_API_TOKEN: "remote-test-token-that-must-not-leak",
+        WEFELLA_BROWSER_SANDBOX_VIEWER_URL: "https://steel-remote.invalid/v1/sessions/{id}/viewer",
+        WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_LIVE_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_HOST_FIREWALL_PROOF: "1"
+      },
+      fetchImpl: fakeSteelSelfHostFetch
+    });
+    const serialized = JSON.stringify(result);
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "steel_remote_host_lifecycle_verified");
+    assert.equal(result.score, 100);
+    assert.equal(result.deployment.ok, true);
+    assert.equal(result.liveGate, true);
+    assert.equal(result.remoteTransportReady, true);
+    assert.equal(result.liveVerification.hostedProviderLiveVerificationReady, true);
+    assert.equal(result.tenChecks.ok, true);
+    assert.equal(result.tenChecks.passed, 10);
+    assert.match(result.acceptedLifecycleArtifactRef, /steel-remote-live-lifecycle-/);
+    assert.equal(result.hostedProviderReady, false);
+    assert.equal(result.safety.rawEndpointUrlWritten, false);
+    assert.doesNotMatch(serialized, /steel-remote\.invalid|remote-test-token-that-must-not-leak|data:image|member id|subscriber id|typed-password/i);
+  } finally {
+    if (originalWebSocket === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWebSocket;
+  }
 });
 
 test("steel self-host operations contract rejects public CDP and retained browser logs", async () => {

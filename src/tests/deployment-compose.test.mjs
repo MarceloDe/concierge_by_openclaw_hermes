@@ -34,6 +34,12 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.browserSandbox.providerPrivateLaunchExecutionEnvExample, "project/deployment/browser-sandbox-provider.private-launch-execution.example.env");
   assert.equal(result.browserSandbox.providerSteelOperationsCommand, "npm run sandbox:browser:steel-operations");
   assert.equal(result.browserSandbox.providerSteelOperationsContract, "project/deployment/browser-sandbox-provider.steel-operations.example.json");
+  assert.equal(result.browserSandbox.providerSteelRemoteReadinessCommand, "npm run sandbox:browser:steel-remote-readiness");
+  assert.equal(result.browserSandbox.providerSteelRemoteCompose, "infra/steel/remote/compose.yaml");
+  assert.equal(result.browserSandbox.providerSteelRemoteProxyConfig, "infra/steel/remote/Caddyfile");
+  assert.equal(result.browserSandbox.providerSteelRemoteFirewallRunbook, "infra/steel/remote/firewall.md");
+  assert.equal(result.browserSandbox.providerSteelRemoteTunnelRunbook, "infra/steel/remote/wireguard.md");
+  assert.equal(result.browserSandbox.providerSteelRemoteRecoveryScript, "infra/steel/remote/recover.sh");
   assert.equal(result.browserSandbox.providerLaunchReadinessRunbook, "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   assert.equal(result.browserSandbox.adapterHarnessCommand, "npm run sandbox:browser:adapter-harness");
   assert.equal(result.browserSandbox.adapterHarnessContract, "project/deployment/browser-sandbox-provider.contract-harness.json");
