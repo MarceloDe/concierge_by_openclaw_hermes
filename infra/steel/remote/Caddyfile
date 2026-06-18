@@ -1,0 +1,80 @@
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+STEEL_REMOTE_HOST:443 {
+	@allow_backend remote_ip {$STEEL_BACKEND_EGRESS_CIDRS}
+	@blocked_backend not remote_ip {$STEEL_BACKEND_EGRESS_CIDRS}
+
+	request_header -X-Forwarded-For
+	request_header -X-Real-IP
+	header {
+		-Server
+		-X-Powered-By
+	}
+
+	@health {
+		method GET
+		path /v1/health
+	}
+	@create_session {
+		method POST
+		path /v1/sessions
+	}
+	@session_screenshot {
+		method POST
+		path /v1/sessions/screenshot
+	}
+	@session_live_details {
+		method GET
+		path_regexp session_live_details ^/v1/sessions/.+/live-details$
+	}
+	@session_release {
+		method POST
+		path_regexp session_release ^/v1/sessions/.+/release$
+	}
+	@session_viewer {
+		method GET
+		path / /sessions/* /icon.png /assets/*
+	}
+	@viewer_api {
+		path /api/v1/sessions /api/v1/sessions/* /api/v1/devtools/inspector.html
+	}
+
+	handle @blocked_backend {
+		respond 403
+	}
+
+	handle @health {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @create_session {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_screenshot {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_live_details {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_release {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_viewer {
+		reverse_proxy 127.0.0.1:5173
+	}
+
+	handle @viewer_api {
+		uri strip_prefix /api
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	respond 404
+}

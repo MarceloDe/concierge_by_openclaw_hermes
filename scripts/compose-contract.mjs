@@ -25,6 +25,7 @@ const REQUIRED_FILES = [
   "scripts/browser-sandbox-provider-launch-readiness-smoke.mjs",
   "scripts/browser-sandbox-provider-private-launch-execution-smoke.mjs",
   "scripts/browser-sandbox-provider-steel-operations-smoke.mjs",
+  "scripts/browser-sandbox-provider-steel-remote-readiness-smoke.mjs",
   "scripts/browser-sandbox-adapter-harness.mjs",
   "scripts/browser-sandbox-provider-resolver.mjs",
   "scripts/browser-sandbox-provider-adapter-smoke.mjs",
@@ -73,6 +74,12 @@ const REQUIRED_FILES = [
   "tools/graphiti/graphiti_bridge.py",
   "vendor/getzep-graphiti/pyproject.toml",
   "src/tests/deployment-graphiti-compose.test.mjs"
+  ,
+  "infra/steel/remote/compose.yaml",
+  "infra/steel/remote/Caddyfile",
+  "infra/steel/remote/firewall.md",
+  "infra/steel/remote/wireguard.md",
+  "infra/steel/remote/recover.sh"
 ];
 
 const COMPOSE_FRAGMENTS = [
@@ -252,6 +259,11 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       providerLaunchReadinessEnvExample: "project/deployment/browser-sandbox-provider.launch-readiness.example.env",
       providerPrivateLaunchExecutionEnvExample: "project/deployment/browser-sandbox-provider.private-launch-execution.example.env",
       providerSteelOperationsContract: "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+      providerSteelRemoteCompose: "infra/steel/remote/compose.yaml",
+      providerSteelRemoteProxyConfig: "infra/steel/remote/Caddyfile",
+      providerSteelRemoteFirewallRunbook: "infra/steel/remote/firewall.md",
+      providerSteelRemoteTunnelRunbook: "infra/steel/remote/wireguard.md",
+      providerSteelRemoteRecoveryScript: "infra/steel/remote/recover.sh",
       providerLaunchReadinessRunbook: "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md",
       adapterHarnessContract: "project/deployment/browser-sandbox-provider.contract-harness.json",
       providerResolverContract: "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
@@ -264,6 +276,7 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
       providerLaunchReadinessCommand: "npm run sandbox:browser:provider-launch-readiness",
       providerPrivateLaunchExecutionCommand: "npm run sandbox:browser:provider-private-launch-execution",
       providerSteelOperationsCommand: "npm run sandbox:browser:steel-operations",
+      providerSteelRemoteReadinessCommand: "npm run sandbox:browser:steel-remote-readiness",
       adapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
       providerResolverCommand: "npm run sandbox:browser:provider-resolver",
       providerAdapterCommand: "npm run sandbox:browser:provider-adapter",

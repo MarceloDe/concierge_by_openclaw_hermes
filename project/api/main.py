@@ -977,6 +977,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "target": "Self-hosted Steel Browser operations prove loopback-only networking, cleanup, retention, monitoring, digest-pinned images, and no hosted-readiness overclaim."
             },
             {
+                "key": "hosted_browser_sandbox_provider_steel_remote_host",
+                "status": browser_sandbox_contract.get("hostedProviderSteelRemoteHost", {}).get("status"),
+                "target": "Remote self-hosted Steel must prove TLS API, private debugger tunnel, host firewall defense in depth, and ten-check lifecycle proof before hosted readiness scores."
+            },
+            {
                 "key": "hosted_browser_sandbox_provider_webrtc_signaling",
                 "status": browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {}).get("status"),
                 "target": "WebRTC live-block signaling must exchange opaque refs only before WebRTC hosted readiness can score."
@@ -1011,6 +1016,7 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})},
             {"key": "hosted_browser_sandbox_provider_steel_self_host", **browser_sandbox_contract.get("hostedProviderSteelSelfHostProof", {})},
             {"key": "hosted_browser_sandbox_provider_steel_operations", **browser_sandbox_contract.get("hostedProviderSteelOperations", {})},
+            {"key": "hosted_browser_sandbox_provider_steel_remote_host", **browser_sandbox_contract.get("hostedProviderSteelRemoteHost", {})},
             {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})},
             {"key": "hosted_browser_sandbox_provider_visual_ocr_replay", **browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {})},
             {"key": "hosted_browser_sandbox_provider_launch_readiness", **browser_sandbox_contract.get("hostedProviderLaunchReadiness", {})},
@@ -1088,6 +1094,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "score": browser_sandbox_contract.get("hostedProviderSteelOperations", {}).get("score", 0),
                 "target": 100,
                 "status": browser_sandbox_contract.get("hostedProviderSteelOperations", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_steel_remote_host",
+                "score": browser_sandbox_contract.get("hostedProviderSteelRemoteHost", {}).get("score", 0),
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderSteelRemoteHost", {}).get("status")
             },
             {
                 "key": "hosted_browser_sandbox_provider_webrtc_signaling",

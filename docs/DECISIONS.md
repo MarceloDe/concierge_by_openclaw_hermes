@@ -2404,3 +2404,24 @@ This closes the production-hardening gap without overclaiming hosted readiness. 
 
 Cost of changing later:
 Low. A managed Steel deployment, Steel Cloud, or another hosted provider can keep the same public `/api/v1/browser/*` contract and proof keys. Only the provider-specific operations policy and probe implementation should change.
+
+## 2026-06-18 - Harden Steel Self-Host For Owned Remote Infrastructure Before Hosted Readiness
+
+Context:
+Phase 29 made local Steel operations safer, but Phase 30 must move the same self-hosted provider to remote infrastructure we own instead of introducing a third-party SaaS browser provider. The critical risk is overclaiming `hosted_remote_browser_sandbox` readiness from local Steel, private launch switches, or static runbooks without proving a real remote Steel host from the backend network position.
+
+Options considered:
+- Pivot to a hosted SaaS browser provider.
+- Build a browser sandbox from scratch around raw Chrome/CDP.
+- Keep the existing `steel-self-host` strategy and add a remote-host readiness layer with TLS, host firewall allowlist, private debugger tunnel, recovery runbook, and a ten-check lifecycle proof.
+
+Decision:
+Keep `steel-self-host` as the provider strategy and add Phase 30 remote hardening around it. Add `infra/steel/remote/compose.yaml`, `infra/steel/remote/Caddyfile`, `infra/steel/remote/firewall.md`, `infra/steel/remote/wireguard.md`, `infra/steel/remote/recover.sh`, `npm run sandbox:browser:steel-remote-readiness`, and a distinct dashboard/API proof key named `hosted_browser_sandbox_provider_steel_remote_host`.
+
+The chosen deployment option for this phase is option (a): Akamai Connected Cloud, using the Linode-origin VPS/cloud VM model under the owner/operator's compliance controls and required agreements. Akamai's public material describes a shared security model and references HIPAA standards compliance for Akamai Connected Cloud, but the operator must still obtain legal/BAA confirmation and complete workload hardening before PHI touches the host. The repo stores no real provider account, hostname, IP, BAA identifier, token, or tunnel key; those live in host-local private config.
+
+Reason:
+This keeps PHI on owned infrastructure, preserves the provider-pluggable adapter contract, avoids a SaaS dependency, and forces remote-host readiness to stay `0 / 100` until the real HTTPS API, private CDP tunnel, screenshot/OCR refs, human takeover, input relay, teardown, host-firewall offsite proof, and redaction checks pass together. The final `hosted_remote_browser_sandbox` score now also requires the Phase 30 remote-host gate.
+
+Cost of changing later:
+Low to moderate. A future hosted-SaaS provider under signed BAA can still replace the endpoint and provider name through `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME`, but this self-hosted track keeps the current public `/api/v1/browser/*` contract and human-only takeover boundary intact.

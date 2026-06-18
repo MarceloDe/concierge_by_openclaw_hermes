@@ -41,6 +41,7 @@
     "sandbox:browser:provider-launch-readiness": "node scripts/browser-sandbox-provider-launch-readiness-smoke.mjs",
     "sandbox:browser:provider-private-launch-execution": "node scripts/browser-sandbox-provider-private-launch-execution-smoke.mjs",
     "sandbox:browser:steel-operations": "node scripts/browser-sandbox-provider-steel-operations-smoke.mjs",
+    "sandbox:browser:steel-remote-readiness": "node scripts/browser-sandbox-provider-steel-remote-readiness-smoke.mjs",
     "sandbox:browser:adapter-harness": "node scripts/browser-sandbox-adapter-harness.mjs",
     "sandbox:browser:provider-resolver": "node scripts/browser-sandbox-provider-resolver.mjs",
     "sandbox:browser:provider-adapter": "node scripts/browser-sandbox-provider-adapter-smoke.mjs",

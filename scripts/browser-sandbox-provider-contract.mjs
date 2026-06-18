@@ -16,6 +16,12 @@ const PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/b
 const STEEL_OPERATIONS_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.steel-operations.example.json";
 const STEEL_COMPOSE_PATH = "infra/steel/compose.yaml";
 const STEEL_RUNBOOK_PATH = "infra/steel/README.md";
+const STEEL_REMOTE_COMPOSE_PATH = "infra/steel/remote/compose.yaml";
+const STEEL_REMOTE_CADDYFILE_PATH = "infra/steel/remote/Caddyfile";
+const STEEL_REMOTE_FIREWALL_PATH = "infra/steel/remote/firewall.md";
+const STEEL_REMOTE_WIREGUARD_PATH = "infra/steel/remote/wireguard.md";
+const STEEL_REMOTE_RECOVERY_SCRIPT_PATH = "infra/steel/remote/recover.sh";
+const STEEL_REMOTE_ACCEPTANCE_ARTIFACT_DIR = "artifacts/phase30";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -36,7 +42,8 @@ function sanitizeConfig(config, configPath) {
       stream: config.transport?.stream ?? null,
       inputRelay: config.transport?.inputRelay ?? null,
       screenshot: config.transport?.screenshot ?? null,
-      ocrCaption: config.transport?.ocrCaption ?? null
+      ocrCaption: config.transport?.ocrCaption ?? null,
+      tls: config.transport?.tls === true
     },
     adapter: {
       mode: config.adapter?.mode ?? "contract_only",
@@ -84,7 +91,7 @@ function validateConfig(config, configPath) {
   const failures = [];
   if (config.schemaVersion !== "brainstyworkers.browser-sandbox-provider.v1") failures.push("schema_version_missing_or_unknown");
   if (!ALLOWED_PROVIDERS.has(config.provider)) failures.push("provider_not_allowed");
-  if (!["staging", "production"].includes(config.environment)) failures.push("environment_must_be_staging_or_production");
+  if (!["staging", "production", "production-candidate"].includes(config.environment)) failures.push("environment_must_be_staging_or_production_candidate");
   if (!ALLOWED_SECRET_SOURCES.has(config.secretSource)) failures.push("secret_source_must_be_managed_or_file_backed");
   if (!config.endpointRef || /^https?:\/\//i.test(String(config.endpointRef))) failures.push("endpoint_ref_must_not_be_raw_url");
   if (!["webrtc_or_sse_frames", "webrtc", "sse_frames"].includes(config.transport?.stream)) failures.push("stream_transport_not_allowed");
@@ -563,6 +570,218 @@ export async function runBrowserSandboxProviderSteelOperationsSmoke({
   };
   await mkdir(dirname(artifactPath), { recursive: true });
   await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+export function validateSteelRemoteDeploymentFiles({
+  composeText,
+  caddyText,
+  firewallText,
+  wireguardText,
+  recoveryText
+} = {}) {
+  const checks = [
+    ["remote_api_image_pinned_digest", /ghcr\.io\/steel-dev\/steel-browser-api@sha256:[a-f0-9]{64}/.test(composeText)],
+    ["remote_ui_image_pinned_digest", /ghcr\.io\/steel-dev\/steel-browser-ui@sha256:[a-f0-9]{64}/.test(composeText)],
+    ["remote_no_latest_tags", !/:latest\b/.test(composeText)],
+    ["remote_api_loopback_only", composeText.includes("\"127.0.0.1:3000:3000\"")],
+    ["remote_cdp_loopback_only", composeText.includes("\"127.0.0.1:9223:9223\"")],
+    ["remote_no_public_cdp_or_api_bind", !/["'](?:0\.0\.0\.0|\[::\]|::):(?:3000|9223):/i.test(composeText)],
+    ["remote_restart_unless_stopped", (composeText.match(/restart:\s+unless-stopped/g) ?? []).length >= 2],
+    ["remote_healthcheck_local", composeText.includes("http://127.0.0.1:3000/v1/health")],
+    ["remote_encrypted_logs_mount_documented", composeText.includes("/srv/workerprototype_openclaw/steel/logs:/data/steel/logs")],
+    ["remote_tls_placeholder_host", caddyText.includes("STEEL_REMOTE_HOST") && caddyText.includes(":443")],
+    ["remote_ip_allowlist_matcher", caddyText.includes("@allow_backend") && caddyText.includes("remote_ip")],
+    ["remote_forbid_non_allowlisted", caddyText.includes("respond @blocked_backend 403") || caddyText.includes("respond @not_allow_backend 403") || (caddyText.includes("handle @blocked_backend") && caddyText.includes("respond 403"))],
+    ["remote_only_expected_steel_routes", [
+      "path /v1/health",
+      "path /v1/sessions",
+      "path /v1/sessions/screenshot",
+      "/v1/sessions/.+/live-details",
+      "/v1/sessions/.+/release",
+      "path / /sessions/* /icon.png /assets/*",
+      "path /api/v1/sessions /api/v1/sessions/* /api/v1/devtools/inspector.html",
+      "uri strip_prefix /api"
+    ].every((fragment) => caddyText.includes(fragment))],
+    ["remote_blocks_everything_else", caddyText.includes("respond 404")],
+    ["remote_no_cdp_proxy", !/9223|cdp/i.test(caddyText)],
+    ["remote_firewall_inbound_documented", ["22/tcp", "443/tcp", "backend egress", "9223"].every((fragment) => firewallText.includes(fragment))],
+    ["remote_firewall_outbound_allowlist_documented", ["outbound", "allowlist", "ACME", "ghcr.io", "drop"].every((fragment) => firewallText.includes(fragment))],
+    ["remote_wireguard_private_cdp_documented", ["WireGuard", "127.0.0.1:9223", "ssh -L 9223:127.0.0.1:9223"].every((fragment) => wireguardText.includes(fragment))],
+    ["remote_recovery_script_health_and_smoke", ["v1/health", "v1/sessions", "release", "recovery"].every((fragment) => recoveryText.includes(fragment))],
+    ["remote_no_secrets_or_runtime_values", !/(sk-[A-Za-z0-9]|Bearer\s+[A-Za-z0-9._-]+|BEGIN (?:OPENSSH )?PRIVATE KEY|wg-private|token=|password=|[0-9]{1,3}(?:\.[0-9]{1,3}){3}\/[0-9]{1,2})/i.test(`${composeText}\n${caddyText}\n${firewallText}\n${wireguardText}\n${recoveryText}`)]
+  ].map(([key, ok]) => ({ key, ok: Boolean(ok) }));
+  return {
+    ok: checks.every((check) => check.ok),
+    checks,
+    passed: checks.filter((check) => check.ok).length,
+    total: checks.length
+  };
+}
+
+function summarizeSteelRemoteTenChecks(liveVerification, env = process.env) {
+  const lifecycle = liveVerification?.liveLifecycle ?? {};
+  const safety = lifecycle.safety ?? {};
+  const checks = [
+    {
+      key: "session_create_returns_websocket_and_viewer_refs",
+      ok: Boolean(lifecycle.createSession?.ok && lifecycle.createSession?.cdpConnected && lifecycle.stream?.viewerUrlAvailable)
+    },
+    {
+      key: "cdp_connect_over_private_tunnel",
+      ok: Boolean(lifecycle.createSession?.cdpConnected)
+    },
+    {
+      key: "live_stream_ref_reachable_over_tls",
+      ok: Boolean(lifecycle.stream?.ok && lifecycle.stream?.frameRefPresent && env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL?.startsWith("https://"))
+    },
+    {
+      key: "screenshot_ref_only",
+      ok: Boolean(lifecycle.screenshot?.ok && lifecycle.screenshot?.screenshotRefPresent && lifecycle.screenshot?.rawImageReturned === false)
+    },
+    {
+      key: "local_ocr_caption_ref_only",
+      ok: Boolean(lifecycle.ocrCaption?.ok && lifecycle.ocrCaption?.captionRefPresent && lifecycle.ocrCaption?.rawOcrTextReturned === false)
+    },
+    {
+      key: "approved_synthetic_input_relay",
+      ok: Boolean(lifecycle.input?.ok && lifecycle.input?.inputAccepted && lifecycle.input?.rawInputReturned === false)
+    },
+    {
+      key: "human_takeover_event_required",
+      ok: Boolean(lifecycle.takeover?.ok && lifecycle.takeover?.approvalRequired && lifecycle.takeover?.inputRelay === "approval_gated_human_only")
+    },
+    {
+      key: "teardown_removes_session",
+      ok: Boolean(lifecycle.teardown?.ok && lifecycle.teardown?.teardownComplete)
+    },
+    {
+      key: "offsite_fail_closed_and_host_firewall_proof",
+      ok: Boolean(lifecycle.offsite?.ok && lifecycle.offsite?.offsiteFailClosed && env.WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_HOST_FIREWALL_PROOF === "1")
+    },
+    {
+      key: "phi_redaction_policy_holds",
+      ok: Boolean(
+        safety.rawFrameReturned === false &&
+        safety.rawOcrTextReturned === false &&
+        safety.rawInputReturned === false &&
+        safety.rawEndpointReturned === false &&
+        safety.rawSecretReturned === false
+      )
+    }
+  ];
+  return {
+    ok: checks.every((check) => check.ok),
+    passed: checks.filter((check) => check.ok).length,
+    total: checks.length,
+    checks
+  };
+}
+
+export async function runBrowserSandboxProviderSteelRemoteReadinessSmoke({
+  artifactPath = resolve("artifacts/browser-sandbox-provider-steel-remote-readiness-smoke.json"),
+  acceptanceArtifactDir = STEEL_REMOTE_ACCEPTANCE_ARTIFACT_DIR,
+  env = process.env,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [composeText, caddyText, firewallText, wireguardText, recoveryText] = await Promise.all([
+    readFile(resolve(STEEL_REMOTE_COMPOSE_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_CADDYFILE_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_FIREWALL_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_WIREGUARD_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_RECOVERY_SCRIPT_PATH), "utf8")
+  ]);
+  const deployment = validateSteelRemoteDeploymentFiles({
+    composeText,
+    caddyText,
+    firewallText,
+    wireguardText,
+    recoveryText
+  });
+  const liveGate = env.WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_LIVE_READY === "1";
+  const remoteTransportReady = Boolean(
+    env.WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME === "steel-self-host" &&
+    env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL?.startsWith("https://") &&
+    env.WEFELLA_BROWSER_SANDBOX_CDP_URL === "ws://127.0.0.1:9223" &&
+    env.WEFELLA_BROWSER_SANDBOX_VIEWER_URL?.startsWith("https://")
+  );
+  const liveVerification = liveGate && remoteTransportReady
+    ? await runBrowserSandboxProviderLiveVerificationSmoke({
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-steel-remote-live-verification-smoke.json"),
+      env,
+      providerReady: env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+      fetchImpl
+    })
+    : {
+      ok: false,
+      status: liveGate
+        ? "steel_remote_live_transport_private_config_missing_or_invalid"
+        : "steel_remote_live_verification_not_requested",
+      hostedProviderLiveVerificationReady: false,
+      hostedProviderReady: false,
+      liveLifecycle: { attempted: false, ok: false }
+    };
+  const tenChecks = summarizeSteelRemoteTenChecks(liveVerification, env);
+  const accepted = Boolean(deployment.ok && liveGate && remoteTransportReady && liveVerification.hostedProviderLiveVerificationReady && tenChecks.ok);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const lifecycleArtifactPath = accepted
+    ? resolve(acceptanceArtifactDir, `steel-remote-live-lifecycle-${timestamp}.json`)
+    : null;
+  const result = {
+    ok: accepted,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: accepted
+      ? "steel_remote_host_lifecycle_verified"
+      : deployment.ok
+        ? "steel_remote_host_contract_ready_waiting_live_10_of_10"
+        : "steel_remote_host_contract_incomplete",
+    hostedProviderReady: false,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    steelRemoteReadinessReady: accepted,
+    score: accepted ? 100 : 0,
+    target: 100,
+    deployment,
+    liveGate,
+    remoteTransportReady,
+    liveVerification: {
+      status: liveVerification.status,
+      hostedProviderLiveVerificationReady: Boolean(liveVerification.hostedProviderLiveVerificationReady),
+      hostedProviderReady: Boolean(liveVerification.hostedProviderReady)
+    },
+    tenChecks,
+    acceptedLifecycleArtifactRef: lifecycleArtifactPath ? relative(process.cwd(), lifecycleArtifactPath) : null,
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_steel_remote_host",
+      scoreKey: "hosted_browser_sandbox_provider_steel_remote_host",
+      command: "npm run sandbox:browser:steel-remote-readiness",
+      contractReadinessLabel: "contract readiness",
+      localHostReadinessLabel: "local-host readiness",
+      remoteHostReadinessLabel: "remote-host readiness",
+      remoteLiveReadyEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_LIVE_READY",
+      hostFirewallProofEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_REMOTE_HOST_FIREWALL_PROOF",
+      lifecycleArtifact: lifecycleArtifactPath ? relative(process.cwd(), lifecycleArtifactPath) : null
+    },
+    safety: {
+      ...assertNoSecretLeak(deployment),
+      ...assertNoSecretLeak(liveVerification),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      hostedReadinessOverclaimed: false
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  if (lifecycleArtifactPath) {
+    await mkdir(dirname(lifecycleArtifactPath), { recursive: true });
+    await writeFile(lifecycleArtifactPath, JSON.stringify(result, null, 2));
+  }
   return result;
 }
 
