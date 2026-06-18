@@ -317,7 +317,9 @@ async function safeDeploymentContractStatus() {
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY:-0}",
     "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE:-}",
-    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY:-0}"
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY:-0}",
+    "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED:-0}"
   ].every((fragment) => composeFile.includes(fragment));
   const hostedBrowserSandboxProviderConfigFile =
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE ?? "project/deployment/browser-sandbox-provider.example.json";
@@ -396,6 +398,8 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderVisualOcrProofValidation.ok;
   const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
+  const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText =
+    await readTextIfExists("project/deployment/browser-sandbox-provider.private-launch-execution.example.env");
   const hostedBrowserSandboxProviderLaunchReadinessRunbookReady = Boolean(
     hostedBrowserSandboxProviderLaunchRunbookText?.includes("Launch Readiness Sequence") &&
     hostedBrowserSandboxProviderLaunchRunbookText?.includes("hosted_remote_browser_sandbox") &&
@@ -418,6 +422,18 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderPrivateProofChainReady &&
     hostedBrowserSandboxProviderResolver.ready
   );
+  const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvReady = Boolean(
+    hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText?.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=0") &&
+    hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText?.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=0") &&
+    hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText?.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0")
+  );
+  const hostedBrowserSandboxProviderPrivateLaunchExecutionReady = Boolean(
+    hostedBrowserSandboxProviderPrivateLaunchExecutionEnvReady &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY === "1" &&
+    process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED === "1" &&
+    hostedBrowserSandboxProviderPrivateProofChainReady &&
+    hostedBrowserSandboxProviderFinalEnablementAllowed
+  );
   const hostedBrowserSandboxAdapterHarnessReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1" &&
@@ -429,7 +445,8 @@ async function safeDeploymentContractStatus() {
     !hostedBrowserSandboxConfigIsExample &&
     hostedBrowserSandboxAdapterMode === "hosted_provider" &&
     hostedBrowserSandboxProviderVisualOcrReplayReady &&
-    hostedBrowserSandboxProviderResolver.ready;
+    hostedBrowserSandboxProviderResolver.ready &&
+    hostedBrowserSandboxProviderPrivateLaunchExecutionReady;
   const hostedBrowserSandboxProviderAdapterReady =
     hostedBrowserSandboxProviderSelected &&
     process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_ADAPTER_CONTRACT_READY === "1" &&
@@ -590,6 +607,34 @@ async function safeDeploymentContractStatus() {
       rawOcrTextReturned: false,
       rawInputReturned: false
     },
+    hostedBrowserSandboxProviderPrivateLaunchExecutionReady,
+    hostedBrowserSandboxProviderPrivateLaunchExecution: {
+      status: hostedBrowserSandboxProviderPrivateLaunchExecutionReady
+        ? "hosted_browser_sandbox_provider_private_launch_executed"
+        : process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY === "1"
+          ? "hosted_browser_sandbox_provider_private_launch_execution_blocked"
+          : "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+      envExampleReady: hostedBrowserSandboxProviderPrivateLaunchExecutionEnvReady,
+      executionGate: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY === "1",
+      finalHumanReviewed: process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED === "1",
+      privateProofChainReady: hostedBrowserSandboxProviderPrivateProofChainReady,
+      finalEnablementAllowed: hostedBrowserSandboxProviderFinalEnablementAllowed,
+      command: "npm run sandbox:browser:provider-private-launch-execution",
+      envExample: "project/deployment/browser-sandbox-provider.private-launch-execution.example.env",
+      missing: [
+        ...(!hostedBrowserSandboxProviderPrivateLaunchExecutionEnvReady ? ["private_launch_execution_env_template"] : []),
+        ...(process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY === "1" ? [] : ["private_launch_execution_gate"]),
+        ...(!hostedBrowserSandboxProviderPrivateProofChainReady ? ["private_proof_chain_ready"] : []),
+        ...(!hostedBrowserSandboxProviderFinalEnablementAllowed ? ["launch_final_enablement_allowed"] : []),
+        ...(process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED === "1" ? [] : ["final_human_review"])
+      ],
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    },
     hostedBrowserSandboxProviderAdapterReady,
     hostedBrowserSandboxProviderHttpAdapterReady,
     hostedBrowserSandboxProviderLiveLifecycleHarnessReady,
@@ -619,6 +664,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderWebrtcSignalingCommand: "npm run sandbox:browser:provider-webrtc-signaling",
     browserSandboxProviderVisualOcrReplayCommand: "npm run sandbox:browser:provider-visual-ocr-replay",
     browserSandboxProviderLaunchReadinessCommand: "npm run sandbox:browser:provider-launch-readiness",
+    browserSandboxProviderPrivateLaunchExecutionCommand: "npm run sandbox:browser:provider-private-launch-execution",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -737,6 +783,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_launch_readiness",
         status: deployment.hostedBrowserSandboxProviderLaunchReadiness?.status,
         target: "Operator launch readiness aggregates private config, live provider, WebRTC, visual/OCR, and final enablement gates without leaking secrets."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_private_launch_execution",
+        status: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.status,
+        target: "Real selected-provider private launch execution must be explicitly gated and human-reviewed before final hosted readiness can score."
       },
       {
         key: "hosted_browser_sandbox_adapter_harness",
@@ -931,6 +982,23 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
       },
       {
+        key: "hosted_browser_sandbox_provider_private_launch_execution",
+        status: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.status,
+        ok: deployment.hostedBrowserSandboxProviderPrivateLaunchExecutionReady,
+        command: deployment.browserSandboxProviderPrivateLaunchExecutionCommand,
+        executionGate: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.executionGate ?? false,
+        finalHumanReviewed: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.finalHumanReviewed ?? false,
+        privateProofChainReady: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.privateProofChainReady ?? false,
+        finalEnablementAllowed: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.finalEnablementAllowed ?? false,
+        missing: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.missing ?? [],
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
         key: "hosted_browser_sandbox_provider_adapter",
         status: deployment.hostedBrowserSandboxProviderStatus,
         ok: deployment.hostedBrowserSandboxProviderAdapterReady,
@@ -1093,6 +1161,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
               : 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderLaunchReadiness?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_private_launch_execution",
+        score: deployment.hostedBrowserSandboxProviderPrivateLaunchExecutionReady ? 100 : 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderPrivateLaunchExecution?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_adapter",

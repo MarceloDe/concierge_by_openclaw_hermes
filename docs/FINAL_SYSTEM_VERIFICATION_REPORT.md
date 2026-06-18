@@ -838,3 +838,29 @@ Current readiness:
 
 Remaining proof:
 - Real provider launch readiness remains pending until operator-supplied private provider credentials and real visual/OCR artifacts are available outside Git.
+
+## Phase 27 Hosted Browser Sandbox Provider Private Launch Execution
+
+What changed:
+- Added `npm run sandbox:browser:provider-private-launch-execution`.
+- Added `project/deployment/browser-sandbox-provider.private-launch-execution.example.env`.
+- Exposed `hosted_browser_sandbox_provider_private_launch_execution` through Node dashboard proof and FastAPI `/api/v1/proof`.
+- Required private launch execution plus final human review before `hosted_remote_browser_sandbox` can pass.
+
+Focused verification:
+- `npm run sandbox:browser:provider-private-launch-execution` passed in safe default mode and reported `hosted_browser_sandbox_provider_private_launch_execution_not_enabled`.
+- Browser-sandbox provider and deployment compose contract tests passed with 22/22 tests.
+- Focused FastAPI private execution proof tests passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 38/38 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 49 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Browser dashboard/API proof verified private launch execution score, launch-readiness score, final hosted remote score, and no fake endpoint/token/provider-config-path leak.
+
+Current readiness:
+- `hosted_browser_sandbox_provider_private_launch_execution` remains `0 / 100` by default.
+- `hosted_remote_browser_sandbox` remains `0 / 100` unless real provider proof, private execution, and final human review pass.
+
+Remaining proof:
+- Real selected-provider private execution remains pending until operator-supplied provider credentials and visual/OCR artifacts are available outside Git.
+- Project PR merge and Cortex PR merge remain pending for Phase 27.

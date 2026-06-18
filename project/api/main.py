@@ -981,6 +981,11 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 "status": browser_sandbox_contract.get("hostedProviderLaunchReadiness", {}).get("status"),
                 "target": "Operator launch readiness aggregates private config, live provider, WebRTC, visual/OCR, and final enablement gates without leaking secrets."
             },
+            {
+                "key": "hosted_browser_sandbox_provider_private_launch_execution",
+                "status": browser_sandbox_contract.get("hostedProviderPrivateLaunchExecution", {}).get("status"),
+                "target": "Real selected-provider private launch execution must be explicitly gated and human-reviewed before final hosted readiness can score."
+            },
             {"key": "next_mobile_pwa", "status": "scaffolded", "target": "Next.js PWA uses only /api/v1."},
             {"key": "visual_dashboard_proof", "status": "dashboard_contract_ready", "target": "Dashboard renders connector cycle status and visual test checklist."}
         ],
@@ -996,7 +1001,8 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
             {"key": "hosted_browser_sandbox_provider_live_verification", **browser_sandbox_contract.get("hostedProviderLiveVerification", {})},
             {"key": "hosted_browser_sandbox_provider_webrtc_signaling", **browser_sandbox_contract.get("hostedProviderWebrtcSignaling", {})},
             {"key": "hosted_browser_sandbox_provider_visual_ocr_replay", **browser_sandbox_contract.get("hostedProviderVisualOcrReplay", {})},
-            {"key": "hosted_browser_sandbox_provider_launch_readiness", **browser_sandbox_contract.get("hostedProviderLaunchReadiness", {})}
+            {"key": "hosted_browser_sandbox_provider_launch_readiness", **browser_sandbox_contract.get("hostedProviderLaunchReadiness", {})},
+            {"key": "hosted_browser_sandbox_provider_private_launch_execution", **browser_sandbox_contract.get("hostedProviderPrivateLaunchExecution", {})}
         ],
         "visual_artifacts": [
             {"route": "/", "required": True, "proof": "operator dashboard connector cycle panel"},
@@ -1081,6 +1087,12 @@ def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user
                 ),
                 "target": 100,
                 "status": browser_sandbox_contract.get("hostedProviderLaunchReadiness", {}).get("status")
+            },
+            {
+                "key": "hosted_browser_sandbox_provider_private_launch_execution",
+                "score": 100 if browser_sandbox_contract.get("hostedProviderPrivateLaunchExecutionReady") else 0,
+                "target": 100,
+                "status": browser_sandbox_contract.get("hostedProviderPrivateLaunchExecution", {}).get("status")
             },
             {
                 "key": "hosted_remote_browser_sandbox",

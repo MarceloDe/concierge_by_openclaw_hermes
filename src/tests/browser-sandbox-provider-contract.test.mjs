@@ -14,6 +14,7 @@ import {
   runBrowserSandboxProviderWebrtcSignalingSmoke,
   runBrowserSandboxProviderVisualOcrReplaySmoke,
   runBrowserSandboxProviderLaunchReadinessSmoke,
+  runBrowserSandboxProviderPrivateLaunchExecutionSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -367,6 +368,70 @@ test("hosted browser sandbox provider launch readiness can prove private chain w
   assert.equal(result.checklist.configOutsideGit, true);
   assert.equal(result.checklist.proofOutsideGit, true);
   assert.equal(result.checklist.missing.includes("final_live_verified_switch"), true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+  assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password|v=0|candidate:/i);
+});
+
+test("hosted browser sandbox provider private launch execution is disabled by default", async () => {
+  const result = await runBrowserSandboxProviderPrivateLaunchExecutionSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-private-launch-execution-default-smoke-test.json",
+    env: {}
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderPrivateLaunchExecutionReady, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_private_launch_execution_not_enabled");
+  assert.equal(result.executionGate, false);
+  assert.equal(result.finalHumanReviewed, false);
+  assert.equal(result.missing.includes("private_launch_execution_gate"), true);
+  assert.equal(result.dashboard.readinessKey, "hosted_browser_sandbox_provider_private_launch_execution");
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+});
+
+test("hosted browser sandbox provider private launch execution requires private proof and final review", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "brainsty-provider-private-launch-ready-"));
+  const proofPath = join(tmp, "provider-visual-ocr-proof.json");
+  const configPath = join(tmp, "browser-sandbox-provider.runtime.json");
+  const config = JSON.parse(await readFile(new URL("../../project/deployment/browser-sandbox-provider.hosted-provider.example.json", import.meta.url), "utf8"));
+  config.adapter.providerLiveConnected = true;
+  await writeFile(configPath, JSON.stringify(config, null, 2));
+  await writeFile(proofPath, JSON.stringify(validVisualOcrProofManifest(), null, 2));
+  const result = await runBrowserSandboxProviderPrivateLaunchExecutionSmoke({
+    configPath,
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-private-launch-execution-ready-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: proofPath,
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED: "1"
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderPrivateLaunchExecutionReady, true);
+  assert.equal(result.hostedProviderReady, true);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_private_launch_executed");
+  assert.equal(result.launchReadiness.privateProofChainReady, true);
+  assert.equal(result.launchReadiness.finalEnablementAllowed, true);
+  assert.equal(result.executionGate, true);
+  assert.equal(result.finalHumanReviewed, true);
+  assert.equal(result.missing.length, 0);
   assert.equal(result.safety.rawEndpointUrlWritten, false);
   assert.equal(result.safety.rawSecretReturned, false);
   assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);

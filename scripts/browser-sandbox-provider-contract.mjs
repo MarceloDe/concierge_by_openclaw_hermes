@@ -11,6 +11,7 @@ const PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandb
 const VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1";
 const PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env";
 const PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md";
+const PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.private-launch-execution.example.env";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -1099,6 +1100,109 @@ export async function runBrowserSandboxProviderLaunchReadinessSmoke({
       externalActions: false,
       agentCredentialEntryAllowed: false,
       liveProviderOverclaimed: !finalEnablementAllowed && Boolean(resolver.ready || visualReplay.hostedProviderReady)
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
+}
+
+export async function runBrowserSandboxProviderPrivateLaunchExecutionSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE || HOSTED_PROVIDER_EXAMPLE_CONFIG_PATH,
+  selectionConfigPath = process.env.WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE || PROVIDER_SELECTION_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-private-launch-execution-smoke.json"),
+  env = process.env,
+  providerReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_READY === "1",
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [launchReadiness, envExampleText] = await Promise.all([
+    runBrowserSandboxProviderLaunchReadinessSmoke({
+      configPath,
+      selectionConfigPath,
+      artifactPath: resolve(dirname(artifactPath), "browser-sandbox-provider-launch-readiness-smoke.json"),
+      env,
+      providerReady,
+      fetchImpl
+    }),
+    readTextIfExists(PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH)
+  ]);
+  const executionGate = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY === "1";
+  const finalReviewed = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED === "1";
+  const envExamplePresent = Boolean(
+    envExampleText &&
+    envExampleText.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=0") &&
+    envExampleText.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=0") &&
+    envExampleText.includes("WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0")
+  );
+  const privateExecutionReady = Boolean(
+    executionGate &&
+    launchReadiness.hostedProviderPrivateProofChainReady &&
+    launchReadiness.hostedProviderFinalEnablementAllowed &&
+    finalReviewed
+  );
+  const status = privateExecutionReady
+    ? "hosted_browser_sandbox_provider_private_launch_executed"
+    : executionGate
+      ? "hosted_browser_sandbox_provider_private_launch_execution_blocked"
+      : "hosted_browser_sandbox_provider_private_launch_execution_not_enabled";
+  const missing = [
+    ...(!envExamplePresent ? ["private_launch_execution_env_template"] : []),
+    ...(!executionGate ? ["private_launch_execution_gate"] : []),
+    ...(!launchReadiness.hostedProviderPrivateProofChainReady ? ["private_proof_chain_ready"] : []),
+    ...(!launchReadiness.hostedProviderFinalEnablementAllowed ? ["launch_final_enablement_allowed"] : []),
+    ...(!finalReviewed ? ["final_human_review"] : [])
+  ];
+  const result = {
+    ok: Boolean(envExamplePresent && launchReadiness.ok),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status,
+    hostedProviderPrivateLaunchExecutionReady: privateExecutionReady,
+    hostedProviderReady: privateExecutionReady,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    executionGate,
+    finalHumanReviewed: finalReviewed,
+    launchReadiness: {
+      status: launchReadiness.status,
+      runbookReady: launchReadiness.hostedProviderLaunchReadinessRunbookReady,
+      privateProofChainReady: launchReadiness.hostedProviderPrivateProofChainReady,
+      finalEnablementAllowed: launchReadiness.hostedProviderFinalEnablementAllowed,
+      liveVerificationReady: launchReadiness.liveProof?.liveVerificationReady ?? false,
+      webrtcSignalingReady: launchReadiness.liveProof?.webrtcSignalingReady ?? false,
+      visualOcrReplayReady: launchReadiness.liveProof?.visualOcrReplayReady ?? false,
+      configOutsideGit: launchReadiness.checklist?.configOutsideGit ?? false,
+      proofFileOutsideGit: launchReadiness.checklist?.proofOutsideGit ?? false,
+      missing: launchReadiness.checklist?.missing ?? []
+    },
+    missing,
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_private_launch_execution",
+      scoreKey: "hosted_browser_sandbox_provider_private_launch_execution",
+      executionReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY",
+      finalHumanReviewedEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED",
+      envExample: PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH,
+      hostedReadyEnv: "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+    },
+    operatorSequence: [
+      "Run npm run sandbox:browser:provider-launch-readiness with private endpoint/token/runtime config and private visual/OCR proof.",
+      "Confirm hosted_browser_sandbox_provider_launch_readiness is hosted_browser_sandbox_provider_launch_ready.",
+      "Complete final human review outside Codex, including provider session, visual/OCR, takeover, input, teardown, and no-secret/no-PHI proof.",
+      "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=1 and WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=1 only for the reviewed private execution."
+    ],
+    safety: {
+      ...assertNoSecretLeak(launchReadiness),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawSecretFilePathWritten: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      rawSdpReturned: false,
+      rawIceCandidateReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      liveProviderOverclaimed: !privateExecutionReady && Boolean(launchReadiness.hostedProviderReady)
     }
   };
   await mkdir(dirname(artifactPath), { recursive: true });

@@ -1379,6 +1379,91 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(launch_score["score"], 60)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_private_launch_execution_requires_final_review(self):
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        proof_manifest = {
+            "schemaVersion": "brainstyworkers.browser-sandbox-provider-visual-ocr-proof.v1",
+            "providerLiveConnected": True,
+            "session": {"sessionRefPresent": True, "rawSessionRefReturned": False},
+            "stream": {"frameRefPresent": True, "rawFrameReturned": False, "rawFramePersisted": False},
+            "screenshot": {"screenshotRefPresent": True, "rawImageReturned": False},
+            "ocrCaption": {
+                "captionRefPresent": True,
+                "rawOcrTextReturned": False,
+                "rawOcrTextPersisted": False,
+                "visualCaptionSafe": True
+            },
+            "takeover": {"approvalRequired": True, "inputRelay": "approval_gated_human_only"},
+            "input": {"rawInputReturned": False, "externalWriteActionsWithoutApproval": False},
+            "teardown": {"teardownComplete": True, "rawFramePersisted": False, "rawOcrTextPersisted": False},
+            "visualProof": {
+                "dashboardScreenshotRefPresent": True,
+                "mobileLiveBlockRefPresent": True,
+                "ocrCaptionRefPresent": True
+            },
+            "safety": {
+                "agentCredentialEntryAllowed": False,
+                "externalWriteActionsWithoutApproval": False,
+                "rawEndpointReturned": False,
+                "rawSecretReturned": False
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            proof_path = os.path.join(tmpdir, "provider-visual-ocr-proof.json")
+            config_path = os.path.join(tmpdir, "browser-sandbox-provider.runtime.json")
+            with open("project/deployment/browser-sandbox-provider.hosted-provider.example.json", "r", encoding="utf-8") as handle:
+                config = json.load(handle)
+            config["adapter"]["providerLiveConnected"] = True
+            with open(config_path, "w", encoding="utf-8") as handle:
+                json.dump(config, handle)
+            with open(proof_path, "w", encoding="utf-8") as handle:
+                json.dump(proof_manifest, handle)
+            with patch.dict(os.environ, {
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": config_path,
+                "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+                "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json",
+                "WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER": "custom_webrtc",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE": proof_path,
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY": "1"
+            }, clear=True):
+                app = create_app(inline_tasks=True)
+                app.state.node_client = FakeNodeRuntimeClient()
+                client = TestClient(app)
+                headers = self.bearer_headers("v1_hosted_provider_private_launch_user")
+                proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-private-launch-execution", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        self.assertNotIn(config_path, proof_text)
+        self.assertNotIn(proof_path, proof_text)
+        proof = proof_response.json()
+        private_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_private_launch_execution")
+        private_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_private_launch_execution")
+        launch_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_launch_readiness")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(private_check["status"], "hosted_browser_sandbox_provider_private_launch_execution_blocked")
+        self.assertTrue(private_check["executionGate"])
+        self.assertFalse(private_check["finalHumanReviewed"])
+        self.assertTrue(private_check["privateProofChainReady"])
+        self.assertTrue(private_check["finalEnablementAllowed"])
+        self.assertIn("final_human_review", private_check["missing"])
+        self.assertEqual(private_score["score"], 0)
+        self.assertEqual(launch_score["score"], 100)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_webrtc_offer_route_sanitizes_provider_response(self):
         from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
 

@@ -18,7 +18,10 @@ Phase 26 turns the hosted-provider proof chain into an operator launch checklist
 10. Run `npm run sandbox:browser:provider-visual-ocr-replay`.
 11. Run `npm run sandbox:browser:provider-launch-readiness`.
 12. Set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=1` only after the private proof chain is green and reviewed.
-13. Set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and `adapter.providerLiveConnected=true` in the private runtime JSON only after final human approval.
+13. Run `npm run sandbox:browser:provider-private-launch-execution`.
+14. Complete final human review outside Codex. Review the real provider run for session creation, live stream, screenshot/OCR refs, takeover, approved input relay, offsite fail-closed behavior, teardown, dashboard/mobile proof, and absence of raw endpoint/token/frame/OCR/SDP/ICE/credential/input leakage.
+15. Set `WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=1` and `WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=1` only for the reviewed private execution.
+16. Set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` and `adapter.providerLiveConnected=true` in the private runtime JSON only after final human approval.
 
 ## Safety Invariants
 
@@ -26,7 +29,7 @@ Phase 26 turns the hosted-provider proof chain into an operator launch checklist
 - `interactive_takeover` remains human-only.
 - The live worker block may show the user an approved remote browser session, but proof artifacts must use opaque refs and sanitized captions.
 - Raw screenshots, raw OCR text, portal/member text, endpoint URLs, tokens, SDP, ICE candidates, local paths, and input values are rejected by the proof validators.
-- A passing launch-readiness run is not the same as final hosted remote readiness unless the final live-verified switch and private provider live-connected config are both present.
+- A passing launch-readiness run is not the same as final hosted remote readiness unless the private launch execution gate, final human review, final live-verified switch, and private provider live-connected config are all present.
 
 ## Verification Commands
 
@@ -37,6 +40,7 @@ npm run sandbox:browser:provider-live-verification
 npm run sandbox:browser:provider-webrtc-signaling
 npm run sandbox:browser:provider-visual-ocr-replay
 npm run sandbox:browser:provider-launch-readiness
+npm run sandbox:browser:provider-private-launch-execution
 npm run test:docker:contract
 ```
 

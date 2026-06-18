@@ -30,6 +30,8 @@ test("deployment compose contract defines connector services and safety boundari
   assert.equal(result.browserSandbox.providerVisualOcrReplayEnvExample, "project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env");
   assert.equal(result.browserSandbox.providerLaunchReadinessCommand, "npm run sandbox:browser:provider-launch-readiness");
   assert.equal(result.browserSandbox.providerLaunchReadinessEnvExample, "project/deployment/browser-sandbox-provider.launch-readiness.example.env");
+  assert.equal(result.browserSandbox.providerPrivateLaunchExecutionCommand, "npm run sandbox:browser:provider-private-launch-execution");
+  assert.equal(result.browserSandbox.providerPrivateLaunchExecutionEnvExample, "project/deployment/browser-sandbox-provider.private-launch-execution.example.env");
   assert.equal(result.browserSandbox.providerLaunchReadinessRunbook, "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   assert.equal(result.browserSandbox.adapterHarnessCommand, "npm run sandbox:browser:adapter-harness");
   assert.equal(result.browserSandbox.adapterHarnessContract, "project/deployment/browser-sandbox-provider.contract-harness.json");

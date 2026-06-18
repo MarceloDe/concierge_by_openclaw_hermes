@@ -1,0 +1,66 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+  "hostedProviderPrivateLaunchExecutionReady": false,
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "executionGate": false,
+  "finalHumanReviewed": false,
+  "launchReadiness": {
+    "status": "hosted_browser_sandbox_provider_launch_runbook_ready",
+    "runbookReady": true,
+    "privateProofChainReady": false,
+    "finalEnablementAllowed": false,
+    "liveVerificationReady": false,
+    "webrtcSignalingReady": false,
+    "visualOcrReplayReady": false,
+    "configOutsideGit": false,
+    "proofFileOutsideGit": false,
+    "missing": [
+      "provider_config_private",
+      "selection_preflight",
+      "live_preflight",
+      "live_verification",
+      "webrtc_signaling",
+      "visual_ocr_replay_private_proof",
+      "final_live_verified_switch"
+    ]
+  },
+  "missing": [
+    "private_launch_execution_gate",
+    "private_proof_chain_ready",
+    "launch_final_enablement_allowed",
+    "final_human_review"
+  ],
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_private_launch_execution",
+    "scoreKey": "hosted_browser_sandbox_provider_private_launch_execution",
+    "executionReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY",
+    "finalHumanReviewedEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED",
+    "envExample": "project/deployment/browser-sandbox-provider.private-launch-execution.example.env",
+    "hostedReadyEnv": "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED"
+  },
+  "operatorSequence": [
+    "Run npm run sandbox:browser:provider-launch-readiness with private endpoint/token/runtime config and private visual/OCR proof.",
+    "Confirm hosted_browser_sandbox_provider_launch_readiness is hosted_browser_sandbox_provider_launch_ready.",
+    "Complete final human review outside Codex, including provider session, visual/OCR, takeover, input, teardown, and no-secret/no-PHI proof.",
+    "Set WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=1 and WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=1 only for the reviewed private execution."
+  ],
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawInputReturned": false,
+    "rawSdpReturned": false,
+    "rawIceCandidateReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "liveProviderOverclaimed": false
+  }
+}
