@@ -2667,3 +2667,32 @@ Remaining follow-up:
 - Provision the owned remote host, TLS hostname, backend egress allowlist, and WireGuard tunnel.
 - Run the live Phase 30 harness against `https://example.com` from the backend network position.
 - Only after 10/10, flip private runtime JSON to `environment=production-candidate` and `transport.tls=true`, then write the Cortex episodic, semantic, and procedural notes required by Phase 30.
+## Phase 32: Canonical RALPH + Goal-Tied Operating System
+
+Goal:
+Upgrade development from a long-running implementation thread to canonical goal-tied phase execution with one source-of-truth order, role-separated work, non-mocked proof rules, dashboard/API visibility, and Cortex memory mirrors.
+
+Build:
+- Add `docs/PROJECT_OPERATING_SYSTEM.md` as the local mirror of the Cortex-canonical project operating contract.
+- Add `docs/PHASE_SCOREBOARD.md` for active gates, current maturity, and next phase candidates.
+- Add `docs/NON_MOCKED_PROOF_RULES.md` to prevent fake LLM, browser, provider, memory, or visual proof claims.
+- Expose `canonical_goal_tied_phase_execution` and `canonical_phase_operating_system` through the existing proof endpoint and dashboard renderer.
+- Add regression coverage so future branches cannot remove the operating-system docs or proof keys silently.
+- Mirror the durable objective and RALPH procedure into Cortex semantic/procedural memory after verification.
+
+Non-goals:
+- Do not implement Phase 33 continuous procedural memory yet.
+- Do not add browser concurrency or N-host routing unless product load requires it.
+- Do not change the human-only browser takeover boundary.
+- Do not change healthcare runtime authority: LangGraph remains master, OpenClaw remains bounded worker.
+
+Gates:
+- `node --test src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Dashboard/API proof for `canonical_goal_tied_phase_execution`
+- Cortex semantic/procedural/episodic PR
+- Worker repo PR from branch `phase-32-canonical-ralph-operating-system`
+
+Next:
+Phase 33 should start the continuous-intelligence implementation: typed `CaseState`, G0-G8 conditional LangGraph gates, PEMS candidate maturity schema, and shadow-mode procedural reconstruction proof.
