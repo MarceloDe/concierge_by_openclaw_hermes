@@ -7928,3 +7928,51 @@ Known risks or gaps:
 - Current Steel self-host deployment is single-machine/local and should be treated as a staging sandbox, not a scaled production browser cluster.
 - The pinned Steel image required `SKIP_FINGERPRINT_INJECTION=true` on this Docker host to avoid an upstream fingerprint-generation launch failure.
 - The Steel API/CDP/UI ports are local loopback only; remote/mobile access still needs the FastAPI connector and a deployment-safe tunnel or hosted infrastructure.
+
+## Phase 29 Steel Self-Host Production Hardening Update
+
+Status: Implemented, regression-tested, and visually proved on the operator dashboard.
+
+Slice name:
+- Steel self-host operations readiness gate.
+
+Code changes:
+- Added `project/deployment/browser-sandbox-provider.steel-operations.example.json` as the non-secret operations policy for self-hosted Steel.
+- Added `npm run sandbox:browser:steel-operations` and `scripts/browser-sandbox-provider-steel-operations-smoke.mjs`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with a Steel operations validator covering concurrency, TTL/idle cleanup, retention, loopback networking, image pinning, monitoring, and approval boundaries.
+- Changed `infra/steel/compose.yaml` to disable Steel browser log storage by default.
+- Expanded `infra/steel/README.md` with the operations gate, stale-session cleanup, loopback-only, and FastAPI-connector remote boundary guidance.
+- Exposed `hosted_browser_sandbox_provider_steel_operations` in the Node dashboard and FastAPI `/api/v1/proof` as a separate score from `hosted_browser_sandbox_provider_steel_self_host` and `hosted_remote_browser_sandbox`.
+
+Safety decision:
+- Static Steel operations hardening can score `85 / 100` without claiming production hosted remote readiness.
+- `100 / 100` for `hosted_browser_sandbox_provider_steel_operations` requires `WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY=1`; if live probe mode is enabled, local Steel API/CDP/viewer config must also be present.
+- The final `hosted_remote_browser_sandbox` score remains blocked until the separate private execution, final human review, live verification, visual/OCR replay, and provider-live-connected gates all pass.
+- Human-only `interactive_takeover` remains preserved; Codex must not enter credentials, solve 2FA/captcha, submit forms, contact payers, or perform external/write actions.
+
+Verification plan:
+- `npm run sandbox:browser:steel-operations`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_steel_self_host_operations_visible_without_hosted_remote_overclaim project.tests.test_fastapi_facade.FastApiFacadeTest.test_steel_self_host_operations_gate_scores_without_hosted_remote_overclaim`
+- `npm run build`
+- `npm run test:docker:contract`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+- `npm run test:local`
+- Browser dashboard/API proof showing `hosted_browser_sandbox_provider_steel_operations`, `hosted_browser_sandbox_provider_steel_self_host`, and `hosted_remote_browser_sandbox`.
+
+Verification result:
+- Steel operations smoke passed with `steel_self_host_operations_contract_ready`, `85 / 100`, `hostedProviderReady=false`, and no endpoint/token/frame/OCR/input leakage.
+- Browser-sandbox provider contract tests passed with 25/25 tests.
+- Deployment compose contract test passed.
+- Focused FastAPI Steel operations tests passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 42/42 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 51 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips after linking the clean worktree to the existing local Graphiti venv and copied local Aetna fixture DB for verification only.
+- Browser dashboard/API proof passed on `http://127.0.0.1:4214/?phase=steel-self-host-operations-hardening`.
+- Visual/API proof verified `hosted_browser_sandbox_provider_steel_operations` at `85 / 100`, `hosted_browser_sandbox_provider_steel_self_host` at `0 / 100` in the fresh worktree without the private Phase 28 artifact, `hosted_remote_browser_sandbox` at `0 / 100`, and no local endpoint/token leakage.
+- Proof artifacts:
+  - `artifacts/browser-sandbox-provider-steel-operations-smoke.json`
+  - `artifacts/phase29-steel-operations-dashboard-proof.png`
+  - `artifacts/phase29-steel-operations-visual-proof.json`

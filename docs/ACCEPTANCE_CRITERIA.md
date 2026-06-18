@@ -2220,3 +2220,29 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
 - Browser dashboard/API proof at `http://127.0.0.1:4213/?phase=hosted-browser-sandbox-provider-private-launch-execution` verified private launch execution, launch readiness, final hosted remote score, and no fake endpoint/token/provider-config-path leak.
 - Visual/proof artifacts were saved at `artifacts/phase27-hosted-provider-private-launch-execution-dashboard-proof.png`, `artifacts/phase27-hosted-provider-private-launch-execution-visual-proof.json`, and `artifacts/browser-sandbox-provider-private-launch-execution-smoke.json`.
+
+## Steel Self-Host Operations Hardening Acceptance
+
+This slice is acceptable when:
+
+- A Steel operations smoke command exists and is safe in default local mode.
+- A non-secret Steel operations policy exists for concurrency, TTL, idle timeout, teardown, stale-session cleanup, retention, loopback networking, image pinning, monitoring, and approval boundaries.
+- Steel browser log storage is disabled by default.
+- The validator rejects public CDP exposure, browser log retention, frame/OCR persistence, raw endpoint literals, secret literals, unpinned images, missing teardown, and unsafe approval policy.
+- Connector proof exposes `hosted_browser_sandbox_provider_steel_operations` separately from `hosted_browser_sandbox_provider_steel_self_host` and `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` unless private launch execution and final human review pass in addition to real selected-provider private config, live verification, WebRTC when required, visual/OCR replay, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true`.
+- Public proof artifacts and dashboard text do not contain Steel endpoint URLs, tokens, raw screenshots, raw OCR text, raw frames, credentials, or input values.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:steel-operations` passed in default static mode with `85 / 100` and `hostedProviderReady=false`.
+- Browser-sandbox provider contract tests passed with 25/25 tests.
+- Deployment compose contract test passed.
+- Focused FastAPI Steel operations tests passed with 2/2 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 42/42 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 51 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Browser dashboard/API proof at `http://127.0.0.1:4214/?phase=steel-self-host-operations-hardening` verified Steel operations `85 / 100`, final hosted remote browser `0 / 100`, and no local endpoint/token leak.
+- Visual/proof artifacts were saved at `artifacts/phase29-steel-operations-dashboard-proof.png`, `artifacts/phase29-steel-operations-visual-proof.json`, and `artifacts/browser-sandbox-provider-steel-operations-smoke.json`.

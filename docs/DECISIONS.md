@@ -2385,3 +2385,22 @@ Steel gives the project a real local browser-sandbox provider without introducin
 
 Cost of changing later:
 Low to moderate. Steel Cloud, another provider, or a production self-host deployment can replace the endpoint and strategy-specific client while keeping the public connector, dashboard proof keys, and human-only takeover contract stable.
+
+## 2026-06-18 - Add Steel Self-Host Operations Gate Before Production Claims
+
+Context:
+Phase 28A proved that local self-hosted Steel can satisfy the selected-provider lifecycle, but the Cortex canonical note still treats Steel as staging infrastructure until concurrency, lifecycle cleanup, retention, monitoring, patch cadence, and secure remote access are explicitly controlled. The risk was that a green local lifecycle proof could be misread as production hosted remote browser readiness.
+
+Options considered:
+- Let `hosted_browser_sandbox_provider_steel_self_host=100 / 100` stand as the only Steel proof.
+- Move immediately to a public hosted Steel deployment.
+- Add a separate Steel operations gate for self-hosted hardening while keeping final hosted remote readiness blocked.
+
+Decision:
+Add `npm run sandbox:browser:steel-operations`, `project/deployment/browser-sandbox-provider.steel-operations.example.json`, and a dashboard/API score named `hosted_browser_sandbox_provider_steel_operations`. Disable Steel browser log storage by default, require loopback-only API/CDP/viewer bindings, digest-pinned images, documented stale-session cleanup, no direct public Steel exposure, and FastAPI as the remote-app boundary.
+
+Reason:
+This closes the production-hardening gap without overclaiming hosted readiness. Operators can now see that Steel self-host has an operations contract, while final `hosted_remote_browser_sandbox` still depends on private execution, final human review, visual/OCR replay, WebRTC when required, and real provider live verification.
+
+Cost of changing later:
+Low. A managed Steel deployment, Steel Cloud, or another hosted provider can keep the same public `/api/v1/browser/*` contract and proof keys. Only the provider-specific operations policy and probe implementation should change.

@@ -108,7 +108,9 @@ import {
   resolveBrowserSandboxHostedProvider,
   validateVisualOcrProofManifest,
   validateBrowserSandboxProviderContract,
-  validateBrowserSandboxProviderSelectionContract
+  validateBrowserSandboxProviderSelectionContract,
+  validateBrowserSandboxProviderSteelOperationsContract,
+  validateSteelComposeOperations
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 const PORT = Number(process.env.PORT ?? 4173);
@@ -235,6 +237,70 @@ function summarizeSteelSelfHostProof({ artifactRef, proof } = {}) {
   };
 }
 
+async function summarizeSteelOperationsReadiness() {
+  try {
+    const [validation, composeText, runbookText] = await Promise.all([
+      validateBrowserSandboxProviderSteelOperationsContract(),
+      readFile(resolve("infra/steel/compose.yaml"), "utf8"),
+      readFile(resolve("infra/steel/README.md"), "utf8")
+    ]);
+    const compose = validateSteelComposeOperations(composeText, runbookText);
+    const operationsGate = process.env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY === "1";
+    const liveProbeRequested = process.env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE === "1";
+    const liveProbeReady = liveProbeRequested
+      ? Boolean(
+        process.env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL &&
+        process.env.WEFELLA_BROWSER_SANDBOX_CDP_URL &&
+        process.env.WEFELLA_BROWSER_SANDBOX_VIEWER_URL
+      )
+      : false;
+    const staticReady = Boolean(validation.ok && compose.ok);
+    const ready = Boolean(staticReady && operationsGate && (!liveProbeRequested || liveProbeReady));
+    return {
+      status: ready
+        ? "steel_self_host_operations_ready"
+        : staticReady
+          ? "steel_self_host_operations_contract_ready"
+          : "steel_self_host_operations_contract_incomplete",
+      ok: ready,
+      contractReady: staticReady,
+      score: ready ? 100 : staticReady ? 85 : Math.floor((compose.passed / Math.max(compose.total, 1)) * 60),
+      target: 100,
+      checks: [
+        ...compose.checks,
+        { key: "operations_gate", ok: operationsGate },
+        { key: "live_probe_requested", ok: liveProbeRequested },
+        { key: "live_probe_config_present", ok: liveProbeReady }
+      ],
+      composeFile: "infra/steel/compose.yaml",
+      configFile: "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+      runbook: "infra/steel/README.md",
+      command: "npm run sandbox:browser:steel-operations",
+      operationsReadyEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY",
+      liveProbeEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    };
+  } catch (error) {
+    return {
+      status: "steel_self_host_operations_contract_unreadable",
+      ok: false,
+      contractReady: false,
+      score: 0,
+      target: 100,
+      checks: [{ key: "operations_contract_readable", ok: false, error: error.message }],
+      command: "npm run sandbox:browser:steel-operations",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    };
+  }
+}
+
 function sendSse(res, event) {
   res.write(`event: ${event.eventType ?? "message"}\n`);
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -273,6 +339,7 @@ async function safeDeploymentContractStatus() {
     "scripts/browser-sandbox-provider-live-verification-smoke.mjs",
     "scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs",
     "scripts/browser-sandbox-provider-visual-ocr-replay-smoke.mjs",
+    "scripts/browser-sandbox-provider-steel-operations-smoke.mjs",
     "scripts/compose-contract.mjs",
     "scripts/storage-contract.mjs",
     "scripts/postgres-runtime-smoke.mjs",
@@ -290,6 +357,7 @@ async function safeDeploymentContractStatus() {
     "project/deployment/browser-sandbox-provider.live-verification.example.env",
     "project/deployment/browser-sandbox-provider.webrtc-signaling.example.env",
     "project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env",
+    "project/deployment/browser-sandbox-provider.steel-operations.example.json",
     "infra/steel/compose.yaml",
     "infra/steel/README.md",
     "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
@@ -466,6 +534,8 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderVisualOcrProofValidation.ok;
   const hostedBrowserSandboxProviderSteelSelfHostProof =
     summarizeSteelSelfHostProof(await readLatestSteelSelfHostProof());
+  const hostedBrowserSandboxProviderSteelOperations =
+    await summarizeSteelOperationsReadiness();
   const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
   const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText =
@@ -589,6 +659,8 @@ async function safeDeploymentContractStatus() {
     },
     hostedBrowserSandboxProviderSteelSelfHostProofReady: hostedBrowserSandboxProviderSteelSelfHostProof.ok,
     hostedBrowserSandboxProviderSteelSelfHostProof,
+    hostedBrowserSandboxProviderSteelOperationsReady: hostedBrowserSandboxProviderSteelOperations.ok,
+    hostedBrowserSandboxProviderSteelOperations,
     hostedBrowserSandboxProviderLiveVerificationReady,
     hostedBrowserSandboxProviderLiveVerification: {
       status: hostedBrowserSandboxProviderLiveVerificationReady
@@ -847,6 +919,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: "Self-hosted Steel Browser proves the selected-provider lifecycle locally without exposing raw frames, OCR text, endpoints, or input values."
       },
       {
+        key: "hosted_browser_sandbox_provider_steel_operations",
+        status: deployment.hostedBrowserSandboxProviderSteelOperations?.status,
+        target: "Self-hosted Steel Browser operations are hardened for loopback-only networking, cleanup, retention, monitoring, digest-pinned images, and no hosted-readiness overclaim."
+      },
+      {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",
         status: deployment.hostedBrowserSandboxProviderWebrtcSignaling?.status,
         target: "WebRTC live-block signaling must exchange opaque offer/answer/ICE refs before WebRTC hosted readiness scores."
@@ -1020,6 +1097,25 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         checks: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.checks ?? [],
         viewerUrlEnvRef: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.viewerUrlEnvRef ?? null,
         lifecycleRefPresent: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.lifecycleRefPresent ?? false,
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_operations",
+        status: deployment.hostedBrowserSandboxProviderSteelOperations?.status,
+        ok: deployment.hostedBrowserSandboxProviderSteelOperationsReady,
+        contractReady: deployment.hostedBrowserSandboxProviderSteelOperations?.contractReady ?? false,
+        command: deployment.hostedBrowserSandboxProviderSteelOperations?.command ?? "npm run sandbox:browser:steel-operations",
+        score: deployment.hostedBrowserSandboxProviderSteelOperations?.score ?? 0,
+        target: deployment.hostedBrowserSandboxProviderSteelOperations?.target ?? 100,
+        checks: deployment.hostedBrowserSandboxProviderSteelOperations?.checks ?? [],
+        composeFile: deployment.hostedBrowserSandboxProviderSteelOperations?.composeFile ?? null,
+        configFile: deployment.hostedBrowserSandboxProviderSteelOperations?.configFile ?? null,
+        runbook: deployment.hostedBrowserSandboxProviderSteelOperations?.runbook ?? null,
         rawEndpointReturned: false,
         rawSecretReturned: false,
         rawFrameReturned: false,
@@ -1238,6 +1334,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.score ?? 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderSteelSelfHostProof?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_operations",
+        score: deployment.hostedBrowserSandboxProviderSteelOperations?.score ?? 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderSteelOperations?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",

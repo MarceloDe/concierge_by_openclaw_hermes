@@ -1,0 +1,142 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "steel_self_host_operations_contract_ready",
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "steelOperationsReady": false,
+  "score": 85,
+  "target": 100,
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider-steel-operations.v1",
+      "providerStrategy": "steel-self-host",
+      "status": "operations_contract_only",
+      "environment": "staging",
+      "composeFile": "infra/steel/compose.yaml",
+      "runbook": "infra/steel/README.md",
+      "sessionPolicy": {
+        "maxConcurrentSessions": 2,
+        "maxSessionMinutes": 30,
+        "idleTimeoutMinutes": 5,
+        "releaseOnTeardown": true,
+        "releaseStaleSessions": true,
+        "teardownOnFailure": true
+      },
+      "retentionPolicy": {
+        "recordFrames": false,
+        "persistRawOcrText": false,
+        "rawScreenshotsInGit": false,
+        "browserLogStorageEnabled": false,
+        "logStorageContainsPhi": false,
+        "proofArtifactRetentionDays": 14
+      },
+      "networkPolicy": {
+        "apiLoopbackOnly": true,
+        "cdpLoopbackOnly": true,
+        "viewerLoopbackOnly": true,
+        "directPublicCdpAllowed": false,
+        "remoteAccessViaFastApiOnly": true
+      },
+      "imagePolicy": {
+        "pinnedByDigest": true,
+        "latestTagsAllowed": false,
+        "patchReviewRequired": true
+      },
+      "monitoringPolicy": {
+        "healthProbeRequired": true,
+        "cdpProbeRequired": true,
+        "viewerProbeRequired": true,
+        "dashboardScoreRequired": true
+      }
+    }
+  },
+  "compose": {
+    "ok": true,
+    "checks": [
+      {
+        "key": "api_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "ui_image_pinned_digest",
+        "ok": true
+      },
+      {
+        "key": "no_latest_tags",
+        "ok": true
+      },
+      {
+        "key": "api_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "cdp_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "viewer_port_loopback_only",
+        "ok": true
+      },
+      {
+        "key": "log_storage_disabled_by_default",
+        "ok": true
+      },
+      {
+        "key": "fingerprint_injection_skip_documented",
+        "ok": true
+      },
+      {
+        "key": "fastapi_remote_boundary_documented",
+        "ok": true
+      },
+      {
+        "key": "cleanup_documented",
+        "ok": true
+      }
+    ],
+    "passed": 10,
+    "total": 10
+  },
+  "liveProbe": {
+    "attempted": false,
+    "ok": false,
+    "status": "steel_operations_live_probe_not_requested",
+    "healthOk": false,
+    "cdpOk": false,
+    "viewerOk": false,
+    "rawEndpointReturned": false
+  },
+  "gates": {
+    "operationsReadyEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY",
+    "liveProbeEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE",
+    "operationsGate": false,
+    "liveProbeRequested": false
+  },
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_steel_operations",
+    "scoreKey": "hosted_browser_sandbox_provider_steel_operations",
+    "command": "npm run sandbox:browser:steel-operations",
+    "configFile": "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+    "composeFile": "infra/steel/compose.yaml",
+    "runbook": "infra/steel/README.md"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawInputReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "hostedReadinessOverclaimed": false
+  }
+}

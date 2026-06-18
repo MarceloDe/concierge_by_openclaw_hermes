@@ -13,6 +13,9 @@ const VISUAL_OCR_PROOF_SCHEMA_VERSION = "brainstyworkers.browser-sandbox-provide
 const PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env";
 const PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md";
 const PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.private-launch-execution.example.env";
+const STEEL_OPERATIONS_EXAMPLE_CONFIG_PATH = "project/deployment/browser-sandbox-provider.steel-operations.example.json";
+const STEEL_COMPOSE_PATH = "infra/steel/compose.yaml";
+const STEEL_RUNBOOK_PATH = "infra/steel/README.md";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -295,6 +298,272 @@ function validateProviderSelectionConfig(config, configPath) {
     failures,
     sanitizedConfig: sanitizeProviderSelectionConfig(config, configPath)
   };
+}
+
+function validateSteelOperationsConfig(config, configPath) {
+  const failures = [];
+  if (config.schemaVersion !== "brainstyworkers.browser-sandbox-provider-steel-operations.v1") failures.push("steel_operations_schema_version_missing_or_unknown");
+  if (config.providerStrategy !== "steel-self-host") failures.push("steel_operations_provider_strategy_must_be_steel_self_host");
+  if (config.status !== "operations_contract_only") failures.push("steel_operations_status_must_be_contract_only");
+  if (!["staging", "production"].includes(config.environment)) failures.push("steel_operations_environment_must_be_staging_or_production");
+  if (config.composeFile !== STEEL_COMPOSE_PATH) failures.push("steel_operations_compose_file_mismatch");
+  if (config.runbook !== STEEL_RUNBOOK_PATH) failures.push("steel_operations_runbook_mismatch");
+
+  const session = config.sessionPolicy ?? {};
+  if (!Number.isInteger(session.maxConcurrentSessions) || session.maxConcurrentSessions < 1 || session.maxConcurrentSessions > 5) failures.push("steel_operations_concurrency_cap_required");
+  if (Number(session.maxSessionMinutes ?? Infinity) > 30) failures.push("steel_operations_max_session_minutes_must_be_30_or_less");
+  if (Number(session.idleTimeoutMinutes ?? Infinity) > 5) failures.push("steel_operations_idle_timeout_minutes_must_be_5_or_less");
+  if (session.releaseOnTeardown !== true) failures.push("steel_operations_release_on_teardown_required");
+  if (session.releaseStaleSessions !== true) failures.push("steel_operations_stale_session_release_required");
+  if (session.teardownOnFailure !== true) failures.push("steel_operations_teardown_on_failure_required");
+
+  const retention = config.retentionPolicy ?? {};
+  if (retention.recordFrames !== false) failures.push("steel_operations_frame_recording_must_be_disabled");
+  if (retention.persistRawOcrText !== false) failures.push("steel_operations_raw_ocr_persistence_must_be_disabled");
+  if (retention.rawScreenshotsInGit !== false) failures.push("steel_operations_raw_screenshots_in_git_must_be_disabled");
+  if (retention.browserLogStorageEnabled !== false) failures.push("steel_operations_browser_log_storage_must_be_disabled_by_default");
+  if (retention.logStorageContainsPhi !== false) failures.push("steel_operations_log_storage_phi_must_be_false");
+  if (!Number.isInteger(retention.proofArtifactRetentionDays) || retention.proofArtifactRetentionDays < 1 || retention.proofArtifactRetentionDays > 30) {
+    failures.push("steel_operations_proof_retention_days_must_be_1_to_30");
+  }
+
+  const network = config.networkPolicy ?? {};
+  for (const [key, expected] of [
+    ["apiLoopbackOnly", true],
+    ["cdpLoopbackOnly", true],
+    ["viewerLoopbackOnly", true],
+    ["directPublicCdpAllowed", false],
+    ["remoteAccessViaFastApiOnly", true]
+  ]) {
+    if (network[key] !== expected) failures.push(`steel_operations_network_${key}_invalid`);
+  }
+
+  const images = config.imagePolicy ?? {};
+  if (images.pinnedByDigest !== true) failures.push("steel_operations_images_must_be_pinned_by_digest");
+  if (images.latestTagsAllowed !== false) failures.push("steel_operations_latest_tags_must_be_forbidden");
+  if (images.patchReviewRequired !== true) failures.push("steel_operations_patch_review_required");
+
+  const monitoring = config.monitoringPolicy ?? {};
+  for (const [key, expected] of [
+    ["healthProbeRequired", true],
+    ["cdpProbeRequired", true],
+    ["viewerProbeRequired", true],
+    ["dashboardScoreRequired", true]
+  ]) {
+    if (monitoring[key] !== expected) failures.push(`steel_operations_monitoring_${key}_required`);
+  }
+
+  const approval = config.approvalPolicy ?? {};
+  if (approval.requiresReadOnlyApproval !== true) failures.push("steel_operations_read_only_approval_required");
+  if (approval.requiresHumanTakeoverApproval !== true) failures.push("steel_operations_human_takeover_approval_required");
+  if (approval.agentCredentialEntryAllowed !== false) failures.push("steel_operations_agent_credential_entry_must_be_blocked");
+  if (approval.externalWriteActionsAllowed !== false) failures.push("steel_operations_external_write_actions_must_be_blocked");
+
+  const serialized = JSON.stringify(config);
+  if (/https?:\/\/[^"\\\s]+|ws:\/\/[^"\\\s]+/i.test(serialized)) failures.push("steel_operations_raw_endpoint_forbidden");
+  if (/Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]/i.test(serialized)) failures.push("steel_operations_secret_literal_forbidden");
+
+  return {
+    ok: failures.length === 0,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    configPath,
+    failures,
+    sanitizedConfig: {
+      schemaVersion: config.schemaVersion ?? null,
+      providerStrategy: config.providerStrategy ?? null,
+      status: config.status ?? null,
+      environment: config.environment ?? null,
+      composeFile: config.composeFile ?? null,
+      runbook: config.runbook ?? null,
+      sessionPolicy: {
+        maxConcurrentSessions: Number(session.maxConcurrentSessions ?? 0),
+        maxSessionMinutes: Number(session.maxSessionMinutes ?? 0),
+        idleTimeoutMinutes: Number(session.idleTimeoutMinutes ?? 0),
+        releaseOnTeardown: Boolean(session.releaseOnTeardown),
+        releaseStaleSessions: Boolean(session.releaseStaleSessions),
+        teardownOnFailure: Boolean(session.teardownOnFailure)
+      },
+      retentionPolicy: {
+        recordFrames: Boolean(retention.recordFrames),
+        persistRawOcrText: Boolean(retention.persistRawOcrText),
+        rawScreenshotsInGit: Boolean(retention.rawScreenshotsInGit),
+        browserLogStorageEnabled: Boolean(retention.browserLogStorageEnabled),
+        logStorageContainsPhi: Boolean(retention.logStorageContainsPhi),
+        proofArtifactRetentionDays: Number(retention.proofArtifactRetentionDays ?? 0)
+      },
+      networkPolicy: {
+        apiLoopbackOnly: Boolean(network.apiLoopbackOnly),
+        cdpLoopbackOnly: Boolean(network.cdpLoopbackOnly),
+        viewerLoopbackOnly: Boolean(network.viewerLoopbackOnly),
+        directPublicCdpAllowed: Boolean(network.directPublicCdpAllowed),
+        remoteAccessViaFastApiOnly: Boolean(network.remoteAccessViaFastApiOnly)
+      },
+      imagePolicy: {
+        pinnedByDigest: Boolean(images.pinnedByDigest),
+        latestTagsAllowed: Boolean(images.latestTagsAllowed),
+        patchReviewRequired: Boolean(images.patchReviewRequired)
+      },
+      monitoringPolicy: {
+        healthProbeRequired: Boolean(monitoring.healthProbeRequired),
+        cdpProbeRequired: Boolean(monitoring.cdpProbeRequired),
+        viewerProbeRequired: Boolean(monitoring.viewerProbeRequired),
+        dashboardScoreRequired: Boolean(monitoring.dashboardScoreRequired)
+      }
+    }
+  };
+}
+
+export function validateSteelComposeOperations(composeText, runbookText) {
+  const checks = [
+    ["api_image_pinned_digest", /ghcr\.io\/steel-dev\/steel-browser-api@sha256:[a-f0-9]{64}/.test(composeText)],
+    ["ui_image_pinned_digest", /ghcr\.io\/steel-dev\/steel-browser-ui@sha256:[a-f0-9]{64}/.test(composeText)],
+    ["no_latest_tags", !/:latest\b/.test(composeText)],
+    ["api_port_loopback_only", composeText.includes("\"127.0.0.1:3000:3000\"")],
+    ["cdp_port_loopback_only", composeText.includes("\"127.0.0.1:9223:9223\"")],
+    ["viewer_port_loopback_only", composeText.includes("\"127.0.0.1:5173:80\"")],
+    ["log_storage_disabled_by_default", composeText.includes("LOG_STORAGE_ENABLED=false")],
+    ["fingerprint_injection_skip_documented", composeText.includes("SKIP_FINGERPRINT_INJECTION=true") && runbookText.includes("SKIP_FINGERPRINT_INJECTION=true")],
+    ["fastapi_remote_boundary_documented", runbookText.includes("FastAPI connector") && runbookText.includes("Do not expose Steel API, UI, or CDP directly")],
+    ["cleanup_documented", runbookText.includes("release stale sessions") && runbookText.includes("docker compose -f infra/steel/compose.yaml down")]
+  ].map(([key, ok]) => ({ key, ok: Boolean(ok) }));
+  return {
+    ok: checks.every((check) => check.ok),
+    checks,
+    passed: checks.filter((check) => check.ok).length,
+    total: checks.length
+  };
+}
+
+async function probeSteelOperationsLive({ endpointUrl, cdpUrl, viewerUrl, fetchImpl = globalThis.fetch } = {}) {
+  if (!endpointUrl || !cdpUrl || !viewerUrl) {
+    return {
+      attempted: false,
+      ok: false,
+      status: "steel_operations_live_probe_missing_private_config",
+      healthOk: false,
+      cdpOk: false,
+      viewerOk: false,
+      rawEndpointReturned: false
+    };
+  }
+  try {
+    const [health, cdp, viewer] = await Promise.all([
+      fetchSteelJson({ endpointUrl: normalizeBaseUrl(endpointUrl), path: "/v1/health", method: "GET", fetchImpl }),
+      probeSteelCdp({ cdpUrl, fetchImpl }),
+      fetchImpl(viewerUrl, { method: "GET" }).then((response) => ({ ok: Boolean(response.ok), statusCode: response.status }))
+    ]);
+    return {
+      attempted: true,
+      ok: Boolean(health.ok && cdp.ok && viewer.ok),
+      status: health.ok && cdp.ok && viewer.ok ? "steel_operations_live_probe_ready" : "steel_operations_live_probe_failed",
+      healthOk: Boolean(health.ok),
+      cdpOk: Boolean(cdp.ok),
+      viewerOk: Boolean(viewer.ok),
+      rawEndpointReturned: false
+    };
+  } catch {
+    return {
+      attempted: true,
+      ok: false,
+      status: "steel_operations_live_probe_failed",
+      healthOk: false,
+      cdpOk: false,
+      viewerOk: false,
+      rawEndpointReturned: false
+    };
+  }
+}
+
+export async function validateBrowserSandboxProviderSteelOperationsContract({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_FILE || STEEL_OPERATIONS_EXAMPLE_CONFIG_PATH
+} = {}) {
+  const text = await readFile(resolve(configPath), "utf8");
+  return validateSteelOperationsConfig(JSON.parse(text), configPath);
+}
+
+export async function runBrowserSandboxProviderSteelOperationsSmoke({
+  configPath = process.env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_FILE || STEEL_OPERATIONS_EXAMPLE_CONFIG_PATH,
+  artifactPath = resolve("artifacts/browser-sandbox-provider-steel-operations-smoke.json"),
+  env = process.env,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const [configText, composeText, runbookText] = await Promise.all([
+    readFile(resolve(configPath), "utf8"),
+    readFile(resolve(STEEL_COMPOSE_PATH), "utf8"),
+    readFile(resolve(STEEL_RUNBOOK_PATH), "utf8")
+  ]);
+  const validation = validateSteelOperationsConfig(JSON.parse(configText), configPath);
+  const compose = validateSteelComposeOperations(composeText, runbookText);
+  const liveProbeRequested = env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE === "1";
+  const liveProbe = liveProbeRequested
+    ? await probeSteelOperationsLive({
+      endpointUrl: env.WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL,
+      cdpUrl: env.WEFELLA_BROWSER_SANDBOX_CDP_URL,
+      viewerUrl: env.WEFELLA_BROWSER_SANDBOX_VIEWER_URL,
+      fetchImpl
+    })
+    : {
+      attempted: false,
+      ok: false,
+      status: "steel_operations_live_probe_not_requested",
+      healthOk: false,
+      cdpOk: false,
+      viewerOk: false,
+      rawEndpointReturned: false
+    };
+  const operationsGate = env.WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY === "1";
+  const staticReady = Boolean(validation.ok && compose.ok);
+  const ready = Boolean(staticReady && operationsGate && (!liveProbeRequested || liveProbe.ok));
+  const score = ready ? 100 : staticReady ? 85 : Math.floor((compose.passed / Math.max(compose.total, 1)) * 60);
+  const result = {
+    ok: staticReady && (!liveProbeRequested || liveProbe.ok),
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: ready
+      ? "steel_self_host_operations_ready"
+      : staticReady
+        ? "steel_self_host_operations_contract_ready"
+        : "steel_self_host_operations_contract_incomplete",
+    hostedProviderReady: false,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    steelOperationsReady: ready,
+    score,
+    target: 100,
+    validation,
+    compose,
+    liveProbe,
+    gates: {
+      operationsReadyEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY",
+      liveProbeEnv: "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE",
+      operationsGate,
+      liveProbeRequested
+    },
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_steel_operations",
+      scoreKey: "hosted_browser_sandbox_provider_steel_operations",
+      command: "npm run sandbox:browser:steel-operations",
+      configFile: configPath,
+      composeFile: STEEL_COMPOSE_PATH,
+      runbook: STEEL_RUNBOOK_PATH
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(compose),
+      ...assertNoSecretLeak(liveProbe),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      hostedReadinessOverclaimed: false
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
+  return result;
 }
 
 export async function validateBrowserSandboxProviderSelectionContract({

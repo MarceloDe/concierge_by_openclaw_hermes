@@ -20,6 +20,9 @@ DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-pro
 PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env"
 PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md"
 PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.private-launch-execution.example.env"
+STEEL_OPERATIONS_CONFIG_PATH = "project/deployment/browser-sandbox-provider.steel-operations.example.json"
+STEEL_COMPOSE_PATH = "infra/steel/compose.yaml"
+STEEL_RUNBOOK_PATH = "infra/steel/README.md"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
@@ -753,6 +756,132 @@ def _summarize_steel_self_host_proof() -> dict[str, Any]:
     }
 
 
+def _validate_steel_operations_config(config: dict[str, Any]) -> dict[str, Any]:
+    failures: list[str] = []
+    if config.get("schemaVersion") != "brainstyworkers.browser-sandbox-provider-steel-operations.v1":
+        failures.append("steel_operations_schema_version_missing_or_unknown")
+    if config.get("providerStrategy") != "steel-self-host":
+        failures.append("steel_operations_provider_strategy_must_be_steel_self_host")
+    if config.get("status") != "operations_contract_only":
+        failures.append("steel_operations_status_must_be_contract_only")
+    if config.get("composeFile") != STEEL_COMPOSE_PATH:
+        failures.append("steel_operations_compose_file_mismatch")
+    if config.get("runbook") != STEEL_RUNBOOK_PATH:
+        failures.append("steel_operations_runbook_mismatch")
+    session = config.get("sessionPolicy", {}) if isinstance(config.get("sessionPolicy"), dict) else {}
+    if not isinstance(session.get("maxConcurrentSessions"), int) or not 1 <= session.get("maxConcurrentSessions", 0) <= 5:
+        failures.append("steel_operations_concurrency_cap_required")
+    if session.get("maxSessionMinutes", 999) > 30:
+        failures.append("steel_operations_max_session_minutes_must_be_30_or_less")
+    if session.get("idleTimeoutMinutes", 999) > 5:
+        failures.append("steel_operations_idle_timeout_minutes_must_be_5_or_less")
+    for key, failure in [
+        ("releaseOnTeardown", "steel_operations_release_on_teardown_required"),
+        ("releaseStaleSessions", "steel_operations_stale_session_release_required"),
+        ("teardownOnFailure", "steel_operations_teardown_on_failure_required")
+    ]:
+        if session.get(key) is not True:
+            failures.append(failure)
+    retention = config.get("retentionPolicy", {}) if isinstance(config.get("retentionPolicy"), dict) else {}
+    for key, failure in [
+        ("recordFrames", "steel_operations_frame_recording_must_be_disabled"),
+        ("persistRawOcrText", "steel_operations_raw_ocr_persistence_must_be_disabled"),
+        ("rawScreenshotsInGit", "steel_operations_raw_screenshots_in_git_must_be_disabled"),
+        ("browserLogStorageEnabled", "steel_operations_browser_log_storage_must_be_disabled_by_default"),
+        ("logStorageContainsPhi", "steel_operations_log_storage_phi_must_be_false")
+    ]:
+        if retention.get(key) is not False:
+            failures.append(failure)
+    if not isinstance(retention.get("proofArtifactRetentionDays"), int) or not 1 <= retention.get("proofArtifactRetentionDays", 0) <= 30:
+        failures.append("steel_operations_proof_retention_days_must_be_1_to_30")
+    network = config.get("networkPolicy", {}) if isinstance(config.get("networkPolicy"), dict) else {}
+    expected_network = {
+        "apiLoopbackOnly": True,
+        "cdpLoopbackOnly": True,
+        "viewerLoopbackOnly": True,
+        "directPublicCdpAllowed": False,
+        "remoteAccessViaFastApiOnly": True
+    }
+    for key, expected in expected_network.items():
+        if network.get(key) is not expected:
+            failures.append(f"steel_operations_network_{key}_invalid")
+    image = config.get("imagePolicy", {}) if isinstance(config.get("imagePolicy"), dict) else {}
+    if image.get("pinnedByDigest") is not True:
+        failures.append("steel_operations_images_must_be_pinned_by_digest")
+    if image.get("latestTagsAllowed") is not False:
+        failures.append("steel_operations_latest_tags_must_be_forbidden")
+    if image.get("patchReviewRequired") is not True:
+        failures.append("steel_operations_patch_review_required")
+    approval = config.get("approvalPolicy", {}) if isinstance(config.get("approvalPolicy"), dict) else {}
+    if approval.get("requiresReadOnlyApproval") is not True or approval.get("requiresHumanTakeoverApproval") is not True:
+        failures.append("steel_operations_approval_required")
+    if approval.get("agentCredentialEntryAllowed") is not False or approval.get("externalWriteActionsAllowed") is not False:
+        failures.append("steel_operations_external_or_credential_actions_must_be_blocked")
+    serialized = json.dumps(config, separators=(",", ":"))
+    if re.search(r"https?://[^\"\\\s]+|ws://[^\"\\\s]+", serialized, re.I):
+        failures.append("steel_operations_raw_endpoint_forbidden")
+    if re.search(r"Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]", serialized, re.I):
+        failures.append("steel_operations_secret_literal_forbidden")
+    return {"ok": len(failures) == 0, "failures": failures}
+
+
+def _summarize_steel_operations() -> dict[str, Any]:
+    config = _read_json_if_present(STEEL_OPERATIONS_CONFIG_PATH)
+    compose_text = _read_text_if_present(STEEL_COMPOSE_PATH) or ""
+    runbook_text = _read_text_if_present(STEEL_RUNBOOK_PATH) or ""
+    validation = _validate_steel_operations_config(config if isinstance(config, dict) else {})
+    checks = [
+        {"key": "api_image_pinned_digest", "ok": bool(re.search(r"ghcr\.io/steel-dev/steel-browser-api@sha256:[a-f0-9]{64}", compose_text))},
+        {"key": "ui_image_pinned_digest", "ok": bool(re.search(r"ghcr\.io/steel-dev/steel-browser-ui@sha256:[a-f0-9]{64}", compose_text))},
+        {"key": "no_latest_tags", "ok": ":latest" not in compose_text},
+        {"key": "api_port_loopback_only", "ok": '"127.0.0.1:3000:3000"' in compose_text},
+        {"key": "cdp_port_loopback_only", "ok": '"127.0.0.1:9223:9223"' in compose_text},
+        {"key": "viewer_port_loopback_only", "ok": '"127.0.0.1:5173:80"' in compose_text},
+        {"key": "log_storage_disabled_by_default", "ok": "LOG_STORAGE_ENABLED=false" in compose_text},
+        {"key": "fastapi_remote_boundary_documented", "ok": "FastAPI connector" in runbook_text and "Do not expose Steel API, UI, or CDP directly" in runbook_text},
+        {"key": "cleanup_documented", "ok": "release stale sessions" in runbook_text and "docker compose -f infra/steel/compose.yaml down" in runbook_text}
+    ]
+    passed = sum(1 for check in checks if check["ok"])
+    static_ready = bool(validation["ok"] and passed == len(checks))
+    operations_gate = os.environ.get("WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY") == "1"
+    live_probe_requested = os.environ.get("WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE") == "1"
+    live_probe_config_present = bool(
+        os.environ.get("WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL")
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_CDP_URL")
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_VIEWER_URL")
+    )
+    ready = bool(static_ready and operations_gate and (not live_probe_requested or live_probe_config_present))
+    return {
+        "status": (
+            "steel_self_host_operations_ready"
+            if ready
+            else "steel_self_host_operations_contract_ready"
+            if static_ready
+            else "steel_self_host_operations_contract_incomplete"
+        ),
+        "ok": ready,
+        "contractReady": static_ready,
+        "score": 100 if ready else 85 if static_ready else int((passed / max(len(checks), 1)) * 60),
+        "target": 100,
+        "checks": checks + [
+            {"key": "operations_gate", "ok": operations_gate},
+            {"key": "live_probe_requested", "ok": live_probe_requested},
+            {"key": "live_probe_config_present", "ok": live_probe_config_present}
+        ],
+        "failures": validation["failures"],
+        "composeFile": STEEL_COMPOSE_PATH,
+        "configFile": STEEL_OPERATIONS_CONFIG_PATH,
+        "runbook": STEEL_RUNBOOK_PATH,
+        "command": "npm run sandbox:browser:steel-operations",
+        "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+        "rawEndpointReturned": False,
+        "rawSecretReturned": False,
+        "rawFrameReturned": False,
+        "rawOcrTextReturned": False,
+        "rawInputReturned": False
+    }
+
+
 def validate_visual_ocr_proof_manifest(manifest: dict[str, Any], *, proof_path: str | None = None) -> dict[str, Any]:
     failures: list[str] = []
     if manifest.get("schemaVersion") != VISUAL_OCR_PROOF_SCHEMA_VERSION:
@@ -940,6 +1069,7 @@ def describe_browser_sandbox_provider_contract(
         and visual_ocr_proof_validation["ok"]
     )
     steel_self_host_proof = _summarize_steel_self_host_proof()
+    steel_operations = _summarize_steel_operations()
     launch_runbook_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH)
     launch_env_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH)
     launch_runbook_ready = bool(
@@ -1076,6 +1206,8 @@ def describe_browser_sandbox_provider_contract(
         },
         "hostedProviderSteelSelfHostProofReady": steel_self_host_proof["ok"],
         "hostedProviderSteelSelfHostProof": steel_self_host_proof,
+        "hostedProviderSteelOperationsReady": steel_operations["ok"],
+        "hostedProviderSteelOperations": steel_operations,
         "hostedProviderWebrtcSignalingReady": webrtc_signaling_ready,
         "hostedProviderWebrtcSignaling": {
             "status": (
