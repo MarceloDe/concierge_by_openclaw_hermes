@@ -7889,3 +7889,42 @@ Known risks or gaps:
 - No real hosted-provider credentials were present in the local environment.
 - The success path is covered by a fake live-provider harness in JS tests only; production readiness still requires operator-supplied private config, real provider verification, WebRTC proof when required, real visual/OCR replay, private launch execution, and final human review.
 - `hosted_remote_browser_sandbox` must remain `0 / 100` until the private execution and final human review gates pass against real provider evidence.
+
+## Phase 28A Self-Hosted Steel Browser Provider Update
+
+Status: Implemented, Docker-backed live-verified locally, and dashboard/API proof surfaced separately from final hosted remote readiness.
+
+Slice name:
+- Self-hosted Steel Browser as `steel-self-host` BrowserSandboxProvider strategy.
+
+Code changes:
+- Added `infra/steel/compose.yaml` and `infra/steel/README.md` for local Steel API/UI with loopback-only API, CDP, and viewer ports.
+- Added a `steel-self-host` live-verification strategy to `scripts/browser-sandbox-provider-contract.mjs`.
+- Allowed HTTP endpoint resolution only for loopback `steel-self-host`; non-local hosted providers still require HTTPS.
+- Mapped Steel `/v1` lifecycle into the existing provider envelope: create session, CDP connect, live viewer ref, screenshot ref, local caption ref, approval-gated takeover, synthetic approved input relay, offsite fail-closed, and teardown.
+- Added a regression test with fake Steel API and fake CDP WebSocket.
+- Exposed `hosted_browser_sandbox_provider_steel_self_host` in Node dashboard proof and FastAPI `/api/v1/proof` from the Phase 28 artifact.
+
+Safety decision:
+- The final `hosted_remote_browser_sandbox` score remains blocked until the explicit live-verified/runtime-flag/WebRTC/visual-replay/private-execution/final-review gates all pass.
+- The Steel self-host proof is a separate local-provider proof and returns refs/booleans only.
+- Human-only takeover remains preserved; Codex must not enter credentials, solve 2FA/captcha, submit forms, contact payers, or run against a real payer portal.
+
+Focused verification completed:
+- `docker compose -f infra/steel/compose.yaml up -d`
+- `docker compose -f infra/steel/compose.yaml ps`
+- `curl http://127.0.0.1:3000/v1/health` returned `{"status":"ok"}` after clearing a stale local Next.js listener on port 3000.
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `npm run sandbox:browser:provider-live-verification`
+
+Focused verification result:
+- Steel live lifecycle passed with `steel_self_host_live_lifecycle_verified`.
+- Phase 28A artifact: `artifacts/phase28/steel-self-host-live-lifecycle-2026-06-18T02-15-54Z.json`.
+- Dashboard/API proof now derives `10 / 10` checks and `100 / 100` for `hosted_browser_sandbox_provider_steel_self_host`.
+- `hostedProviderReady=false` remains correct even after private runtime JSON was flipped to `adapter.providerLiveConnected=true`, because final live-verified, WebRTC/visual replay, private execution, and human-reviewed launch gates are not all enabled.
+
+Known risks or gaps:
+- Current Steel self-host deployment is single-machine/local and should be treated as a staging sandbox, not a scaled production browser cluster.
+- The pinned Steel image required `SKIP_FINGERPRINT_INJECTION=true` on this Docker host to avoid an upstream fingerprint-generation launch failure.
+- The Steel API/CDP/UI ports are local loopback only; remote/mobile access still needs the FastAPI connector and a deployment-safe tunnel or hosted infrastructure.

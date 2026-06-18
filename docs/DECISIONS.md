@@ -2366,3 +2366,22 @@ This prevents an operator or future agent from confusing a green runbook/private
 
 Cost of changing later:
 Low. Provider-specific launch evidence can be added behind the private execution manifest and proof key without changing the public `/api/v1/browser/*` contract, redaction policy, or human-only takeover boundary.
+
+## 2026-06-18 - Use Self-Hosted Steel Browser For Local Hosted-Sandbox Proof
+
+Context:
+The project needed a real selected-provider browser sandbox proof, but no third-party sandbox provider credentials were available and PHI must not leave the machine. A purely fake provider would keep the hosted remote browser gap open, while a new custom sandbox from scratch would delay the connector and visual proof work.
+
+Options considered:
+- Wait for a third-party provider account before implementing the adapter.
+- Build a browser sandbox from scratch around raw Chrome/CDP.
+- Use self-hosted Steel Browser locally, behind the existing BrowserSandboxProvider contract.
+
+Decision:
+Add `infra/steel/compose.yaml` with digest-pinned Steel API/UI images and a `steel-self-host` adapter strategy selected by `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME`. The strategy allows HTTP only for loopback Steel, creates sessions through Steel `/v1/sessions`, proves CDP over the local debugger port, maps the viewer/screenshot/caption/takeover/input/teardown lifecycle into sanitized refs, and exposes a separate `hosted_browser_sandbox_provider_steel_self_host` dashboard/API score.
+
+Reason:
+Steel gives the project a real local browser-sandbox provider without introducing a SaaS dependency or moving PHI off the machine. Keeping it behind the existing provider envelope preserves the public `/api/v1/browser/*` contract, approval boundaries, and final hosted-readiness gates.
+
+Cost of changing later:
+Low to moderate. Steel Cloud, another provider, or a production self-host deployment can replace the endpoint and strategy-specific client while keeping the public connector, dashboard proof keys, and human-only takeover contract stable.

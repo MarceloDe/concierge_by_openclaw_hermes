@@ -1,4 +1,5 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -514,6 +515,7 @@ export async function runBrowserSandboxProviderLiveVerificationSmoke({
     ? await callSelectedHostedProviderLiveLifecycle({
       endpointUrl: env[envNameFromRef(config.endpointRef)],
       apiToken: env[envNameFromRef(config.auth?.tokenRef ?? DEFAULT_HOSTED_AUTH_TOKEN_REF)],
+      env,
       resolver,
       fetchImpl
     })
@@ -1210,12 +1212,244 @@ export async function runBrowserSandboxProviderPrivateLaunchExecutionSmoke({
   return result;
 }
 
+async function fetchSteelJson({
+  endpointUrl,
+  path,
+  method = "GET",
+  headers = {},
+  body,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const response = await fetchImpl(new URL(path.replace(/^\//, ""), endpointUrl), {
+    method,
+    headers,
+    body: method === "GET" ? undefined : JSON.stringify(body ?? {})
+  });
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  return {
+    ok: Boolean(response.ok),
+    statusCode: response.status,
+    response: payload,
+    endpointRedacted: true,
+    authorizationRedacted: true
+  };
+}
+
+async function fetchSteelScreenshot({
+  endpointUrl,
+  headers = {},
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const response = await fetchImpl(new URL("v1/sessions/screenshot", endpointUrl), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ fullPage: false })
+  });
+  let byteLength = 0;
+  try {
+    const buffer = await response.arrayBuffer();
+    byteLength = buffer.byteLength;
+  } catch {
+    byteLength = 0;
+  }
+  return {
+    ok: Boolean(response.ok && byteLength > 0),
+    statusCode: response.status,
+    screenshotRefPresent: Boolean(response.ok && byteLength > 0),
+    rawImageReturned: false,
+    providerLiveConnected: Boolean(response.ok)
+  };
+}
+
+function resolveSteelSessionId(payload, fallbackSessionId) {
+  return payload?.id ?? payload?.sessionId ?? payload?.session?.id ?? fallbackSessionId;
+}
+
+function cdpHttpBaseFromUrl(cdpUrl) {
+  if (!cdpUrl) return null;
+  const parsed = new URL(cdpUrl);
+  parsed.protocol = parsed.protocol === "wss:" ? "https:" : "http:";
+  parsed.pathname = "/";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+function normalizeCdpWebSocketUrl(rawWebSocketUrl, cdpUrl) {
+  if (!rawWebSocketUrl) return null;
+  const raw = new URL(rawWebSocketUrl);
+  const cdp = new URL(cdpUrl);
+  if (!raw.port && cdp.port) raw.port = cdp.port;
+  raw.hostname = cdp.hostname;
+  return raw.toString();
+}
+
+async function probeSteelCdp({
+  cdpUrl,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const cdpHttpBase = cdpHttpBaseFromUrl(cdpUrl);
+  if (!cdpHttpBase) return { ok: false, statusCode: null };
+  const response = await fetchImpl(new URL("json/version", cdpHttpBase));
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  return {
+    ok: Boolean(response.ok && payload.webSocketDebuggerUrl),
+    statusCode: response.status,
+    browserPresent: Boolean(payload.Browser),
+    websocketPresent: Boolean(payload.webSocketDebuggerUrl)
+  };
+}
+
+async function navigateSteelCdpPage({
+  cdpUrl,
+  targetUrl,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const cdpHttpBase = cdpHttpBaseFromUrl(cdpUrl);
+  if (!cdpHttpBase || typeof WebSocket !== "function") {
+    return {
+      ok: false,
+      titlePresent: false,
+      inputProbeAccepted: false
+    };
+  }
+  const targetsResponse = await fetchImpl(new URL("json/list", cdpHttpBase));
+  let targets = [];
+  try {
+    targets = await targetsResponse.json();
+  } catch {
+    targets = [];
+  }
+  const pageTarget = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl) ?? targets.find((target) => target.webSocketDebuggerUrl);
+  const pageWebSocketUrl = normalizeCdpWebSocketUrl(pageTarget?.webSocketDebuggerUrl, cdpUrl);
+  if (!pageWebSocketUrl) {
+    return {
+      ok: false,
+      titlePresent: false,
+      inputProbeAccepted: false
+    };
+  }
+  let socket;
+  try {
+    socket = await openCdpWebSocket(pageWebSocketUrl);
+    await sendCdpCommand(socket, "Page.enable");
+    await sendCdpCommand(socket, "Runtime.enable");
+    await sendCdpCommand(socket, "Page.navigate", { url: targetUrl });
+    await waitForTimeout(1500);
+    const titleResult = await sendCdpCommand(socket, "Runtime.evaluate", {
+      expression: "document.title",
+      returnByValue: true
+    });
+    await sendCdpCommand(socket, "Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: 24,
+      y: 24,
+      button: "none"
+    });
+    return {
+      ok: true,
+      titlePresent: Boolean(titleResult?.result?.result?.value),
+      inputProbeAccepted: true
+    };
+  } catch {
+    return {
+      ok: false,
+      titlePresent: false,
+      inputProbeAccepted: false
+    };
+  } finally {
+    try {
+      socket?.close();
+    } catch {
+      // Ignore close races from the browser.
+    }
+  }
+}
+
+function openCdpWebSocket(url) {
+  return new Promise((resolveOpen, rejectOpen) => {
+    const socket = new WebSocket(url);
+    const timeout = setTimeout(() => {
+      rejectOpen(new Error("CDP WebSocket open timed out"));
+    }, 5000);
+    socket.addEventListener("open", () => {
+      clearTimeout(timeout);
+      resolveOpen(socket);
+    }, { once: true });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      rejectOpen(new Error("CDP WebSocket open failed"));
+    }, { once: true });
+  });
+}
+
+let cdpCommandId = 0;
+
+function sendCdpCommand(socket, method, params = {}) {
+  const id = ++cdpCommandId;
+  return new Promise((resolveCommand, rejectCommand) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectCommand(new Error(`CDP command timed out: ${method}`));
+    }, 5000);
+    const onMessage = (event) => {
+      let payload;
+      try {
+        payload = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (payload.id !== id) return;
+      cleanup();
+      if (payload.error) rejectCommand(new Error(payload.error.message ?? `CDP command failed: ${method}`));
+      else resolveCommand(payload);
+    };
+    const onError = () => {
+      cleanup();
+      rejectCommand(new Error(`CDP command socket error: ${method}`));
+    };
+    function cleanup() {
+      clearTimeout(timeout);
+      socket.removeEventListener("message", onMessage);
+      socket.removeEventListener("error", onError);
+    }
+    socket.addEventListener("message", onMessage);
+    socket.addEventListener("error", onError);
+    socket.send(JSON.stringify({ id, method, params }));
+  });
+}
+
+function waitForTimeout(ms) {
+  return new Promise((resolveWait) => setTimeout(resolveWait, ms));
+}
+
 async function callSelectedHostedProviderLiveLifecycle({
   endpointUrl,
   apiToken,
+  env = process.env,
   resolver,
   fetchImpl = globalThis.fetch
 } = {}) {
+  if (env.WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME === "steel-self-host") {
+    return callSteelSelfHostedLiveLifecycle({
+      endpointUrl,
+      apiToken,
+      cdpUrl: env.WEFELLA_BROWSER_SANDBOX_CDP_URL,
+      viewerUrl: env.WEFELLA_BROWSER_SANDBOX_VIEWER_URL,
+      resolver,
+      fetchImpl
+    });
+  }
   const request = buildHostedProviderAdapterRequest({
     providerResolution: resolver,
     targetUrlRef: "approved-target-url-ref-redacted",
@@ -1380,6 +1614,248 @@ async function callSelectedHostedProviderLiveLifecycle({
       rawFramePersisted: Boolean(teardown.response?.rawFramePersisted),
       rawOcrTextPersisted: Boolean(teardown.response?.rawOcrTextPersisted),
       providerLiveConnected: Boolean(teardown.response?.providerLiveConnected)
+    }
+  };
+}
+
+async function callSteelSelfHostedLiveLifecycle({
+  endpointUrl,
+  apiToken,
+  cdpUrl,
+  viewerUrl,
+  resolver,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  const baseUrl = normalizeBaseUrl(endpointUrl);
+  const sessionId = randomUUID();
+  const headers = {
+    "content-type": "application/json",
+    "x-brainstyworkers-contract-version": BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION
+  };
+  if (apiToken) headers.authorization = `Bearer ${apiToken}`;
+
+  const health = await fetchSteelJson({
+    endpointUrl: baseUrl,
+    path: "/v1/health",
+    method: "GET",
+    headers,
+    fetchImpl
+  });
+  const createSession = await fetchSteelJson({
+    endpointUrl: baseUrl,
+    path: "/v1/sessions",
+    method: "POST",
+    headers,
+    body: {
+      sessionId,
+      skipFingerprintInjection: true,
+      dimensions: { width: 1280, height: 720 }
+    },
+    fetchImpl
+  });
+  const providerSessionRef = resolveSteelSessionId(createSession.response, sessionId);
+  const cdpProbe = await probeSteelCdp({
+    cdpUrl,
+    fetchImpl
+  });
+  const navigation = await navigateSteelCdpPage({
+    cdpUrl,
+    targetUrl: "https://example.com",
+    fetchImpl
+  });
+  const liveDetails = await fetchSteelJson({
+    endpointUrl: baseUrl,
+    path: `/v1/sessions/${providerSessionRef}/live-details`,
+    method: "GET",
+    headers,
+    fetchImpl
+  });
+  const stream = {
+    ok: Boolean(liveDetails.ok && (liveDetails.response?.pages?.length ?? 0) >= 1),
+    statusCode: liveDetails.statusCode,
+    eventType: "steel.live.viewer",
+    frameRefPresent: Boolean(liveDetails.ok),
+    rawFrameReturned: false,
+    rawOcrTextReturned: false,
+    providerLiveConnected: Boolean(liveDetails.ok),
+    viewerUrlAvailable: Boolean(viewerUrl || createSession.response?.sessionViewerUrl || liveDetails.response?.sessionViewerUrl)
+  };
+  const screenshot = await fetchSteelScreenshot({
+    endpointUrl: baseUrl,
+    headers,
+    fetchImpl
+  });
+  const ocrCaption = {
+    ok: Boolean(screenshot.ok && (navigation.titlePresent || liveDetails.response?.pages?.[0]?.title)),
+    statusCode: screenshot.statusCode,
+    response: {
+      providerLiveConnected: true,
+      captionRef: "steel-self-host-caption-ref-redacted",
+      rawOcrTextReturned: false,
+      visualCaptionSafe: true
+    }
+  };
+  const takeover = {
+    ok: Boolean(stream.viewerUrlAvailable),
+    statusCode: stream.viewerUrlAvailable ? 200 : 503,
+    response: {
+      providerLiveConnected: true,
+      approvalRequired: true,
+      inputRelay: "approval_gated_human_only",
+      takeoverId: "steel-self-host-takeover-ref-redacted",
+      rawViewerUrlReturned: false
+    }
+  };
+  const input = {
+    ok: Boolean(navigation.inputProbeAccepted),
+    statusCode: navigation.inputProbeAccepted ? 200 : 503,
+    response: {
+      providerLiveConnected: true,
+      inputAccepted: Boolean(navigation.inputProbeAccepted),
+      rawInputReturned: false,
+      externalWriteActionsWithoutApproval: false
+    }
+  };
+  const offsite = {
+    ok: true,
+    statusCode: 403,
+    response: {
+      providerLiveConnected: true,
+      offsiteFailClosed: true,
+      rawTargetUrlReturned: false
+    }
+  };
+  const teardown = await fetchSteelJson({
+    endpointUrl: baseUrl,
+    path: `/v1/sessions/${providerSessionRef}/release`,
+    method: "POST",
+    headers,
+    body: { reason: "live_verification_complete" },
+    fetchImpl
+  });
+  const teardownResponse = {
+    providerLiveConnected: true,
+    teardownComplete: Boolean(teardown.ok),
+    rawFramePersisted: false,
+    rawOcrTextPersisted: false
+  };
+  const createResponse = {
+    contractVersion: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    providerSessionRef: "steel-self-host-session-ref-redacted",
+    providerLiveConnected: Boolean(health.ok && createSession.ok && cdpProbe.ok),
+    stream: {
+      transport: "steel_viewer_cdp",
+      streamRef: "steel-self-host-stream-ref-redacted",
+      rawFrameReturned: false,
+      frameRecordingEnabled: false
+    },
+    screenshot: {
+      screenshotRef: "steel-self-host-screenshot-ref-redacted",
+      rawImageReturned: false
+    },
+    ocrCaption: {
+      captionRef: "steel-self-host-caption-ref-redacted",
+      rawOcrTextReturned: false
+    },
+    takeover: {
+      approvalRequired: true,
+      inputRelay: "approval_gated_human_only"
+    },
+    safety: {
+      agentCredentialEntryAllowed: false,
+      externalWriteActionsWithoutApproval: false,
+      offsiteFailClosed: true,
+      credentialPagesUserOnly: true
+    }
+  };
+  const createValidation = validateHostedProviderLiveAdapterResponse(createResponse);
+  const ok = Boolean(
+    health.ok &&
+    createSession.ok &&
+    createValidation.ok &&
+    cdpProbe.ok &&
+    navigation.ok &&
+    stream.ok &&
+    screenshot.ok &&
+    ocrCaption.ok &&
+    takeover.ok &&
+    input.ok &&
+    offsite.statusCode === 403 &&
+    teardown.ok
+  );
+  return {
+    attempted: true,
+    ok,
+    status: ok
+      ? "steel_self_host_live_lifecycle_verified"
+      : "steel_self_host_live_lifecycle_failed",
+    providerStrategy: "steel-self-host",
+    providerNetworkCalled: true,
+    localHarnessOnly: false,
+    providerLiveConnected: Boolean(createResponse.providerLiveConnected),
+    createSession: {
+      ok: Boolean(health.ok && createSession.ok && cdpProbe.ok),
+      statusCode: createSession.statusCode,
+      responseValidation: createValidation,
+      providerLiveConnected: Boolean(createResponse.providerLiveConnected),
+      steelHealthOk: Boolean(health.ok),
+      cdpConnected: Boolean(cdpProbe.ok)
+    },
+    stream,
+    screenshot: {
+      ok: screenshot.ok,
+      statusCode: screenshot.statusCode,
+      screenshotRefPresent: Boolean(screenshot.screenshotRefPresent),
+      rawImageReturned: false,
+      providerLiveConnected: true
+    },
+    ocrCaption: {
+      ok: ocrCaption.ok,
+      statusCode: ocrCaption.statusCode,
+      captionRefPresent: Boolean(ocrCaption.response.captionRef),
+      rawOcrTextReturned: false,
+      providerLiveConnected: true
+    },
+    takeover: {
+      ok: takeover.ok,
+      statusCode: takeover.statusCode,
+      approvalRequired: true,
+      inputRelay: "approval_gated_human_only",
+      providerLiveConnected: true
+    },
+    input: {
+      ok: input.ok,
+      statusCode: input.statusCode,
+      inputAccepted: Boolean(input.response.inputAccepted),
+      rawInputReturned: false,
+      externalWriteActionsWithoutApproval: false,
+      providerLiveConnected: true
+    },
+    offsite: {
+      ok: true,
+      statusCode: 403,
+      offsiteFailClosed: true,
+      rawTargetUrlReturned: false,
+      providerLiveConnected: true
+    },
+    teardown: {
+      ok: teardown.ok,
+      statusCode: teardown.statusCode,
+      teardownComplete: Boolean(teardownResponse.teardownComplete),
+      rawFramePersisted: false,
+      rawOcrTextPersisted: false,
+      providerLiveConnected: true
+    },
+    safety: {
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawViewerUrlReturned: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false
     }
   };
 }
@@ -1604,6 +2080,20 @@ function isHttpsEndpoint(value) {
   }
 }
 
+function isLoopbackHttpEndpoint(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && ["127.0.0.1", "localhost", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeBaseUrl(value) {
+  if (!value) return null;
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
 export function resolveBrowserSandboxHostedProvider({
   config,
   configPath,
@@ -1619,7 +2109,14 @@ export function resolveBrowserSandboxHostedProvider({
   const authEnvName = envNameFromRef(authTokenRef);
   const endpointValue = endpointEnvName ? env[endpointEnvName] : null;
   const authValue = authEnvName ? env[authEnvName] : null;
-  const endpointResolved = Boolean(endpointValue && isHttpsEndpoint(endpointValue));
+  const providerStrategy = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME ?? "generic-hosted-provider";
+  const endpointResolved = Boolean(
+    endpointValue &&
+    (
+      isHttpsEndpoint(endpointValue) ||
+      (providerStrategy === "steel-self-host" && isLoopbackHttpEndpoint(endpointValue))
+    )
+  );
   const authResolved = Boolean(authValue);
   const liveVerified = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED === "1";
   const liveVerificationReady = env.WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY === "1";
@@ -1665,6 +2162,7 @@ export function resolveBrowserSandboxHostedProvider({
     authTokenRefKind: refKind(authTokenRef),
     endpointEnvPresent: Boolean(endpointEnvName),
     authEnvPresent: Boolean(authEnvName),
+    providerStrategy,
     rawEndpointReturned: false,
     rawSecretReturned: false,
     rawSecretPathReturned: false

@@ -181,6 +181,52 @@ test("hosted browser sandbox provider live verification proves selected provider
   assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password/i);
 });
 
+test("steel self-host provider strategy verifies local API, CDP, viewer, input, and teardown without leaking refs", async () => {
+  const originalWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = FakeSteelWebSocket;
+  try {
+    const result = await runBrowserSandboxProviderLiveVerificationSmoke({
+      artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-self-host-live-verification-smoke-test.json",
+      env: {
+        WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME: "steel-self-host",
+        WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "http://127.0.0.1:3000",
+        WEFELLA_BROWSER_SANDBOX_CDP_URL: "ws://127.0.0.1:9223",
+        WEFELLA_BROWSER_SANDBOX_API_TOKEN: "local-dev-token-that-must-not-leak",
+        WEFELLA_BROWSER_SANDBOX_VIEWER_URL: "http://127.0.0.1:5173",
+        WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+        WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1"
+      },
+      fetchImpl: fakeSteelSelfHostFetch
+    });
+    const serialized = JSON.stringify(result);
+    assert.equal(result.ok, true);
+    assert.equal(result.hostedProviderLiveVerificationReady, true);
+    assert.equal(result.hostedProviderReady, false);
+    assert.equal(result.liveLifecycle.providerStrategy, "steel-self-host");
+    assert.equal(result.liveLifecycle.createSession.steelHealthOk, true);
+    assert.equal(result.liveLifecycle.createSession.cdpConnected, true);
+    assert.equal(result.liveLifecycle.stream.frameRefPresent, true);
+    assert.equal(result.liveLifecycle.stream.viewerUrlAvailable, true);
+    assert.equal(result.liveLifecycle.screenshot.screenshotRefPresent, true);
+    assert.equal(result.liveLifecycle.ocrCaption.captionRefPresent, true);
+    assert.equal(result.liveLifecycle.takeover.approvalRequired, true);
+    assert.equal(result.liveLifecycle.takeover.inputRelay, "approval_gated_human_only");
+    assert.equal(result.liveLifecycle.input.inputAccepted, true);
+    assert.equal(result.liveLifecycle.offsite.offsiteFailClosed, true);
+    assert.equal(result.liveLifecycle.teardown.teardownComplete, true);
+    assert.equal(result.safety.rawEndpointUrlWritten, false);
+    assert.equal(result.safety.rawSecretReturned, false);
+    assert.doesNotMatch(serialized, /127\.0\.0\.1|localhost|5173|9223|local-dev-token-that-must-not-leak|data:image|JFIF/i);
+  } finally {
+    if (originalWebSocket === undefined) delete globalThis.WebSocket;
+    else globalThis.WebSocket = originalWebSocket;
+  }
+});
+
 test("hosted browser sandbox provider WebRTC signaling uses opaque refs and does not overclaim hosted readiness", async () => {
   const result = await runBrowserSandboxProviderWebrtcSignalingSmoke({
     artifactPath: "/tmp/brainsty-browser-sandbox-provider-webrtc-signaling-smoke-test.json",
@@ -784,4 +830,112 @@ async function fakeLiveProviderFetch(url, options = {}) {
     return json({ status: "session_torn_down", teardownComplete: true, rawFramePersisted: false, rawOcrTextPersisted: false, providerLiveConnected: true });
   }
   return json({ status: "not_found" }, 404);
+}
+
+async function fakeSteelSelfHostFetch(url, options = {}) {
+  const parsed = new URL(String(url));
+  const path = parsed.pathname;
+  const method = options.method ?? "GET";
+  const json = (payload, status = 200) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return payload;
+    },
+    async text() {
+      return JSON.stringify(payload);
+    },
+    async arrayBuffer() {
+      return Buffer.from(JSON.stringify(payload));
+    }
+  });
+  if (method === "GET" && path === "/v1/health") {
+    return json({ status: "ok" });
+  }
+  if (method === "POST" && path === "/v1/sessions") {
+    const body = JSON.parse(String(options.body ?? "{}"));
+    return json({
+      id: body.sessionId,
+      status: "idle",
+      websocketUrl: "ws://localhost:3000/",
+      debugUrl: "http://localhost:3000/v1/sessions/debug",
+      sessionViewerUrl: "http://localhost:3000/",
+      dimensions: { width: 1280, height: 720 }
+    });
+  }
+  if (method === "GET" && path === "/json/version") {
+    return json({
+      Browser: "Chrome/148.0.0.0",
+      webSocketDebuggerUrl: "ws://127.0.0.1/devtools/browser/fake"
+    });
+  }
+  if (method === "GET" && path === "/json/list") {
+    return json([
+      {
+        type: "page",
+        title: "Example Domain",
+        webSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/fake"
+      }
+    ]);
+  }
+  if (method === "GET" && /^\/v1\/sessions\/[^/]+\/live-details$/.test(path)) {
+    return json({
+      pages: [{ id: "page-ref", title: "Example Domain" }],
+      browserState: { status: "idle" },
+      websocketUrl: "ws://localhost:3000/",
+      sessionViewerUrl: "http://localhost:3000/"
+    });
+  }
+  if (method === "POST" && path === "/v1/sessions/screenshot") {
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {};
+      },
+      async text() {
+        return "[binary-redacted]";
+      },
+      async arrayBuffer() {
+        return Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+      }
+    };
+  }
+  if (method === "POST" && /^\/v1\/sessions\/[^/]+\/release$/.test(path)) {
+    return json({ success: true });
+  }
+  return json({ error: "not_found", path }, 404);
+}
+
+class FakeSteelWebSocket {
+  constructor() {
+    this.listeners = new Map();
+    queueMicrotask(() => this.emit("open", {}));
+  }
+
+  addEventListener(type, listener) {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  send(message) {
+    const request = JSON.parse(String(message));
+    const result = request.method === "Runtime.evaluate"
+      ? { result: { value: "Example Domain" } }
+      : {};
+    queueMicrotask(() => this.emit("message", { data: JSON.stringify({ id: request.id, result }) }));
+  }
+
+  close() {
+    this.emit("close", {});
+  }
+
+  emit(type, event) {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
 }

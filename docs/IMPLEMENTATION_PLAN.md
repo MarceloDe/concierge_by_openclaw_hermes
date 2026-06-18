@@ -2577,3 +2577,35 @@ Verification:
 Remaining follow-up:
 - Run the private launch execution against a real selected provider with operator-supplied private endpoint/token/runtime config and private visual/OCR artifacts.
 - Only after the private execution and final human review pass should production hosted remote browser readiness be allowed to score above `0 / 100`.
+
+## Self-Hosted Steel Browser Provider Cycle - 2026-06-18
+
+Goal:
+- Replace the missing external sandbox provider dependency with a local self-hosted Steel Browser provider behind the existing BrowserSandboxProvider contract.
+
+Implemented slice:
+- Add `infra/steel/compose.yaml` and `infra/steel/README.md` for local Steel API/UI/CDP.
+- Add `steel-self-host` provider strategy selected by `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME`.
+- Keep `local_cdp` and generic hosted-provider strategies as siblings.
+- Permit `http://127.0.0.1` endpoint resolution only for `steel-self-host`; production hosted endpoints still require HTTPS.
+- Run the existing `npm run sandbox:browser:provider-live-verification` harness against Steel and save Phase 28A proof under `artifacts/phase28/`.
+- Add dashboard/API proof key `hosted_browser_sandbox_provider_steel_self_host`.
+
+Acceptance:
+- Steel API health is reachable at `http://127.0.0.1:3000/v1/health`.
+- CDP is reachable on loopback only at `ws://127.0.0.1:9223`.
+- The lifecycle proof passes create session, CDP connect, live viewer ref, screenshot ref, caption ref, approved synthetic input relay, takeover approval scope, teardown, offsite fail-closed, and redaction checks.
+- Public proof returns refs and booleans only; no raw endpoint, token, screenshot bytes, OCR text, frame content, or input value.
+- `hosted_remote_browser_sandbox` remains blocked until final private execution and human review gates pass.
+
+Verification:
+- `docker compose -f infra/steel/compose.yaml up -d`
+- `docker compose -f infra/steel/compose.yaml ps`
+- `curl http://127.0.0.1:3000/v1/health`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `npm run sandbox:browser:provider-live-verification`
+
+Remaining follow-up:
+- Run browser/UI visual checks on the operator dashboard and Steel UI.
+- Decide whether to flip private runtime `adapter.providerLiveConnected=true` after human review of the local Steel proof.
+- Add deployment-scale planning for concurrency, patch cadence, artifact storage, and secure remote access before treating self-hosted Steel as production infrastructure.

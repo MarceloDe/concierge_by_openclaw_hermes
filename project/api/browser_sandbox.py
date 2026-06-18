@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import glob
 import json
 import os
 import re
@@ -696,6 +697,62 @@ def _public_path_ref(path: str | None, *, private_label: str) -> str | None:
     return path if _path_is_inside_repo(path) else private_label
 
 
+def _latest_steel_self_host_proof() -> tuple[str | None, dict[str, Any] | None]:
+    explicit_path = os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_SELF_HOST_PROOF_FILE")
+    if explicit_path:
+        return _public_path_ref(explicit_path, private_label="[private-steel-self-host-proof-outside-git]"), _read_json_if_present(explicit_path)
+    candidates = sorted(glob.glob(os.path.join("artifacts", "phase28", "steel-self-host-live-lifecycle-*.json")))
+    if not candidates:
+        return None, None
+    latest = candidates[-1]
+    return latest, _read_json_if_present(latest)
+
+
+def _summarize_steel_self_host_proof() -> dict[str, Any]:
+    artifact_ref, proof = _latest_steel_self_host_proof()
+    lifecycle = proof.get("liveLifecycle", {}) if isinstance(proof, dict) and isinstance(proof.get("liveLifecycle"), dict) else {}
+    create_session = lifecycle.get("createSession", {}) if isinstance(lifecycle.get("createSession"), dict) else {}
+    stream = lifecycle.get("stream", {}) if isinstance(lifecycle.get("stream"), dict) else {}
+    screenshot = lifecycle.get("screenshot", {}) if isinstance(lifecycle.get("screenshot"), dict) else {}
+    ocr_caption = lifecycle.get("ocrCaption", {}) if isinstance(lifecycle.get("ocrCaption"), dict) else {}
+    input_proof = lifecycle.get("input", {}) if isinstance(lifecycle.get("input"), dict) else {}
+    takeover = lifecycle.get("takeover", {}) if isinstance(lifecycle.get("takeover"), dict) else {}
+    teardown = lifecycle.get("teardown", {}) if isinstance(lifecycle.get("teardown"), dict) else {}
+    offsite = lifecycle.get("offsite", {}) if isinstance(lifecycle.get("offsite"), dict) else {}
+    safety = lifecycle.get("safety", {}) if isinstance(lifecycle.get("safety"), dict) else {}
+    checks = [
+        {"key": "session_create", "ok": create_session.get("ok") is True and lifecycle.get("providerLiveConnected") is True},
+        {"key": "cdp_connect", "ok": create_session.get("cdpConnected") is True},
+        {"key": "live_viewer_stream_ref", "ok": stream.get("ok") is True and stream.get("viewerUrlAvailable") is True},
+        {"key": "screenshot_ref", "ok": screenshot.get("ok") is True and screenshot.get("screenshotRefPresent") is True and screenshot.get("rawImageReturned") is False},
+        {"key": "ocr_caption_ref", "ok": ocr_caption.get("ok") is True and ocr_caption.get("captionRefPresent") is True and ocr_caption.get("rawOcrTextReturned") is False},
+        {"key": "approved_input_relay", "ok": input_proof.get("ok") is True and input_proof.get("inputAccepted") is True and input_proof.get("rawInputReturned") is False},
+        {"key": "takeover_approval_scope", "ok": takeover.get("ok") is True and takeover.get("approvalRequired") is True and takeover.get("inputRelay") == "approval_gated_human_only"},
+        {"key": "teardown_release", "ok": teardown.get("ok") is True and teardown.get("teardownComplete") is True},
+        {"key": "offsite_fail_closed", "ok": offsite.get("ok") is True and offsite.get("statusCode") == 403 and offsite.get("offsiteFailClosed") is True},
+        {"key": "phi_redaction_policy", "ok": safety.get("rawFrameReturned") is False and safety.get("rawImageReturned") is False and safety.get("rawOcrTextReturned") is False and safety.get("rawInputReturned") is False}
+    ]
+    passed = sum(1 for check in checks if check["ok"])
+    return {
+        "status": "steel_self_host_live_proof_ready" if passed == len(checks) else "steel_self_host_live_proof_incomplete" if artifact_ref else "steel_self_host_live_proof_missing",
+        "ok": passed == len(checks),
+        "score": passed * 10,
+        "target": 100,
+        "passed": passed,
+        "total": len(checks),
+        "checks": checks,
+        "artifactRef": artifact_ref,
+        "providerStrategy": lifecycle.get("providerStrategy"),
+        "viewerUrlEnvRef": "WEFELLA_BROWSER_SANDBOX_VIEWER_URL",
+        "lifecycleRefPresent": bool(lifecycle.get("status")),
+        "rawEndpointReturned": False,
+        "rawSecretReturned": False,
+        "rawFrameReturned": False,
+        "rawOcrTextReturned": False,
+        "rawInputReturned": False
+    }
+
+
 def validate_visual_ocr_proof_manifest(manifest: dict[str, Any], *, proof_path: str | None = None) -> dict[str, Any]:
     failures: list[str] = []
     if manifest.get("schemaVersion") != VISUAL_OCR_PROOF_SCHEMA_VERSION:
@@ -882,6 +939,7 @@ def describe_browser_sandbox_provider_contract(
         and visual_ocr_proof_path
         and visual_ocr_proof_validation["ok"]
     )
+    steel_self_host_proof = _summarize_steel_self_host_proof()
     launch_runbook_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH)
     launch_env_text = _read_text_if_present(PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH)
     launch_runbook_ready = bool(
@@ -1016,6 +1074,8 @@ def describe_browser_sandbox_provider_contract(
             "rawEndpointReturned": False,
             "rawSecretReturned": False
         },
+        "hostedProviderSteelSelfHostProofReady": steel_self_host_proof["ok"],
+        "hostedProviderSteelSelfHostProof": steel_self_host_proof,
         "hostedProviderWebrtcSignalingReady": webrtc_signaling_ready,
         "hostedProviderWebrtcSignaling": {
             "status": (
