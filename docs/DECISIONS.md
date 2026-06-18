@@ -2328,3 +2328,22 @@ This closes the GUI/OCR evidence gap without leaking PHI, provider secrets, raw 
 
 Cost of changing later:
 Low. Real providers can produce the same manifest from their capture pipeline, and future storage can replace the file reference with a secret-manager or artifact-store reference without changing the public proof keys or approval boundary.
+
+## 2026-06-17 - Add Hosted Browser Sandbox Provider Launch Readiness Gate
+
+Context:
+The visual/OCR replay gate proves the last artifact layer before hosted browser readiness, but the operational launch sequence was still spread across selection, preflight, live verification, WebRTC, replay, and final enablement switches. Without an aggregate gate, a future operator or agent could confuse "the runbook exists" with "hosted remote browser is production-ready."
+
+Options considered:
+- Mark hosted readiness complete from the existing live verification and replay harnesses.
+- Wait for real provider credentials and make no code change.
+- Add an operator launch-readiness command, env template, runbook, and dashboard/FastAPI score that aggregates the existing proof chain while preserving the final hosted score block.
+
+Decision:
+Add `npm run sandbox:browser:provider-launch-readiness`, `project/deployment/browser-sandbox-provider.launch-readiness.example.env`, and `docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md`. Expose a separate `hosted_browser_sandbox_provider_launch_readiness` proof key in Node dashboard proof and FastAPI `/api/v1/proof`. The aggregate reports runbook readiness, private proof-chain readiness, final enablement allowance, missing private requirements, and sanitized operator steps.
+
+Reason:
+This gives the next real provider launch a deterministic, auditable path while staying honest about missing private credentials. The runbook gate can pass in local/default mode, but `hosted_remote_browser_sandbox` still remains `0 / 100` until real private provider config, live verification, WebRTC when required, visual/OCR replay, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true` all agree.
+
+Cost of changing later:
+Low. Provider-specific launch steps can be added behind the same readiness checklist without changing the public `/api/v1/browser/*` contract, proof keys, redaction policy, or human-only takeover boundary.

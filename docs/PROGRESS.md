@@ -7778,3 +7778,61 @@ Known risks or gaps:
 - This phase validates the visual/OCR replay artifact layer, but the local environment still does not include real provider credentials.
 - A real selected provider must still be verified with private endpoint/token/config and real GUI/OCR evidence before `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1` can be set.
 - `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider proves live connection from private config, WebRTC signaling when required, and GUI/OCR replay proof.
+
+## Phase 26 Hosted Browser Sandbox Provider Launch Readiness Update
+
+Status: Implemented, regression-tested, and dashboard/API visually proved with hosted remote still honestly blocked.
+
+Slice name:
+- Hosted browser sandbox provider launch readiness runbook.
+
+Code changes:
+- Added `npm run sandbox:browser:provider-launch-readiness` and `scripts/browser-sandbox-provider-launch-readiness-smoke.mjs`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with an aggregate launch-readiness evaluator over provider selection, live preflight, live verification, WebRTC signaling, visual/OCR replay, private config placement, and final enablement.
+- Added `project/deployment/browser-sandbox-provider.launch-readiness.example.env` as a non-secret operator template.
+- Added `docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md`.
+- Exposed `hosted_browser_sandbox_provider_launch_readiness` in Node dashboard proof and FastAPI `/api/v1/proof`.
+- Extended compose/deployment contract checks with the new launch-readiness env gate, script, env template, and runbook.
+
+Safety decision:
+- Launch readiness is separate from final hosted remote readiness.
+- `hosted_browser_sandbox_provider_launch_readiness` can report runbook readiness or private proof-chain readiness, but `hosted_remote_browser_sandbox` remains `0 / 100` unless the existing final live provider conditions pass.
+- Private provider config and visual/OCR proof manifests must stay outside Git.
+- No raw endpoint URL, token, screenshot, OCR text, SDP, ICE candidate, local private path, credential, or input value should appear in proof output.
+- Human-only `interactive_takeover` remains preserved; Codex must not enter credentials, solve 2FA/captcha, submit forms, contact payers, or perform external/write actions.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-launch-readiness-smoke.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py`
+- `npm run sandbox:browser:provider-launch-readiness`
+- `npm run sandbox:browser:provider-visual-ocr-replay`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_launch_readiness_is_visible_without_overclaiming project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_visual_ocr_replay_is_separate_from_hosted_ready`
+
+Focused verification result:
+- Launch-readiness smoke reported `hosted_browser_sandbox_provider_launch_runbook_ready`, `hostedProviderLaunchReadinessRunbookReady=true`, `hostedProviderPrivateProofChainReady=false`, `hostedProviderFinalEnablementAllowed=false`, and `hostedProviderReady=false`.
+- Browser-sandbox provider contract tests passed with 19/19 tests.
+- Deployment compose contract test passed after linking the temp worktree to the existing local Graphiti vendor checkout.
+- Focused FastAPI facade tests passed with 2/2 tests.
+
+Full verification result:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 36/36 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 48 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Dashboard/API proof passed on `http://127.0.0.1:4212/?phase=hosted-browser-sandbox-provider-launch-readiness`.
+- Browser DOM/API assertion proved `hosted_browser_sandbox_provider_launch_readiness` at `60 / 100`, `hosted_remote_browser_sandbox` still at `0 / 100`, runbook ready, private proof chain not ready, final enablement not allowed, and no fake endpoint/token leakage.
+- In-app screenshot capture timed out, so the visual screenshot was captured through delayed headless Chrome after the auto-loaded proof panel populated the operator trace.
+- Proof artifacts:
+  - `artifacts/phase26-hosted-provider-launch-readiness-dashboard-proof.png`
+  - `artifacts/phase26-hosted-provider-launch-readiness-visual-proof.json`
+  - `artifacts/phase26-hosted-provider-launch-readiness-proof.json`
+  - `artifacts/browser-sandbox-provider-launch-readiness-smoke.json`
+
+Known risks or gaps:
+- No real hosted-provider credentials were present in the local environment.
+- The private proof-chain path is covered by a fake live-provider harness; production readiness still requires operator-supplied private config, live provider verification, WebRTC proof when required, and real visual/OCR replay.
+- `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider proves live connection from private config and final human enablement is approved.

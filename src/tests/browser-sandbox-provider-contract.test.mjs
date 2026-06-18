@@ -13,6 +13,7 @@ import {
   runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxProviderWebrtcSignalingSmoke,
   runBrowserSandboxProviderVisualOcrReplaySmoke,
+  runBrowserSandboxProviderLaunchReadinessSmoke,
   runBrowserSandboxAdapterHarnessSmoke,
   runBrowserSandboxProviderResolverSmoke,
   runBrowserSandboxProviderAdapterSmoke,
@@ -304,6 +305,73 @@ test("hosted browser sandbox provider visual/OCR replay rejects raw OCR or scree
   assert.equal(result.proofFile.validation.failures.includes("raw_frame_must_not_be_returned"), true);
   assert.equal(result.proofFile.validation.failures.includes("raw_ocr_text_must_not_be_returned"), true);
   assert.equal(result.proofFile.validation.failures.includes("raw_frame_ocr_or_credential_content_forbidden"), true);
+});
+
+test("hosted browser sandbox provider launch readiness publishes a safe operator runbook gate", async () => {
+  const result = await runBrowserSandboxProviderLaunchReadinessSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-launch-readiness-default-smoke-test.json",
+    env: {}
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderLaunchReadinessRunbookReady, true);
+  assert.equal(result.hostedProviderPrivateProofChainReady, false);
+  assert.equal(result.hostedProviderFinalEnablementAllowed, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_launch_runbook_ready");
+  assert.equal(result.checklist.runbookPresent, true);
+  assert.equal(result.checklist.envExamplePresent, true);
+  assert.equal(result.checklist.missing.includes("provider_config_private"), true);
+  assert.equal(result.dashboard.readinessKey, "hosted_browser_sandbox_provider_launch_readiness");
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.doesNotMatch(serialized, /Bearer\s+|sk-[A-Za-z0-9]/);
+});
+
+test("hosted browser sandbox provider launch readiness can prove private chain without final hosted enablement", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "brainsty-provider-launch-ready-"));
+  const proofPath = join(tmp, "provider-visual-ocr-proof.json");
+  const configPath = join(tmp, "browser-sandbox-provider.runtime.json");
+  const config = JSON.parse(await readFile(new URL("../../project/deployment/browser-sandbox-provider.hosted-provider.example.json", import.meta.url), "utf8"));
+  await writeFile(configPath, JSON.stringify(config, null, 2));
+  await writeFile(proofPath, JSON.stringify(validVisualOcrProofManifest(), null, 2));
+  const result = await runBrowserSandboxProviderLaunchReadinessSmoke({
+    configPath,
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-launch-readiness-private-smoke-test.json",
+    env: {
+      WEFELLA_BROWSER_SANDBOX_PROVIDER: "hosted_remote",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL: "https://sandbox-provider.invalid/api",
+      WEFELLA_BROWSER_SANDBOX_API_TOKEN: "test-token-that-must-not-leak",
+      WEFELLA_BROWSER_SANDBOX_SELECTED_PROVIDER: "custom_webrtc",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_PREFLIGHT_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY: "1",
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_PROOF_FILE: proofPath,
+      WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY: "1"
+    },
+    fetchImpl: fakeLiveProviderFetch
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.hostedProviderLaunchReadinessRunbookReady, true);
+  assert.equal(result.hostedProviderPrivateProofChainReady, true);
+  assert.equal(result.hostedProviderFinalEnablementAllowed, false);
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.status, "hosted_browser_sandbox_provider_launch_waiting_final_enablement");
+  assert.equal(result.liveProof.liveVerificationReady, true);
+  assert.equal(result.liveProof.webrtcSignalingReady, true);
+  assert.equal(result.liveProof.visualOcrReplayReady, true);
+  assert.equal(result.checklist.configOutsideGit, true);
+  assert.equal(result.checklist.proofOutsideGit, true);
+  assert.equal(result.checklist.missing.includes("final_live_verified_switch"), true);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.equal(result.safety.rawSecretReturned, false);
+  assert.doesNotMatch(serialized, /sandbox-provider\.invalid/);
+  assert.doesNotMatch(serialized, /test-token-that-must-not-leak/);
+  assert.doesNotMatch(serialized, /data:image|member id|subscriber id|typed-password|v=0|candidate:/i);
 });
 
 test("hosted browser sandbox provider readiness requires live verification gate even when live verified is set", async () => {

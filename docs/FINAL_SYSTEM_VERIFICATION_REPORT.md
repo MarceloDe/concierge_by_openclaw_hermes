@@ -812,3 +812,29 @@ Full verification:
 Score decision:
 - `hosted_browser_sandbox_provider_visual_ocr_replay` can reach `100 / 100` only when the explicit replay gate, earlier provider-readiness gates, and a valid private proof manifest outside Git pass.
 - `hosted_remote_browser_sandbox` remains `0 / 100` until a real selected provider proves live connection from private config, WebRTC signaling when required, visual/OCR replay proof, and explicit live verification.
+
+## Phase 26 Hosted Browser Sandbox Provider Launch Readiness
+
+What changed:
+- Added `npm run sandbox:browser:provider-launch-readiness`.
+- Added `project/deployment/browser-sandbox-provider.launch-readiness.example.env`.
+- Added `docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md`.
+- Exposed `hosted_browser_sandbox_provider_launch_readiness` through Node dashboard proof and FastAPI `/api/v1/proof`.
+- Aggregated selected-provider selection, live preflight, live verification, WebRTC signaling, visual/OCR replay, private config placement, private proof placement, and final enablement into one sanitized operator proof.
+
+Verification:
+- `npm run sandbox:browser:provider-launch-readiness` passed in safe default mode and reported `hosted_browser_sandbox_provider_launch_runbook_ready`.
+- Browser-sandbox provider contract tests passed with 19/19 tests.
+- Focused FastAPI launch-readiness proof test passed.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 36/36 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 48 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
+- Browser dashboard/API proof verified `hosted_browser_sandbox_provider_launch_readiness=60 / 100`, `hosted_remote_browser_sandbox=0 / 100`, and no fake endpoint/token leak.
+
+Current readiness:
+- `hosted_browser_sandbox_provider_launch_readiness` reports runbook readiness in default local mode.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until a real provider supplies private live proof, WebRTC proof when required, visual/OCR replay, final live verified env, and private `adapter.providerLiveConnected=true`.
+
+Remaining proof:
+- Real provider launch readiness remains pending until operator-supplied private provider credentials and real visual/OCR artifacts are available outside Git.

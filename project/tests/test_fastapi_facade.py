@@ -1344,6 +1344,41 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(visual_score["score"], 100)
         self.assertEqual(hosted_score["score"], 0)
 
+    def test_hosted_browser_sandbox_provider_launch_readiness_is_visible_without_overclaiming(self):
+        fake_endpoint = "https://sandbox-provider.invalid/api"
+        fake_token = "test-token-that-must-not-leak"
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": "project/deployment/browser-sandbox-provider.hosted-provider.example.json",
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": fake_endpoint,
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": fake_token,
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_SELECTION_FILE": "project/deployment/browser-sandbox-provider.selection.example.json"
+        }, clear=True):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_hosted_provider_launch_readiness_user")
+            proof_response = client.get("/api/v1/proof/runs/hosted-browser-sandbox-provider-launch-readiness", headers=headers)
+
+        self.assertEqual(proof_response.status_code, 200)
+        proof_text = json.dumps(proof_response.json())
+        self.assertNotIn(fake_endpoint, proof_text)
+        self.assertNotIn(fake_token, proof_text)
+        proof = proof_response.json()
+        launch_goal = next(goal for goal in proof["goals"] if goal["key"] == "hosted_browser_sandbox_provider_launch_readiness")
+        launch_check = next(check for check in proof["checks"] if check["key"] == "hosted_browser_sandbox_provider_launch_readiness")
+        launch_score = next(score for score in proof["scores"] if score["key"] == "hosted_browser_sandbox_provider_launch_readiness")
+        hosted_score = next(score for score in proof["scores"] if score["key"] == "hosted_remote_browser_sandbox")
+        self.assertEqual(launch_goal["status"], "hosted_browser_sandbox_provider_launch_runbook_ready")
+        self.assertEqual(launch_check["status"], "hosted_browser_sandbox_provider_launch_runbook_ready")
+        self.assertTrue(launch_check["runbookReady"])
+        self.assertFalse(launch_check["privateProofChainReady"])
+        self.assertFalse(launch_check["finalEnablementAllowed"])
+        self.assertIn("private_provider_config_outside_git", launch_check["missing"])
+        self.assertEqual(launch_score["score"], 60)
+        self.assertEqual(hosted_score["score"], 0)
+
     def test_hosted_browser_sandbox_webrtc_offer_route_sanitizes_provider_response(self):
         from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
 

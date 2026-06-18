@@ -2512,3 +2512,36 @@ Acceptance:
 Remaining follow-up:
 - Run visual/OCR replay against real provider artifacts captured by an operator in a private location.
 - Only after real provider live verification plus visual/OCR replay proof passes, enable the final hosted remote score in the private runtime config.
+
+## Hosted Browser Sandbox Provider Launch Readiness Cycle - 2026-06-17
+
+Goal:
+- Turn the selected-provider proof chain into an operator-safe launch-readiness gate without enabling hosted remote browser readiness from local/default proof.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-launch-readiness-smoke.mjs` and `npm run sandbox:browser:provider-launch-readiness`.
+- Add `project/deployment/browser-sandbox-provider.launch-readiness.example.env` as a non-secret private-launch template.
+- Add `docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md`.
+- Aggregate provider selection, live preflight, live verification, WebRTC signaling, visual/OCR replay, private config placement, private proof placement, and final enablement status into one sanitized proof artifact.
+- Expose `hosted_browser_sandbox_provider_launch_readiness` through Node dashboard proof and FastAPI `/api/v1/proof`.
+
+Acceptance:
+- Default local mode reports `hosted_browser_sandbox_provider_launch_runbook_ready`.
+- The aggregate lists missing private provider requirements instead of overclaiming readiness.
+- A private proof-chain harness can reach `hosted_browser_sandbox_provider_launch_waiting_final_enablement` while `hostedProviderReady=false`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until real private provider config, live verification, WebRTC when required, visual/OCR replay, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true` all agree.
+- Proof output must not include endpoint URLs, tokens, raw screenshots, raw OCR text, SDP, ICE candidates, local private paths, credentials, or input values.
+
+Verification:
+- `npm run sandbox:browser:provider-launch-readiness`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+- `npm run build`
+- `npm run test:docker:contract`
+- `npm run test:local`
+- Browser visual/API proof on the dashboard showing `hosted_browser_sandbox_provider_launch_readiness` and `hosted_remote_browser_sandbox`.
+
+Remaining follow-up:
+- Run the launch-readiness gate against the real selected provider with private endpoint/token/runtime config and private visual/OCR artifacts.
+- Only after final human review, set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=1`, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true`.
