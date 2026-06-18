@@ -16,6 +16,10 @@ const mobileNextConfig = await readFile(new URL("../../apps/mobile-next/next.con
 const mobilePage = await readFile(new URL("../../apps/mobile-next/app/page.jsx", import.meta.url), "utf8");
 const mobileApi = await readFile(new URL("../../apps/mobile-next/lib/api.js", import.meta.url), "utf8");
 const mobileCss = await readFile(new URL("../../apps/mobile-next/app/globals.css", import.meta.url), "utf8");
+const serverMjs = await readFile(new URL("../server/server.mjs", import.meta.url), "utf8");
+const projectOperatingSystem = await readFile(new URL("../../docs/PROJECT_OPERATING_SYSTEM.md", import.meta.url), "utf8");
+const phaseScoreboard = await readFile(new URL("../../docs/PHASE_SCOREBOARD.md", import.meta.url), "utf8");
+const nonMockedProofRules = await readFile(new URL("../../docs/NON_MOCKED_PROOF_RULES.md", import.meta.url), "utf8");
 
 test("chat MVP surface exposes guided auth, portal readiness, and runtime timeline", () => {
   assert.match(indexHtml, /id="chatJourney"/);
@@ -337,6 +341,32 @@ test("server connector dashboard and Next mobile PWA expose only the v1 connecto
   assert.match(browserStreamController, /captureScreenshotFallbackFrame/);
   assert.match(browserStreamController, /cdp_screenshot_fallback/);
   assert.match(browserStreamController, /lastFrame/);
+});
+
+test("Phase 32 canonical operating system is documented and visible in dashboard proof", () => {
+  assert.match(projectOperatingSystem, /Source Of Truth Order/);
+  assert.match(projectOperatingSystem, /Cortex wins/);
+  assert.match(projectOperatingSystem, /No phase is done until both the worker repo changes and Cortex memory changes land on `main`/);
+  assert.match(projectOperatingSystem, /Planner/);
+  assert.match(projectOperatingSystem, /Verifier/);
+  assert.match(projectOperatingSystem, /Cortex Scribe/);
+  assert.match(projectOperatingSystem, /Phase 33 should implement the first continuous-intelligence slice/);
+
+  assert.match(phaseScoreboard, /canonical_operating_system/);
+  assert.match(phaseScoreboard, /continuous_procedural_memory/);
+  assert.match(phaseScoreboard, /multi_channel_openclaw_gateway/);
+  assert.match(phaseScoreboard, /production_database_rollout/);
+
+  assert.match(nonMockedProofRules, /Do not call a stubbed LLM response an LLM proof/);
+  assert.match(nonMockedProofRules, /Do not call a local fake provider final hosted-browser readiness/);
+  assert.match(nonMockedProofRules, /Live LLM proof must/);
+  assert.match(nonMockedProofRules, /Visual proof is required/);
+
+  assert.match(serverMjs, /canonical_goal_tied_phase_execution/);
+  assert.match(serverMjs, /canonical_phase_operating_system/);
+  assert.match(serverMjs, /phase32_goal_tied_execution_contract_ready/);
+  assert.match(serverMjs, /docs\/PROJECT_OPERATING_SYSTEM\.md/);
+  assert.match(appJs, /renderConnectorProof/);
 });
 
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {

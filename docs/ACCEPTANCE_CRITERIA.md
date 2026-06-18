@@ -2302,3 +2302,21 @@ Current proof status:
 - `node --test src/tests/browser-sandbox-provider-contract.test.mjs` passed with 28/28 tests.
 - `npm run build` passed.
 - `npm run test:docker:contract` passed with 45/45 tests.
+## Phase 32: Canonical Goal-Tied Phase Execution
+
+Acceptance criteria:
+- `docs/PROJECT_OPERATING_SYSTEM.md` defines the source-of-truth order, durable objective, RALPH loop, role model, and Phase 33 candidate.
+- `docs/PHASE_SCOREBOARD.md` lists active maturity gates and makes incomplete intelligence/channel/database gaps visible.
+- `docs/NON_MOCKED_PROOF_RULES.md` defines allowed proof types, forbidden claims, required labels, live LLM proof requirements, and visual proof requirements.
+- `GET /api/proof/runs/server-connector-next-mobile-mvp` includes:
+  - goal key `canonical_goal_tied_phase_execution`;
+  - check key `canonical_phase_operating_system`;
+  - score key `canonical_goal_tied_phase_execution`.
+- The operator dashboard can render those keys through the existing connector proof panel.
+- Tests fail if the operating-system docs or proof keys are removed.
+- The phase is not marked done until the worker branch and Cortex memory branch are pushed and PRs are opened.
+
+Focused proof:
+- `node --test src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`

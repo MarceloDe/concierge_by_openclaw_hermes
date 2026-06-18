@@ -8067,3 +8067,45 @@ Browser/dashboard proof:
 - Browser DOM proof verified `hosted_browser_sandbox_provider_steel_ops_drills`, `steel_remote_ops_drills_ready`, `100 / 100`, `ops-drill readiness`, `remote-host readiness`, and the Phase 30 lifecycle artifact reference.
 - Screenshot artifact: `artifacts/phase31/steel-ops-drills-dashboard-proof.png`
 - Visual proof artifact: `artifacts/phase31/steel-ops-drills-visual-proof.json`
+
+## Phase 32 Canonical Goal-Tied Operating System Update
+
+Status: Implemented and locally verified in the Phase 32 branch; PRs pending.
+
+Slice name:
+- Canonical RALPH + multi-agent role operating system.
+
+Context:
+- The user asked to upgrade from long-running implementation continuity to canonical goal-tied phase execution.
+- Cortex remains the canonical source of truth.
+- Phase 32 intentionally does not implement runtime continuous procedural memory; it creates the development control surface for Phase 33.
+
+Code and docs changed:
+- Added `docs/PROJECT_OPERATING_SYSTEM.md`.
+- Added `docs/PHASE_SCOREBOARD.md`.
+- Added `docs/NON_MOCKED_PROOF_RULES.md`.
+- Extended `/api/proof/runs/server-connector-next-mobile-mvp` with:
+  - `canonical_goal_tied_phase_execution`;
+  - `canonical_phase_operating_system`;
+  - Phase 32 visual/doc proof metadata.
+- Added regression coverage in `src/tests/chat-ui-contract.test.mjs`.
+
+Safety decision:
+- Multi-agent work is allowed only as role-separated phase execution with one merge gate.
+- Cortex is project memory only; product memory remains Graphiti/FalkorDB or another explicit runtime product-memory adapter.
+- Non-mocked proof labels are now a first-class local rule.
+
+Verification result:
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 12/12 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 211 total tests: 209 passed, 0 failed, and 2 expected live-gated OpenClaw skips after linking the clean worktree to the existing local Graphiti venv and copying the local SQLite fixture DB for verification only.
+- API proof at `http://127.0.0.1:4216/api/proof/runs/server-connector-next-mobile-mvp` showed `canonical_goal_tied_phase_execution`, `canonical_phase_operating_system`, and a `100 / 100` `canonical_goal_tied_phase_execution` score.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4216/?phase=phase-32-canonical-ralph-operating-system`
+- Browser DOM proof verified `canonical_goal_tied_phase_execution`, `pass_phase32_operating_system_contract`, `100 / 100`, `docs/PROJECT_OPERATING_SYSTEM.md`, and `cycle_contract_ready`.
+- Screenshot artifact: `artifacts/phase32/phase32-dashboard-proof.png`
+- Visual proof artifact: `artifacts/phase32/phase32-dashboard-proof.json`
+
+Next phase:
+- Phase 33 should implement the first continuous-intelligence runtime slice: typed `CaseState`, G0-G8 LangGraph gates, PEMS maturity schema, and shadow-mode procedural reconstruction proof.

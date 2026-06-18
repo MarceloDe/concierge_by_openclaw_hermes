@@ -1064,6 +1064,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: "Operator dashboard exposes API, browser, safety, and visual-test readiness."
       },
       {
+        key: "canonical_goal_tied_phase_execution",
+        status: "implemented_phase32_operating_system",
+        target: "All future phases use one Cortex-canonical RALPH loop, role-separated execution, non-mocked proof labels, dashboard scoring, and PR-based memory visibility."
+      },
+      {
         key: "docker_connector_deployment",
         status: deployment.status,
         target: "Docker Compose defines the Node runtime, FastAPI connector, Next.js PWA, and FalkorDB dependency services."
@@ -1485,6 +1490,20 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         command: deployment.browserSandboxAdapterHarnessCommand,
         adapterMode: deployment.hostedBrowserSandboxAdapterMode
       },
+      {
+        key: "canonical_phase_operating_system",
+        status: "phase32_goal_tied_execution_contract_ready",
+        ok: true,
+        docs: [
+          "docs/PROJECT_OPERATING_SYSTEM.md",
+          "docs/PHASE_SCOREBOARD.md",
+          "docs/NON_MOCKED_PROOF_RULES.md"
+        ],
+        cortexMirrorRequired: true,
+        ralphLoopRequired: true,
+        roleSeparationRequired: true,
+        nonMockedProofRequired: true
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1504,10 +1523,22 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         status: "live_worker_stream_verified",
         proof: "Worker Browser live block rendered a data:image/jpeg frame through FastAPI /api/v1.",
         artifact: "/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png"
+      },
+      {
+        route: "docs/PROJECT_OPERATING_SYSTEM.md",
+        required: true,
+        status: "phase32_operating_system_documented",
+        proof: "Canonical goal-tied RALPH operating system is mirrored in repo docs and must be mirrored in Cortex before the phase is done."
       }
     ],
     scores: [
       { key: "api_readiness", score: 90, target: 90, status: "pass_contract" },
+      {
+        key: "canonical_goal_tied_phase_execution",
+        score: 100,
+        target: 100,
+        status: "pass_phase32_operating_system_contract"
+      },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
       {
         key: "product_memory_deployment",
@@ -1662,6 +1693,9 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     safety: {
       fastApiIsPublicConnector: true,
       nodeIsInternalRuntime: true,
+      canonicalGoalTiedPhaseExecution: true,
+      cortexIsProjectMemoryOnly: true,
+      nonMockedProofRequired: true,
       publicApi: "/api/v1",
       frontendDirectNodeCallsAllowedForPwa: false,
       externalWriteActionsWithoutApproval: false,

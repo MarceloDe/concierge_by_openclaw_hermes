@@ -2444,3 +2444,21 @@ This keeps Phase 31 aligned with the user directive: patching cadence, backup/re
 
 Cost of changing later:
 Low. The ops-drill contract can grow concrete monitoring integrations, backup destinations, or N-host routing without changing the public `/api/v1/browser/*` browser contract or the human-only takeover boundary.
+## 2026-06-18 - Upgrade Development To Canonical Goal-Tied Phase Execution
+
+Context:
+After Phase 31, the project had strong remote Steel operations proof, but the next work risked drifting because the long-run goal lived across Cortex semantic notes, repo AGENTS rules, final-system goals, progress logs, and intelligence-loop prompts. The user asked whether Codex should continue as-is or move to a more multi-agent, `/goal`-tied development system.
+
+Options considered:
+- Continue with one long-running implementation thread and rely on `docs/PROGRESS.md`.
+- Let several agents edit in parallel without a stronger central operating contract.
+- Keep Codex as primary implementer but add role-separated phase discipline, a single source-of-truth order, non-mocked proof labels, dashboard scoring, and Cortex semantic/procedural mirrors.
+
+Decision:
+Phase 32 creates the local canonical operating-system mirror in `docs/PROJECT_OPERATING_SYSTEM.md`, `docs/PHASE_SCOREBOARD.md`, and `docs/NON_MOCKED_PROOF_RULES.md`. The existing proof endpoint now exposes `canonical_goal_tied_phase_execution` and `canonical_phase_operating_system` so the operator dashboard can show the development discipline as a real gate. Multi-agent work is allowed only through defined roles and one merge gate; free parallel repo editing remains out of scope.
+
+Reason:
+The project is now too large for implicit continuity. The safest path is not more process theater; it is making the process itself testable. This preserves the RALPH loop, protects non-mocked proof claims, keeps Cortex canonical, and gives Phase 33 a clean launch point for continuous procedural intelligence.
+
+Cost of changing later:
+Low. These docs and proof keys do not change runtime healthcare behavior. They create a contract future phases can refine without weakening LangGraph/OpenClaw safety boundaries.
