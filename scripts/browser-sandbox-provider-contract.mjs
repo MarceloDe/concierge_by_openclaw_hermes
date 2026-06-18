@@ -1,7 +1,7 @@
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, mkdir, writeFile, readdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION = "2026-06-17.browser-sandbox-provider.v1";
@@ -22,6 +22,11 @@ const STEEL_REMOTE_FIREWALL_PATH = "infra/steel/remote/firewall.md";
 const STEEL_REMOTE_WIREGUARD_PATH = "infra/steel/remote/wireguard.md";
 const STEEL_REMOTE_RECOVERY_SCRIPT_PATH = "infra/steel/remote/recover.sh";
 const STEEL_REMOTE_ACCEPTANCE_ARTIFACT_DIR = "artifacts/phase30";
+const STEEL_REMOTE_OPS_DRILLS_CONFIG_PATH = "infra/steel/remote/ops-drills.example.json";
+const STEEL_REMOTE_PATCHING_PATH = "infra/steel/remote/patching.md";
+const STEEL_REMOTE_BACKUP_RESTORE_DRILL_PATH = "infra/steel/remote/backup-restore-drill.sh";
+const STEEL_REMOTE_HEALTH_ALERTS_PATH = "infra/steel/remote/health-alerts.example.json";
+const STEEL_REMOTE_ONCALL_HANDOFF_PATH = "infra/steel/remote/oncall-handoff.md";
 const ALLOWED_PROVIDERS = new Set(["hosted_remote", "vercel_sandbox", "browserbase", "custom_webrtc"]);
 const ALLOWED_SECRET_SOURCES = new Set(["managed_env", "secret_file", "docker_secret"]);
 const ALLOWED_ADAPTER_MODES = new Set(["contract_only", "contract_harness", "hosted_provider"]);
@@ -782,6 +787,223 @@ export async function runBrowserSandboxProviderSteelRemoteReadinessSmoke({
     await mkdir(dirname(lifecycleArtifactPath), { recursive: true });
     await writeFile(lifecycleArtifactPath, JSON.stringify(result, null, 2));
   }
+  return result;
+}
+
+async function readLatestSteelRemoteLifecycleArtifact(artifactDir = STEEL_REMOTE_ACCEPTANCE_ARTIFACT_DIR) {
+  try {
+    const files = (await readdir(resolve(artifactDir)))
+      .filter((file) => /^steel-remote-live-lifecycle-.*\.json$/.test(file))
+      .sort();
+    const latest = files.at(-1);
+    if (!latest) return { artifactRef: null, proof: null };
+    const artifactPath = join(resolve(artifactDir), latest);
+    return {
+      artifactRef: relative(process.cwd(), artifactPath),
+      proof: JSON.parse(await readFile(artifactPath, "utf8"))
+    };
+  } catch {
+    return { artifactRef: null, proof: null };
+  }
+}
+
+function validateSteelOpsDrillsConfig(config, configPath) {
+  const failures = [];
+  if (config?.schemaVersion !== "brainstyworkers.browser-sandbox-provider-steel-ops-drills.v1") failures.push("steel_ops_drills_schema_version_missing_or_unknown");
+  if (config?.phase !== "31") failures.push("steel_ops_drills_phase_must_be_31");
+  if (config?.status !== "ops_drill_contract_only") failures.push("steel_ops_drills_status_must_be_contract_only");
+  if (config?.providerStrategy !== "steel-self-host") failures.push("steel_ops_drills_provider_must_be_steel_self_host");
+  if (config?.hostModel !== "single_remote_host_single_session_queue") failures.push("steel_ops_drills_host_model_must_remain_single_host_queue");
+  if (config?.remoteReadinessArtifactRequired !== true) failures.push("steel_ops_drills_remote_readiness_artifact_required");
+  if (config?.concurrencyFanoutDeferred !== true) failures.push("steel_ops_drills_concurrency_fanout_must_be_deferred");
+
+  const patching = config?.patching ?? {};
+  if (patching.cadence !== "weekly") failures.push("steel_ops_drills_weekly_patching_cadence_required");
+  if (Number(patching.criticalCveReviewHours ?? Infinity) > 24) failures.push("steel_ops_drills_critical_cve_review_must_be_24h_or_less");
+  if (patching.chromeSecurityReviewRequired !== true) failures.push("steel_ops_drills_chrome_security_review_required");
+  if (patching.steelDigestReviewRequired !== true) failures.push("steel_ops_drills_digest_review_required");
+  if (patching.latestTagsAllowed !== false) failures.push("steel_ops_drills_latest_tags_must_be_forbidden");
+  if (patching.rollbackDigestRequired !== true) failures.push("steel_ops_drills_rollback_digest_required");
+  for (const command of ["npm run sandbox:browser:steel-remote-readiness", "npm run sandbox:browser:steel-ops-drills"]) {
+    if (!Array.isArray(patching.smokeCommands) || !patching.smokeCommands.includes(command)) failures.push(`steel_ops_drills_missing_smoke_command:${command}`);
+  }
+
+  const backup = config?.backupRestore ?? {};
+  if (backup.encryptedVolumeRequired !== true) failures.push("steel_ops_drills_encrypted_volume_required");
+  if (backup.restoreDrillRequired !== true) failures.push("steel_ops_drills_restore_drill_required");
+  for (const key of ["rawFramesBackedUp", "rawScreenshotsBackedUp", "rawOcrTextBackedUp", "inputValuesBackedUp"]) {
+    if (backup[key] !== false) failures.push(`steel_ops_drills_${key}_must_be_false`);
+  }
+  if (backup.recoveryScript !== STEEL_REMOTE_RECOVERY_SCRIPT_PATH) failures.push("steel_ops_drills_recovery_script_path_mismatch");
+  if (backup.drillScript !== STEEL_REMOTE_BACKUP_RESTORE_DRILL_PATH) failures.push("steel_ops_drills_drill_script_path_mismatch");
+
+  const alerting = config?.healthAlerting ?? {};
+  for (const key of ["healthProbeRequired", "sessionLatencyProbeRequired", "tlsExpiryProbeRequired", "wireguardProbeRequired", "containerRestartProbeRequired", "recoveryEventProbeRequired"]) {
+    if (alerting[key] !== true) failures.push(`steel_ops_drills_${key}_required`);
+  }
+  if (Number(alerting.alertThresholds?.sessionCreateP95Ms ?? Infinity) > 3000) failures.push("steel_ops_drills_session_latency_threshold_too_high");
+  if (Number(alerting.alertThresholds?.tlsMinDaysRemaining ?? 0) < 14) failures.push("steel_ops_drills_tls_expiry_threshold_too_low");
+  if (Number(alerting.alertThresholds?.containerRestartsIn15m ?? Infinity) > 1) failures.push("steel_ops_drills_restart_threshold_too_high");
+
+  const onCall = config?.onCall ?? {};
+  if (onCall.handoffTemplate !== STEEL_REMOTE_ONCALL_HANDOFF_PATH) failures.push("steel_ops_drills_handoff_template_path_mismatch");
+  for (const key of ["latestLifecycleArtifactRequired", "phiExposureFieldRequired", "humanTakeoverBoundaryFieldRequired"]) {
+    if (onCall[key] !== true) failures.push(`steel_ops_drills_oncall_${key}_required`);
+  }
+
+  const safety = config?.safety ?? {};
+  if (safety.requiresHumanTakeoverApproval !== true) failures.push("steel_ops_drills_human_takeover_approval_required");
+  for (const key of ["agentCredentialEntryAllowed", "externalWriteActionsAllowed", "recordFrames", "persistRawOcrText", "secretsInRepoAllowed"]) {
+    if (safety[key] !== false) failures.push(`steel_ops_drills_safety_${key}_must_be_false`);
+  }
+
+  const serialized = JSON.stringify(config ?? {});
+  if (/https?:\/\/[^"\\\s]+|ws:\/\/[^"\\\s]+/i.test(serialized)) failures.push("steel_ops_drills_raw_endpoint_forbidden");
+  if (/Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]/i.test(serialized)) failures.push("steel_ops_drills_secret_literal_forbidden");
+
+  return {
+    ok: failures.length === 0,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    configPath,
+    failures,
+    sanitizedConfig: {
+      schemaVersion: config?.schemaVersion ?? null,
+      phase: config?.phase ?? null,
+      status: config?.status ?? null,
+      providerStrategy: config?.providerStrategy ?? null,
+      hostModel: config?.hostModel ?? null,
+      remoteReadinessArtifactRequired: Boolean(config?.remoteReadinessArtifactRequired),
+      concurrencyFanoutDeferred: Boolean(config?.concurrencyFanoutDeferred),
+      patchCadence: patching.cadence ?? null,
+      criticalCveReviewHours: Number(patching.criticalCveReviewHours ?? 0),
+      restoreDrillRequired: Boolean(backup.restoreDrillRequired),
+      healthAlertingRequired: Boolean(alerting.healthProbeRequired && alerting.sessionLatencyProbeRequired),
+      handoffTemplate: onCall.handoffTemplate ?? null
+    }
+  };
+}
+
+export function validateSteelOpsDrillsFiles({
+  config,
+  patchingText = "",
+  backupRestoreDrillText = "",
+  healthAlertsText = "",
+  oncallHandoffText = "",
+  remoteProof = null
+} = {}) {
+  let alerts = null;
+  try {
+    alerts = JSON.parse(healthAlertsText);
+  } catch {
+    alerts = null;
+  }
+  const tenChecks = remoteProof?.tenChecks ?? {};
+  const lifecycleChecks = Array.isArray(tenChecks.checks) ? tenChecks.checks : [];
+  const checks = [
+    ["phase30_remote_lifecycle_artifact_green", Boolean(remoteProof?.ok && tenChecks.ok && lifecycleChecks.length === 10 && lifecycleChecks.every((check) => check.ok))],
+    ["patching_weekly_and_critical_cve_window_documented", patchingText.includes("Review Steel API and UI image digests weekly") && patchingText.includes("within 24 hours")],
+    ["patching_forbids_latest_and_requires_digest_rollback", patchingText.includes("Never deploy `latest`") && patchingText.includes("previous digest set")],
+    ["patching_runs_remote_readiness_and_ops_drills", patchingText.includes("npm run sandbox:browser:steel-remote-readiness") && patchingText.includes("npm run sandbox:browser:steel-ops-drills")],
+    ["backup_restore_drill_script_dry_run_safe", backupRestoreDrillText.includes("DRY_RUN") && backupRestoreDrillText.includes("rawContentBackedUp\":false")],
+    ["backup_restore_drill_excludes_raw_visual_artifacts", [".png", ".jpg", ".jpeg", ".webp", ".gif"].every((fragment) => backupRestoreDrillText.includes(fragment))],
+    ["backup_restore_drill_runs_recovery_smoke", backupRestoreDrillText.includes("STEEL_RECOVERY_SCRIPT") && backupRestoreDrillText.includes("recover.sh")],
+    ["health_alerts_cover_required_probes", Boolean(alerts?.probes) && ["tls_health", "local_health", "session_create_latency", "tls_certificate_expiry", "wireguard_cdp_tunnel", "container_restart_count", "recovery_event_stream"].every((key) => alerts.probes.some((probe) => probe.key === key))],
+    ["health_alerts_thresholds_are_operational", Number(alerts?.probes?.find((probe) => probe.key === "session_create_latency")?.p95Ms ?? Infinity) <= 3000 && Number(alerts?.probes?.find((probe) => probe.key === "tls_certificate_expiry")?.minDaysRemaining ?? 0) >= 14],
+    ["health_alerts_no_raw_payload_surfaces", alerts?.redaction?.rawFrames === false && alerts?.redaction?.rawScreenshots === false && alerts?.redaction?.rawOcrText === false && alerts?.redaction?.inputValues === false && alerts?.redaction?.secrets === false],
+    ["oncall_handoff_contains_safety_fields", ["PHI/raw-content exposure observed", "Human takeover boundary intact", "Agent credential entry observed", "External/write action observed"].every((fragment) => oncallHandoffText.includes(fragment))],
+    ["oncall_handoff_requires_phase31_commands", oncallHandoffText.includes("npm run sandbox:browser:steel-remote-readiness") && oncallHandoffText.includes("npm run sandbox:browser:steel-ops-drills")],
+    ["ops_config_defers_concurrency", config?.concurrencyFanoutDeferred === true && config?.hostModel === "single_remote_host_single_session_queue"],
+    ["ops_config_preserves_human_takeover_boundary", config?.safety?.requiresHumanTakeoverApproval === true && config?.safety?.agentCredentialEntryAllowed === false],
+    ["ops_config_forbids_raw_recording", config?.safety?.recordFrames === false && config?.safety?.persistRawOcrText === false]
+  ].map(([key, ok]) => ({ key, ok: Boolean(ok) }));
+  const serialized = JSON.stringify({ config, alerts });
+  checks.push({
+    key: "ops_drills_no_secret_or_runtime_values",
+    ok: !/(steel-staging|wefellas|AKIA|BEGIN (?:OPENSSH )?PRIVATE KEY|Bearer\s+[A-Za-z0-9._-]+|sk-[A-Za-z0-9]|[0-9]{1,3}(?:\.[0-9]{1,3}){3}\/[0-9]{1,2})/i.test(`${serialized}\n${patchingText}\n${backupRestoreDrillText}\n${healthAlertsText}\n${oncallHandoffText}`)
+  });
+  return {
+    ok: checks.every((check) => check.ok),
+    checks,
+    passed: checks.filter((check) => check.ok).length,
+    total: checks.length
+  };
+}
+
+export async function validateBrowserSandboxProviderSteelOpsDrillsContract({
+  configPath = STEEL_REMOTE_OPS_DRILLS_CONFIG_PATH
+} = {}) {
+  const text = await readFile(resolve(configPath), "utf8");
+  return validateSteelOpsDrillsConfig(JSON.parse(text), configPath);
+}
+
+export async function runBrowserSandboxProviderSteelOpsDrillsSmoke({
+  configPath = STEEL_REMOTE_OPS_DRILLS_CONFIG_PATH,
+  artifactPath = resolve("artifacts/phase31/steel-ops-drills-smoke.json"),
+  acceptanceArtifactDir = STEEL_REMOTE_ACCEPTANCE_ARTIFACT_DIR
+} = {}) {
+  const [configText, patchingText, backupRestoreDrillText, healthAlertsText, oncallHandoffText, lifecycleArtifact] = await Promise.all([
+    readFile(resolve(configPath), "utf8"),
+    readFile(resolve(STEEL_REMOTE_PATCHING_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_BACKUP_RESTORE_DRILL_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_HEALTH_ALERTS_PATH), "utf8"),
+    readFile(resolve(STEEL_REMOTE_ONCALL_HANDOFF_PATH), "utf8"),
+    readLatestSteelRemoteLifecycleArtifact(acceptanceArtifactDir)
+  ]);
+  const config = JSON.parse(configText);
+  const validation = validateSteelOpsDrillsConfig(config, configPath);
+  const drills = validateSteelOpsDrillsFiles({
+    config,
+    patchingText,
+    backupRestoreDrillText,
+    healthAlertsText,
+    oncallHandoffText,
+    remoteProof: lifecycleArtifact.proof
+  });
+  const ok = Boolean(validation.ok && drills.ok);
+  const result = {
+    ok,
+    version: BROWSER_SANDBOX_PROVIDER_CONTRACT_VERSION,
+    status: ok ? "steel_remote_ops_drills_ready" : "steel_remote_ops_drills_incomplete",
+    hostedProviderReady: false,
+    hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+    steelRemoteOpsDrillsReady: ok,
+    score: ok ? 100 : Math.floor((drills.passed / Math.max(drills.total, 1)) * 80),
+    target: 100,
+    validation,
+    drills,
+    lifecycleArtifactRef: lifecycleArtifact.artifactRef,
+    dashboard: {
+      readinessKey: "hosted_browser_sandbox_provider_steel_ops_drills",
+      scoreKey: "hosted_browser_sandbox_provider_steel_ops_drills",
+      command: "npm run sandbox:browser:steel-ops-drills",
+      configFile: configPath,
+      patchingRunbook: STEEL_REMOTE_PATCHING_PATH,
+      backupRestoreDrill: STEEL_REMOTE_BACKUP_RESTORE_DRILL_PATH,
+      healthAlerts: STEEL_REMOTE_HEALTH_ALERTS_PATH,
+      oncallHandoff: STEEL_REMOTE_ONCALL_HANDOFF_PATH,
+      lifecycleArtifact: lifecycleArtifact.artifactRef,
+      contractReadinessLabel: "contract readiness",
+      localHostReadinessLabel: "local-host readiness",
+      remoteHostReadinessLabel: "remote-host readiness",
+      opsDrillReadinessLabel: "ops-drill readiness"
+    },
+    safety: {
+      ...assertNoSecretLeak(validation),
+      ...assertNoSecretLeak(drills),
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawEndpointUrlWritten: false,
+      rawFrameReturned: false,
+      rawImageReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false,
+      externalActions: false,
+      agentCredentialEntryAllowed: false,
+      hostedReadinessOverclaimed: false
+    }
+  };
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, JSON.stringify(result, null, 2));
   return result;
 }
 

@@ -8020,3 +8020,50 @@ Verification result:
 
 Known gap:
 - Task 4 acceptance remains blocked by missing real remote Steel host/TLS/tunnel. The remote-host score must stay `0 / 100` until the Phase 29 ten-check lifecycle harness passes against `https://example.com` from the backend network position and host-firewall offsite proof is recorded.
+
+## Phase 30 Closure And Phase 31 Steel Ops Drills Update
+
+Status: Phase 30 is now closed on main, and Phase 31 is implemented as an operational drill gate.
+
+Phase 30 closure:
+- The real remote Steel host path was completed on owned AWS EC2 infrastructure in `us-east-1` after the earlier static note.
+- Accepted artifact: `artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json`.
+- Remote readiness passed with `steel_remote_host_lifecycle_verified`, `10 / 10` lifecycle checks, `20 / 20` deployment checks, `100 / 100`, public TLS, private CDP tunnel, host firewall proof, ref-only screenshot/OCR, human takeover required, and no raw endpoint/secret/frame/image/OCR/input return.
+- Phase 30 PRs landed:
+  - Worker PR #13
+  - Cortex PR #92
+
+Phase 31 slice name:
+- Steel remote ops drills: patch cadence, backup/restore drill, health alerting, and on-call handoff.
+
+Code changes:
+- Added `infra/steel/remote/ops-drills.example.json` for the non-secret Phase 31 operations contract.
+- Added `infra/steel/remote/patching.md` for weekly digest review, critical CVE review, rollback, and post-patch smoke commands.
+- Added `infra/steel/remote/backup-restore-drill.sh`, dry-run safe by default, with ref-only drill events and raw visual artifact exclusions.
+- Added `infra/steel/remote/health-alerts.example.json` for TLS health, local health, session latency, TLS expiry, WireGuard/CDP, restart, and recovery-event probes.
+- Added `infra/steel/remote/oncall-handoff.md` with incident handoff fields for PHI exposure, takeover boundary, credential entry, external/write actions, and rollback.
+- Added `scripts/browser-sandbox-provider-steel-ops-drills-smoke.mjs` and `npm run sandbox:browser:steel-ops-drills`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with Phase 31 ops-drill validation and `hosted_browser_sandbox_provider_steel_ops_drills`.
+- Exposed the Phase 31 gate in the Node dashboard proof and score table.
+
+Safety decision:
+- Phase 31 does not add concurrency fan-out or N-host routing.
+- Phase 31 does not introduce a browser SaaS dependency.
+- The human-only `interactive_takeover` boundary remains preserved.
+- No hostnames, IPs, AWS account IDs, keys, tokens, WireGuard material, raw screenshots, raw OCR text, raw frames, or input values were committed.
+
+Verification result:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-steel-ops-drills-smoke.mjs`
+- `node --check src/server/server.mjs`
+- `npm run sandbox:browser:steel-ops-drills` passed with `16 / 16` checks and `100 / 100`.
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs` passed with 28/28 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 45/45 tests.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips after linking the clean worktree to the existing local Graphiti venv and copying the local Aetna fixture SQLite DB plus WAL/SHM files for verification only.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4215/?phase=steel-ops-drills`
+- Browser DOM proof verified `hosted_browser_sandbox_provider_steel_ops_drills`, `steel_remote_ops_drills_ready`, `100 / 100`, `ops-drill readiness`, `remote-host readiness`, and the Phase 30 lifecycle artifact reference.
+- Screenshot artifact: `artifacts/phase31/steel-ops-drills-dashboard-proof.png`
+- Visual proof artifact: `artifacts/phase31/steel-ops-drills-visual-proof.json`

@@ -111,7 +111,8 @@ import {
   validateBrowserSandboxProviderSelectionContract,
   validateBrowserSandboxProviderSteelOperationsContract,
   validateSteelComposeOperations,
-  validateSteelRemoteDeploymentFiles
+  validateSteelRemoteDeploymentFiles,
+  validateSteelOpsDrillsFiles
 } from "../../scripts/browser-sandbox-provider-contract.mjs";
 
 const PORT = Number(process.env.PORT ?? 4173);
@@ -422,6 +423,63 @@ async function summarizeSteelRemoteReadiness() {
   }
 }
 
+async function summarizeSteelOpsDrillsReadiness() {
+  try {
+    const [configText, patchingText, backupRestoreDrillText, healthAlertsText, oncallHandoffText, proof] = await Promise.all([
+      readFile(resolve("infra/steel/remote/ops-drills.example.json"), "utf8"),
+      readFile(resolve("infra/steel/remote/patching.md"), "utf8"),
+      readFile(resolve("infra/steel/remote/backup-restore-drill.sh"), "utf8"),
+      readFile(resolve("infra/steel/remote/health-alerts.example.json"), "utf8"),
+      readFile(resolve("infra/steel/remote/oncall-handoff.md"), "utf8"),
+      readLatestSteelRemoteProof()
+    ]);
+    const config = JSON.parse(configText);
+    const drills = validateSteelOpsDrillsFiles({
+      config,
+      patchingText,
+      backupRestoreDrillText,
+      healthAlertsText,
+      oncallHandoffText,
+      remoteProof: proof.proof
+    });
+    return {
+      status: drills.ok ? "steel_remote_ops_drills_ready" : "steel_remote_ops_drills_incomplete",
+      ok: drills.ok,
+      score: drills.ok ? 100 : Math.floor((drills.passed / Math.max(drills.total, 1)) * 80),
+      target: 100,
+      checks: drills.checks,
+      lifecycleArtifactRef: proof.artifactRef,
+      configFile: "infra/steel/remote/ops-drills.example.json",
+      patchingRunbook: "infra/steel/remote/patching.md",
+      backupRestoreDrill: "infra/steel/remote/backup-restore-drill.sh",
+      healthAlerts: "infra/steel/remote/health-alerts.example.json",
+      oncallHandoff: "infra/steel/remote/oncall-handoff.md",
+      command: "npm run sandbox:browser:steel-ops-drills",
+      contractReadinessLabel: "contract readiness",
+      localHostReadinessLabel: "local-host readiness",
+      remoteHostReadinessLabel: "remote-host readiness",
+      opsDrillReadinessLabel: "ops-drill readiness",
+      hostedRemoteScoreMayPassOnlyAfterLiveVerified: true,
+      rawEndpointReturned: false,
+      rawSecretReturned: false,
+      rawFrameReturned: false,
+      rawOcrTextReturned: false,
+      rawInputReturned: false
+    };
+  } catch (error) {
+    return {
+      status: "steel_remote_ops_drills_unreadable",
+      ok: false,
+      score: 0,
+      target: 100,
+      checks: [{ key: "ops_drills_readable", ok: false, error: error.message }],
+      command: "npm run sandbox:browser:steel-ops-drills",
+      rawEndpointReturned: false,
+      rawSecretReturned: false
+    };
+  }
+}
+
 function sendSse(res, event) {
   res.write(`event: ${event.eventType ?? "message"}\n`);
   res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -659,6 +717,8 @@ async function safeDeploymentContractStatus() {
     await summarizeSteelOperationsReadiness();
   const hostedBrowserSandboxProviderSteelRemoteHost =
     await summarizeSteelRemoteReadiness();
+  const hostedBrowserSandboxProviderSteelOpsDrills =
+    await summarizeSteelOpsDrillsReadiness();
   const hostedBrowserSandboxProviderLaunchRunbookText = await readTextIfExists("docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md");
   const hostedBrowserSandboxProviderLaunchEnvText = await readTextIfExists("project/deployment/browser-sandbox-provider.launch-readiness.example.env");
   const hostedBrowserSandboxProviderPrivateLaunchExecutionEnvText =
@@ -787,6 +847,8 @@ async function safeDeploymentContractStatus() {
     hostedBrowserSandboxProviderSteelOperations,
     hostedBrowserSandboxProviderSteelRemoteHostReady: hostedBrowserSandboxProviderSteelRemoteHost.ok,
     hostedBrowserSandboxProviderSteelRemoteHost,
+    hostedBrowserSandboxProviderSteelOpsDrillsReady: hostedBrowserSandboxProviderSteelOpsDrills.ok,
+    hostedBrowserSandboxProviderSteelOpsDrills,
     hostedBrowserSandboxProviderLiveVerificationReady,
     hostedBrowserSandboxProviderLiveVerification: {
       status: hostedBrowserSandboxProviderLiveVerificationReady
@@ -936,6 +998,7 @@ async function safeDeploymentContractStatus() {
     browserSandboxProviderLaunchReadinessCommand: "npm run sandbox:browser:provider-launch-readiness",
     browserSandboxProviderPrivateLaunchExecutionCommand: "npm run sandbox:browser:provider-private-launch-execution",
     browserSandboxProviderSteelRemoteReadinessCommand: "npm run sandbox:browser:steel-remote-readiness",
+    browserSandboxProviderSteelOpsDrillsCommand: "npm run sandbox:browser:steel-ops-drills",
     browserSandboxAdapterHarnessCommand: "npm run sandbox:browser:adapter-harness",
     browserSandboxProviderResolverCommand: "npm run sandbox:browser:provider-resolver",
     browserSandboxProviderAdapterCommand: "npm run sandbox:browser:provider-adapter",
@@ -1054,6 +1117,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "hosted_browser_sandbox_provider_steel_remote_host",
         status: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status,
         target: "Remote self-hosted Steel must prove TLS API access, private CDP tunnel, host firewall defense in depth, and ten-check lifecycle proof before remote-host readiness scores."
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_ops_drills",
+        status: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.status,
+        target: "Remote self-hosted Steel operations must prove patch cadence, backup/restore drill, health alerting, and on-call handoff after remote-host readiness."
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",
@@ -1270,6 +1338,33 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
           contractReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.contractReadinessLabel ?? "contract readiness",
           localHostReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.localHostReadinessLabel ?? "local-host readiness",
           remoteHostReadiness: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.remoteHostReadinessLabel ?? "remote-host readiness"
+        },
+        rawEndpointReturned: false,
+        rawSecretReturned: false,
+        rawFrameReturned: false,
+        rawOcrTextReturned: false,
+        rawInputReturned: false,
+        hostedRemoteScoreMayPassOnlyAfterLiveVerified: true
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_ops_drills",
+        status: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.status,
+        ok: deployment.hostedBrowserSandboxProviderSteelOpsDrillsReady,
+        command: deployment.browserSandboxProviderSteelOpsDrillsCommand,
+        score: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.score ?? 0,
+        target: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.target ?? 100,
+        checks: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.checks ?? [],
+        lifecycleArtifactRef: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.lifecycleArtifactRef ?? null,
+        configFile: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.configFile ?? null,
+        patchingRunbook: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.patchingRunbook ?? null,
+        backupRestoreDrill: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.backupRestoreDrill ?? null,
+        healthAlerts: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.healthAlerts ?? null,
+        oncallHandoff: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.oncallHandoff ?? null,
+        labels: {
+          contractReadiness: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.contractReadinessLabel ?? "contract readiness",
+          localHostReadiness: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.localHostReadinessLabel ?? "local-host readiness",
+          remoteHostReadiness: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.remoteHostReadinessLabel ?? "remote-host readiness",
+          opsDrillReadiness: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.opsDrillReadinessLabel ?? "ops-drill readiness"
         },
         rawEndpointReturned: false,
         rawSecretReturned: false,
@@ -1501,6 +1596,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.score ?? 0,
         target: 100,
         status: deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status ?? "unknown"
+      },
+      {
+        key: "hosted_browser_sandbox_provider_steel_ops_drills",
+        score: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.score ?? 0,
+        target: 100,
+        status: deployment.hostedBrowserSandboxProviderSteelOpsDrills?.status ?? "unknown"
       },
       {
         key: "hosted_browser_sandbox_provider_webrtc_signaling",

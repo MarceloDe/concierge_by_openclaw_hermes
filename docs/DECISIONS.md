@@ -2425,3 +2425,22 @@ This keeps PHI on owned infrastructure, preserves the provider-pluggable adapter
 
 Cost of changing later:
 Low to moderate. A future hosted-SaaS provider under signed BAA can still replace the endpoint and provider name through `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME`, but this self-hosted track keeps the current public `/api/v1/browser/*` contract and human-only takeover boundary intact.
+
+## 2026-06-18 - Add Steel Remote Ops Drills After Remote Host Readiness
+
+Context:
+Phase 30 later completed the owned remote Steel host proof on AWS EC2 in `us-east-1` with public TLS, private CDP tunnel, host firewall proof, and a 10/10 lifecycle artifact. The next risk is operational: a remote browser host can be green once but still unsafe to operate if patching, backup/restore, alerting, and handoff are not executable gates.
+
+Options considered:
+- Treat the Phase 30 lifecycle artifact as sufficient for ongoing operations.
+- Implement concurrency and N-host routing immediately.
+- Add a Phase 31 ops-drill gate for patch cadence, restore drill, health alerting, and on-call handoff, while deferring concurrency.
+
+Decision:
+Add `npm run sandbox:browser:steel-ops-drills`, `infra/steel/remote/ops-drills.example.json`, `infra/steel/remote/patching.md`, `infra/steel/remote/backup-restore-drill.sh`, `infra/steel/remote/health-alerts.example.json`, and `infra/steel/remote/oncall-handoff.md`. Expose a distinct dashboard/API score named `hosted_browser_sandbox_provider_steel_ops_drills`.
+
+Reason:
+This keeps Phase 31 aligned with the user directive: patching cadence, backup/restore drill, health alerting, and on-call runbook execution only. It depends on the Phase 30 accepted remote lifecycle artifact and preserves the single-host/single-session queue model. Concurrency remains a Phase 32 candidate until product traffic proves the need.
+
+Cost of changing later:
+Low. The ops-drill contract can grow concrete monitoring integrations, backup destinations, or N-host routing without changing the public `/api/v1/browser/*` browser contract or the human-only takeover boundary.

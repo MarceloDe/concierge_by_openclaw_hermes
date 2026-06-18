@@ -1,0 +1,27 @@
+{
+  "phase": "31",
+  "url": "http://127.0.0.1:4215/?phase=steel-ops-drills",
+  "checkedAt": "2026-06-18T22:55:00Z",
+  "visualSignals": {
+    "hasOpsDrillsGate": true,
+    "status": "steel_remote_ops_drills_ready",
+    "score": "100 / 100",
+    "hasOpsDrillReadinessLabel": true,
+    "hasRemoteHostReadinessLabel": true,
+    "hasPhase30LifecycleArtifact": true,
+    "phase30LifecycleArtifact": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json"
+  },
+  "proofArtifacts": {
+    "dashboardScreenshot": "artifacts/phase31/steel-ops-drills-dashboard-proof.png",
+    "opsDrillsSmoke": "artifacts/phase31/steel-ops-drills-smoke.json"
+  },
+  "safety": {
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawOcrTextReturned": false,
+    "rawInputReturned": false,
+    "hostedReadinessOverclaimed": false
+  }
+}
