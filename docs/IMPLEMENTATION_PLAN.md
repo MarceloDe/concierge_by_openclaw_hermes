@@ -2545,3 +2545,35 @@ Verification:
 Remaining follow-up:
 - Run the launch-readiness gate against the real selected provider with private endpoint/token/runtime config and private visual/OCR artifacts.
 - Only after final human review, set `WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY=1`, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true`.
+
+## Hosted Browser Sandbox Provider Private Launch Execution Cycle - 2026-06-18
+
+Goal:
+- Add the final private execution proof gate between launch readiness and production hosted remote browser readiness.
+
+Implemented slice:
+- Add `scripts/browser-sandbox-provider-private-launch-execution-smoke.mjs` and `npm run sandbox:browser:provider-private-launch-execution`.
+- Add `project/deployment/browser-sandbox-provider.private-launch-execution.example.env` as a non-secret private execution template.
+- Aggregate launch readiness, private proof-chain readiness, final enablement allowance, explicit private execution gate, and final human review into one sanitized proof.
+- Expose `hosted_browser_sandbox_provider_private_launch_execution` through Node dashboard proof and FastAPI `/api/v1/proof`.
+- Tighten final `hosted_remote_browser_sandbox` readiness so launch readiness alone is insufficient; the private execution gate and final human review must also pass.
+
+Acceptance:
+- Default local mode reports `hosted_browser_sandbox_provider_private_launch_execution_not_enabled` and scores `0 / 100`.
+- Private execution can score `100 / 100` only when private launch execution is explicitly enabled, the full private proof chain is ready, final enablement is allowed, and final human review is recorded.
+- Public proof must not expose private provider config paths, proof file paths, provider endpoints, tokens, raw screenshots, raw OCR text, SDP, ICE candidates, credentials, or input values.
+- `hosted_remote_browser_sandbox` remains `0 / 100` until private launch execution, final human review, live verification, WebRTC when required, visual/OCR replay, and private `adapter.providerLiveConnected=true` all agree.
+
+Verification:
+- `npm run sandbox:browser:provider-private-launch-execution`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs`
+- `node --test src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade`
+- `npm run build`
+- `npm run test:docker:contract`
+- `npm run test:local`
+- Browser visual/API proof on the dashboard showing private launch execution and final hosted remote score.
+
+Remaining follow-up:
+- Run the private launch execution against a real selected provider with operator-supplied private endpoint/token/runtime config and private visual/OCR artifacts.
+- Only after the private execution and final human review pass should production hosted remote browser readiness be allowed to score above `0 / 100`.

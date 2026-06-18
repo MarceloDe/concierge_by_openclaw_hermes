@@ -1,0 +1,47 @@
+{
+  "privateCheck": {
+    "key": "hosted_browser_sandbox_provider_private_launch_execution",
+    "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+    "ok": false,
+    "command": "npm run sandbox:browser:provider-private-launch-execution",
+    "executionGate": false,
+    "finalHumanReviewed": false,
+    "privateProofChainReady": false,
+    "finalEnablementAllowed": false,
+    "missing": [
+      "private_launch_execution_gate",
+      "private_proof_chain_ready",
+      "launch_final_enablement_allowed",
+      "final_human_review"
+    ],
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawOcrTextReturned": false,
+    "rawInputReturned": false,
+    "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+  },
+  "privateScore": {
+    "key": "hosted_browser_sandbox_provider_private_launch_execution",
+    "score": 0,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled"
+  },
+  "launchScore": {
+    "key": "hosted_browser_sandbox_provider_launch_readiness",
+    "score": 60,
+    "target": 100,
+    "status": "hosted_browser_sandbox_provider_launch_runbook_ready"
+  },
+  "hostedScore": {
+    "key": "hosted_remote_browser_sandbox",
+    "score": 0,
+    "target": 100,
+    "status": "hosted_browser_sandbox_contract_valid_not_configured"
+  },
+  "leaks": {
+    "endpoint": false,
+    "token": false,
+    "providerConfigPath": false
+  }
+}

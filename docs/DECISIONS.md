@@ -2347,3 +2347,22 @@ This gives the next real provider launch a deterministic, auditable path while s
 
 Cost of changing later:
 Low. Provider-specific launch steps can be added behind the same readiness checklist without changing the public `/api/v1/browser/*` contract, proof keys, redaction policy, or human-only takeover boundary.
+
+## 2026-06-18 - Require Private Launch Execution And Final Human Review Before Hosted Remote Browser Readiness
+
+Context:
+Phase 26 added an aggregate launch-readiness gate, but launch readiness is still not the same as actually executing the real selected provider launch. A private proof chain can be green while the final operator/human review has not yet approved production hosted remote browser enablement.
+
+Options considered:
+- Let `hosted_browser_sandbox_provider_launch_readiness=100 / 100` imply final hosted readiness.
+- Wait for real provider credentials and make no code change.
+- Add a separate private launch execution gate that depends on launch readiness, explicit private execution, and final human review, then require that gate for `hosted_remote_browser_sandbox`.
+
+Decision:
+Add `npm run sandbox:browser:provider-private-launch-execution`, `project/deployment/browser-sandbox-provider.private-launch-execution.example.env`, and a separate `hosted_browser_sandbox_provider_private_launch_execution` proof key in Node dashboard proof and FastAPI `/api/v1/proof`. Require this gate and `WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=1` before final `hosted_remote_browser_sandbox` readiness can pass.
+
+Reason:
+This prevents an operator or future agent from confusing a green runbook/private-proof chain with a reviewed production launch. It also gives the real provider launch a deterministic acceptance point without committing secrets, screenshots, OCR text, WebRTC payloads, private paths, or credential/input values.
+
+Cost of changing later:
+Low. Provider-specific launch evidence can be added behind the private execution manifest and proof key without changing the public `/api/v1/browser/*` contract, redaction policy, or human-only takeover boundary.

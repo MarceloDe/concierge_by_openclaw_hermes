@@ -2193,3 +2193,30 @@ Full proof status:
 - `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Browser dashboard/API proof at `http://127.0.0.1:4212/?phase=hosted-browser-sandbox-provider-launch-readiness` verified launch readiness, final hosted remote score, and no fake endpoint/token leak.
 - Visual/proof artifacts were saved at `artifacts/phase26-hosted-provider-launch-readiness-dashboard-proof.png`, `artifacts/phase26-hosted-provider-launch-readiness-visual-proof.json`, `artifacts/phase26-hosted-provider-launch-readiness-proof.json`, and `artifacts/browser-sandbox-provider-launch-readiness-smoke.json`.
+
+## Hosted Browser Sandbox Provider Private Launch Execution Acceptance
+
+This slice is acceptable when:
+
+- A hosted-provider private launch execution smoke command exists and is safe in default local mode.
+- A non-secret private execution env template exists for operator-owned private execution.
+- The private execution proof lists execution gate, final human review, private proof-chain readiness, final enablement allowance, and missing requirements.
+- Connector proof exposes `hosted_browser_sandbox_provider_private_launch_execution` separately from `hosted_browser_sandbox_provider_launch_readiness` and `hosted_remote_browser_sandbox`.
+- `hosted_remote_browser_sandbox` remains `0 / 100` unless private launch execution and final human review pass in addition to real selected-provider private config, live verification, WebRTC when required, visual/OCR replay, `WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=1`, and private `adapter.providerLiveConnected=true`.
+- Public proof artifacts and dashboard text do not contain private config paths, visual/OCR proof paths, provider endpoints, bearer tokens, raw screenshots, raw OCR text, raw SDP, raw ICE candidates, credentials, or raw input values.
+
+Current proof status:
+
+- JS and Python syntax checks passed.
+- `npm run sandbox:browser:provider-private-launch-execution` reported `hosted_browser_sandbox_provider_private_launch_execution_not_enabled` in default safe mode.
+- Browser-sandbox provider and deployment compose contract tests passed with 22/22 tests.
+- Focused FastAPI private launch execution and launch-readiness tests passed with 2/2 tests.
+
+Full proof status:
+
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 38/38 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 49 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Browser dashboard/API proof at `http://127.0.0.1:4213/?phase=hosted-browser-sandbox-provider-private-launch-execution` verified private launch execution, launch readiness, final hosted remote score, and no fake endpoint/token/provider-config-path leak.
+- Visual/proof artifacts were saved at `artifacts/phase27-hosted-provider-private-launch-execution-dashboard-proof.png`, `artifacts/phase27-hosted-provider-private-launch-execution-visual-proof.json`, and `artifacts/browser-sandbox-provider-private-launch-execution-smoke.json`.

@@ -7836,3 +7836,56 @@ Known risks or gaps:
 - No real hosted-provider credentials were present in the local environment.
 - The private proof-chain path is covered by a fake live-provider harness; production readiness still requires operator-supplied private config, live provider verification, WebRTC proof when required, and real visual/OCR replay.
 - `hosted_remote_browser_sandbox` must remain `0 / 100` until a real provider proves live connection from private config and final human enablement is approved.
+
+## Phase 27 Hosted Browser Sandbox Provider Private Launch Execution Update
+
+Status: Implemented, regression-tested, and dashboard/API visually proved with hosted remote still honestly blocked.
+
+Slice name:
+- Hosted browser sandbox provider private launch execution.
+
+Code changes:
+- Added `npm run sandbox:browser:provider-private-launch-execution` and `scripts/browser-sandbox-provider-private-launch-execution-smoke.mjs`.
+- Extended `scripts/browser-sandbox-provider-contract.mjs` with a private launch execution gate over launch readiness, private proof-chain readiness, final enablement allowance, explicit private execution, and final human review.
+- Added `project/deployment/browser-sandbox-provider.private-launch-execution.example.env` as a non-secret operator template.
+- Exposed `hosted_browser_sandbox_provider_private_launch_execution` in Node dashboard proof and FastAPI `/api/v1/proof`.
+- Tightened final `hosted_remote_browser_sandbox` readiness so it cannot pass from launch readiness alone; private execution and final human review are now required.
+- Redacted private provider config paths from FastAPI public proof output.
+
+Safety decision:
+- Launch readiness is still not production hosted remote readiness.
+- `WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=1` and `WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=1` are required before final hosted readiness can pass.
+- Private config paths, proof paths, provider endpoints, tokens, screenshots, OCR text, SDP, ICE candidates, credentials, and input values must not appear in public proof output.
+- Human-only `interactive_takeover` remains preserved; Codex must not enter credentials, solve 2FA/captcha, submit forms, contact payers, or perform external/write actions.
+
+Focused verification completed:
+- `node --check scripts/browser-sandbox-provider-contract.mjs`
+- `node --check scripts/browser-sandbox-provider-private-launch-execution-smoke.mjs`
+- `node --check src/server/server.mjs`
+- `node --check scripts/compose-contract.mjs`
+- `python3 -m py_compile project/api/browser_sandbox.py project/api/main.py`
+- `npm run sandbox:browser:provider-private-launch-execution`
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs src/tests/deployment-compose.test.mjs`
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_private_launch_execution_requires_final_review project.tests.test_fastapi_facade.FastApiFacadeTest.test_hosted_browser_sandbox_provider_launch_readiness_is_visible_without_overclaiming`
+
+Focused verification result:
+- Default private launch execution smoke reported `hosted_browser_sandbox_provider_private_launch_execution_not_enabled`, execution gate false, final human review false, and `hostedProviderReady=false`.
+- Browser-sandbox provider and deployment compose contract tests passed with 22/22 tests.
+- Focused FastAPI tests passed with 2/2 tests and verified private config/proof paths plus endpoint/token were not exposed.
+
+Full verification result:
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 38/38 tests.
+- `.venv-facade/bin/python -m unittest project.tests.test_fastapi_facade` passed with 49 tests and 2 expected live-gated skips.
+- `npm run test:local` passed with 210 total tests: 208 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Dashboard/API proof passed on `http://127.0.0.1:4213/?phase=hosted-browser-sandbox-provider-private-launch-execution`.
+- Browser/API assertion proved `hosted_browser_sandbox_provider_private_launch_execution` at `0 / 100`, `hosted_browser_sandbox_provider_launch_readiness` at `60 / 100`, `hosted_remote_browser_sandbox` still at `0 / 100`, execution gate false, final human review false, and no fake endpoint/token/provider-config-path leakage.
+- Proof artifacts:
+  - `artifacts/phase27-hosted-provider-private-launch-execution-dashboard-proof.png`
+  - `artifacts/phase27-hosted-provider-private-launch-execution-visual-proof.json`
+  - `artifacts/browser-sandbox-provider-private-launch-execution-smoke.json`
+
+Known risks or gaps:
+- No real hosted-provider credentials were present in the local environment.
+- The success path is covered by a fake live-provider harness in JS tests only; production readiness still requires operator-supplied private config, real provider verification, WebRTC proof when required, real visual/OCR replay, private launch execution, and final human review.
+- `hosted_remote_browser_sandbox` must remain `0 / 100` until the private execution and final human review gates pass against real provider evidence.

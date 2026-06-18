@@ -18,6 +18,7 @@ DEFAULT_PROVIDER_CONFIG_PATH = "project/deployment/browser-sandbox-provider.exam
 DEFAULT_PROVIDER_SELECTION_CONFIG_PATH = "project/deployment/browser-sandbox-provider.selection.example.json"
 PROVIDER_LAUNCH_READINESS_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.launch-readiness.example.env"
 PROVIDER_LAUNCH_READINESS_RUNBOOK_PATH = "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md"
+PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH = "project/deployment/browser-sandbox-provider.private-launch-execution.example.env"
 DEFAULT_HOSTED_AUTH_TOKEN_REF = "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"
 
 
@@ -689,6 +690,12 @@ def _path_is_inside_repo(path: str | None) -> bool:
     return bool(relative and not relative.startswith("..") and not os.path.isabs(relative))
 
 
+def _public_path_ref(path: str | None, *, private_label: str) -> str | None:
+    if not path:
+        return None
+    return path if _path_is_inside_repo(path) else private_label
+
+
 def validate_visual_ocr_proof_manifest(manifest: dict[str, Any], *, proof_path: str | None = None) -> dict[str, Any]:
     failures: list[str] = []
     if manifest.get("schemaVersion") != VISUAL_OCR_PROOF_SCHEMA_VERSION:
@@ -905,6 +912,20 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["liveVerificationReady"]
         and hosted_resolution["providerLiveConnected"]
     )
+    private_launch_execution_env_text = _read_text_if_present(PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH)
+    private_launch_execution_env_ready = bool(
+        private_launch_execution_env_text
+        and "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY=0" in private_launch_execution_env_text
+        and "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED=0" in private_launch_execution_env_text
+        and "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED=0" in private_launch_execution_env_text
+    )
+    private_launch_execution_ready = bool(
+        private_launch_execution_env_ready
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY") == "1"
+        and os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED") == "1"
+        and private_proof_chain_ready
+        and final_enablement_allowed
+    )
     provider_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -918,6 +939,7 @@ def describe_browser_sandbox_provider_contract(
         and hosted_resolution["visualOcrReplayReady"]
         and visual_ocr_replay_ready
         and hosted_resolution["providerLiveConnected"]
+        and private_launch_execution_ready
     )
     adapter_contract_ready = bool(
         selected_provider == "hosted_remote"
@@ -952,7 +974,7 @@ def describe_browser_sandbox_provider_contract(
     return {
         "version": HOSTED_SANDBOX_CONTRACT_VERSION,
         "provider": selected_provider,
-        "configPath": selected_config_path,
+        "configPath": _public_path_ref(selected_config_path, private_label="[private-provider-config-outside-git]"),
         "configOk": config_ok,
         "adapterMode": adapter_mode,
         "ready": provider_ready,
@@ -1075,6 +1097,36 @@ def describe_browser_sandbox_provider_contract(
             "rawOcrTextReturned": False,
             "rawInputReturned": False
         },
+        "hostedProviderPrivateLaunchExecutionReady": private_launch_execution_ready,
+        "hostedProviderPrivateLaunchExecution": {
+            "status": (
+                "hosted_browser_sandbox_provider_private_launch_executed"
+                if private_launch_execution_ready
+                else "hosted_browser_sandbox_provider_private_launch_execution_blocked"
+                if os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY") == "1"
+                else "hosted_browser_sandbox_provider_private_launch_execution_not_enabled"
+            ),
+            "envExampleReady": private_launch_execution_env_ready,
+            "executionGate": os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY") == "1",
+            "finalHumanReviewed": os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED") == "1",
+            "privateProofChainReady": private_proof_chain_ready,
+            "finalEnablementAllowed": final_enablement_allowed,
+            "command": "npm run sandbox:browser:provider-private-launch-execution",
+            "envExample": PROVIDER_PRIVATE_LAUNCH_EXECUTION_ENV_EXAMPLE_PATH,
+            "missing": (
+                ([] if private_launch_execution_env_ready else ["private_launch_execution_env_template"])
+                + ([] if os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY") == "1" else ["private_launch_execution_gate"])
+                + ([] if private_proof_chain_ready else ["private_proof_chain_ready"])
+                + ([] if final_enablement_allowed else ["launch_final_enablement_allowed"])
+                + ([] if os.environ.get("WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED") == "1" else ["final_human_review"])
+            ),
+            "hostedRemoteScoreMayPassOnlyAfterLiveVerified": True,
+            "rawEndpointReturned": False,
+            "rawSecretReturned": False,
+            "rawFrameReturned": False,
+            "rawOcrTextReturned": False,
+            "rawInputReturned": False
+        },
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
         "hostedProviderLiveLifecycleHarnessReady": live_lifecycle_harness_ready,
@@ -1152,7 +1204,7 @@ def describe_browser_sandbox_provider_selection_contract(
         ),
         "contractReady": contract_ok,
         "preflightReady": preflight_ready,
-        "configPath": selected_config_path,
+        "configPath": _public_path_ref(selected_config_path, private_label="[private-selection-config-outside-git]"),
         "candidateKeys": candidate_keys,
         "selectedProviderKnown": selected_provider_known,
         "selectedProviderKey": selected_provider if selected_provider_known else None,
