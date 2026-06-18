@@ -592,13 +592,16 @@ export function validateSteelRemoteDeploymentFiles({
     ["remote_encrypted_logs_mount_documented", composeText.includes("/srv/workerprototype_openclaw/steel/logs:/data/steel/logs")],
     ["remote_tls_placeholder_host", caddyText.includes("STEEL_REMOTE_HOST") && caddyText.includes(":443")],
     ["remote_ip_allowlist_matcher", caddyText.includes("@allow_backend") && caddyText.includes("remote_ip")],
-    ["remote_forbid_non_allowlisted", caddyText.includes("respond @blocked_backend 403") || caddyText.includes("respond @not_allow_backend 403")],
+    ["remote_forbid_non_allowlisted", caddyText.includes("respond @blocked_backend 403") || caddyText.includes("respond @not_allow_backend 403") || (caddyText.includes("handle @blocked_backend") && caddyText.includes("respond 403"))],
     ["remote_only_expected_steel_routes", [
       "path /v1/health",
       "path /v1/sessions",
-      "/v1/sessions/.+/screenshot",
+      "path /v1/sessions/screenshot",
+      "/v1/sessions/.+/live-details",
       "/v1/sessions/.+/release",
-      "/v1/sessions/.+/viewer"
+      "path / /sessions/* /icon.png /assets/*",
+      "path /api/v1/sessions /api/v1/sessions/* /api/v1/devtools/inspector.html",
+      "uri strip_prefix /api"
     ].every((fragment) => caddyText.includes(fragment))],
     ["remote_blocks_everything_else", caddyText.includes("respond 404")],
     ["remote_no_cdp_proxy", !/9223|cdp/i.test(caddyText)],

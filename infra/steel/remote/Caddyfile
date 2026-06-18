@@ -7,7 +7,6 @@
 STEEL_REMOTE_HOST:443 {
 	@allow_backend remote_ip {$STEEL_BACKEND_EGRESS_CIDRS}
 	@blocked_backend not remote_ip {$STEEL_BACKEND_EGRESS_CIDRS}
-	respond @blocked_backend 403
 
 	request_header -X-Forwarded-For
 	request_header -X-Real-IP
@@ -26,7 +25,11 @@ STEEL_REMOTE_HOST:443 {
 	}
 	@session_screenshot {
 		method POST
-		path_regexp session_screenshot ^/v1/sessions/.+/screenshot$
+		path /v1/sessions/screenshot
+	}
+	@session_live_details {
+		method GET
+		path_regexp session_live_details ^/v1/sessions/.+/live-details$
 	}
 	@session_release {
 		method POST
@@ -34,14 +37,44 @@ STEEL_REMOTE_HOST:443 {
 	}
 	@session_viewer {
 		method GET
-		path_regexp session_viewer ^/v1/sessions/.+/viewer.*$
+		path / /sessions/* /icon.png /assets/*
+	}
+	@viewer_api {
+		path /api/v1/sessions /api/v1/sessions/* /api/v1/devtools/inspector.html
 	}
 
-	reverse_proxy @health 127.0.0.1:3000
-	reverse_proxy @create_session 127.0.0.1:3000
-	reverse_proxy @session_screenshot 127.0.0.1:3000
-	reverse_proxy @session_release 127.0.0.1:3000
-	reverse_proxy @session_viewer 127.0.0.1:3000
+	handle @blocked_backend {
+		respond 403
+	}
+
+	handle @health {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @create_session {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_screenshot {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_live_details {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_release {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_viewer {
+		reverse_proxy 127.0.0.1:5173
+	}
+
+	handle @viewer_api {
+		uri strip_prefix /api
+		reverse_proxy 127.0.0.1:3000
+	}
 
 	respond 404
 }
