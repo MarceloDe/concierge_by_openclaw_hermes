@@ -12,6 +12,8 @@ import {
   runBrowserSandboxProviderSelectionSmoke,
   runBrowserSandboxProviderSteelOperationsSmoke,
   runBrowserSandboxProviderSteelRemoteReadinessSmoke,
+  validateBrowserSandboxProviderSteelOpsDrillsContract,
+  runBrowserSandboxProviderSteelOpsDrillsSmoke,
   runBrowserSandboxProviderLivePreflightSmoke,
   runBrowserSandboxProviderLiveVerificationSmoke,
   runBrowserSandboxProviderWebrtcSignalingSmoke,
@@ -347,6 +349,43 @@ test("steel remote readiness can pass only with TLS endpoint, private CDP, firew
     if (originalWebSocket === undefined) delete globalThis.WebSocket;
     else globalThis.WebSocket = originalWebSocket;
   }
+});
+
+test("steel remote ops drills prove patching, restore, alerting, and handoff gates after remote readiness", async () => {
+  const acceptanceDir = await mkdtemp(join(tmpdir(), "steel-ops-drills-accepted-"));
+  await writeFile(
+    join(acceptanceDir, "steel-remote-live-lifecycle-test.json"),
+    JSON.stringify({
+      ok: true,
+      tenChecks: {
+        ok: true,
+        checks: Array.from({ length: 10 }, (_, index) => ({ key: `remote_check_${index + 1}`, ok: true }))
+      }
+    })
+  );
+  const validation = await validateBrowserSandboxProviderSteelOpsDrillsContract();
+  assert.equal(validation.ok, true);
+  assert.equal(validation.sanitizedConfig.phase, "31");
+  assert.equal(validation.sanitizedConfig.concurrencyFanoutDeferred, true);
+
+  const result = await runBrowserSandboxProviderSteelOpsDrillsSmoke({
+    artifactPath: "/tmp/brainsty-browser-sandbox-provider-steel-ops-drills-smoke-test.json",
+    acceptanceArtifactDir: acceptanceDir
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "steel_remote_ops_drills_ready");
+  assert.equal(result.score, 100);
+  assert.equal(result.validation.ok, true);
+  assert.equal(result.drills.ok, true);
+  assert.equal(result.drills.passed, result.drills.total);
+  assert.match(result.lifecycleArtifactRef, /steel-remote-live-lifecycle-test\.json$/);
+  assert.equal(result.dashboard.readinessKey, "hosted_browser_sandbox_provider_steel_ops_drills");
+  assert.equal(result.dashboard.opsDrillReadinessLabel, "ops-drill readiness");
+  assert.equal(result.hostedProviderReady, false);
+  assert.equal(result.safety.hostedReadinessOverclaimed, false);
+  assert.equal(result.safety.rawEndpointUrlWritten, false);
+  assert.doesNotMatch(serialized, /steel-staging|wefellas|AKIA|Bearer\s+|sk-[A-Za-z0-9]|data:image|member id|subscriber id/i);
 });
 
 test("steel self-host operations contract rejects public CDP and retained browser logs", async () => {

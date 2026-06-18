@@ -2276,3 +2276,29 @@ Current proof status:
 
 - Static implementation is present.
 - Live remote acceptance is not complete because no owned remote Steel host/TLS/tunnel was available in this session.
+
+Phase 30 closure update:
+
+- Live remote acceptance later completed against an owned AWS EC2 Steel host in `us-east-1`.
+- Accepted artifact: `artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json`.
+- The artifact reports `steel_remote_host_lifecycle_verified`, `10 / 10` remote checks, `20 / 20` deployment checks, `100 / 100` score, and no raw endpoint, secret, frame, image, OCR text, or input return.
+
+## Steel Remote Ops Drills Acceptance
+
+This slice is acceptable when:
+
+- A Phase 31 ops-drill smoke command exists and is safe in default local mode.
+- The ops-drill contract requires the accepted Phase 30 remote lifecycle artifact before scoring.
+- Patching cadence requires weekly Steel/Chrome digest review, critical CVE review within 24 hours, no `latest` tags, digest rollback, and post-patch smoke commands.
+- Backup/restore drill has a dry-run-safe script, excludes raw visual artifacts, emits a ref-only drill event, and can invoke recovery smoke.
+- Health alerting covers TLS health, local health, session-create latency, TLS expiry, WireGuard/CDP tunnel, container restarts, and recovery-event failures.
+- On-call handoff requires latest lifecycle artifact, PHI/raw-content exposure status, human takeover boundary status, agent credential entry status, external/write action status, and rollback status.
+- Connector proof exposes `hosted_browser_sandbox_provider_steel_ops_drills` separately from remote-host readiness and final hosted readiness.
+- Concurrency fan-out remains explicitly deferred.
+
+Current proof status:
+
+- `npm run sandbox:browser:steel-ops-drills` passed with `steel_remote_ops_drills_ready`, `16 / 16` checks, and `100 / 100`.
+- `node --test src/tests/browser-sandbox-provider-contract.test.mjs` passed with 28/28 tests.
+- `npm run build` passed.
+- `npm run test:docker:contract` passed with 45/45 tests.

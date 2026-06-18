@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "brainstyworkers.steel-remote-health-alerts.v1",
+  "status": "example_no_secrets",
+  "probes": [
+    {
+      "key": "tls_health",
+      "method": "GET",
+      "targetRef": "STEEL_REMOTE_HOST_REF",
+      "path": "/v1/health",
+      "expectStatus": 200,
+      "fromNetwork": "backend_egress_allowlist"
+    },
+    {
+      "key": "local_health",
+      "method": "GET",
+      "targetRef": "STEEL_API_LOOPBACK_REF",
+      "path": "/v1/health",
+      "expectStatus": 200,
+      "fromNetwork": "steel_host"
+    },
+    {
+      "key": "session_create_latency",
+      "method": "POST",
+      "targetRef": "STEEL_REMOTE_HOST_REF",
+      "path": "/v1/sessions",
+      "p95Ms": 3000,
+      "fromNetwork": "backend_egress_allowlist"
+    },
+    {
+      "key": "tls_certificate_expiry",
+      "targetRef": "STEEL_REMOTE_HOST_REF",
+      "minDaysRemaining": 14
+    },
+    {
+      "key": "wireguard_cdp_tunnel",
+      "targetRef": "STEEL_CDP_TUNNEL_REF",
+      "expectReachable": true
+    },
+    {
+      "key": "container_restart_count",
+      "targetRef": "STEEL_DOCKER_HOST_REF",
+      "maxRestartsIn15m": 1
+    },
+    {
+      "key": "recovery_event_stream",
+      "targetRef": "STEEL_RECOVERY_EVENTS_REF",
+      "blockedEventMustAlert": true
+    }
+  ],
+  "notificationTargets": [
+    {
+      "key": "operator_on_call",
+      "targetRef": "PRIVATE_ALERT_TARGET_REF"
+    }
+  ],
+  "redaction": {
+    "rawFrames": false,
+    "rawScreenshots": false,
+    "rawOcrText": false,
+    "inputValues": false,
+    "secrets": false,
+    "hostIdentifiersInDashboard": false
+  }
+}

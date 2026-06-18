@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "brainstyworkers.browser-sandbox-provider-steel-ops-drills.v1",
+  "phase": "31",
+  "status": "ops_drill_contract_only",
+  "providerStrategy": "steel-self-host",
+  "hostModel": "single_remote_host_single_session_queue",
+  "remoteReadinessArtifactRequired": true,
+  "concurrencyFanoutDeferred": true,
+  "patching": {
+    "cadence": "weekly",
+    "criticalCveReviewHours": 24,
+    "chromeSecurityReviewRequired": true,
+    "steelDigestReviewRequired": true,
+    "latestTagsAllowed": false,
+    "rollbackDigestRequired": true,
+    "smokeCommands": [
+      "npm run sandbox:browser:steel-remote-readiness",
+      "npm run sandbox:browser:steel-ops-drills"
+    ]
+  },
+  "backupRestore": {
+    "encryptedVolumeRequired": true,
+    "restoreDrillRequired": true,
+    "rawFramesBackedUp": false,
+    "rawScreenshotsBackedUp": false,
+    "rawOcrTextBackedUp": false,
+    "inputValuesBackedUp": false,
+    "recoveryScript": "infra/steel/remote/recover.sh",
+    "drillScript": "infra/steel/remote/backup-restore-drill.sh"
+  },
+  "healthAlerting": {
+    "healthProbeRequired": true,
+    "sessionLatencyProbeRequired": true,
+    "tlsExpiryProbeRequired": true,
+    "wireguardProbeRequired": true,
+    "containerRestartProbeRequired": true,
+    "recoveryEventProbeRequired": true,
+    "alertThresholds": {
+      "sessionCreateP95Ms": 3000,
+      "tlsMinDaysRemaining": 14,
+      "containerRestartsIn15m": 1
+    }
+  },
+  "onCall": {
+    "handoffTemplate": "infra/steel/remote/oncall-handoff.md",
+    "latestLifecycleArtifactRequired": true,
+    "phiExposureFieldRequired": true,
+    "humanTakeoverBoundaryFieldRequired": true
+  },
+  "safety": {
+    "requiresHumanTakeoverApproval": true,
+    "agentCredentialEntryAllowed": false,
+    "externalWriteActionsAllowed": false,
+    "recordFrames": false,
+    "persistRawOcrText": false,
+    "secretsInRepoAllowed": false
+  }
+}

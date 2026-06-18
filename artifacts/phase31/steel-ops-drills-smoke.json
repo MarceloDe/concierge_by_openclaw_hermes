@@ -1,0 +1,131 @@
+{
+  "ok": true,
+  "version": "2026-06-17.browser-sandbox-provider.v1",
+  "status": "steel_remote_ops_drills_ready",
+  "hostedProviderReady": false,
+  "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+  "steelRemoteOpsDrillsReady": true,
+  "score": 100,
+  "target": 100,
+  "validation": {
+    "ok": true,
+    "version": "2026-06-17.browser-sandbox-provider.v1",
+    "configPath": "infra/steel/remote/ops-drills.example.json",
+    "failures": [],
+    "sanitizedConfig": {
+      "schemaVersion": "brainstyworkers.browser-sandbox-provider-steel-ops-drills.v1",
+      "phase": "31",
+      "status": "ops_drill_contract_only",
+      "providerStrategy": "steel-self-host",
+      "hostModel": "single_remote_host_single_session_queue",
+      "remoteReadinessArtifactRequired": true,
+      "concurrencyFanoutDeferred": true,
+      "patchCadence": "weekly",
+      "criticalCveReviewHours": 24,
+      "restoreDrillRequired": true,
+      "healthAlertingRequired": true,
+      "handoffTemplate": "infra/steel/remote/oncall-handoff.md"
+    }
+  },
+  "drills": {
+    "ok": true,
+    "checks": [
+      {
+        "key": "phase30_remote_lifecycle_artifact_green",
+        "ok": true
+      },
+      {
+        "key": "patching_weekly_and_critical_cve_window_documented",
+        "ok": true
+      },
+      {
+        "key": "patching_forbids_latest_and_requires_digest_rollback",
+        "ok": true
+      },
+      {
+        "key": "patching_runs_remote_readiness_and_ops_drills",
+        "ok": true
+      },
+      {
+        "key": "backup_restore_drill_script_dry_run_safe",
+        "ok": true
+      },
+      {
+        "key": "backup_restore_drill_excludes_raw_visual_artifacts",
+        "ok": true
+      },
+      {
+        "key": "backup_restore_drill_runs_recovery_smoke",
+        "ok": true
+      },
+      {
+        "key": "health_alerts_cover_required_probes",
+        "ok": true
+      },
+      {
+        "key": "health_alerts_thresholds_are_operational",
+        "ok": true
+      },
+      {
+        "key": "health_alerts_no_raw_payload_surfaces",
+        "ok": true
+      },
+      {
+        "key": "oncall_handoff_contains_safety_fields",
+        "ok": true
+      },
+      {
+        "key": "oncall_handoff_requires_phase31_commands",
+        "ok": true
+      },
+      {
+        "key": "ops_config_defers_concurrency",
+        "ok": true
+      },
+      {
+        "key": "ops_config_preserves_human_takeover_boundary",
+        "ok": true
+      },
+      {
+        "key": "ops_config_forbids_raw_recording",
+        "ok": true
+      },
+      {
+        "key": "ops_drills_no_secret_or_runtime_values",
+        "ok": true
+      }
+    ],
+    "passed": 16,
+    "total": 16
+  },
+  "lifecycleArtifactRef": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+  "dashboard": {
+    "readinessKey": "hosted_browser_sandbox_provider_steel_ops_drills",
+    "scoreKey": "hosted_browser_sandbox_provider_steel_ops_drills",
+    "command": "npm run sandbox:browser:steel-ops-drills",
+    "configFile": "infra/steel/remote/ops-drills.example.json",
+    "patchingRunbook": "infra/steel/remote/patching.md",
+    "backupRestoreDrill": "infra/steel/remote/backup-restore-drill.sh",
+    "healthAlerts": "infra/steel/remote/health-alerts.example.json",
+    "oncallHandoff": "infra/steel/remote/oncall-handoff.md",
+    "lifecycleArtifact": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+    "contractReadinessLabel": "contract readiness",
+    "localHostReadinessLabel": "local-host readiness",
+    "remoteHostReadinessLabel": "remote-host readiness",
+    "opsDrillReadinessLabel": "ops-drill readiness"
+  },
+  "safety": {
+    "rawEndpointUrlWritten": false,
+    "rawSecretFilePathWritten": false,
+    "rawOcrTextReturned": false,
+    "frameRecordingEnabled": false,
+    "rawEndpointReturned": false,
+    "rawSecretReturned": false,
+    "rawFrameReturned": false,
+    "rawImageReturned": false,
+    "rawInputReturned": false,
+    "externalActions": false,
+    "agentCredentialEntryAllowed": false,
+    "hostedReadinessOverclaimed": false
+  }
+}
