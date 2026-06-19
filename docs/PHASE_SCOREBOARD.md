@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 32 canonical scoreboard.
+Status: Phase 34 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 60 | Phase 33 shadow scaffold | Typed `CaseState`, G0-G8 gates, PEMS, and shadow reconstruction exist; production decisioning remains disabled until maturity and review gates pass. |
+| continuous_procedural_memory | 70 | Phase 34 shadow persistence | Typed `CaseState`, G0-G8 gates, PEMS, shadow reconstruction, append-only shadow runs, and aggregate candidate maturity exist; production decisioning remains disabled until reviewer and safety gates pass. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -36,3 +36,14 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Connector proof exposes `continuous_procedural_memory_shadow` and `continuous_intelligence_shadow`.
 - Score `continuous_procedural_memory` passes only the Phase 33 shadow scaffold target, not full production procedural automation.
 - Tests prove no raw user input, raw source URL path, or Cortex-as-product-memory claim leaks into `CaseState`.
+
+## Phase 34 Acceptance Checklist
+
+- `continuous_intelligence_shadow_runs` exists as the append-only trace ledger.
+- `pems_candidate_maturity` exists as the aggregate candidate maturity table.
+- Real LangGraph runs persist a final shadow after response composition and product-memory retain.
+- Connector proof exposes `continuous_intelligence_shadow_persistence`.
+- Score `continuous_procedural_memory` reaches only the Phase 34 persistence target, not full production procedural automation.
+- PEMS remains untrusted without reviewer approvals.
+- `productionDrivingAllowed=false` remains enforced.
+- Tests prove persisted payloads do not contain raw user input or raw source URLs.

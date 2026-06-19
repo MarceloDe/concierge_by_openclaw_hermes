@@ -5,7 +5,10 @@ import { SCHEMA_SQL, TABLES } from "../concierge/schema.mjs";
 import { AUDIT_CHAIN_VERSION, AUDIT_LOG_API_VERSION } from "../concierge/audit.mjs";
 import { describeLangGraphScope } from "../concierge/langgraphScope.mjs";
 import { createBrainstyLangGraph, LANGGRAPH_RUNNER_VERSION } from "../concierge/langgraphRunner.mjs";
-import { buildContinuousIntelligenceReadinessProof } from "../concierge/continuousIntelligence.mjs";
+import {
+  buildContinuousIntelligencePersistenceReadinessProof,
+  buildContinuousIntelligenceReadinessProof
+} from "../concierge/continuousIntelligence.mjs";
 import { auditPromptContractSafety, buildPromptBundle } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
 import { loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
@@ -196,6 +199,15 @@ if (!TABLES.includes("research_scheduler_daemon_state") || !SCHEMA_SQL.includes(
   throw new Error("Database schema is missing Phase 10T research scheduler daemon state table");
 }
 
+if (
+  !TABLES.includes("continuous_intelligence_shadow_runs") ||
+  !TABLES.includes("pems_candidate_maturity") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity")
+) {
+  throw new Error("Database schema is missing Phase 34 continuous-intelligence persistence tables");
+}
+
 if (!TABLES.includes("research_embedding_routes") || !TABLES.includes("research_embedding_jobs") || !TABLES.includes("research_embedding_index")) {
   throw new Error("Database schema is missing Phase 10M research embedding route/index tables");
 }
@@ -311,14 +323,22 @@ if (!createBrainstyLangGraph()) {
 }
 
 const continuousIntelligenceProof = buildContinuousIntelligenceReadinessProof();
+const continuousIntelligencePersistenceProof = buildContinuousIntelligencePersistenceReadinessProof({
+  ok: true,
+  shadowRunCount: 1,
+  candidateCount: 1,
+  pemsTrusted: false
+});
 if (
   !continuousIntelligenceProof.ok ||
   continuousIntelligenceProof.mode !== "shadow_only" ||
   continuousIntelligenceProof.productionDrivingAllowed !== false ||
   continuousIntelligenceProof.gateIds.join(",") !== "G0,G1,G2,G3,G4,G5,G6,G7,G8" ||
-  continuousIntelligenceProof.pemsTrusted !== false
+  continuousIntelligenceProof.pemsTrusted !== false ||
+  continuousIntelligencePersistenceProof.status !== "phase34_shadow_persistence_active" ||
+  continuousIntelligencePersistenceProof.productionDrivingAllowed !== false
 ) {
-  throw new Error("Phase 33 continuous intelligence shadow scaffold is incomplete.");
+  throw new Error("Phase 33/34 continuous intelligence shadow scaffold or persistence proof is incomplete.");
 }
 
 const dynamicSkills = await loadDynamicSkillDefinitions();
@@ -409,4 +429,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

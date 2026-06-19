@@ -2,7 +2,11 @@ import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/lang
 import { ChatOpenAI } from "@langchain/openai";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
-import { buildCaseState, buildContinuousIntelligenceShadow } from "./continuousIntelligence.mjs";
+import {
+  buildCaseState,
+  buildContinuousIntelligenceShadow,
+  persistFinalContinuousIntelligenceShadow
+} from "./continuousIntelligence.mjs";
 import { consumeReadOnlyObservationApproval } from "./approvalResume.mjs";
 import { persistClaimedChromeSnapshot, runPortalExtraction } from "./browserAutomation.mjs";
 import { classifyIntent } from "./classifier.mjs";
@@ -97,6 +101,7 @@ const BrainstyState = Annotation.Root({
   memory_context: field(""),
   product_memory_recall: field(null),
   product_memory_retain: field(null),
+  continuous_intelligence_persistence: field(null),
   policy_result: field(null),
   intent: field(null),
   structured_intent: field(null),
@@ -2997,8 +3002,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     context_packet: context.packet,
     runtime_bundle: null,
     memory_context: "",
-    product_memory_recall: productMemoryRecall,
+  product_memory_recall: productMemoryRecall,
     product_memory_retain: null,
+    continuous_intelligence_persistence: null,
     policy_result: null,
     intent: null,
     structured_intent: null,
@@ -3160,6 +3166,46 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     retained: productMemoryRetain.retained,
     episodeUuid: productMemoryRetain.episodeUuid ?? null,
     error: productMemoryRetain.error ?? null
+  });
+  const continuousIntelligencePersistence = await persistFinalContinuousIntelligenceShadow(store, {
+    user,
+    session,
+    graphTraceId,
+    channel,
+    userInput,
+    contextPacket: context.packet,
+    productMemoryRecall,
+    productMemoryRetain,
+    state
+  });
+  state.continuous_intelligence = continuousIntelligencePersistence.shadow;
+  state.case_state = continuousIntelligencePersistence.shadow.caseState;
+  state.continuous_intelligence_persistence = {
+    version: continuousIntelligencePersistence.version,
+    shadowRunId: continuousIntelligencePersistence.shadowRun.id,
+    candidateId: continuousIntelligencePersistence.maturity.candidateId,
+    pemsScore: continuousIntelligencePersistence.maturity.score,
+    pemsTrusted: continuousIntelligencePersistence.maturity.trusted,
+    shadowRunCount: continuousIntelligencePersistence.aggregate.shadowRunCount,
+    productionDrivingAllowed: false
+  };
+  state.proof = mergeProof(state, "continuous_intelligence_shadow_persistence", {
+    version: continuousIntelligencePersistence.version,
+    shadowRunId: continuousIntelligencePersistence.shadowRun.id,
+    candidateId: continuousIntelligencePersistence.maturity.candidateId,
+    pemsScore: continuousIntelligencePersistence.maturity.score,
+    pemsTrusted: continuousIntelligencePersistence.maturity.trusted,
+    shadowRunCount: continuousIntelligencePersistence.aggregate.shadowRunCount,
+    productionDrivingAllowed: false
+  });
+  await audit(store, session.id, "continuous_intelligence_shadow_persisted", {
+    graphTraceId,
+    shadowRunId: continuousIntelligencePersistence.shadowRun.id,
+    candidateId: continuousIntelligencePersistence.maturity.candidateId,
+    pemsScore: continuousIntelligencePersistence.maturity.score,
+    pemsTrusted: continuousIntelligencePersistence.maturity.trusted,
+    shadowRunCount: continuousIntelligencePersistence.aggregate.shadowRunCount,
+    productionDrivingAllowed: false
   });
   state.ai2ui_blocks = buildAi2UiBlocksFromState(state, {
     productMemory: {

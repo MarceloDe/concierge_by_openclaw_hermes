@@ -2727,3 +2727,32 @@ Gates:
 
 Next:
 Phase 34 should add shadow-run persistence and maturity accumulation from real resolved traces, still without allowing procedural skills to drive recommendations until PEMS and reviewer gates are green.
+
+## Phase 34: Continuous Intelligence Shadow Persistence
+
+Goal:
+Persist Phase 33 continuous-intelligence shadows from real graph runs and accumulate PEMS candidate maturity without granting learned procedures any production authority.
+
+Build:
+- Add append-only `continuous_intelligence_shadow_runs` table.
+- Add aggregate `pems_candidate_maturity` table.
+- Persist a final sanitized shadow after response composition and product-memory retain.
+- Expose `continuous_intelligence_shadow_persistence` through dashboard/API proof.
+- Add tests proving direct persistence, aggregate accumulation, real LangGraph persistence, and non-driving PEMS state.
+
+Non-goals:
+- Do not let procedural memory choose workflows, answer claims, approval state, browser actions, or OpenClaw dispatch.
+- Do not persist raw user input, raw source URLs, raw OCR text, raw frames, credentials, or raw document bodies.
+- Do not promote any PEMS candidate to trusted without reviewer approvals and safety gates.
+- Do not replace Graphiti/FalkorDB product memory with Cortex.
+
+Gates:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/continuous-intelligence-persistence.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `continuous_intelligence_shadow_persistence`
+- Browser/dashboard proof that the persistence gate is visible
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 35 should implement reviewer/evaluator promotion gates for PEMS candidates, including explicit human review counters and validator evidence before any supervised advisory use.

@@ -8157,3 +8157,49 @@ Browser/dashboard proof:
 
 Next phase:
 - Phase 34 should persist shadow runs and accumulate PEMS maturity from real resolved traces, still without letting procedural skills drive recommendations until maturity, reviewer, citation, and safety gates are green.
+
+## Phase 34 Continuous Intelligence Shadow Persistence
+
+Status: Implemented and locally verified in the Phase 34 branch.
+
+Slice name:
+- Durable shadow-run ledger and PEMS candidate maturity accumulation.
+
+Context:
+- Phase 33 created the shadow-only `CaseState`, G0-G8 gates, PEMS scorer, and LangGraph `case_state_shadow` node.
+- Phase 34 makes those shadows durable after final response/product-memory retain so the project can learn from real graph traces without letting learned procedures drive healthcare decisions.
+
+Code and docs changed:
+- Added schema tables:
+  - `continuous_intelligence_shadow_runs`;
+  - `pems_candidate_maturity`.
+- Extended `src/concierge/continuousIntelligence.mjs` with:
+  - `2026-06-18.phase34-shadow-persistence.v1`;
+  - safe shadow persistence summaries;
+  - append-only shadow-run persistence;
+  - aggregate PEMS candidate maturity updates;
+  - dashboard/API persistence readiness proof.
+- Wired `runLangGraphOrchestration` to persist a final shadow trace after response composition and product-memory retain.
+- Extended connector proof with `continuous_intelligence_shadow_persistence`.
+- Added `src/tests/continuous-intelligence-persistence.test.mjs`.
+
+Safety decision:
+- Phase 34 still sets `productionDrivingAllowed=false`.
+- PEMS stays untrusted without reviewer approvals even when trace counts accumulate.
+- Persisted shadows include hashes, source pointer refs, gate counts, PEMS maturity, and safe metadata only. Raw user input, raw source URLs, raw frames, OCR text, and Cortex product-memory claims remain excluded.
+
+Verification result:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/continuous-intelligence-persistence.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 20/20 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 219 total tests: 217 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- API proof at `http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp` showed `continuous_intelligence_shadow_persistence`, `phase34_shadow_persistence_active`, `70 / 70`, one real shadow run, `pemsTrusted=false`, and `productionDrivingAllowed=false`.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4218/?phase=phase-34-continuous-intelligence-shadow-persistence`
+- Browser proof verified `continuous_intelligence_shadow_persistence`, `phase34_shadow_persistence_active`, `70 / 70`, `pemsTrusted=false`, and `productionDrivingAllowed=false`.
+- Visual proof artifacts:
+  - `artifacts/phase34/phase34-dashboard-proof.json`;
+  - `artifacts/phase34/phase34-dashboard-proof.png`.
+
+Next phase:
+- Phase 35 should add reviewer/evaluator promotion gates for PEMS candidates before any candidate can move from shadow maturity into supervised advisory use.

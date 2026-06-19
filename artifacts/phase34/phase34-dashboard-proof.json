@@ -1,0 +1,19 @@
+{
+  "phase": 34,
+  "url": "http://127.0.0.1:4218/?phase=phase-34-continuous-intelligence-shadow-persistence",
+  "generatedAt": "2026-06-19T00:39:50.529Z",
+  "domProof": {
+    "proofStatus": "cycle_contract_ready",
+    "checkKeyPresent": true,
+    "scoreKeyPresent": true,
+    "checkStatus": "phase34_shadow_persistence_active",
+    "score": 70,
+    "target": 70,
+    "shadowRunCount": 1,
+    "pemsTrusted": false,
+    "productionDrivingAllowed": false,
+    "latestRunFinalResponsePrepared": true,
+    "rawInputReturned": false,
+    "rawSourceReturned": false
+  }
+}
