@@ -70,7 +70,11 @@ import {
   suppressProductMemoryEpisode
 } from "../concierge/productMemory.mjs";
 import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
-import { buildContinuousIntelligenceReadinessProof } from "../concierge/continuousIntelligence.mjs";
+import {
+  buildContinuousIntelligencePersistenceReadinessProof,
+  buildContinuousIntelligenceReadinessProof,
+  getContinuousIntelligencePersistenceStatus
+} from "../concierge/continuousIntelligence.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1030,6 +1034,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const deployment = await safeDeploymentContractStatus();
   const storage = getStorageReadiness({ deployment });
   const continuousIntelligence = buildContinuousIntelligenceReadinessProof();
+  const continuousIntelligencePersistenceStatus = await getContinuousIntelligencePersistenceStatus(store);
+  const continuousIntelligencePersistence = buildContinuousIntelligencePersistenceReadinessProof(continuousIntelligencePersistenceStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1074,6 +1080,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "continuous_procedural_memory_shadow",
         status: continuousIntelligence.status,
         target: "Phase 33 introduces typed CaseState, G0-G8 universal gate skeleton, PEMS maturity schema, and shadow-mode procedural reconstruction without letting it drive healthcare answers."
+      },
+      {
+        key: "continuous_intelligence_shadow_persistence",
+        status: continuousIntelligencePersistence.status,
+        target: "Phase 34 persists final shadow runs and accumulates PEMS candidate maturity from real graph traces while keeping procedural candidates non-driving."
       },
       {
         key: "docker_connector_deployment",
@@ -1525,6 +1536,21 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: continuousIntelligence.target,
         safety: continuousIntelligence.shadow.safety
       },
+      {
+        key: "continuous_intelligence_shadow_persistence",
+        status: continuousIntelligencePersistence.status,
+        ok: continuousIntelligencePersistence.ok,
+        mode: continuousIntelligencePersistence.mode,
+        score: continuousIntelligencePersistence.score,
+        target: continuousIntelligencePersistence.target,
+        shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
+        candidateCount: continuousIntelligencePersistence.candidateCount,
+        latestRun: continuousIntelligencePersistence.latestRun,
+        latestMaturity: continuousIntelligencePersistence.latestMaturity,
+        pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
+        productionDrivingAllowed: continuousIntelligencePersistence.productionDrivingAllowed,
+        safety: continuousIntelligencePersistence.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1568,10 +1594,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: continuousIntelligence.score,
-        target: continuousIntelligence.target,
-        status: "pass_phase33_shadow_scaffold_not_runtime_decisioning",
-        pemsTrusted: continuousIntelligence.pemsTrusted,
+        score: continuousIntelligencePersistence.score,
+        target: continuousIntelligencePersistence.target,
+        status: continuousIntelligencePersistence.status,
+        pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
+        shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1730,6 +1757,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       nodeIsInternalRuntime: true,
       canonicalGoalTiedPhaseExecution: true,
       continuousIntelligenceShadowOnly: true,
+      continuousIntelligencePersistenceOnly: true,
       cortexIsProjectMemoryOnly: true,
       nonMockedProofRequired: true,
       publicApi: "/api/v1",

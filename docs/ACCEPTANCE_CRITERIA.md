@@ -2337,3 +2337,21 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `continuous_intelligence_shadow`
+
+## Phase 34: Continuous Intelligence Shadow Persistence
+
+Acceptance criteria:
+- Database schema includes `continuous_intelligence_shadow_runs` and `pems_candidate_maturity`.
+- A real `runLangGraphOrchestration` call persists one final shadow row after final response and product-memory retain.
+- PEMS maturity accumulates across repeated shadow runs by candidate id.
+- Persisted rows expose only hashes, refs, counts, safe status fields, and PEMS metadata.
+- Raw user input, raw source URL paths, raw screenshots, raw OCR text, raw frames, and Cortex-as-product-memory claims are not persisted or returned.
+- Connector proof includes `continuous_intelligence_shadow_persistence`.
+- The `continuous_procedural_memory` score can advance only to the Phase 34 persistence target while `productionDrivingAllowed=false`.
+- PEMS candidates remain untrusted without reviewer approvals and zero-safety-incident history.
+
+Focused proof:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/continuous-intelligence-persistence.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `continuous_intelligence_shadow_persistence`

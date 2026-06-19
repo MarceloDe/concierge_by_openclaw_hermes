@@ -2481,3 +2481,22 @@ This makes the next intelligence layer real enough to test without giving it uns
 
 Cost of changing later:
 Low to moderate. Later phases can persist shadow runs, add NeSTR/RHO-style validators, and promote mature procedural candidates without changing the safety boundary that immature candidates cannot drive recommendations.
+
+## 2026-06-18 - Persist Continuous Intelligence Shadows Without Granting Runtime Authority
+
+Context:
+Phase 33 made continuous procedural intelligence visible in shadow mode, but the shadow data disappeared after each graph run. The continuous-learning proposal requires accumulated traces before PEMS candidates can mature, and the project needs real trace accumulation without turning immature learned procedures into healthcare decisioning.
+
+Options considered:
+- Keep Phase 33 as an in-memory proof only.
+- Persist raw transcripts and source text for later skill induction.
+- Persist sanitized final shadow traces plus aggregate PEMS candidate counts after final response/product-memory retain.
+
+Decision:
+Add `continuous_intelligence_shadow_runs` as an append-only trace ledger and `pems_candidate_maturity` as the aggregate maturity table. Persist the final post-response shadow from `runLangGraphOrchestration`, expose `continuous_intelligence_shadow_persistence` in connector proof, and keep `productionDrivingAllowed=false` and `pemsTrusted=false` unless the scorer and reviewer gates are genuinely satisfied.
+
+Reason:
+This advances the project from scaffold to learning substrate while preserving the existing healthcare safety envelope. It gives future PEMS, reviewer, NeSTR/RHO, and skill-induction work real traces to inspect, but only stores hashes, refs, counts, and safe metadata.
+
+Cost of changing later:
+Low. Later phases can add reviewer approvals, external research-derived procedural candidates, or Graphiti-backed storage while keeping the append-only shadow-run ledger and non-driving default.

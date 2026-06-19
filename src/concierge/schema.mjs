@@ -35,6 +35,8 @@ export const TABLES = [
   "research_claim_evaluations",
   "research_schedules",
   "research_scheduler_daemon_state",
+  "continuous_intelligence_shadow_runs",
+  "pems_candidate_maturity",
   "operator_tool_proposals",
   "openclaw_skills",
   "workflow_runs",
@@ -655,6 +657,49 @@ CREATE TABLE IF NOT EXISTS research_scheduler_daemon_state (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (last_tick_event_id) REFERENCES runtime_events(id)
+);
+
+CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  graph_trace_id TEXT,
+  case_ref TEXT NOT NULL,
+  workflow TEXT,
+  mode TEXT NOT NULL,
+  gate_score INTEGER NOT NULL DEFAULT 0,
+  gate_passed INTEGER NOT NULL DEFAULT 0,
+  gate_total INTEGER NOT NULL DEFAULT 0,
+  pems_candidate_id TEXT NOT NULL,
+  pems_score INTEGER NOT NULL DEFAULT 0,
+  pems_trusted INTEGER NOT NULL DEFAULT 0,
+  production_driving_allowed INTEGER NOT NULL DEFAULT 0,
+  source_pointer_count INTEGER NOT NULL DEFAULT 0,
+  workflow_outcome TEXT,
+  final_response_prepared INTEGER NOT NULL DEFAULT 0,
+  shadow_json TEXT NOT NULL DEFAULT '{}',
+  safety_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+CREATE TABLE IF NOT EXISTS pems_candidate_maturity (
+  candidate_id TEXT PRIMARY KEY,
+  workflow TEXT,
+  selected_skill_key TEXT,
+  shadow_run_count INTEGER NOT NULL DEFAULT 0,
+  evidence_ref_count INTEGER NOT NULL DEFAULT 0,
+  successful_outcome_count INTEGER NOT NULL DEFAULT 0,
+  reviewer_approval_count INTEGER NOT NULL DEFAULT 0,
+  authority_citation_count INTEGER NOT NULL DEFAULT 0,
+  validator_pass_count INTEGER NOT NULL DEFAULT 0,
+  safety_incident_count INTEGER NOT NULL DEFAULT 0,
+  latest_score INTEGER NOT NULL DEFAULT 0,
+  trusted INTEGER NOT NULL DEFAULT 0,
+  production_driving_allowed INTEGER NOT NULL DEFAULT 0,
+  maturity_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS operator_tool_proposals (

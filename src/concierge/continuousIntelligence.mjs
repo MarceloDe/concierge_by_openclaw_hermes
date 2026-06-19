@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export const CASE_STATE_SCHEMA_VERSION = "brainstyworkers.case_state.v1";
 export const PEMS_SCHEMA_VERSION = "brainstyworkers.pems.v1";
 export const CONTINUOUS_INTELLIGENCE_SHADOW_VERSION = "2026-06-18.phase33-continuous-intelligence-shadow.v1";
+export const CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION = "2026-06-18.phase34-shadow-persistence.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -26,6 +27,10 @@ function hashText(value) {
 
 function stableRef(prefix, ...parts) {
   return `${prefix}_${hashText(parts.filter((part) => part !== null && part !== undefined).join("|")).slice(0, 16)}`;
+}
+
+function createPersistedId(prefix) {
+  return `${prefix}_${randomUUID()}`;
 }
 
 function safeHostHash(url) {
@@ -347,6 +352,88 @@ export function reconstructProceduralScenarioShadow(caseState, gates) {
   };
 }
 
+function selectedSkillKey(caseState) {
+  return (
+    caseState?.skill?.selected?.executionSkillKey ??
+    caseState?.skill?.selected?.journeySkillKey ??
+    caseState?.skill?.selected?.insuranceSkillKey ??
+    null
+  );
+}
+
+function isSuccessfulOutcome(caseState) {
+  const outcome = String(caseState?.outcome?.workflowOutcome ?? "").toLowerCase();
+  if (!outcome) return caseState?.outcome?.finalResponsePrepared === true;
+  return !/\b(blocked|failed|refused|unavailable|urgent|handoff)\b/.test(outcome);
+}
+
+function safetyIncidentCountForCase(caseState) {
+  if (caseState?.decision?.policyAllowed === false) return 1;
+  if (caseState?.decision?.urgentEscalationRequired) return 1;
+  if (caseState?.intake?.rawInputStored === true) return 1;
+  if (caseState?.outcome?.canDriveRecommendation === true) return 1;
+  return 0;
+}
+
+function rowNumber(value) {
+  return Number(value ?? 0);
+}
+
+function parseJson(value, fallback = {}) {
+  try {
+    return JSON.parse(String(value ?? ""));
+  } catch {
+    return fallback;
+  }
+}
+
+function pemsInputsFromAggregate(aggregate) {
+  return {
+    candidateId: aggregate.candidateId,
+    shadowRuns: aggregate.shadowRunCount,
+    evidenceRefCount: aggregate.evidenceRefCount,
+    successfulOutcomeCount: aggregate.successfulOutcomeCount,
+    reviewerApprovals: aggregate.reviewerApprovalCount,
+    authorityCitationCount: aggregate.authorityCitationCount,
+    validatorPassCount: aggregate.validatorPassCount,
+    safetyIncidentCount: aggregate.safetyIncidentCount,
+    freshnessDays: 0
+  };
+}
+
+export function summarizeContinuousIntelligenceShadowForPersistence(shadow) {
+  return {
+    version: shadow?.version ?? CONTINUOUS_INTELLIGENCE_SHADOW_VERSION,
+    mode: shadow?.mode ?? "shadow_only",
+    productionDrivingAllowed: false,
+    caseState: shadow?.caseState ?? null,
+    gateSummary: shadow?.gateSummary ?? null,
+    gates: (shadow?.gates ?? []).map((item) => ({
+      id: item.id,
+      status: item.status,
+      passed: Boolean(item.passed),
+      checks: item.checks ?? {}
+    })),
+    proceduralReconstruction: {
+      mode: shadow?.proceduralReconstruction?.mode ?? "shadow_only",
+      reconstructionPattern: shadow?.proceduralReconstruction?.reconstructionPattern ?? null,
+      candidateId: shadow?.proceduralReconstruction?.candidateId ?? shadow?.pems?.candidateId ?? null,
+      cue: shadow?.proceduralReconstruction?.cue ?? null,
+      tags: shadow?.proceduralReconstruction?.tags ?? [],
+      contentRefs: shadow?.proceduralReconstruction?.contentRefs ?? [],
+      productionDrivingAllowed: false
+    },
+    pems: shadow?.pems ?? null,
+    safety: {
+      ...(shadow?.safety ?? {}),
+      rawInputReturned: false,
+      rawSourceReturned: false,
+      shadowOnly: true,
+      finalAnswerDecisioningChanged: false
+    }
+  };
+}
+
 export function buildContinuousIntelligenceShadow(input = {}) {
   const caseState = input.caseState ?? buildCaseState(input);
   const gates = evaluateUniversalCaseGates(caseState);
@@ -373,6 +460,273 @@ export function buildContinuousIntelligenceShadow(input = {}) {
       rawSourceReturned: false,
       shadowOnly: true,
       finalAnswerDecisioningChanged: false
+    }
+  };
+}
+
+export async function persistContinuousIntelligenceShadowRun(store, { user, session, graphTraceId, shadow, createdAt = new Date().toISOString() } = {}) {
+  if (!store) throw new Error("A store is required to persist continuous-intelligence shadow runs.");
+  const safeShadow = summarizeContinuousIntelligenceShadowForPersistence(shadow);
+  const caseState = safeShadow.caseState;
+  if (!caseState?.caseRef) throw new Error("Cannot persist continuous-intelligence shadow without a caseRef.");
+  const candidateId = safeShadow.pems?.candidateId ?? safeShadow.proceduralReconstruction?.candidateId;
+  if (!candidateId) throw new Error("Cannot persist continuous-intelligence shadow without a PEMS candidate id.");
+
+  return store.transaction(async (tx) => {
+    const existing = await tx.findOne("pems_candidate_maturity", { candidate_id: candidateId });
+    const aggregate = {
+      candidateId,
+      workflow: caseState.decision?.workflow ?? null,
+      selectedSkillKey: selectedSkillKey(caseState),
+      shadowRunCount: rowNumber(existing?.shadow_run_count) + 1,
+      evidenceRefCount: rowNumber(existing?.evidence_ref_count) + (caseState.evidence?.sourcePointerCount ?? 0),
+      successfulOutcomeCount: rowNumber(existing?.successful_outcome_count) + (isSuccessfulOutcome(caseState) ? 1 : 0),
+      reviewerApprovalCount: rowNumber(existing?.reviewer_approval_count),
+      authorityCitationCount: rowNumber(existing?.authority_citation_count) + (caseState.evidence?.sourcePointerCount ?? 0),
+      validatorPassCount: rowNumber(existing?.validator_pass_count) + (safeShadow.gateSummary?.passed ?? 0),
+      safetyIncidentCount: rowNumber(existing?.safety_incident_count) + safetyIncidentCountForCase(caseState)
+    };
+    const maturity = scorePemsMaturity(pemsInputsFromAggregate(aggregate));
+    const maturityJson = JSON.stringify({
+      version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+      pems: maturity,
+      aggregate,
+      productionDrivingAllowed: false
+    });
+
+    if (existing) {
+      await tx.update(
+        "pems_candidate_maturity",
+        {
+          workflow: aggregate.workflow,
+          selected_skill_key: aggregate.selectedSkillKey,
+          shadow_run_count: aggregate.shadowRunCount,
+          evidence_ref_count: aggregate.evidenceRefCount,
+          successful_outcome_count: aggregate.successfulOutcomeCount,
+          reviewer_approval_count: aggregate.reviewerApprovalCount,
+          authority_citation_count: aggregate.authorityCitationCount,
+          validator_pass_count: aggregate.validatorPassCount,
+          safety_incident_count: aggregate.safetyIncidentCount,
+          latest_score: maturity.score,
+          trusted: maturity.trusted ? 1 : 0,
+          production_driving_allowed: 0,
+          maturity_json: maturityJson,
+          updated_at: createdAt
+        },
+        { candidate_id: candidateId }
+      );
+    } else {
+      await tx.insert("pems_candidate_maturity", {
+        candidate_id: candidateId,
+        workflow: aggregate.workflow,
+        selected_skill_key: aggregate.selectedSkillKey,
+        shadow_run_count: aggregate.shadowRunCount,
+        evidence_ref_count: aggregate.evidenceRefCount,
+        successful_outcome_count: aggregate.successfulOutcomeCount,
+        reviewer_approval_count: aggregate.reviewerApprovalCount,
+        authority_citation_count: aggregate.authorityCitationCount,
+        validator_pass_count: aggregate.validatorPassCount,
+        safety_incident_count: aggregate.safetyIncidentCount,
+        latest_score: maturity.score,
+        trusted: maturity.trusted ? 1 : 0,
+        production_driving_allowed: 0,
+        maturity_json: maturityJson,
+        created_at: createdAt,
+        updated_at: createdAt
+      });
+    }
+
+    const row = await tx.insert("continuous_intelligence_shadow_runs", {
+      id: createPersistedId("ci_shadow"),
+      user_id: user?.id ?? caseState.identifiers?.userId ?? "unknown_user",
+      session_id: session?.id ?? caseState.identifiers?.sessionId,
+      graph_trace_id: graphTraceId ?? caseState.identifiers?.graphTraceId ?? null,
+      case_ref: caseState.caseRef,
+      workflow: caseState.decision?.workflow ?? null,
+      mode: safeShadow.mode,
+      gate_score: safeShadow.gateSummary?.score ?? 0,
+      gate_passed: safeShadow.gateSummary?.passed ?? 0,
+      gate_total: safeShadow.gateSummary?.total ?? 0,
+      pems_candidate_id: candidateId,
+      pems_score: maturity.score,
+      pems_trusted: maturity.trusted ? 1 : 0,
+      production_driving_allowed: 0,
+      source_pointer_count: caseState.evidence?.sourcePointerCount ?? 0,
+      workflow_outcome: caseState.outcome?.workflowOutcome ?? null,
+      final_response_prepared: caseState.outcome?.finalResponsePrepared ? 1 : 0,
+      shadow_json: JSON.stringify({
+        ...safeShadow,
+        persistedMaturity: maturity
+      }),
+      safety_json: JSON.stringify(safeShadow.safety),
+      created_at: createdAt
+    });
+
+    return {
+      version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+      shadowRun: row,
+      maturity,
+      aggregate,
+      productionDrivingAllowed: false,
+      pemsTrusted: maturity.trusted
+    };
+  });
+}
+
+export async function persistFinalContinuousIntelligenceShadow(store, { user, session, graphTraceId, channel, userInput, contextPacket, productMemoryRecall, productMemoryRetain, state } = {}) {
+  const caseState = buildCaseState({
+    userId: user?.id ?? state?.user_id,
+    sessionId: session?.id ?? state?.session_id,
+    graphTraceId: graphTraceId ?? state?.graph_trace_id,
+    channel: channel ?? state?.channel,
+    userInput: userInput ?? state?.user_input,
+    contextPacket: contextPacket ?? state?.context_packet,
+    policyResult: state?.policy_result,
+    structuredIntent: state?.structured_intent,
+    llmDecision: state?.llm_orchestration_decision,
+    workflow: state?.workflow,
+    routeReason: state?.route_reason,
+    workflowRoute: state?.workflow_route,
+    dynamicSkillContext: state?.dynamic_skill_context,
+    openclawTaskProposal: state?.openclaw_task_proposal,
+    approvalResume: state?.approval_resume,
+    evidenceObservation: state?.evidence_observation,
+    sourcePointers: state?.source_pointers,
+    productMemoryRecall,
+    productMemoryRetain,
+    uploadedDocumentContext: state?.uploaded_document_context,
+    researchEvidence: state?.research_evidence,
+    workflowOutcome: state?.workflow_outcome,
+    finalResponse: state?.final_response
+  });
+  const shadow = buildContinuousIntelligenceShadow({ caseState });
+  const persistence = await persistContinuousIntelligenceShadowRun(store, {
+    user,
+    session,
+    graphTraceId: graphTraceId ?? state?.graph_trace_id,
+    shadow
+  });
+  return {
+    ...persistence,
+    shadow
+  };
+}
+
+export async function getContinuousIntelligencePersistenceStatus(store) {
+  if (!store) {
+    return {
+      version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+      status: "store_unavailable",
+      ok: false,
+      shadowRunCount: 0,
+      candidateCount: 0,
+      trustedCandidateCount: 0,
+      productionDrivingAllowed: false
+    };
+  }
+  const counts = await store.get(
+    `SELECT
+       COUNT(*) AS shadowRunCount,
+       COALESCE(SUM(source_pointer_count), 0) AS sourcePointerCount,
+       COALESCE(MAX(created_at), NULL) AS latestShadowRunAt
+     FROM continuous_intelligence_shadow_runs;`
+  );
+  const candidates = await store.get(
+    `SELECT
+       COUNT(*) AS candidateCount,
+       COALESCE(SUM(CASE WHEN trusted = 1 THEN 1 ELSE 0 END), 0) AS trustedCandidateCount,
+       COALESCE(MAX(latest_score), 0) AS maxScore
+     FROM pems_candidate_maturity;`
+  );
+  const latest = await store.get(
+    `SELECT id, workflow, gate_score, gate_passed, gate_total, pems_candidate_id, pems_score,
+            pems_trusted, production_driving_allowed, source_pointer_count, workflow_outcome,
+            final_response_prepared, created_at
+       FROM continuous_intelligence_shadow_runs
+      ORDER BY created_at DESC
+      LIMIT 1;`
+  );
+  const latestMaturity = latest?.pems_candidate_id
+    ? await store.findOne("pems_candidate_maturity", { candidate_id: latest.pems_candidate_id })
+    : null;
+  const status = rowNumber(counts?.shadowRunCount) > 0 ? "phase34_shadow_persistence_active" : "phase34_shadow_persistence_ready_no_runs";
+  return {
+    version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+    status,
+    ok: true,
+    shadowRunCount: rowNumber(counts?.shadowRunCount),
+    sourcePointerCount: rowNumber(counts?.sourcePointerCount),
+    candidateCount: rowNumber(candidates?.candidateCount),
+    trustedCandidateCount: rowNumber(candidates?.trustedCandidateCount),
+    maxScore: rowNumber(candidates?.maxScore),
+    pemsTrusted: rowNumber(candidates?.trustedCandidateCount) > 0,
+    productionDrivingAllowed: false,
+    latestRun: latest
+      ? {
+          id: latest.id,
+          workflow: latest.workflow,
+          gateScore: rowNumber(latest.gate_score),
+          gatePassed: rowNumber(latest.gate_passed),
+          gateTotal: rowNumber(latest.gate_total),
+          candidateId: latest.pems_candidate_id,
+          pemsScore: rowNumber(latest.pems_score),
+          pemsTrusted: latest.pems_trusted === 1,
+          productionDrivingAllowed: false,
+          sourcePointerCount: rowNumber(latest.source_pointer_count),
+          workflowOutcome: latest.workflow_outcome,
+          finalResponsePrepared: latest.final_response_prepared === 1,
+          createdAt: latest.created_at
+        }
+      : null,
+    latestMaturity: latestMaturity
+      ? {
+          candidateId: latestMaturity.candidate_id,
+          workflow: latestMaturity.workflow,
+          selectedSkillKey: latestMaturity.selected_skill_key,
+          shadowRunCount: rowNumber(latestMaturity.shadow_run_count),
+          evidenceRefCount: rowNumber(latestMaturity.evidence_ref_count),
+          successfulOutcomeCount: rowNumber(latestMaturity.successful_outcome_count),
+          reviewerApprovalCount: rowNumber(latestMaturity.reviewer_approval_count),
+          authorityCitationCount: rowNumber(latestMaturity.authority_citation_count),
+          validatorPassCount: rowNumber(latestMaturity.validator_pass_count),
+          safetyIncidentCount: rowNumber(latestMaturity.safety_incident_count),
+          latestScore: rowNumber(latestMaturity.latest_score),
+          trusted: latestMaturity.trusted === 1,
+          productionDrivingAllowed: false,
+          maturity: parseJson(latestMaturity.maturity_json, {})
+        }
+      : null,
+    safety: {
+      appendOnlyShadowRuns: true,
+      rawInputReturned: false,
+      rawSourceReturned: false,
+      productionDrivingAllowed: false,
+      cortexProductMemory: false
+    }
+  };
+}
+
+export function buildContinuousIntelligencePersistenceReadinessProof(status = {}) {
+  const active = (status.shadowRunCount ?? 0) > 0;
+  return {
+    version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+    status: active ? "phase34_shadow_persistence_active" : "phase34_shadow_persistence_ready_no_runs",
+    ok: status.ok !== false,
+    mode: "shadow_only",
+    score: active ? 70 : 65,
+    target: 70,
+    shadowRunCount: status.shadowRunCount ?? 0,
+    candidateCount: status.candidateCount ?? 0,
+    latestRun: status.latestRun ?? null,
+    latestMaturity: status.latestMaturity ?? null,
+    pemsTrusted: status.pemsTrusted ?? false,
+    productionDrivingAllowed: false,
+    safety: status.safety ?? {
+      appendOnlyShadowRuns: true,
+      rawInputReturned: false,
+      rawSourceReturned: false,
+      productionDrivingAllowed: false,
+      cortexProductMemory: false
     }
   };
 }

@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 32 canonical guide.
+Status: Phase 34 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -74,14 +74,27 @@ Use role separation even when one Codex session performs the work:
 
 For real multi-agent runs, each role must use its own Cortex branch and author identity when supported. Do not let multiple agents push unrelated edits into the same feature branch without a single phase owner.
 
+## Active Intelligence Phase
+
+Phase 34 persists the Phase 33 continuous-intelligence shadows:
+
+- append-only shadow-run ledger;
+- aggregate PEMS candidate maturity;
+- real LangGraph final-trace persistence after response/product-memory retain;
+- existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
+- dashboard proof for `continuous_intelligence_shadow_persistence`;
+- production decisioning still disabled.
+
+Phase 34 does not let procedural reconstruction drive recommendations. It creates durable learning substrate only.
+
 ## Recommended Next Phases
 
-Phase 33 implements the first continuous-intelligence slice:
+Phase 35 should add supervised promotion gates for PEMS candidates:
 
-- typed `CaseState`;
-- G0 through G8 LangGraph gate skeleton in shadow mode;
-- a real `case_state_shadow` graph node before response composition;
-- PEMS maturity schema for procedural skill candidates;
-- dashboard proof that the new gate skeleton is active without changing unsafe action authority.
+- reviewer approval counters;
+- validator/NeSTR-style consistency checks;
+- cited-evidence sufficiency;
+- explicit safety-incident vetoes;
+- supervised advisory mode before any production driving.
 
-Phase 33 does not let procedural reconstruction drive recommendations yet. It externalizes state, scores maturity, records proof, and keeps production decisioning disabled until a later phase proves enough shadow runs, reviewer approvals, cited evidence, and safety history.
+Phase 35 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.

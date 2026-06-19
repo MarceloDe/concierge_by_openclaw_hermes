@@ -351,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 33 implements the first continuous-intelligence slice/);
+  assert.match(projectOperatingSystem, /Phase 34 persists the Phase 33 continuous-intelligence shadows/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -371,14 +371,17 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
 });
 
 test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
-  assert.match(projectOperatingSystem, /Phase 33 implements the first continuous-intelligence slice/);
+  assert.match(projectOperatingSystem, /Phase 34 persists the Phase 33 continuous-intelligence shadows/);
+  assert.match(projectOperatingSystem, /append-only shadow-run ledger/);
   assert.match(projectOperatingSystem, /case_state_shadow/);
-  assert.match(projectOperatingSystem, /production decisioning disabled/);
+  assert.match(projectOperatingSystem, /production decisioning still disabled/);
 
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
-  assert.match(phaseScoreboard, /Phase 33 shadow scaffold/);
+  assert.match(phaseScoreboard, /Phase 34 shadow persistence/);
   assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
   assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
+  assert.match(phaseScoreboard, /continuous_intelligence_shadow_runs/);
+  assert.match(phaseScoreboard, /pems_candidate_maturity/);
 
   assert.match(continuousIntelligence, /CASE_STATE_SCHEMA_VERSION = "brainstyworkers\.case_state\.v1"/);
   assert.match(continuousIntelligence, /PEMS_SCHEMA_VERSION = "brainstyworkers\.pems\.v1"/);
@@ -388,8 +391,12 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
 
   assert.match(serverMjs, /continuous_procedural_memory_shadow/);
   assert.match(serverMjs, /continuous_intelligence_shadow/);
-  assert.match(serverMjs, /pass_phase33_shadow_scaffold_not_runtime_decisioning/);
+  assert.match(serverMjs, /continuous_intelligence_shadow_persistence/);
+  assert.match(serverMjs, /continuousIntelligencePersistence/);
+  assert.match(serverMjs, /pemsTrusted/);
+  assert.match(serverMjs, /productionDrivingAllowed/);
   assert.match(serverMjs, /continuousIntelligenceShadowOnly/);
+  assert.match(serverMjs, /continuousIntelligencePersistenceOnly/);
 });
 
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {
