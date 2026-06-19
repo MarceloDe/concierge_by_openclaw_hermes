@@ -351,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 35 adds supervised promotion gates for PEMS candidates/);
+  assert.match(projectOperatingSystem, /Phase 36 connects supervised advisory candidates to a reviewer\/evaluator workbench/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -371,23 +371,26 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
 });
 
 test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
-  assert.match(projectOperatingSystem, /Phase 35 adds supervised promotion gates for PEMS candidates/);
+  assert.match(projectOperatingSystem, /Phase 36 connects supervised advisory candidates to a reviewer\/evaluator workbench/);
   assert.match(projectOperatingSystem, /append-only shadow-run ledger/);
   assert.match(projectOperatingSystem, /case_state_shadow/);
   assert.match(projectOperatingSystem, /production decisioning still disabled/);
 
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
-  assert.match(phaseScoreboard, /Phase 35 supervised promotion gate/);
+  assert.match(phaseScoreboard, /Phase 36 reviewer\/evaluator workbench/);
   assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
   assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
   assert.match(phaseScoreboard, /continuous_intelligence_shadow_runs/);
   assert.match(phaseScoreboard, /pems_candidate_maturity/);
   assert.match(phaseScoreboard, /pems_candidate_promotion_reviews/);
+  assert.match(phaseScoreboard, /pems_candidate_evaluator_drafts/);
 
   assert.match(continuousIntelligence, /CASE_STATE_SCHEMA_VERSION = "brainstyworkers\.case_state\.v1"/);
   assert.match(continuousIntelligence, /PEMS_SCHEMA_VERSION = "brainstyworkers\.pems\.v1"/);
   assert.match(continuousIntelligence, /PEMS_PROMOTION_GATE_VERSION/);
+  assert.match(continuousIntelligence, /PEMS_REVIEW_WORKBENCH_VERSION/);
   assert.match(continuousIntelligence, /evaluatePemsPromotionGate/);
+  assert.match(continuousIntelligence, /createPemsEvaluatorDraft/);
   assert.match(continuousIntelligence, /UNIVERSAL_CASE_GATES/);
   assert.match(continuousIntelligence, /productionDrivingAllowed: false/);
   assert.match(continuousIntelligence, /shadow_only/);
@@ -397,12 +400,16 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /continuous_intelligence_shadow_persistence/);
   assert.match(serverMjs, /continuousIntelligencePersistence/);
   assert.match(serverMjs, /pems_supervised_promotion_gate/);
+  assert.match(serverMjs, /pems_reviewer_evaluator_workbench/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/promotion/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/reviews/);
+  assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/workbench/);
+  assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/evaluator-drafts/);
   assert.match(serverMjs, /pemsTrusted/);
   assert.match(serverMjs, /productionDrivingAllowed/);
   assert.match(serverMjs, /continuousIntelligenceShadowOnly/);
   assert.match(serverMjs, /continuousIntelligencePersistenceOnly/);
+  assert.match(serverMjs, /pemsReviewerWorkbenchAdvisoryOnly/);
 });
 
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {

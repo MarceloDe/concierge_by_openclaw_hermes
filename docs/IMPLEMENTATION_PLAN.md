@@ -2782,3 +2782,32 @@ Gates:
 
 Next:
 Phase 35 should implement reviewer/evaluator promotion gates for PEMS candidates, including explicit human review counters and validator evidence before any supervised advisory use.
+
+## Phase 36: PEMS Reviewer/Evaluator Workbench
+
+Goal:
+Connect supervised advisory candidates to a reviewer-facing evaluator workbench without letting evaluator drafts drive production behavior.
+
+Build:
+- Add `pems_candidate_evaluator_drafts` as a sanitized advisory-draft ledger.
+- Add helpers to create evaluator draft notes, LLM-assisted advisory notes, and NeSTR-style consistency trace refs.
+- Link advisory material into the existing `pems_candidate_promotion_reviews` ledger only when an explicit human or deterministic reviewer records a review.
+- Expose `/api/continuous-intelligence/pems/workbench` and `/api/continuous-intelligence/pems/evaluator-drafts`.
+- Expose `pems_reviewer_evaluator_workbench` through dashboard/API proof.
+- Keep `productionDrivingAllowed=false`.
+
+Non-goals:
+- Do not score mocked LLM output as live LLM proof.
+- Do not let advisory drafts approve a candidate, choose workflows, compose final answers, alter approval state, dispatch OpenClaw, drive browser actions, contact payers, send external messages, or write to payer systems.
+- Do not persist raw advisory notes, raw consistency traces, raw source text, raw OCR, raw frames, credentials, or secrets.
+
+Gates:
+- `node --test src/tests/pems-reviewer-workbench.test.mjs src/tests/pems-promotion-gates.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `pems_reviewer_evaluator_workbench`
+- Browser/dashboard proof that the workbench gate is visible
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 37 should add an operator UI for reviewing advisory drafts, comparing deterministic and advisory output, and approving or rejecting by ref only.

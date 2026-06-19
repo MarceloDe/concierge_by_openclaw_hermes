@@ -2519,3 +2519,22 @@ This advances the project from scaffold to learning substrate while preserving t
 
 Cost of changing later:
 Low. Later phases can add reviewer approvals, external research-derived procedural candidates, or Graphiti-backed storage while keeping the append-only shadow-run ledger and non-driving default.
+
+## 2026-06-18 - Add Advisory Reviewer Workbench Without Granting PEMS Authority
+
+Context:
+Phase 35 added supervised promotion gates for mature PEMS candidates, but reviewer/evaluator material was still entered directly as final review records. The canonical Cortex Phase 35 note named Phase 36 as a reviewer/evaluator workbench where LLM-assisted draft notes and NeSTR-style consistency traces could advise reviewers without becoming authority.
+
+Options considered:
+- Let evaluator draft notes automatically create pass/fail promotion reviews.
+- Store raw evaluator notes and traces for later inspection.
+- Add a separate sanitized advisory-draft ledger and allow explicit human or deterministic reviews to link to draft refs.
+
+Decision:
+Add `pems_candidate_evaluator_drafts`, `createPemsEvaluatorDraft`, `getPemsReviewerWorkbenchStatus`, and `buildPemsReviewerWorkbenchReadinessProof`. Drafts store hashes, safe previews, and consistency trace refs only. `recordPemsPromotionReview` can link to a draft id, but only explicit reviews affect the promotion gate.
+
+Reason:
+This moves the project toward less deterministic intelligence and richer evaluator support while preserving the healthcare authority boundary. LLM-assisted notes can become useful reviewer material, but deterministic validators and human reviewers remain the only promotion authority, and production driving remains disabled.
+
+Cost of changing later:
+Low. Phase 37 can add a UI for reviewing draft refs, and a future live LLM evaluator can populate the same draft contract without changing the promotion-review gate.
