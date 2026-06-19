@@ -5,6 +5,7 @@ import { SCHEMA_SQL, TABLES } from "../concierge/schema.mjs";
 import { AUDIT_CHAIN_VERSION, AUDIT_LOG_API_VERSION } from "../concierge/audit.mjs";
 import { describeLangGraphScope } from "../concierge/langgraphScope.mjs";
 import { createBrainstyLangGraph, LANGGRAPH_RUNNER_VERSION } from "../concierge/langgraphRunner.mjs";
+import { buildContinuousIntelligenceReadinessProof } from "../concierge/continuousIntelligence.mjs";
 import { auditPromptContractSafety, buildPromptBundle } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
 import { loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
@@ -100,6 +101,7 @@ const requiredFiles = [
   "src/concierge/orchestratorDemo.mjs",
   "src/concierge/outboundPayloadObservability.mjs",
   "src/concierge/productMemory.mjs",
+  "src/concierge/continuousIntelligence.mjs",
   "src/concierge/llmOrchestrationDecision.mjs",
   "src/concierge/runtimeEvents.mjs",
   "src/concierge/researchOps.mjs",
@@ -308,6 +310,17 @@ if (!createBrainstyLangGraph()) {
   throw new Error("LangGraph runner failed to compile.");
 }
 
+const continuousIntelligenceProof = buildContinuousIntelligenceReadinessProof();
+if (
+  !continuousIntelligenceProof.ok ||
+  continuousIntelligenceProof.mode !== "shadow_only" ||
+  continuousIntelligenceProof.productionDrivingAllowed !== false ||
+  continuousIntelligenceProof.gateIds.join(",") !== "G0,G1,G2,G3,G4,G5,G6,G7,G8" ||
+  continuousIntelligenceProof.pemsTrusted !== false
+) {
+  throw new Error("Phase 33 continuous intelligence shadow scaffold is incomplete.");
+}
+
 const dynamicSkills = await loadDynamicSkillDefinitions();
 if (
   !dynamicSkills.definitions.some((item) => item.skillKey === "insurance_plan_aetna_temporary" && item.validation.valid) ||
@@ -396,4 +409,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

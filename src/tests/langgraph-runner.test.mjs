@@ -545,8 +545,12 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     "workflow_executor",
     "evidence_observation"
   ]);
-  assert.equal(proposalSteps[8], "response_policy");
-  assert.equal(proposalSteps[9], "model_invocation");
+  assert.equal(proposalSteps[8], "continuous_intelligence_shadow");
+  assert.equal(proposalSteps[9], "response_policy");
+  assert.equal(proposalSteps[10], "model_invocation");
+  assert.equal(proposalRun.state.continuous_intelligence.mode, "shadow_only");
+  assert.equal(proposalRun.state.continuous_intelligence.productionDrivingAllowed, false);
+  assert.equal(proposalRun.state.continuous_intelligence.pems.trusted, false);
   assert.ok(proposalSteps.includes("openclaw_skill_invocation_proposal"));
   assert.ok(proposalSteps.includes("product_memory_retain"));
   assert.equal(proposalRun.state.workflow, "eligibility_benefits_navigation");

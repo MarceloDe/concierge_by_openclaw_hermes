@@ -8109,3 +8109,51 @@ Browser/dashboard proof:
 
 Next phase:
 - Phase 33 should implement the first continuous-intelligence runtime slice: typed `CaseState`, G0-G8 LangGraph gates, PEMS maturity schema, and shadow-mode procedural reconstruction proof.
+
+## Phase 33 Continuous Intelligence Runtime Shadow Slice
+
+Status: Implemented and locally verified in the Phase 33 branch.
+
+Slice name:
+- Continuous-intelligence shadow scaffold: typed `CaseState`, G0-G8 gates, PEMS, and shadow procedural reconstruction.
+
+Context:
+- Phase 32 made the development loop canonical and identified continuous procedural intelligence as the next runtime gap.
+- Phase 33 intentionally implements the first runtime scaffold only. It does not let procedural reconstruction drive healthcare recommendations, approval decisions, worker dispatch, or final answers.
+
+Code and docs changed:
+- Added `src/concierge/continuousIntelligence.mjs` with:
+  - `brainstyworkers.case_state.v1`;
+  - `brainstyworkers.pems.v1`;
+  - ordered G0-G8 universal case gates;
+  - PEMS maturity scoring and safety-incident veto;
+  - shadow-only cue/tag/content procedural reconstruction;
+  - connector readiness proof helper.
+- Added LangGraph node `case_state_shadow` after `observe_evidence` and before `compose_response`.
+- Extended connector proof with:
+  - `continuous_procedural_memory_shadow`;
+  - `continuous_intelligence_shadow`;
+  - score `continuous_procedural_memory` at `60 / 60`.
+- Added `src/tests/continuous-intelligence.test.mjs`.
+- Updated topology, runner-cycle, dashboard contract, build-check, plan, acceptance, decisions, project operating-system, and scoreboard docs.
+
+Safety decision:
+- `productionDrivingAllowed=false` remains hard-coded for Phase 33.
+- PEMS is not trusted in the readiness proof.
+- `CaseState` hashes user input and returns source pointer refs without raw URL paths.
+- Cortex remains project memory only; product memory remains Graphiti/FalkorDB direction.
+
+Verification result:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/graph-topology.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 20/20 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 217 total tests: 215 passed, 0 failed, and 2 expected live-gated OpenClaw skips after linking the clean worktree to the existing local Graphiti venv and copying the local Aetna fixture SQLite DB for verification only.
+- API proof at `http://127.0.0.1:4217/api/proof/runs/server-connector-next-mobile-mvp` showed `continuous_procedural_memory_shadow`, `continuous_intelligence_shadow`, `60 / 60`, `shadow_only`, `brainstyworkers.case_state.v1`, `brainstyworkers.pems.v1`, `pemsTrusted=false`, and `productionDrivingAllowed=false`.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4217/?phase=phase-33-continuous-intelligence-shadow`
+- Browser DOM proof verified `continuous_procedural_memory_shadow`, `continuous_intelligence_shadow`, `pass_phase33_shadow_scaffold_not_runtime_decisioning`, `60 / 60`, both schema ids, `shadow_only`, and production-driving blocked.
+- Visual proof artifact: `artifacts/phase33/phase33-dashboard-proof.json`
+- Screenshot note: in-app browser screenshot capture timed out twice on `Page.captureScreenshot`; a full-screen fallback was intentionally not committed because it could capture unrelated personal window content.
+
+Next phase:
+- Phase 34 should persist shadow runs and accumulate PEMS maturity from real resolved traces, still without letting procedural skills drive recommendations until maturity, reviewer, citation, and safety gates are green.

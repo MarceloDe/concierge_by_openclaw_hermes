@@ -20,6 +20,7 @@ const serverMjs = await readFile(new URL("../server/server.mjs", import.meta.url
 const projectOperatingSystem = await readFile(new URL("../../docs/PROJECT_OPERATING_SYSTEM.md", import.meta.url), "utf8");
 const phaseScoreboard = await readFile(new URL("../../docs/PHASE_SCOREBOARD.md", import.meta.url), "utf8");
 const nonMockedProofRules = await readFile(new URL("../../docs/NON_MOCKED_PROOF_RULES.md", import.meta.url), "utf8");
+const continuousIntelligence = await readFile(new URL("../concierge/continuousIntelligence.mjs", import.meta.url), "utf8");
 
 test("chat MVP surface exposes guided auth, portal readiness, and runtime timeline", () => {
   assert.match(indexHtml, /id="chatJourney"/);
@@ -350,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 33 should implement the first continuous-intelligence slice/);
+  assert.match(projectOperatingSystem, /Phase 33 implements the first continuous-intelligence slice/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -367,6 +368,28 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(serverMjs, /phase32_goal_tied_execution_contract_ready/);
   assert.match(serverMjs, /docs\/PROJECT_OPERATING_SYSTEM\.md/);
   assert.match(appJs, /renderConnectorProof/);
+});
+
+test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
+  assert.match(projectOperatingSystem, /Phase 33 implements the first continuous-intelligence slice/);
+  assert.match(projectOperatingSystem, /case_state_shadow/);
+  assert.match(projectOperatingSystem, /production decisioning disabled/);
+
+  assert.match(phaseScoreboard, /continuous_procedural_memory/);
+  assert.match(phaseScoreboard, /Phase 33 shadow scaffold/);
+  assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
+  assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
+
+  assert.match(continuousIntelligence, /CASE_STATE_SCHEMA_VERSION = "brainstyworkers\.case_state\.v1"/);
+  assert.match(continuousIntelligence, /PEMS_SCHEMA_VERSION = "brainstyworkers\.pems\.v1"/);
+  assert.match(continuousIntelligence, /UNIVERSAL_CASE_GATES/);
+  assert.match(continuousIntelligence, /productionDrivingAllowed: false/);
+  assert.match(continuousIntelligence, /shadow_only/);
+
+  assert.match(serverMjs, /continuous_procedural_memory_shadow/);
+  assert.match(serverMjs, /continuous_intelligence_shadow/);
+  assert.match(serverMjs, /pass_phase33_shadow_scaffold_not_runtime_decisioning/);
+  assert.match(serverMjs, /continuousIntelligenceShadowOnly/);
 });
 
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {

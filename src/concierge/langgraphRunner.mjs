@@ -2,6 +2,7 @@ import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/lang
 import { ChatOpenAI } from "@langchain/openai";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
+import { buildCaseState, buildContinuousIntelligenceShadow } from "./continuousIntelligence.mjs";
 import { consumeReadOnlyObservationApproval } from "./approvalResume.mjs";
 import { persistClaimedChromeSnapshot, runPortalExtraction } from "./browserAutomation.mjs";
 import { classifyIntent } from "./classifier.mjs";
@@ -113,6 +114,8 @@ const BrainstyState = Annotation.Root({
   human_handoff: field(null),
   approval_resume: field(null),
   evidence_observation: field(null),
+  case_state: field(null),
+  continuous_intelligence: field(null),
   sourced_answer: field(null),
   research_evidence: field(null),
   uploaded_document_context: field(null),
@@ -2360,6 +2363,49 @@ async function evidenceObservationNode(state) {
   };
 }
 
+async function caseStateShadowNode(state) {
+  const caseState = buildCaseState({
+    userId: state.user_id,
+    sessionId: state.session_id,
+    graphTraceId: state.graph_trace_id,
+    channel: state.channel,
+    userInput: state.user_input,
+    contextPacket: state.context_packet,
+    policyResult: state.policy_result,
+    structuredIntent: state.structured_intent,
+    llmDecision: state.llm_orchestration_decision,
+    workflow: state.workflow,
+    routeReason: state.route_reason,
+    workflowRoute: state.workflow_route,
+    dynamicSkillContext: state.dynamic_skill_context,
+    openclawTaskProposal: state.openclaw_task_proposal,
+    approvalResume: state.approval_resume,
+    evidenceObservation: state.evidence_observation,
+    sourcePointers: state.source_pointers,
+    productMemoryRecall: state.product_memory_recall,
+    productMemoryRetain: state.product_memory_retain,
+    uploadedDocumentContext: state.uploaded_document_context,
+    researchEvidence: state.research_evidence,
+    workflowOutcome: state.workflow_outcome,
+    finalResponse: state.final_response
+  });
+  const shadow = buildContinuousIntelligenceShadow({ caseState });
+  return {
+    case_state: caseState,
+    continuous_intelligence: shadow,
+    proof: appendProof(state, "continuous_intelligence_shadow", {
+      version: shadow.version,
+      mode: shadow.mode,
+      gateScore: shadow.gateSummary.score,
+      gatePassed: shadow.gateSummary.passed,
+      gateTotal: shadow.gateSummary.total,
+      pemsScore: shadow.pems.score,
+      pemsTrusted: shadow.pems.trusted,
+      productionDrivingAllowed: false
+    })
+  };
+}
+
 export const SOURCE_POINTER_RESPONSE_STATUSES = new Set([
   "captured_visible_page",
   "captured_official_openclaw_read_only_observation",
@@ -2827,6 +2873,7 @@ export function createBrainstyLangGraph() {
     .addNode("skill_resolver", skillResolverNode)
     .addNode("workflow_executor", workflowExecutorNode)
     .addNode("observe_evidence", evidenceObservationNode)
+    .addNode("case_state_shadow", caseStateShadowNode)
     .addNode("compose_response", composeResponseNode)
     .addNode("maybe_model", maybeModelNode)
     .addEdge(START, "input_policy")
@@ -2844,8 +2891,9 @@ export function createBrainstyLangGraph() {
     .addEdge("skill_resolver", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
     .addConditionalEdges("observe_evidence", routeAfterEvidenceObservation, {
-      compose_response: "compose_response"
+      case_state_shadow: "case_state_shadow"
     })
+    .addEdge("case_state_shadow", "compose_response")
     .addEdge("compose_response", "maybe_model")
     .addEdge("maybe_model", END)
     .compile({ checkpointer });
@@ -2864,7 +2912,7 @@ export function routeAfterWorkflowRouter(state) {
 }
 
 export function routeAfterEvidenceObservation() {
-  return "compose_response";
+  return "case_state_shadow";
 }
 
 export function describeBrainstyLangGraphTopology() {
@@ -2883,8 +2931,8 @@ export function describeBrainstyLangGraphTopology() {
       },
       {
         from: "observe_evidence",
-        cases: ["compose_response"],
-        proves: ["evidence_blocked", "evidence_found", "answer_composition"]
+        cases: ["case_state_shadow"],
+        proves: ["evidence_blocked", "evidence_found", "case_state_shadow"]
       }
     ],
     linearEdges: [
@@ -2893,6 +2941,7 @@ export function describeBrainstyLangGraphTopology() {
       ["llm_decision", "workflow_router"],
       ["skill_resolver", "workflow_executor"],
       ["workflow_executor", "observe_evidence"],
+      ["case_state_shadow", "compose_response"],
       ["compose_response", "maybe_model"]
     ],
     finalResponseBranchingMechanism: "policy_and_workflow_state_first_with_final_response_backward_compatibility"
@@ -2966,6 +3015,8 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     human_handoff: null,
     approval_resume: null,
     evidence_observation: null,
+    case_state: null,
+    continuous_intelligence: null,
     research_evidence: null,
     uploaded_document_context: null,
     browser_result: null,
@@ -3036,7 +3087,10 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
     humanHandoffId: state.human_handoff?.handoff?.id ?? null,
     humanHandoffTaskId: state.human_handoff?.handoff?.taskId ?? state.human_handoff?.task?.id ?? null,
-    modelInvocationMode: state.model_invocation?.mode
+    modelInvocationMode: state.model_invocation?.mode,
+    continuousIntelligenceMode: state.continuous_intelligence?.mode ?? null,
+    continuousIntelligenceGateScore: state.continuous_intelligence?.gateSummary?.score ?? null,
+    continuousIntelligencePemsTrusted: state.continuous_intelligence?.pems?.trusted ?? null
   });
   await checkpointSession(store, {
     session,
@@ -3056,6 +3110,15 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
         openclawTaskProposalPrepared: Boolean(state.openclaw_task_proposal),
         openclawSkillProposalTaskId: state.openclaw_skill_proposal?.task?.id ?? null,
         humanHandoff: state.human_handoff?.handoff ?? null,
+        continuousIntelligence: state.continuous_intelligence
+          ? {
+              version: state.continuous_intelligence.version,
+              mode: state.continuous_intelligence.mode,
+              gateSummary: state.continuous_intelligence.gateSummary,
+              pems: state.continuous_intelligence.pems,
+              productionDrivingAllowed: false
+            }
+          : null,
         modelInvocationMode: state.model_invocation?.mode
       }
     },

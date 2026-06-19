@@ -12,7 +12,8 @@ test("LangGraph topology exposes conditional routing boundaries", () => {
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("approval_pending")));
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("evidence_blocked")));
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("evidence_found")));
-  assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("answer_composition")));
+  assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("case_state_shadow")));
+  assert.ok(topology.linearEdges.some(([from, to]) => from === "case_state_shadow" && to === "compose_response"));
   assert.notEqual(topology.finalResponseBranchingMechanism, "linear_final_response_short_circuit_only");
 });
 
@@ -24,5 +25,5 @@ test("conditional edge guards route policy blocks and normal requests differentl
   assert.equal(routeAfterWorkflowRouter({ policy_result: { urgentEscalationRequired: true }, final_response: null }), "compose_response");
   assert.equal(routeAfterWorkflowRouter({ final_response: "blocked" }), "compose_response");
   assert.equal(routeAfterWorkflowRouter({ final_response: null }), "skill_resolver");
-  assert.equal(routeAfterEvidenceObservation({ evidence_observation: { status: "blocked_no_authenticated_evidence" } }), "compose_response");
+  assert.equal(routeAfterEvidenceObservation({ evidence_observation: { status: "blocked_no_authenticated_evidence" } }), "case_state_shadow");
 });

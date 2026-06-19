@@ -2320,3 +2320,20 @@ Focused proof:
 - `node --test src/tests/chat-ui-contract.test.mjs`
 - `npm run build`
 - `npm run test:local`
+
+## Phase 33: Continuous Intelligence Runtime Shadow Slice
+
+Acceptance criteria:
+- `CaseState` is typed as `brainstyworkers.case_state.v1`, hashes the raw user input, and does not expose raw source URL paths.
+- LangGraph topology includes `case_state_shadow` after `observe_evidence` and before `compose_response`.
+- Universal gates G0-G8 are present in order and evaluate intake, policy, context, workflow, skill/rule match, approval, scenario reconstruction, validation, and decision/escalation readiness.
+- PEMS schema `brainstyworkers.pems.v1` blocks immature candidates and vetoes candidates with safety incidents.
+- Phase 33 readiness proof is labeled `shadow_only`, keeps `productionDrivingAllowed=false`, and does not mark PEMS trusted.
+- Connector proof includes goal/check/score entries for continuous procedural memory shadow scaffolding.
+- Build/test proof confirms this is a deterministic scaffold and not a mocked LLM, browser, or product-memory proof.
+
+Focused proof:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/graph-topology.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `continuous_intelligence_shadow`
