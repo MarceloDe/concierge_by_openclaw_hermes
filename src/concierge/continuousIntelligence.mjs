@@ -4,6 +4,7 @@ export const CASE_STATE_SCHEMA_VERSION = "brainstyworkers.case_state.v1";
 export const PEMS_SCHEMA_VERSION = "brainstyworkers.pems.v1";
 export const CONTINUOUS_INTELLIGENCE_SHADOW_VERSION = "2026-06-18.phase33-continuous-intelligence-shadow.v1";
 export const CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION = "2026-06-18.phase34-shadow-persistence.v1";
+export const PEMS_PROMOTION_GATE_VERSION = "2026-06-18.phase35-pems-supervised-promotion-gate.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -20,6 +21,8 @@ export const UNIVERSAL_CASE_GATES = Object.freeze([
 const PEMS_TRUST_THRESHOLD = 85;
 const PEMS_MIN_SHADOW_RUNS = 10;
 const PEMS_MIN_REVIEWER_APPROVALS = 2;
+const PEMS_MIN_VALIDATOR_EVALUATIONS = 1;
+const PEMS_MIN_CITATION_EVALUATIONS = 1;
 
 function hashText(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -39,6 +42,17 @@ function safeHostHash(url) {
   } catch {
     return null;
   }
+}
+
+function safePreview(value, limit = 120) {
+  return String(value ?? "")
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\b\d{3}[-.\s]?\d{2}[-.\s]?\d{4}\b/g, "[identifier]")
+    .replace(/\b\d{8,}\b/g, "[identifier]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, limit);
 }
 
 function sourcePointerRef(pointer) {
@@ -387,6 +401,12 @@ function parseJson(value, fallback = {}) {
   }
 }
 
+function jsonValue(value, fallback = {}) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string") return parseJson(value, fallback);
+  return value;
+}
+
 function pemsInputsFromAggregate(aggregate) {
   return {
     candidateId: aggregate.candidateId,
@@ -399,6 +419,196 @@ function pemsInputsFromAggregate(aggregate) {
     safetyIncidentCount: aggregate.safetyIncidentCount,
     freshnessDays: 0
   };
+}
+
+function normalizeReviewType(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["human_review", "validator_evaluation", "citation_evaluation", "safety_review"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS promotion review type: ${value}`);
+}
+
+function normalizeReviewDecision(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["approved", "rejected", "pass", "fail", "blocked"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS promotion review decision: ${value}`);
+}
+
+function reviewCount(reviews, predicate) {
+  return reviews.filter(predicate).length;
+}
+
+function maturityValue(maturity, snakeKey, camelKey, fallback = 0) {
+  return rowNumber(maturity?.[snakeKey] ?? maturity?.[camelKey] ?? fallback);
+}
+
+export function evaluatePemsPromotionGate(maturity = {}, reviews = []) {
+  const normalizedReviews = reviews.map((review) => ({
+    reviewType: String(review.review_type ?? review.reviewType ?? "").toLowerCase(),
+    decision: String(review.decision ?? "").toLowerCase(),
+    evidenceRefCount: rowNumber(review.evidence_ref_count ?? review.evidenceRefCount),
+    validatorPassCount: rowNumber(review.validator_pass_count ?? review.validatorPassCount),
+    safetyIncidentCount: rowNumber(review.safety_incident_count ?? review.safetyIncidentCount)
+  }));
+  const humanApprovals = reviewCount(normalizedReviews, (review) => review.reviewType === "human_review" && review.decision === "approved");
+  const humanRejections = reviewCount(normalizedReviews, (review) => review.reviewType === "human_review" && ["rejected", "blocked"].includes(review.decision));
+  const validatorPasses = reviewCount(normalizedReviews, (review) => review.reviewType === "validator_evaluation" && review.decision === "pass");
+  const validatorFailures = reviewCount(normalizedReviews, (review) => review.reviewType === "validator_evaluation" && ["fail", "blocked"].includes(review.decision));
+  const citationPasses = reviewCount(normalizedReviews, (review) => review.reviewType === "citation_evaluation" && review.decision === "pass");
+  const citationFailures = reviewCount(normalizedReviews, (review) => review.reviewType === "citation_evaluation" && ["fail", "blocked"].includes(review.decision));
+  const citationEvidenceRefCount = normalizedReviews
+    .filter((review) => review.reviewType === "citation_evaluation" && review.decision === "pass")
+    .reduce((sum, review) => sum + review.evidenceRefCount, 0);
+  const reviewSafetyIncidentCount =
+    normalizedReviews.reduce((sum, review) => sum + review.safetyIncidentCount, 0) +
+    reviewCount(normalizedReviews, (review) => review.reviewType === "safety_review" && ["fail", "blocked", "rejected"].includes(review.decision));
+  const safetyIncidentCount = maturityValue(maturity, "safety_incident_count", "safetyIncidentCount") + reviewSafetyIncidentCount;
+  const latestScore = maturityValue(maturity, "latest_score", "latestScore");
+  const shadowRunCount = maturityValue(maturity, "shadow_run_count", "shadowRunCount");
+  const evidenceRefCount = maturityValue(maturity, "evidence_ref_count", "evidenceRefCount");
+  const productionDrivingAllowed =
+    maturity?.production_driving_allowed === 1 || maturity?.productionDrivingAllowed === true || maturity?.productionDrivingAllowed === "true";
+  const requirements = [
+    { key: "maturity_score", ok: latestScore >= PEMS_TRUST_THRESHOLD, actual: latestScore, target: PEMS_TRUST_THRESHOLD },
+    { key: "shadow_runs", ok: shadowRunCount >= PEMS_MIN_SHADOW_RUNS, actual: shadowRunCount, target: PEMS_MIN_SHADOW_RUNS },
+    { key: "human_reviewer_approvals", ok: humanApprovals >= PEMS_MIN_REVIEWER_APPROVALS, actual: humanApprovals, target: PEMS_MIN_REVIEWER_APPROVALS },
+    { key: "validator_evaluation_passes", ok: validatorPasses >= PEMS_MIN_VALIDATOR_EVALUATIONS && validatorFailures === 0, actual: validatorPasses, target: PEMS_MIN_VALIDATOR_EVALUATIONS },
+    { key: "citation_evaluation_passes", ok: citationPasses >= PEMS_MIN_CITATION_EVALUATIONS && citationFailures === 0, actual: citationPasses, target: PEMS_MIN_CITATION_EVALUATIONS },
+    { key: "citation_evidence_refs", ok: citationEvidenceRefCount > 0 || evidenceRefCount > 0, actual: Math.max(citationEvidenceRefCount, evidenceRefCount), target: 1 },
+    { key: "safety_incidents", ok: safetyIncidentCount === 0 && humanRejections === 0, actual: safetyIncidentCount + humanRejections, target: 0 },
+    { key: "production_driving_disabled", ok: !productionDrivingAllowed, actual: productionDrivingAllowed ? 1 : 0, target: 0 }
+  ];
+  const supervisedAdvisoryAllowed = requirements.every((requirement) => requirement.ok);
+  return {
+    version: PEMS_PROMOTION_GATE_VERSION,
+    status: supervisedAdvisoryAllowed ? "supervised_advisory_allowed" : safetyIncidentCount > 0 ? "safety_veto" : "shadow_review_required",
+    ok: supervisedAdvisoryAllowed,
+    supervisedAdvisoryAllowed,
+    productionDrivingAllowed: false,
+    candidateId: maturity?.candidate_id ?? maturity?.candidateId ?? null,
+    counts: {
+      humanApprovals,
+      humanRejections,
+      validatorPasses,
+      validatorFailures,
+      citationPasses,
+      citationFailures,
+      citationEvidenceRefCount,
+      safetyIncidentCount,
+      reviewCount: normalizedReviews.length
+    },
+    requirements,
+    safety: {
+      rawRationaleStored: false,
+      rawSourceStored: false,
+      supervisedAdvisoryOnly: true,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+async function listPemsPromotionReviewsForCandidate(store, candidateId) {
+  return store.all(
+    `SELECT id, candidate_id, actor_user_id, review_type, decision, evidence_ref_count,
+            validator_pass_count, safety_incident_count, rationale_hash, rationale_preview,
+            metadata_json, created_at
+       FROM pems_candidate_promotion_reviews
+      WHERE candidate_id = ?
+      ORDER BY created_at ASC;`,
+    [candidateId]
+  );
+}
+
+export async function recordPemsPromotionReview(
+  store,
+  {
+    candidateId,
+    actorUserId = "operator",
+    reviewType,
+    decision,
+    evidenceRefCount = 0,
+    validatorPassCount = 0,
+    safetyIncidentCount = 0,
+    rationale = "",
+    metadata = {},
+    createdAt = new Date().toISOString()
+  } = {}
+) {
+  if (!store) throw new Error("A store is required to record a PEMS promotion review.");
+  const normalizedCandidateId = String(candidateId ?? "").trim();
+  if (!normalizedCandidateId) throw new Error("PEMS promotion review requires candidateId.");
+  const normalizedReviewType = normalizeReviewType(reviewType);
+  const normalizedDecision = normalizeReviewDecision(decision);
+  return store.transaction(async (tx) => {
+    const existing = await tx.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId });
+    if (!existing) throw new Error(`PEMS candidate not found: ${normalizedCandidateId}`);
+    const review = await tx.insert("pems_candidate_promotion_reviews", {
+      id: createPersistedId("pems_review"),
+      candidate_id: normalizedCandidateId,
+      actor_user_id: actorUserId ? String(actorUserId) : null,
+      review_type: normalizedReviewType,
+      decision: normalizedDecision,
+      evidence_ref_count: Math.max(0, rowNumber(evidenceRefCount)),
+      validator_pass_count: Math.max(0, rowNumber(validatorPassCount)),
+      safety_incident_count: Math.max(0, rowNumber(safetyIncidentCount)),
+      rationale_hash: hashText(rationale),
+      rationale_preview: safePreview(rationale),
+      metadata_json: JSON.stringify({
+        ...jsonValue(metadata, {}),
+        rawRationaleStored: false,
+        productionDrivingAllowed: false
+      }),
+      created_at: createdAt
+    });
+    const reviews = await listPemsPromotionReviewsForCandidate(tx, normalizedCandidateId);
+    const reviewerApprovalCount = reviewCount(
+      reviews.map((item) => ({ review_type: item.review_type, decision: item.decision })),
+      (item) => item.review_type === "human_review" && item.decision === "approved"
+    );
+    const aggregate = {
+      candidateId: existing.candidate_id,
+      shadowRunCount: rowNumber(existing.shadow_run_count),
+      evidenceRefCount: rowNumber(existing.evidence_ref_count),
+      successfulOutcomeCount: rowNumber(existing.successful_outcome_count),
+      reviewerApprovalCount,
+      authorityCitationCount: rowNumber(existing.authority_citation_count),
+      validatorPassCount: rowNumber(existing.validator_pass_count),
+      safetyIncidentCount: rowNumber(existing.safety_incident_count)
+    };
+    const maturity = scorePemsMaturity(pemsInputsFromAggregate(aggregate));
+    const gate = evaluatePemsPromotionGate({ ...existing, latest_score: maturity.score, reviewer_approval_count: reviewerApprovalCount }, reviews);
+    await tx.update(
+      "pems_candidate_maturity",
+      {
+        reviewer_approval_count: reviewerApprovalCount,
+        latest_score: maturity.score,
+        trusted: maturity.trusted ? 1 : 0,
+        supervised_advisory_allowed: gate.supervisedAdvisoryAllowed ? 1 : 0,
+        promotion_status: gate.status,
+        last_reviewed_at: createdAt,
+        production_driving_allowed: 0,
+        maturity_json: JSON.stringify({
+          version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
+          pems: maturity,
+          aggregate,
+          productionDrivingAllowed: false
+        }),
+        promotion_json: JSON.stringify(gate),
+        updated_at: createdAt
+      },
+      { candidate_id: normalizedCandidateId }
+    );
+    return {
+      version: PEMS_PROMOTION_GATE_VERSION,
+      review: {
+        ...review,
+        rationale: undefined,
+        rawRationaleStored: false
+      },
+      gate,
+      maturity,
+      productionDrivingAllowed: false
+    };
+  });
 }
 
 export function summarizeContinuousIntelligenceShadowForPersistence(shadow) {
@@ -692,8 +902,11 @@ export async function getContinuousIntelligencePersistenceStatus(store) {
           safetyIncidentCount: rowNumber(latestMaturity.safety_incident_count),
           latestScore: rowNumber(latestMaturity.latest_score),
           trusted: latestMaturity.trusted === 1,
+          supervisedAdvisoryAllowed: latestMaturity.supervised_advisory_allowed === 1,
+          promotionStatus: latestMaturity.promotion_status ?? "shadow_review_required",
           productionDrivingAllowed: false,
-          maturity: parseJson(latestMaturity.maturity_json, {})
+          maturity: parseJson(latestMaturity.maturity_json, {}),
+          promotion: parseJson(latestMaturity.promotion_json, {})
         }
       : null,
     safety: {
@@ -702,6 +915,129 @@ export async function getContinuousIntelligencePersistenceStatus(store) {
       rawSourceReturned: false,
       productionDrivingAllowed: false,
       cortexProductMemory: false
+    }
+  };
+}
+
+export async function getPemsPromotionGateStatus(store) {
+  if (!store) {
+    return {
+      version: PEMS_PROMOTION_GATE_VERSION,
+      status: "store_unavailable",
+      ok: false,
+      candidateCount: 0,
+      reviewCount: 0,
+      supervisedAdvisoryCandidateCount: 0,
+      productionDrivingAllowed: false
+    };
+  }
+  const candidateCounts = await store.get(
+    `SELECT
+       COUNT(*) AS candidateCount,
+       COALESCE(SUM(CASE WHEN supervised_advisory_allowed = 1 THEN 1 ELSE 0 END), 0) AS supervisedAdvisoryCandidateCount,
+       COALESCE(SUM(CASE WHEN production_driving_allowed = 1 THEN 1 ELSE 0 END), 0) AS productionDrivingCandidateCount
+     FROM pems_candidate_maturity;`
+  );
+  const reviewCounts = await store.get(
+    `SELECT
+       COUNT(*) AS reviewCount,
+       COALESCE(SUM(CASE WHEN review_type = 'human_review' AND decision = 'approved' THEN 1 ELSE 0 END), 0) AS humanApprovalCount,
+       COALESCE(SUM(CASE WHEN review_type = 'validator_evaluation' AND decision = 'pass' THEN 1 ELSE 0 END), 0) AS validatorPassCount,
+       COALESCE(SUM(CASE WHEN review_type = 'citation_evaluation' AND decision = 'pass' THEN 1 ELSE 0 END), 0) AS citationPassCount,
+       COALESCE(SUM(safety_incident_count), 0) AS reviewSafetyIncidentCount
+     FROM pems_candidate_promotion_reviews;`
+  );
+  const latestCandidate = await store.get(
+    `SELECT candidate_id, workflow, selected_skill_key, shadow_run_count, evidence_ref_count,
+            successful_outcome_count, reviewer_approval_count, authority_citation_count,
+            validator_pass_count, safety_incident_count, latest_score, trusted,
+            supervised_advisory_allowed, promotion_status, last_reviewed_at,
+            production_driving_allowed, promotion_json, updated_at
+       FROM pems_candidate_maturity
+      ORDER BY COALESCE(last_reviewed_at, updated_at) DESC
+      LIMIT 1;`
+  );
+  const latestReviews = latestCandidate?.candidate_id ? await listPemsPromotionReviewsForCandidate(store, latestCandidate.candidate_id) : [];
+  const latestGate = latestCandidate ? evaluatePemsPromotionGate(latestCandidate, latestReviews) : null;
+  const reviewCountValue = rowNumber(reviewCounts?.reviewCount);
+  const status =
+    rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount) > 0
+      ? "phase35_supervised_promotion_gate_active"
+      : reviewCountValue > 0
+        ? "phase35_supervised_promotion_gate_reviewing"
+        : "phase35_supervised_promotion_gate_ready_no_reviews";
+  return {
+    version: PEMS_PROMOTION_GATE_VERSION,
+    status,
+    ok: true,
+    candidateCount: rowNumber(candidateCounts?.candidateCount),
+    reviewCount: reviewCountValue,
+    humanApprovalCount: rowNumber(reviewCounts?.humanApprovalCount),
+    validatorPassCount: rowNumber(reviewCounts?.validatorPassCount),
+    citationPassCount: rowNumber(reviewCounts?.citationPassCount),
+    reviewSafetyIncidentCount: rowNumber(reviewCounts?.reviewSafetyIncidentCount),
+    supervisedAdvisoryCandidateCount: rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount),
+    productionDrivingCandidateCount: rowNumber(candidateCounts?.productionDrivingCandidateCount),
+    productionDrivingAllowed: false,
+    latestCandidate: latestCandidate
+      ? {
+          candidateId: latestCandidate.candidate_id,
+          workflow: latestCandidate.workflow,
+          selectedSkillKey: latestCandidate.selected_skill_key,
+          shadowRunCount: rowNumber(latestCandidate.shadow_run_count),
+          evidenceRefCount: rowNumber(latestCandidate.evidence_ref_count),
+          successfulOutcomeCount: rowNumber(latestCandidate.successful_outcome_count),
+          reviewerApprovalCount: rowNumber(latestCandidate.reviewer_approval_count),
+          authorityCitationCount: rowNumber(latestCandidate.authority_citation_count),
+          validatorPassCount: rowNumber(latestCandidate.validator_pass_count),
+          safetyIncidentCount: rowNumber(latestCandidate.safety_incident_count),
+          latestScore: rowNumber(latestCandidate.latest_score),
+          trusted: latestCandidate.trusted === 1,
+          supervisedAdvisoryAllowed: latestCandidate.supervised_advisory_allowed === 1,
+          promotionStatus: latestCandidate.promotion_status,
+          lastReviewedAt: latestCandidate.last_reviewed_at,
+          productionDrivingAllowed: false,
+          promotion: parseJson(latestCandidate.promotion_json, {})
+        }
+      : null,
+    latestGate,
+    safety: {
+      rawRationaleStored: false,
+      rawSourceStored: false,
+      supervisedAdvisoryOnly: true,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsPromotionReadinessProof(status = {}) {
+  const active = (status.supervisedAdvisoryCandidateCount ?? 0) > 0;
+  const reviewing = (status.reviewCount ?? 0) > 0;
+  return {
+    version: PEMS_PROMOTION_GATE_VERSION,
+    status: active
+      ? "phase35_supervised_promotion_gate_active"
+      : reviewing
+        ? "phase35_supervised_promotion_gate_reviewing"
+        : "phase35_supervised_promotion_gate_ready_no_reviews",
+    ok: status.ok !== false,
+    mode: "supervised_advisory_gate_only",
+    score: active ? 80 : reviewing ? 78 : 75,
+    target: 80,
+    candidateCount: status.candidateCount ?? 0,
+    reviewCount: status.reviewCount ?? 0,
+    humanApprovalCount: status.humanApprovalCount ?? 0,
+    validatorPassCount: status.validatorPassCount ?? 0,
+    citationPassCount: status.citationPassCount ?? 0,
+    supervisedAdvisoryCandidateCount: status.supervisedAdvisoryCandidateCount ?? 0,
+    productionDrivingAllowed: false,
+    latestCandidate: status.latestCandidate ?? null,
+    latestGate: status.latestGate ?? null,
+    safety: status.safety ?? {
+      rawRationaleStored: false,
+      rawSourceStored: false,
+      supervisedAdvisoryOnly: true,
+      productionDrivingAllowed: false
     }
   };
 }

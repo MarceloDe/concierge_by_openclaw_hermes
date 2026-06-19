@@ -275,6 +275,29 @@ export class SqliteStore {
         updated_at TEXT NOT NULL
       );
     `);
+    await this.migrateColumns("pems_candidate_maturity", [
+      ["supervised_advisory_allowed", "ALTER TABLE pems_candidate_maturity ADD COLUMN supervised_advisory_allowed INTEGER NOT NULL DEFAULT 0;"],
+      ["promotion_status", "ALTER TABLE pems_candidate_maturity ADD COLUMN promotion_status TEXT NOT NULL DEFAULT 'shadow_review_required';"],
+      ["last_reviewed_at", "ALTER TABLE pems_candidate_maturity ADD COLUMN last_reviewed_at TEXT;"],
+      ["promotion_json", "ALTER TABLE pems_candidate_maturity ADD COLUMN promotion_json TEXT NOT NULL DEFAULT '{}';"]
+    ]);
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        actor_user_id TEXT,
+        review_type TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        evidence_ref_count INTEGER NOT NULL DEFAULT 0,
+        validator_pass_count INTEGER NOT NULL DEFAULT 0,
+        safety_incident_count INTEGER NOT NULL DEFAULT 0,
+        rationale_hash TEXT NOT NULL,
+        rationale_preview TEXT NOT NULL DEFAULT '',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id)
+      );
+    `);
     await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,

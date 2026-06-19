@@ -10,6 +10,91 @@ For every slice, record:
 - What the user can try locally
 - Known risks or gaps
 
+## Phase 35 PEMS Supervised Promotion Gates - 2026-06-18
+
+Slice name:
+- Continuous-intelligence PEMS supervised promotion gates.
+
+Files changed:
+- `src/concierge/schema.mjs`
+- `src/concierge/database.mjs`
+- `src/concierge/continuousIntelligence.mjs`
+- `src/server/server.mjs`
+- `src/server/build-check.mjs`
+- `src/tests/pems-promotion-gates.test.mjs`
+- `src/tests/chat-ui-contract.test.mjs`
+- `package.json`
+- `docs/PROJECT_OPERATING_SYSTEM.md`
+- `docs/PHASE_SCOREBOARD.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/ACCEPTANCE_CRITERIA.md`
+- `docs/DECISIONS.md`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Added `pems_candidate_promotion_reviews` as the explicit reviewer/evaluator ledger.
+- Extended `pems_candidate_maturity` with supervised advisory and promotion status fields.
+- Added deterministic PEMS promotion evaluation requiring:
+  - PEMS maturity score and enough shadow runs;
+  - two human reviewer approvals;
+  - validator/evaluator pass;
+  - citation/evidence sufficiency;
+  - zero safety incidents;
+  - production-driving disabled.
+- Added review recording that stores rationale hash plus sanitized preview, not raw rationale or source text.
+- Added API routes for promotion status and review recording:
+  - `GET /api/continuous-intelligence/pems/promotion`
+  - `POST /api/continuous-intelligence/pems/reviews`
+- Added connector proof key `pems_supervised_promotion_gate`.
+- Advanced `continuous_procedural_memory` only to the Phase 35 supervised-advisory target.
+
+Verification commands:
+- `node --check src/concierge/continuousIntelligence.mjs`
+- `node --check src/server/server.mjs`
+- `node --check src/tests/pems-promotion-gates.test.mjs`
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/continuous-intelligence-persistence.test.mjs src/tests/pems-promotion-gates.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- `curl http://127.0.0.1:4218/api/continuous-intelligence/pems/promotion`
+- `curl http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp`
+- In-app browser visual proof at `http://127.0.0.1:4218/`
+
+Verification result:
+- Syntax checks passed.
+- Focused continuous-intelligence/UI contract tests passed:
+  - 22 tests,
+  - 22 passed,
+  - 0 failed.
+- `npm run build` passed and names the Phase 35 PEMS supervised promotion gate.
+- First `npm run test:local` in the temp clone exposed missing local Aetna scan rows because the temp clone did not include `data/brainstyworkers.sqlite`.
+- After copying the existing local SQLite proof DB into the temp clone, `npm run test:local` passed:
+  - 221 tests,
+  - 219 passed,
+  - 0 failed,
+  - 2 expected live-gated OpenClaw skips.
+- API proof passed with seeded non-PHI proof state:
+  - `pems_supervised_promotion_gate`: `phase35_supervised_promotion_gate_active`,
+  - `continuous_procedural_memory`: `80 / 80`,
+  - `productionDrivingAllowed=false`.
+- Visual proof passed in the in-app browser:
+  - dashboard loaded at `http://127.0.0.1:4218/`,
+  - connector proof rendered `pems_supervised_promotion_gate`,
+  - connector proof rendered `80 / 80`,
+  - browser console error count: 0.
+- Artifacts:
+  - `artifacts/phase35/phase35-pems-promotion-api-proof.json`
+  - `artifacts/phase35/phase35-connector-proof.json`
+  - `artifacts/phase35/phase35-dashboard-proof-final.png`
+
+What the user can try locally:
+- Open the dashboard and inspect connector proof for `pems_supervised_promotion_gate`.
+- Use the promotion API to record reviewer/evaluator rows against a mature PEMS candidate.
+
+Known risks or gaps:
+- Phase 35 is not production procedural automation.
+- No PEMS candidate may drive final healthcare answers or browser actions.
+- Phase 36 should add a reviewer/evaluator workbench and LLM-assisted evaluator draft notes through this same ledger.
+
 ## Phase 8T/8U Candidate-Specific Document Approval And Observation - 2026-06-01
 
 Slice name:

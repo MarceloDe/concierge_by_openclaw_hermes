@@ -1,0 +1,189 @@
+{
+  "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+  "status": "phase35_supervised_promotion_gate_active",
+  "ok": true,
+  "mode": "supervised_advisory_gate_only",
+  "score": 80,
+  "target": 80,
+  "candidateCount": 1,
+  "reviewCount": 4,
+  "humanApprovalCount": 2,
+  "validatorPassCount": 1,
+  "citationPassCount": 1,
+  "supervisedAdvisoryCandidateCount": 1,
+  "productionDrivingAllowed": false,
+  "latestCandidate": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "workflow": "eligibility_benefits_navigation",
+    "selectedSkillKey": "insurance_portal_browser",
+    "shadowRunCount": 10,
+    "evidenceRefCount": 10,
+    "successfulOutcomeCount": 10,
+    "reviewerApprovalCount": 2,
+    "authorityCitationCount": 10,
+    "validatorPassCount": 80,
+    "safetyIncidentCount": 0,
+    "latestScore": 100,
+    "trusted": true,
+    "supervisedAdvisoryAllowed": true,
+    "promotionStatus": "supervised_advisory_allowed",
+    "lastReviewedAt": "2026-06-19T00:52:03.554Z",
+    "productionDrivingAllowed": false,
+    "promotion": {
+      "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+      "status": "supervised_advisory_allowed",
+      "ok": true,
+      "supervisedAdvisoryAllowed": true,
+      "productionDrivingAllowed": false,
+      "candidateId": "pems_40d7cea4abb98732",
+      "counts": {
+        "humanApprovals": 2,
+        "humanRejections": 0,
+        "validatorPasses": 1,
+        "validatorFailures": 0,
+        "citationPasses": 1,
+        "citationFailures": 0,
+        "citationEvidenceRefCount": 2,
+        "safetyIncidentCount": 0,
+        "reviewCount": 4
+      },
+      "requirements": [
+        {
+          "key": "maturity_score",
+          "ok": true,
+          "actual": 100,
+          "target": 85
+        },
+        {
+          "key": "shadow_runs",
+          "ok": true,
+          "actual": 10,
+          "target": 10
+        },
+        {
+          "key": "human_reviewer_approvals",
+          "ok": true,
+          "actual": 2,
+          "target": 2
+        },
+        {
+          "key": "validator_evaluation_passes",
+          "ok": true,
+          "actual": 1,
+          "target": 1
+        },
+        {
+          "key": "citation_evaluation_passes",
+          "ok": true,
+          "actual": 1,
+          "target": 1
+        },
+        {
+          "key": "citation_evidence_refs",
+          "ok": true,
+          "actual": 10,
+          "target": 1
+        },
+        {
+          "key": "safety_incidents",
+          "ok": true,
+          "actual": 0,
+          "target": 0
+        },
+        {
+          "key": "production_driving_disabled",
+          "ok": true,
+          "actual": 0,
+          "target": 0
+        }
+      ],
+      "safety": {
+        "rawRationaleStored": false,
+        "rawSourceStored": false,
+        "supervisedAdvisoryOnly": true,
+        "productionDrivingAllowed": false
+      }
+    }
+  },
+  "latestGate": {
+    "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+    "status": "supervised_advisory_allowed",
+    "ok": true,
+    "supervisedAdvisoryAllowed": true,
+    "productionDrivingAllowed": false,
+    "candidateId": "pems_40d7cea4abb98732",
+    "counts": {
+      "humanApprovals": 2,
+      "humanRejections": 0,
+      "validatorPasses": 1,
+      "validatorFailures": 0,
+      "citationPasses": 1,
+      "citationFailures": 0,
+      "citationEvidenceRefCount": 2,
+      "safetyIncidentCount": 0,
+      "reviewCount": 4
+    },
+    "requirements": [
+      {
+        "key": "maturity_score",
+        "ok": true,
+        "actual": 100,
+        "target": 85
+      },
+      {
+        "key": "shadow_runs",
+        "ok": true,
+        "actual": 10,
+        "target": 10
+      },
+      {
+        "key": "human_reviewer_approvals",
+        "ok": true,
+        "actual": 2,
+        "target": 2
+      },
+      {
+        "key": "validator_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evidence_refs",
+        "ok": true,
+        "actual": 10,
+        "target": 1
+      },
+      {
+        "key": "safety_incidents",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      },
+      {
+        "key": "production_driving_disabled",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      }
+    ],
+    "safety": {
+      "rawRationaleStored": false,
+      "rawSourceStored": false,
+      "supervisedAdvisoryOnly": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "safety": {
+    "rawRationaleStored": false,
+    "rawSourceStored": false,
+    "supervisedAdvisoryOnly": true,
+    "productionDrivingAllowed": false
+  }
+}

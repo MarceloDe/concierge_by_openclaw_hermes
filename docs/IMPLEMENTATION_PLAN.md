@@ -1,13 +1,39 @@
 # Implementation Plan
 
-Status: MVP hardening Phases 1-8U are implemented locally, and Wefella/FastAPI facade Phases 9A-9F are implemented locally through the approved-loop precise-blocker proof. Phase 7D adds mandatory visual OCR evidence to the official OpenClaw read-only worker path. Phase 7E corrects the OpenClaw skill layering so `insurance-portal-browser` is the healthcare safety envelope, `browser-automation` is the browser-control substrate, and `ocr-local` is the local visual evidence substrate. Phase 7F verifies LangGraph-owned worker cycle management from proposal through single-use approval, result ingest, audit, and no-action token reuse. Phase 7G expands the OpenClaw worker contract so the worker can create subtasks, choose tool paths, use worker memory, and report progress every 30 seconds inside the assigned LangGraph task. Phase 8M enriches the project OpenClaw insurance-browser skill and worker prompt with portal search, DOM/accessibility extraction, visual OCR, read-only document/PDF handling, structured insurance data fields, quality bars, and user-only auth recovery. Phase 8N applies that contract to the auth-plus-chat MVP loop with a clearer latest Current Answer, Graphiti retain repair/status, and source-pointer-safe claims/prior-authorization extraction. Phase 8O makes the official OpenClaw live worker path record portal-search, document discovery, SBC/PDF candidate, and section reachability proof from the same approved read-only observation. Phase 8P proved the live discovery harness against an authenticated portal. Phase 8Q added a separate user-friendly `/mvp` auth-plus-chat sequencing app while preserving `/` as the operator proof dashboard. Phase 8R proved the live approved Benefits path from `/mvp` through user auth, LangGraph proposal, approval consumption, official OpenClaw multi-page read-only observation, source-pointer persistence, final answer, and Graphiti retain. Phase 8S added section-specific structured extraction and replaced mutable local real-Aetna DB assumptions with sanitized captured-format fixtures. Phase 8T adds candidate-specific document approval. Phase 8U adds approved single-candidate read-only document observation through the official OpenClaw worker path. Phase 9F proves `/mvp` can run the approved loop through FastAPI and return either source pointers or a precise external blocker with matching operator proof. Phases 10E-10L add the operator research control plane, RBAC, deterministic research execution, artifact review, trusted research grounding in user answers, operator proposal gates, scheduled research automation, and the redacted audit log API/dashboard. Phase 10U adds a LangGraph-compatible dynamic skill server with editable temporary Aetna insurance and claim journey skills.
+Status: Phase 35 implementation plan. Earlier MVP, connector, browser-sandbox, operating-system, and continuous-intelligence phases remain in history below. The active slice is supervised PEMS promotion: keep Phase 34 shadow persistence, add explicit reviewer/evaluator gates, and do not permit production-driving recommendations.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
 - `AGENTS.md`
 - `brainstyworkers_ai_concierge_prompt.md`
 
-Last updated: 2026-06-01
+Last updated: 2026-06-18
+
+## Phase 35 - PEMS Supervised Promotion Gates
+
+Goal:
+- Let a mature PEMS candidate become visible for supervised advisory review only after explicit human reviewer, validator, citation, and safety gates pass.
+- Keep LangGraph as healthcare authority and keep OpenClaw bounded by approved tasks.
+- Keep `productionDrivingAllowed=false` in the schema, runtime proof, API status, and dashboard score.
+
+Implementation plan:
+- Add `pems_candidate_promotion_reviews` as an audited review/evaluation ledger.
+- Extend `pems_candidate_maturity` with supervised advisory and promotion status fields.
+- Add a deterministic `evaluatePemsPromotionGate` helper that refuses candidates missing reviewer approvals, validator pass, citation/evidence sufficiency, or clean safety state.
+- Add `recordPemsPromotionReview` so all reviews store hashes and sanitized previews, not raw rationale/source text.
+- Add API proof routes:
+  - `GET /api/continuous-intelligence/pems/promotion`
+  - `POST /api/continuous-intelligence/pems/reviews`
+- Add `pems_supervised_promotion_gate` to connector proof and raise `continuous_procedural_memory` only to the Phase 35 target.
+- Add regression tests for promotion, safety veto, sanitized review storage, and no production-driving flip.
+
+Acceptance:
+- A mature candidate remains blocked with no review rows.
+- One approval remains blocked.
+- Two approvals remain blocked until validator and citation gates pass.
+- A safety review can veto a previously supervised advisory candidate.
+- Dashboard/API proof reports the gate and still marks production driving disabled.
+- `npm run build`, focused tests, `npm run test:local`, API proof, and visual dashboard proof pass.
 
 ## Phase 10U - Dynamic Skill Server For Insurance And Journey Skills
 

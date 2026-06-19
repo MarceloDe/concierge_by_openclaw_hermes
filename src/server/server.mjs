@@ -73,7 +73,10 @@ import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
-  getContinuousIntelligencePersistenceStatus
+  buildPemsPromotionReadinessProof,
+  getContinuousIntelligencePersistenceStatus,
+  getPemsPromotionGateStatus,
+  recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
@@ -1036,6 +1039,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const continuousIntelligence = buildContinuousIntelligenceReadinessProof();
   const continuousIntelligencePersistenceStatus = await getContinuousIntelligencePersistenceStatus(store);
   const continuousIntelligencePersistence = buildContinuousIntelligencePersistenceReadinessProof(continuousIntelligencePersistenceStatus);
+  const pemsPromotionStatus = await getPemsPromotionGateStatus(store);
+  const pemsPromotion = buildPemsPromotionReadinessProof(pemsPromotionStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1085,6 +1090,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "continuous_intelligence_shadow_persistence",
         status: continuousIntelligencePersistence.status,
         target: "Phase 34 persists final shadow runs and accumulates PEMS candidate maturity from real graph traces while keeping procedural candidates non-driving."
+      },
+      {
+        key: "pems_supervised_promotion_gate",
+        status: pemsPromotion.status,
+        target: "Phase 35 requires explicit reviewer, validator, citation, and safety gates before a PEMS candidate can enter supervised advisory mode; production driving remains disabled."
       },
       {
         key: "docker_connector_deployment",
@@ -1551,6 +1561,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: continuousIntelligencePersistence.productionDrivingAllowed,
         safety: continuousIntelligencePersistence.safety
       },
+      {
+        key: "pems_supervised_promotion_gate",
+        status: pemsPromotion.status,
+        ok: pemsPromotion.ok,
+        mode: pemsPromotion.mode,
+        score: pemsPromotion.score,
+        target: pemsPromotion.target,
+        candidateCount: pemsPromotion.candidateCount,
+        reviewCount: pemsPromotion.reviewCount,
+        humanApprovalCount: pemsPromotion.humanApprovalCount,
+        validatorPassCount: pemsPromotion.validatorPassCount,
+        citationPassCount: pemsPromotion.citationPassCount,
+        supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
+        latestCandidate: pemsPromotion.latestCandidate,
+        latestGate: pemsPromotion.latestGate,
+        productionDrivingAllowed: pemsPromotion.productionDrivingAllowed,
+        safety: pemsPromotion.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1582,6 +1610,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: "phase33_shadow_scaffold_documented",
         proof: "Typed CaseState, G0-G8 gate skeleton, PEMS maturity schema, and shadow reconstruction are implemented in a deterministic module."
+      },
+      {
+        route: "/api/continuous-intelligence/pems/promotion",
+        required: true,
+        status: pemsPromotion.status,
+        proof: "Phase 35 PEMS supervised promotion gate exposes reviewer, validator, citation, safety, and production-disabled proof."
       }
     ],
     scores: [
@@ -1594,11 +1628,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: continuousIntelligencePersistence.score,
-        target: continuousIntelligencePersistence.target,
-        status: continuousIntelligencePersistence.status,
+        score: pemsPromotion.score,
+        target: pemsPromotion.target,
+        status: pemsPromotion.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
+        supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1806,6 +1841,29 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname.startsWith("/api/proof/runs/")) {
     const runId = decodeURIComponent(url.pathname.split("/").pop() || "server-connector-next-mobile-mvp");
     sendJson(res, 200, await connectorProofRun(runId));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/promotion") {
+    const status = await getPemsPromotionGateStatus(store);
+    sendJson(res, 200, buildPemsPromotionReadinessProof(status));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/continuous-intelligence/pems/reviews") {
+    const body = await readJson(req);
+    const result = await recordPemsPromotionReview(store, {
+      candidateId: body.candidateId,
+      actorUserId: body.actorUserId ?? "operator",
+      reviewType: body.reviewType,
+      decision: body.decision,
+      evidenceRefCount: body.evidenceRefCount ?? 0,
+      validatorPassCount: body.validatorPassCount ?? 0,
+      safetyIncidentCount: body.safetyIncidentCount ?? 0,
+      rationale: body.rationale ?? "",
+      metadata: body.metadata ?? {}
+    });
+    sendJson(res, 200, result);
     return;
   }
 

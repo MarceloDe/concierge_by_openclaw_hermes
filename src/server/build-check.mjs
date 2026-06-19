@@ -7,7 +7,9 @@ import { describeLangGraphScope } from "../concierge/langgraphScope.mjs";
 import { createBrainstyLangGraph, LANGGRAPH_RUNNER_VERSION } from "../concierge/langgraphRunner.mjs";
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
-  buildContinuousIntelligenceReadinessProof
+  buildContinuousIntelligenceReadinessProof,
+  buildPemsPromotionReadinessProof,
+  PEMS_PROMOTION_GATE_VERSION
 } from "../concierge/continuousIntelligence.mjs";
 import { auditPromptContractSafety, buildPromptBundle } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
@@ -202,10 +204,30 @@ if (!TABLES.includes("research_scheduler_daemon_state") || !SCHEMA_SQL.includes(
 if (
   !TABLES.includes("continuous_intelligence_shadow_runs") ||
   !TABLES.includes("pems_candidate_maturity") ||
+  !TABLES.includes("pems_candidate_promotion_reviews") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
-  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity")
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews")
 ) {
-  throw new Error("Database schema is missing Phase 34 continuous-intelligence persistence tables");
+  throw new Error("Database schema is missing Phase 35 continuous-intelligence promotion tables");
+}
+
+const pemsPromotionProof = buildPemsPromotionReadinessProof({
+  ok: true,
+  candidateCount: 1,
+  reviewCount: 4,
+  humanApprovalCount: 2,
+  validatorPassCount: 1,
+  citationPassCount: 1,
+  supervisedAdvisoryCandidateCount: 1
+});
+if (
+  pemsPromotionProof.version !== PEMS_PROMOTION_GATE_VERSION ||
+  pemsPromotionProof.status !== "phase35_supervised_promotion_gate_active" ||
+  pemsPromotionProof.score !== 80 ||
+  pemsPromotionProof.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 35 PEMS supervised promotion proof contract is incomplete.");
 }
 
 if (!TABLES.includes("research_embedding_routes") || !TABLES.includes("research_embedding_jobs") || !TABLES.includes("research_embedding_index")) {
@@ -429,4 +451,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

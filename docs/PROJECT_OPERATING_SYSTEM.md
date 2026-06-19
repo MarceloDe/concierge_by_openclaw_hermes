@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 34 canonical guide.
+Status: Phase 35 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -76,25 +76,29 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Active Intelligence Phase
 
-Phase 34 persists the Phase 33 continuous-intelligence shadows:
+Phase 35 adds supervised promotion gates for PEMS candidates on top of the Phase 34 durable shadow substrate:
 
 - append-only shadow-run ledger;
 - aggregate PEMS candidate maturity;
 - real LangGraph final-trace persistence after response/product-memory retain;
+- explicit human reviewer approvals;
+- validator/evaluator pass requirements;
+- cited-evidence sufficiency checks;
+- safety-incident vetoes;
+- supervised advisory mode as the only possible promotion state;
 - existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
-- dashboard proof for `continuous_intelligence_shadow_persistence`;
+- dashboard proof for `continuous_intelligence_shadow_persistence` and `pems_supervised_promotion_gate`;
 - production decisioning still disabled.
 
-Phase 34 does not let procedural reconstruction drive recommendations. It creates durable learning substrate only.
+Phase 35 does not let procedural reconstruction drive recommendations. It lets a mature candidate become supervised-advisory-visible only after review gates pass, while keeping `productionDrivingAllowed=false`.
 
 ## Recommended Next Phases
 
-Phase 35 should add supervised promotion gates for PEMS candidates:
+Phase 36 should connect supervised advisory candidates to a reviewer-facing evaluation workbench:
 
-- reviewer approval counters;
-- validator/NeSTR-style consistency checks;
-- cited-evidence sufficiency;
-- explicit safety-incident vetoes;
-- supervised advisory mode before any production driving.
+- LLM-assisted evaluator draft notes routed through the same review ledger;
+- NeSTR-style consistency traces rendered as refs, not raw PHI;
+- reviewer diff between deterministic and advisory outputs;
+- no automatic production recommendations.
 
-Phase 35 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
+Phase 36 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
