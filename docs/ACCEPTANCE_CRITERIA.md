@@ -2373,3 +2373,22 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `continuous_intelligence_shadow_persistence`
+
+## Phase 36: PEMS Reviewer/Evaluator Workbench
+
+Acceptance criteria:
+- Database schema includes `pems_candidate_evaluator_drafts`.
+- Evaluator drafts are created through a bounded API/helper and are labeled advisory-only.
+- Draft payloads store hashes, safe previews, and consistency trace refs only.
+- Raw advisory notes, raw consistency traces, raw source text, raw screenshots, raw OCR text, raw frames, credentials, and secrets are not persisted or returned.
+- Drafts do not alter promotion state, healthcare routing, final answers, approval state, browser actions, OpenClaw dispatch, payer contact, external messages, or writes.
+- An evaluator draft becomes part of the promotion evidence only when an explicit `pems_candidate_promotion_reviews` row links to the draft id.
+- Connector proof includes `pems_reviewer_evaluator_workbench`.
+- The `continuous_procedural_memory` score can advance only to the Phase 36 reviewer-workbench target while `productionDrivingAllowed=false`.
+- Tests prove sanitized draft storage, advisory-only behavior, explicit review linkage, and proof visibility.
+
+Focused proof:
+- `node --test src/tests/pems-reviewer-workbench.test.mjs src/tests/pems-promotion-gates.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `pems_reviewer_evaluator_workbench`

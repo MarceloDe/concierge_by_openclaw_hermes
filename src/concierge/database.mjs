@@ -299,6 +299,28 @@ export class SqliteStore {
       );
     `);
     await this.exec(`
+      CREATE TABLE IF NOT EXISTS pems_candidate_evaluator_drafts (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        actor_user_id TEXT,
+        draft_type TEXT NOT NULL,
+        evaluator_mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        deterministic_validator_status TEXT NOT NULL,
+        suggested_review_type TEXT NOT NULL,
+        suggested_decision TEXT NOT NULL,
+        advisory_note_hash TEXT NOT NULL,
+        advisory_note_preview TEXT NOT NULL DEFAULT '',
+        consistency_trace_ref TEXT NOT NULL,
+        consistency_trace_hash TEXT NOT NULL,
+        consistency_trace_preview TEXT NOT NULL DEFAULT '',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id)
+      );
+    `);
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,
         actor_user_id TEXT,

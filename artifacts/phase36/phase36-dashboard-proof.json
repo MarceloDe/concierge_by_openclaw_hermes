@@ -1,0 +1,21 @@
+{
+  "phase": 36,
+  "slug": "pems-reviewer-evaluator-workbench",
+  "url": "http://127.0.0.1:4218/?phase=phase-36-pems-reviewer-evaluator-workbench",
+  "dashboardScreenshot": "artifacts/phase36/phase36-dashboard-proof.png",
+  "dashboardScoreScreenshot": "artifacts/phase36/phase36-dashboard-score-proof.png",
+  "apiProof": "artifacts/phase36/phase36-workbench-api-proof.json",
+  "connectorProof": "artifacts/phase36/phase36-connector-proof.json",
+  "checks": {
+    "pems_reviewer_evaluator_workbench_visible": true,
+    "phase36_active_status_visible": true,
+    "continuous_procedural_memory_85_of_85_visible": true,
+    "production_driving_false_visible": true
+  },
+  "safety": {
+    "advisory_only": true,
+    "raw_advisory_note_stored": false,
+    "raw_consistency_trace_stored": false,
+    "production_driving_allowed": false
+  }
+}

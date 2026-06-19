@@ -8288,3 +8288,49 @@ Browser/dashboard proof:
 
 Next phase:
 - Phase 35 should add reviewer/evaluator promotion gates for PEMS candidates before any candidate can move from shadow maturity into supervised advisory use.
+
+## Phase 36 PEMS Reviewer/Evaluator Workbench
+
+Status: Implemented and locally verified on branch `phase-36-pems-reviewer-evaluator-workbench`.
+
+Slice name:
+- Sanitized advisory-draft workbench for supervised PEMS review.
+
+Context:
+- Phase 35 created the promotion-review ledger and explicit reviewer, validator, citation, and safety gates.
+- Cortex Phase 35 named the next step as a workbench where LLM-assisted evaluator draft notes and NeSTR-style consistency traces can advise reviewers without becoming authority.
+
+Code and docs changed:
+- Add schema table `pems_candidate_evaluator_drafts`.
+- Add advisory draft helpers and workbench readiness proof in `src/concierge/continuousIntelligence.mjs`.
+- Add API routes:
+  - `GET /api/continuous-intelligence/pems/workbench`;
+  - `POST /api/continuous-intelligence/pems/evaluator-drafts`.
+- Extend `POST /api/continuous-intelligence/pems/reviews` so explicit reviews can link to advisory draft refs.
+- Extend connector proof with `pems_reviewer_evaluator_workbench`.
+- Add `src/tests/pems-reviewer-workbench.test.mjs`.
+
+Safety decision:
+- Drafts are advisory material only.
+- Drafts do not approve candidates, alter promotion state, route healthcare workflows, compose final answers, dispatch OpenClaw, control browsers, contact payers, send external messages, or write to payer systems.
+- Draft rows store hashes, previews, and refs only; raw notes, raw traces, raw OCR, raw frames, raw source text, credentials, and secrets remain excluded.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification result:
+- `node --test src/tests/pems-reviewer-workbench.test.mjs src/tests/pems-promotion-gates.test.mjs src/tests/chat-ui-contract.test.mjs` passed with 16/16 tests.
+- `npm run build` passed and names the Phase 36 reviewer/evaluator workbench contract.
+- `npm run test:local` passed with 222 total tests: 220 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- API proof at `http://127.0.0.1:4218/api/continuous-intelligence/pems/workbench` showed `phase36_reviewer_evaluator_workbench_active`, `85 / 85`, one evaluator draft, one advisory-linked review, and `productionDrivingAllowed=false`.
+- Connector proof at `http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp` showed `pems_reviewer_evaluator_workbench`, `continuous_procedural_memory` at `85 / 85`, `evaluatorDraftCount=1`, `advisoryLinkedReviewCount=1`, and production driving disabled.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4218/?phase=phase-36-pems-reviewer-evaluator-workbench`
+- Browser DOM proof verified `pems_reviewer_evaluator_workbench`, `phase36_reviewer_evaluator_workbench_active`, `85 / 85`, and production-driving false.
+- Visual proof artifacts:
+  - `artifacts/phase36/phase36-workbench-api-proof.json`;
+  - `artifacts/phase36/phase36-connector-proof.json`;
+  - `artifacts/phase36/phase36-dashboard-proof.json`;
+  - `artifacts/phase36/phase36-dashboard-proof.png`.
+
+Next phase:
+- Phase 37 should add a reviewer-facing UI surface for comparing deterministic and advisory outputs and approving, rejecting, or blocking advisory material by ref only.

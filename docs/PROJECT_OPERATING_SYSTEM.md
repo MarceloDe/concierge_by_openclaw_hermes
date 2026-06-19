@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 35 canonical guide.
+Status: Phase 36 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -76,7 +76,7 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Active Intelligence Phase
 
-Phase 35 adds supervised promotion gates for PEMS candidates on top of the Phase 34 durable shadow substrate:
+Phase 36 connects supervised advisory candidates to a reviewer/evaluator workbench on top of the Phase 35 promotion gates:
 
 - append-only shadow-run ledger;
 - aggregate PEMS candidate maturity;
@@ -86,19 +86,22 @@ Phase 35 adds supervised promotion gates for PEMS candidates on top of the Phase
 - cited-evidence sufficiency checks;
 - safety-incident vetoes;
 - supervised advisory mode as the only possible promotion state;
+- sanitized evaluator draft notes;
+- NeSTR-style consistency trace refs;
+- advisory material linkage into explicit promotion-review records;
 - existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
-- dashboard proof for `continuous_intelligence_shadow_persistence` and `pems_supervised_promotion_gate`;
+- dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, and `pems_reviewer_evaluator_workbench`;
 - production decisioning still disabled.
 
-Phase 35 does not let procedural reconstruction drive recommendations. It lets a mature candidate become supervised-advisory-visible only after review gates pass, while keeping `productionDrivingAllowed=false`.
+Phase 36 does not let evaluator drafts, LLM-assisted notes, or consistency traces drive recommendations. Drafts are advisory material only. They become relevant to the gate only when a human or deterministic reviewer records an explicit review linked to the draft, while keeping `productionDrivingAllowed=false`.
 
 ## Recommended Next Phases
 
-Phase 36 should connect supervised advisory candidates to a reviewer-facing evaluation workbench:
+Phase 37 should add a reviewer-facing UI surface for the Phase 36 workbench:
 
-- LLM-assisted evaluator draft notes routed through the same review ledger;
-- NeSTR-style consistency traces rendered as refs, not raw PHI;
 - reviewer diff between deterministic and advisory outputs;
+- reviewer controls to approve, reject, or block advisory material by ref;
+- visual proof for regular operator use;
 - no automatic production recommendations.
 
-Phase 36 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
+Phase 37 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.

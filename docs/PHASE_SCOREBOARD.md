@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 35 canonical scoreboard.
+Status: Phase 36 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 80 | Phase 35 supervised promotion gate | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, and `pems_candidate_promotion_reviews` now exist; supervised advisory requires reviewer, validator, citation, and safety gates while production decisioning remains disabled. |
+| continuous_procedural_memory | 85 | Phase 36 reviewer/evaluator workbench | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, and `pems_candidate_evaluator_drafts` now exist; evaluator drafts and consistency traces are advisory material only, while explicit reviewer/validator/citation/safety gates remain authoritative and production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -60,3 +60,15 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Score `continuous_procedural_memory` reaches only the Phase 35 supervised-advisory target, not full production procedural automation.
 - `productionDrivingAllowed=false` remains enforced even when supervised advisory is allowed.
 - Tests prove promotion-review payloads store safe rationale previews and hashes, not raw sensitive text.
+
+## Phase 36 Acceptance Checklist
+
+- `pems_candidate_evaluator_drafts` exists as the sanitized advisory-draft ledger.
+- Evaluator drafts store note hashes, safe previews, consistency trace refs, and trace hashes instead of raw advisory notes, raw traces, raw source text, raw OCR, raw frames, credentials, or secrets.
+- Drafts may be LLM-assisted advisory material, but no mocked LLM output is scored as live LLM proof.
+- Drafts do not change `pems_candidate_maturity`, supervised advisory state, healthcare routing, final answers, browser actions, OpenClaw dispatch, payer contact, external messages, or writes.
+- A draft affects the promotion ledger only when an explicit human or deterministic reviewer submits a `pems_candidate_promotion_reviews` record linked by advisory draft id.
+- Connector proof exposes `pems_reviewer_evaluator_workbench`.
+- Score `continuous_procedural_memory` reaches only the Phase 36 reviewer-workbench target, not full production procedural automation.
+- `productionDrivingAllowed=false` remains enforced.
+- Tests prove sanitized draft storage, advisory-only behavior, explicit review linkage, and dashboard/API proof.

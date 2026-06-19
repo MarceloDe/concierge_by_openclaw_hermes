@@ -5,6 +5,7 @@ export const PEMS_SCHEMA_VERSION = "brainstyworkers.pems.v1";
 export const CONTINUOUS_INTELLIGENCE_SHADOW_VERSION = "2026-06-18.phase33-continuous-intelligence-shadow.v1";
 export const CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION = "2026-06-18.phase34-shadow-persistence.v1";
 export const PEMS_PROMOTION_GATE_VERSION = "2026-06-18.phase35-pems-supervised-promotion-gate.v1";
+export const PEMS_REVIEW_WORKBENCH_VERSION = "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -433,6 +434,30 @@ function normalizeReviewDecision(value) {
   throw new Error(`Unsupported PEMS promotion review decision: ${value}`);
 }
 
+function normalizeEvaluatorDraftType(value) {
+  const normalized = String(value ?? "evaluator_draft_note").trim().toLowerCase();
+  if (["evaluator_draft_note", "nestr_consistency_trace", "reviewer_diff"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS evaluator draft type: ${value}`);
+}
+
+function normalizeEvaluatorMode(value) {
+  const normalized = String(value ?? "deterministic_validator_advisory").trim().toLowerCase();
+  if (["deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS evaluator mode: ${value}`);
+}
+
+function normalizeValidatorStatus(value) {
+  const normalized = String(value ?? "pending").trim().toLowerCase();
+  if (["pass", "fail", "blocked", "pending"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS deterministic validator status: ${value}`);
+}
+
+function advisoryDraftStatus({ deterministicValidatorStatus, suggestedDecision }) {
+  if (["fail", "blocked"].includes(deterministicValidatorStatus)) return "blocked_by_validator";
+  if (["rejected", "fail", "blocked"].includes(suggestedDecision)) return "needs_reviewer_attention";
+  return "draft_ready_for_human_review";
+}
+
 function reviewCount(reviews, predicate) {
   return reviews.filter(predicate).length;
 }
@@ -529,6 +554,7 @@ export async function recordPemsPromotionReview(
     validatorPassCount = 0,
     safetyIncidentCount = 0,
     rationale = "",
+    advisoryDraftId = null,
     metadata = {},
     createdAt = new Date().toISOString()
   } = {}
@@ -541,6 +567,14 @@ export async function recordPemsPromotionReview(
   return store.transaction(async (tx) => {
     const existing = await tx.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId });
     if (!existing) throw new Error(`PEMS candidate not found: ${normalizedCandidateId}`);
+    let advisoryDraft = null;
+    if (advisoryDraftId) {
+      advisoryDraft = await tx.findOne("pems_candidate_evaluator_drafts", { id: String(advisoryDraftId) });
+      if (!advisoryDraft) throw new Error(`PEMS evaluator draft not found: ${advisoryDraftId}`);
+      if (advisoryDraft.candidate_id !== normalizedCandidateId) {
+        throw new Error(`PEMS evaluator draft does not belong to candidate: ${normalizedCandidateId}`);
+      }
+    }
     const review = await tx.insert("pems_candidate_promotion_reviews", {
       id: createPersistedId("pems_review"),
       candidate_id: normalizedCandidateId,
@@ -554,6 +588,9 @@ export async function recordPemsPromotionReview(
       rationale_preview: safePreview(rationale),
       metadata_json: JSON.stringify({
         ...jsonValue(metadata, {}),
+        advisoryDraftId: advisoryDraft?.id ?? null,
+        advisoryMaterialRef: advisoryDraft ? stableRef("pems_advisory_material", advisoryDraft.id, advisoryDraft.consistency_trace_hash) : null,
+        advisoryOnly: Boolean(advisoryDraft),
         rawRationaleStored: false,
         productionDrivingAllowed: false
       }),
@@ -606,6 +643,89 @@ export async function recordPemsPromotionReview(
       },
       gate,
       maturity,
+      productionDrivingAllowed: false
+    };
+  });
+}
+
+export async function createPemsEvaluatorDraft(
+  store,
+  {
+    candidateId,
+    actorUserId = "evaluator",
+    draftType = "evaluator_draft_note",
+    evaluatorMode = "deterministic_validator_advisory",
+    deterministicValidatorStatus = "pending",
+    suggestedReviewType = "validator_evaluation",
+    suggestedDecision = "blocked",
+    advisoryNote = "",
+    consistencyTrace = {},
+    metadata = {},
+    createdAt = new Date().toISOString()
+  } = {}
+) {
+  if (!store) throw new Error("A store is required to create a PEMS evaluator draft.");
+  const normalizedCandidateId = String(candidateId ?? "").trim();
+  if (!normalizedCandidateId) throw new Error("PEMS evaluator draft requires candidateId.");
+  const normalizedDraftType = normalizeEvaluatorDraftType(draftType);
+  const normalizedEvaluatorMode = normalizeEvaluatorMode(evaluatorMode);
+  const normalizedValidatorStatus = normalizeValidatorStatus(deterministicValidatorStatus);
+  const normalizedSuggestedReviewType = normalizeReviewType(suggestedReviewType);
+  const normalizedSuggestedDecision = normalizeReviewDecision(suggestedDecision);
+  const traceText = typeof consistencyTrace === "string" ? consistencyTrace : JSON.stringify(consistencyTrace ?? {});
+  const traceHash = hashText(traceText);
+  const status = advisoryDraftStatus({
+    deterministicValidatorStatus: normalizedValidatorStatus,
+    suggestedDecision: normalizedSuggestedDecision
+  });
+
+  return store.transaction(async (tx) => {
+    const existing = await tx.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId });
+    if (!existing) throw new Error(`PEMS candidate not found: ${normalizedCandidateId}`);
+    const draft = await tx.insert("pems_candidate_evaluator_drafts", {
+      id: createPersistedId("pems_eval_draft"),
+      candidate_id: normalizedCandidateId,
+      actor_user_id: actorUserId ? String(actorUserId) : null,
+      draft_type: normalizedDraftType,
+      evaluator_mode: normalizedEvaluatorMode,
+      status,
+      deterministic_validator_status: normalizedValidatorStatus,
+      suggested_review_type: normalizedSuggestedReviewType,
+      suggested_decision: normalizedSuggestedDecision,
+      advisory_note_hash: hashText(advisoryNote),
+      advisory_note_preview: safePreview(advisoryNote, 160),
+      consistency_trace_ref: stableRef("pems_consistency_trace", normalizedCandidateId, traceHash),
+      consistency_trace_hash: traceHash,
+      consistency_trace_preview: safePreview(traceText, 160),
+      metadata_json: JSON.stringify({
+        ...jsonValue(metadata, {}),
+        phase: 36,
+        advisoryOnly: true,
+        rawAdvisoryNoteStored: false,
+        rawConsistencyTraceStored: false,
+        deterministicValidatorAuthority: true,
+        humanReviewerAuthority: true,
+        productionDrivingAllowed: false
+      }),
+      created_at: createdAt,
+      updated_at: createdAt
+    });
+    return {
+      version: PEMS_REVIEW_WORKBENCH_VERSION,
+      draft: {
+        ...draft,
+        advisoryNote: undefined,
+        consistencyTrace: undefined,
+        rawAdvisoryNoteStored: false,
+        rawConsistencyTraceStored: false
+      },
+      candidate: {
+        candidateId: existing.candidate_id,
+        promotionStatus: existing.promotion_status ?? "shadow_review_required",
+        supervisedAdvisoryAllowed: existing.supervised_advisory_allowed === 1,
+        productionDrivingAllowed: false
+      },
+      advisoryOnly: true,
       productionDrivingAllowed: false
     };
   });
@@ -1037,6 +1157,167 @@ export function buildPemsPromotionReadinessProof(status = {}) {
       rawRationaleStored: false,
       rawSourceStored: false,
       supervisedAdvisoryOnly: true,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export async function getPemsReviewerWorkbenchStatus(store) {
+  if (!store) {
+    return {
+      version: PEMS_REVIEW_WORKBENCH_VERSION,
+      status: "store_unavailable",
+      ok: false,
+      candidateCount: 0,
+      draftCount: 0,
+      reviewCount: 0,
+      advisoryLinkedReviewCount: 0,
+      productionDrivingAllowed: false
+    };
+  }
+  const candidateCounts = await store.get(
+    `SELECT
+       COUNT(*) AS candidateCount,
+       COALESCE(SUM(CASE WHEN supervised_advisory_allowed = 1 THEN 1 ELSE 0 END), 0) AS supervisedAdvisoryCandidateCount
+     FROM pems_candidate_maturity;`
+  );
+  const draftCounts = await store.get(
+    `SELECT
+       COUNT(*) AS draftCount,
+       COALESCE(SUM(CASE WHEN evaluator_mode = 'llm_assisted_advisory' THEN 1 ELSE 0 END), 0) AS llmAssistedDraftCount,
+       COALESCE(SUM(CASE WHEN draft_type = 'nestr_consistency_trace' OR evaluator_mode = 'nestr_consistency_trace' THEN 1 ELSE 0 END), 0) AS consistencyTraceDraftCount,
+       COALESCE(SUM(CASE WHEN status = 'draft_ready_for_human_review' THEN 1 ELSE 0 END), 0) AS readyDraftCount,
+       COALESCE(SUM(CASE WHEN status = 'blocked_by_validator' THEN 1 ELSE 0 END), 0) AS blockedDraftCount
+     FROM pems_candidate_evaluator_drafts;`
+  );
+  const reviewCounts = await store.get(
+    `SELECT
+       COUNT(*) AS reviewCount,
+       COALESCE(SUM(CASE WHEN metadata_json LIKE '%"advisoryOnly":true%' THEN 1 ELSE 0 END), 0) AS advisoryLinkedReviewCount
+     FROM pems_candidate_promotion_reviews;`
+  );
+  const latestDraft = await store.get(
+    `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
+            deterministic_validator_status, suggested_review_type, suggested_decision,
+            advisory_note_hash, advisory_note_preview, consistency_trace_ref,
+            consistency_trace_hash, consistency_trace_preview, metadata_json, created_at, updated_at
+       FROM pems_candidate_evaluator_drafts
+      ORDER BY created_at DESC
+      LIMIT 1;`
+  );
+  const latestCandidate = latestDraft?.candidate_id
+    ? await store.findOne("pems_candidate_maturity", { candidate_id: latestDraft.candidate_id })
+    : await store.get(
+        `SELECT candidate_id, workflow, selected_skill_key, shadow_run_count, latest_score,
+                supervised_advisory_allowed, promotion_status, production_driving_allowed, updated_at
+           FROM pems_candidate_maturity
+          ORDER BY updated_at DESC
+          LIMIT 1;`
+      );
+  const latestReviews = latestCandidate?.candidate_id ? await listPemsPromotionReviewsForCandidate(store, latestCandidate.candidate_id) : [];
+  const latestGate = latestCandidate ? evaluatePemsPromotionGate(latestCandidate, latestReviews) : null;
+  const draftCountValue = rowNumber(draftCounts?.draftCount);
+  const status =
+    draftCountValue > 0
+      ? "phase36_reviewer_evaluator_workbench_active"
+      : rowNumber(candidateCounts?.candidateCount) > 0
+        ? "phase36_reviewer_evaluator_workbench_ready_no_drafts"
+        : "phase36_reviewer_evaluator_workbench_waiting_for_candidates";
+  return {
+    version: PEMS_REVIEW_WORKBENCH_VERSION,
+    status,
+    ok: true,
+    candidateCount: rowNumber(candidateCounts?.candidateCount),
+    supervisedAdvisoryCandidateCount: rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount),
+    draftCount: draftCountValue,
+    llmAssistedDraftCount: rowNumber(draftCounts?.llmAssistedDraftCount),
+    consistencyTraceDraftCount: rowNumber(draftCounts?.consistencyTraceDraftCount),
+    readyDraftCount: rowNumber(draftCounts?.readyDraftCount),
+    blockedDraftCount: rowNumber(draftCounts?.blockedDraftCount),
+    reviewCount: rowNumber(reviewCounts?.reviewCount),
+    advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
+    productionDrivingAllowed: false,
+    latestDraft: latestDraft
+      ? {
+          id: latestDraft.id,
+          candidateId: latestDraft.candidate_id,
+          actorUserId: latestDraft.actor_user_id,
+          draftType: latestDraft.draft_type,
+          evaluatorMode: latestDraft.evaluator_mode,
+          status: latestDraft.status,
+          deterministicValidatorStatus: latestDraft.deterministic_validator_status,
+          suggestedReviewType: latestDraft.suggested_review_type,
+          suggestedDecision: latestDraft.suggested_decision,
+          advisoryNoteHash: latestDraft.advisory_note_hash,
+          advisoryNotePreview: latestDraft.advisory_note_preview,
+          consistencyTraceRef: latestDraft.consistency_trace_ref,
+          consistencyTraceHash: latestDraft.consistency_trace_hash,
+          consistencyTracePreview: latestDraft.consistency_trace_preview,
+          metadata: parseJson(latestDraft.metadata_json, {}),
+          createdAt: latestDraft.created_at,
+          updatedAt: latestDraft.updated_at
+        }
+      : null,
+    latestCandidate: latestCandidate
+      ? {
+          candidateId: latestCandidate.candidate_id,
+          workflow: latestCandidate.workflow,
+          selectedSkillKey: latestCandidate.selected_skill_key,
+          shadowRunCount: rowNumber(latestCandidate.shadow_run_count),
+          latestScore: rowNumber(latestCandidate.latest_score),
+          supervisedAdvisoryAllowed: latestCandidate.supervised_advisory_allowed === 1,
+          promotionStatus: latestCandidate.promotion_status ?? "shadow_review_required",
+          productionDrivingAllowed: false,
+          updatedAt: latestCandidate.updated_at
+        }
+      : null,
+    latestGate,
+    safety: {
+      advisoryDraftsOnly: true,
+      deterministicValidatorAuthority: true,
+      humanReviewerAuthority: true,
+      rawAdvisoryNoteStored: false,
+      rawConsistencyTraceStored: false,
+      rawSourceStored: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsReviewerWorkbenchReadinessProof(status = {}) {
+  const active = (status.draftCount ?? 0) > 0;
+  const linked = (status.advisoryLinkedReviewCount ?? 0) > 0;
+  const ready = (status.candidateCount ?? 0) > 0;
+  return {
+    version: PEMS_REVIEW_WORKBENCH_VERSION,
+    status: active
+      ? "phase36_reviewer_evaluator_workbench_active"
+      : ready
+        ? "phase36_reviewer_evaluator_workbench_ready_no_drafts"
+        : "phase36_reviewer_evaluator_workbench_waiting_for_candidates",
+    ok: status.ok !== false,
+    mode: "supervised_advisory_workbench_only",
+    score: active && linked ? 85 : active ? 83 : ready ? 80 : 70,
+    target: 85,
+    candidateCount: status.candidateCount ?? 0,
+    supervisedAdvisoryCandidateCount: status.supervisedAdvisoryCandidateCount ?? 0,
+    draftCount: status.draftCount ?? 0,
+    llmAssistedDraftCount: status.llmAssistedDraftCount ?? 0,
+    consistencyTraceDraftCount: status.consistencyTraceDraftCount ?? 0,
+    readyDraftCount: status.readyDraftCount ?? 0,
+    blockedDraftCount: status.blockedDraftCount ?? 0,
+    reviewCount: status.reviewCount ?? 0,
+    advisoryLinkedReviewCount: status.advisoryLinkedReviewCount ?? 0,
+    productionDrivingAllowed: false,
+    latestDraft: status.latestDraft ?? null,
+    latestCandidate: status.latestCandidate ?? null,
+    latestGate: status.latestGate ?? null,
+    safety: status.safety ?? {
+      advisoryDraftsOnly: true,
+      deterministicValidatorAuthority: true,
+      humanReviewerAuthority: true,
+      rawAdvisoryNoteStored: false,
+      rawConsistencyTraceStored: false,
       productionDrivingAllowed: false
     }
   };

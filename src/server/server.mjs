@@ -74,8 +74,11 @@ import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
   buildPemsPromotionReadinessProof,
+  buildPemsReviewerWorkbenchReadinessProof,
+  createPemsEvaluatorDraft,
   getContinuousIntelligencePersistenceStatus,
   getPemsPromotionGateStatus,
+  getPemsReviewerWorkbenchStatus,
   recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
@@ -1041,6 +1044,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const continuousIntelligencePersistence = buildContinuousIntelligencePersistenceReadinessProof(continuousIntelligencePersistenceStatus);
   const pemsPromotionStatus = await getPemsPromotionGateStatus(store);
   const pemsPromotion = buildPemsPromotionReadinessProof(pemsPromotionStatus);
+  const pemsReviewerWorkbenchStatus = await getPemsReviewerWorkbenchStatus(store);
+  const pemsReviewerWorkbench = buildPemsReviewerWorkbenchReadinessProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1095,6 +1100,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_supervised_promotion_gate",
         status: pemsPromotion.status,
         target: "Phase 35 requires explicit reviewer, validator, citation, and safety gates before a PEMS candidate can enter supervised advisory mode; production driving remains disabled."
+      },
+      {
+        key: "pems_reviewer_evaluator_workbench",
+        status: pemsReviewerWorkbench.status,
+        target: "Phase 36 lets evaluator draft notes and NeSTR-style consistency traces advise reviewers while human and deterministic review gates remain authoritative."
       },
       {
         key: "docker_connector_deployment",
@@ -1579,6 +1589,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsPromotion.productionDrivingAllowed,
         safety: pemsPromotion.safety
       },
+      {
+        key: "pems_reviewer_evaluator_workbench",
+        status: pemsReviewerWorkbench.status,
+        ok: pemsReviewerWorkbench.ok,
+        mode: pemsReviewerWorkbench.mode,
+        score: pemsReviewerWorkbench.score,
+        target: pemsReviewerWorkbench.target,
+        candidateCount: pemsReviewerWorkbench.candidateCount,
+        draftCount: pemsReviewerWorkbench.draftCount,
+        llmAssistedDraftCount: pemsReviewerWorkbench.llmAssistedDraftCount,
+        consistencyTraceDraftCount: pemsReviewerWorkbench.consistencyTraceDraftCount,
+        advisoryLinkedReviewCount: pemsReviewerWorkbench.advisoryLinkedReviewCount,
+        latestDraft: pemsReviewerWorkbench.latestDraft,
+        latestCandidate: pemsReviewerWorkbench.latestCandidate,
+        latestGate: pemsReviewerWorkbench.latestGate,
+        productionDrivingAllowed: pemsReviewerWorkbench.productionDrivingAllowed,
+        safety: pemsReviewerWorkbench.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1616,6 +1644,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsPromotion.status,
         proof: "Phase 35 PEMS supervised promotion gate exposes reviewer, validator, citation, safety, and production-disabled proof."
+      },
+      {
+        route: "/api/continuous-intelligence/pems/workbench",
+        required: true,
+        status: pemsReviewerWorkbench.status,
+        proof: "Phase 36 reviewer/evaluator workbench exposes sanitized advisory draft notes, consistency trace refs, and explicit human-review linkage."
       }
     ],
     scores: [
@@ -1628,12 +1662,14 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: pemsPromotion.score,
-        target: pemsPromotion.target,
-        status: pemsPromotion.status,
+        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score),
+        target: pemsReviewerWorkbench.target,
+        status: pemsReviewerWorkbench.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
+        evaluatorDraftCount: pemsReviewerWorkbench.draftCount,
+        advisoryLinkedReviewCount: pemsReviewerWorkbench.advisoryLinkedReviewCount,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1793,6 +1829,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       canonicalGoalTiedPhaseExecution: true,
       continuousIntelligenceShadowOnly: true,
       continuousIntelligencePersistenceOnly: true,
+      pemsReviewerWorkbenchAdvisoryOnly: true,
       cortexIsProjectMemoryOnly: true,
       nonMockedProofRequired: true,
       publicApi: "/api/v1",
@@ -1850,6 +1887,30 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/workbench") {
+    const status = await getPemsReviewerWorkbenchStatus(store);
+    sendJson(res, 200, buildPemsReviewerWorkbenchReadinessProof(status));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/continuous-intelligence/pems/evaluator-drafts") {
+    const body = await readJson(req);
+    const result = await createPemsEvaluatorDraft(store, {
+      candidateId: body.candidateId,
+      actorUserId: body.actorUserId ?? "evaluator",
+      draftType: body.draftType ?? "evaluator_draft_note",
+      evaluatorMode: body.evaluatorMode ?? "deterministic_validator_advisory",
+      deterministicValidatorStatus: body.deterministicValidatorStatus ?? "pending",
+      suggestedReviewType: body.suggestedReviewType ?? "validator_evaluation",
+      suggestedDecision: body.suggestedDecision ?? "blocked",
+      advisoryNote: body.advisoryNote ?? "",
+      consistencyTrace: body.consistencyTrace ?? {},
+      metadata: body.metadata ?? {}
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/continuous-intelligence/pems/reviews") {
     const body = await readJson(req);
     const result = await recordPemsPromotionReview(store, {
@@ -1861,6 +1922,7 @@ async function handleApi(req, res, url) {
       validatorPassCount: body.validatorPassCount ?? 0,
       safetyIncidentCount: body.safetyIncidentCount ?? 0,
       rationale: body.rationale ?? "",
+      advisoryDraftId: body.advisoryDraftId ?? null,
       metadata: body.metadata ?? {}
     });
     sendJson(res, 200, result);

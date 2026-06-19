@@ -1,0 +1,144 @@
+{
+  "version": "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1",
+  "status": "phase36_reviewer_evaluator_workbench_active",
+  "ok": true,
+  "mode": "supervised_advisory_workbench_only",
+  "score": 85,
+  "target": 85,
+  "candidateCount": 1,
+  "supervisedAdvisoryCandidateCount": 0,
+  "draftCount": 1,
+  "llmAssistedDraftCount": 1,
+  "consistencyTraceDraftCount": 1,
+  "readyDraftCount": 1,
+  "blockedDraftCount": 0,
+  "reviewCount": 1,
+  "advisoryLinkedReviewCount": 1,
+  "productionDrivingAllowed": false,
+  "latestDraft": {
+    "id": "pems_eval_draft_37213dbd-9d5c-4357-b402-303a55ab85d1",
+    "candidateId": "pems_40d7cea4abb98732",
+    "actorUserId": "phase36_evaluator",
+    "draftType": "nestr_consistency_trace",
+    "evaluatorMode": "llm_assisted_advisory",
+    "status": "draft_ready_for_human_review",
+    "deterministicValidatorStatus": "pass",
+    "suggestedReviewType": "validator_evaluation",
+    "suggestedDecision": "pass",
+    "advisoryNoteHash": "45b1b9f95e9e4c55fcf49653c32f93d688255a4b20fc0d038db49915a1b14eb0",
+    "advisoryNotePreview": "Phase 36 safe advisory draft: source pointer refs are sufficient; no raw PHI included.",
+    "consistencyTraceRef": "pems_consistency_trace_1f8ab99f98200667",
+    "consistencyTraceHash": "20a3954b259dbc09495324c3e4628e979aa131abddc0bb2e67d8a607795b0adc",
+    "consistencyTracePreview": "{\"traceKind\":\"nestr_consistency_trace\",\"sourcePointerIds\":[\"phase36_public_example\"],\"refOnly\":true}",
+    "metadata": {
+      "proofSeed": "phase36_dashboard_api",
+      "sourcePointerIds": [
+        "phase36_public_example"
+      ],
+      "phase": 36,
+      "advisoryOnly": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "deterministicValidatorAuthority": true,
+      "humanReviewerAuthority": true,
+      "productionDrivingAllowed": false
+    },
+    "createdAt": "2026-06-19T02:28:05.090Z",
+    "updatedAt": "2026-06-19T02:28:05.090Z"
+  },
+  "latestCandidate": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "workflow": "eligibility_benefits_navigation",
+    "selectedSkillKey": "insurance_portal_browser",
+    "shadowRunCount": 10,
+    "latestScore": 100,
+    "supervisedAdvisoryAllowed": false,
+    "promotionStatus": "shadow_review_required",
+    "productionDrivingAllowed": false,
+    "updatedAt": "2026-06-19T02:28:05.090Z"
+  },
+  "latestGate": {
+    "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+    "status": "shadow_review_required",
+    "ok": false,
+    "supervisedAdvisoryAllowed": false,
+    "productionDrivingAllowed": false,
+    "candidateId": "pems_40d7cea4abb98732",
+    "counts": {
+      "humanApprovals": 0,
+      "humanRejections": 0,
+      "validatorPasses": 1,
+      "validatorFailures": 0,
+      "citationPasses": 0,
+      "citationFailures": 0,
+      "citationEvidenceRefCount": 0,
+      "safetyIncidentCount": 0,
+      "reviewCount": 1
+    },
+    "requirements": [
+      {
+        "key": "maturity_score",
+        "ok": true,
+        "actual": 100,
+        "target": 85
+      },
+      {
+        "key": "shadow_runs",
+        "ok": true,
+        "actual": 10,
+        "target": 10
+      },
+      {
+        "key": "human_reviewer_approvals",
+        "ok": false,
+        "actual": 0,
+        "target": 2
+      },
+      {
+        "key": "validator_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evaluation_passes",
+        "ok": false,
+        "actual": 0,
+        "target": 1
+      },
+      {
+        "key": "citation_evidence_refs",
+        "ok": true,
+        "actual": 10,
+        "target": 1
+      },
+      {
+        "key": "safety_incidents",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      },
+      {
+        "key": "production_driving_disabled",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      }
+    ],
+    "safety": {
+      "rawRationaleStored": false,
+      "rawSourceStored": false,
+      "supervisedAdvisoryOnly": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "safety": {
+    "advisoryDraftsOnly": true,
+    "deterministicValidatorAuthority": true,
+    "humanReviewerAuthority": true,
+    "rawAdvisoryNoteStored": false,
+    "rawConsistencyTraceStored": false,
+    "rawSourceStored": false,
+    "productionDrivingAllowed": false
+  }
+}
