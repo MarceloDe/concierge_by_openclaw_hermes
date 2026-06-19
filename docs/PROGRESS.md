@@ -8334,3 +8334,47 @@ Browser/dashboard proof:
 
 Next phase:
 - Phase 37 should add a reviewer-facing UI surface for comparing deterministic and advisory outputs and approving, rejecting, or blocking advisory material by ref only.
+
+## Phase 37 PEMS Reviewer UI
+
+Status: Verified locally on branch `phase-37-pems-reviewer-ui`.
+
+Slice name:
+- Operator-facing UI for ref-only advisory PEMS review.
+
+Context:
+- Phase 36 created the safe evaluator-draft ledger and workbench API.
+- Cortex Phase 36 named the next step as a reviewer-facing UI surface that lets operators compare/inspect advisory material and approve, reject, or block by ref only.
+
+Implemented code and docs:
+- Added a `PEMS Reviewer Workbench` panel to `src/app/index.html`.
+- Added rendering and review-action handlers in `src/app/app.js`.
+- Added responsive workbench styling in `src/app/styles.css`.
+- Extended connector proof with `pems_reviewer_ui`.
+- Extended the workbench API with a `reviewerUi` readiness wrapper so the dashboard distinguishes the Phase 37 UI gate from the underlying Phase 36 workbench queue.
+- Extended build and UI contract tests.
+
+Safety decision:
+- UI actions submit explicit review records only.
+- The UI does not let advisory drafts drive recommendations, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or writes.
+- The UI renders sanitized previews and refs only; raw advisory notes, raw consistency traces, raw OCR, raw frames, credentials, and secrets remain excluded.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification result:
+- `node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 15/15 tests.
+- `npm run build` passed and names the Phase 37 PEMS reviewer UI contract.
+- `npm run test:local` passed with 223 total tests: 221 passed, 0 failed, and 2 expected live-gated skips.
+- API proof at `http://127.0.0.1:4218/api/continuous-intelligence/pems/workbench` shows the Phase 37 `reviewerUi` wrapper at `88 / 88`, the underlying Phase 36 workbench queue at `85 / 85`, one ready draft, one linked review, and `productionDrivingAllowed=false`.
+- Connector proof at `http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp` shows `pems_reviewer_ui`, `continuous_procedural_memory` at `88 / 88`, review actions `approved`, `rejected`, `blocked`, and production driving disabled.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4218/?phase=phase-37-pems-reviewer-ui`
+- Browser DOM proof verified `phase37_pems_reviewer_ui_ready`, `88 / 88`, the underlying Phase 36 queue, the three review controls, and production-driving false.
+- Visual proof initially caught a dashboard truth bug where the Phase 37 panel displayed the Phase 36 workbench header; fixed by adding the `reviewerUi` wrapper and rendering the UI gate separately from the queue.
+- Visual and API proof artifacts:
+  - `artifacts/phase37/phase37-workbench-api-proof.json`;
+  - `artifacts/phase37/phase37-connector-proof.json`;
+  - `artifacts/phase37/phase37-dashboard-proof.json`;
+  - `artifacts/phase37/phase37-dashboard-workbench-proof.png`;
+  - `artifacts/phase37/phase37-dashboard-score-proof.png`.

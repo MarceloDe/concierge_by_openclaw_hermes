@@ -351,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 36 connects supervised advisory candidates to a reviewer\/evaluator workbench/);
+  assert.match(projectOperatingSystem, /Phase 37 exposes the Phase 36 reviewer\/evaluator workbench through an operator-facing UI/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -371,13 +371,13 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
 });
 
 test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
-  assert.match(projectOperatingSystem, /Phase 36 connects supervised advisory candidates to a reviewer\/evaluator workbench/);
+  assert.match(projectOperatingSystem, /Phase 37 exposes the Phase 36 reviewer\/evaluator workbench through an operator-facing UI/);
   assert.match(projectOperatingSystem, /append-only shadow-run ledger/);
   assert.match(projectOperatingSystem, /case_state_shadow/);
   assert.match(projectOperatingSystem, /production decisioning still disabled/);
 
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
-  assert.match(phaseScoreboard, /Phase 36 reviewer\/evaluator workbench/);
+  assert.match(phaseScoreboard, /Phase 37 reviewer UI/);
   assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
   assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
   assert.match(phaseScoreboard, /continuous_intelligence_shadow_runs/);
@@ -401,6 +401,7 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /continuousIntelligencePersistence/);
   assert.match(serverMjs, /pems_supervised_promotion_gate/);
   assert.match(serverMjs, /pems_reviewer_evaluator_workbench/);
+  assert.match(serverMjs, /pems_reviewer_ui/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/promotion/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/reviews/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/workbench/);
@@ -410,6 +411,38 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /continuousIntelligenceShadowOnly/);
   assert.match(serverMjs, /continuousIntelligencePersistenceOnly/);
   assert.match(serverMjs, /pemsReviewerWorkbenchAdvisoryOnly/);
+  assert.match(serverMjs, /pemsReviewerUiRefOnly/);
+});
+
+test("Phase 37 PEMS reviewer UI exposes ref-only advisory controls", () => {
+  assert.match(indexHtml, /PEMS Reviewer Workbench/);
+  assert.match(indexHtml, /id="pemsWorkbench"/);
+  assert.match(indexHtml, /id="loadPemsWorkbench"/);
+  assert.match(indexHtml, /id="pemsReviewRationale"/);
+  assert.match(indexHtml, /data-pems-review-action="approved"/);
+  assert.match(indexHtml, /data-pems-review-action="rejected"/);
+  assert.match(indexHtml, /data-pems-review-action="blocked"/);
+
+  assert.match(appJs, /loadPemsWorkbench/);
+  assert.match(appJs, /renderPemsWorkbench/);
+  assert.match(appJs, /submitPemsWorkbenchReview/);
+  assert.match(appJs, /\/api\/continuous-intelligence\/pems\/workbench/);
+  assert.match(appJs, /\/api\/continuous-intelligence\/pems\/reviews/);
+  assert.match(appJs, /Phase 37 UI Gate/);
+  assert.match(appJs, /Underlying queue/);
+  assert.match(appJs, /advisoryDraftId/);
+  assert.match(appJs, /rawAdvisoryNoteStored/);
+  assert.match(appJs, /rawConsistencyTraceStored/);
+  assert.match(appJs, /productionDrivingAllowed: false/);
+  assert.match(appJs, /human reviewer \+ deterministic validator/);
+  assert.match(serverMjs, /reviewerUi: buildPemsReviewerUiProof/);
+  assert.match(serverMjs, /phase37_pems_reviewer_ui_ready/);
+  assert.match(serverMjs, /ref_only_operator_review_ui/);
+  assert.match(serverMjs, /pems_reviewer_ui/);
+
+  assert.match(appCss, /pems-workbench-grid/);
+  assert.match(appCss, /pems-review-form/);
+  assert.match(appCss, /pems-review-actions/);
 });
 
 test("user-friendly MVP app is a separate auth plus chat surface wired to real APIs", () => {

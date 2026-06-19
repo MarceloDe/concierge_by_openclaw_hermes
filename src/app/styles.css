@@ -759,6 +759,38 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.pems-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.15fr) minmax(220px, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pems-workbench-summary {
+  border-color: #9dc7b7;
+  background: #f7fbf8;
+}
+
+.pems-review-form {
+  border-top: 1px solid #dbe4dd;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding-top: 12px;
+}
+
+.pems-review-form textarea {
+  min-height: 74px;
+}
+
+.pems-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .connector-proof-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1277,7 +1309,9 @@ pre {
   .operator-form-grid,
   .operator-assistant-form,
   .connector-proof-grid,
-  .research-grid {
+  .research-grid,
+  .pems-workbench-grid,
+  .pems-review-form {
     grid-template-columns: 1fr;
   }
 

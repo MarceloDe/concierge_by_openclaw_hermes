@@ -2538,3 +2538,22 @@ This moves the project toward less deterministic intelligence and richer evaluat
 
 Cost of changing later:
 Low. Phase 37 can add a UI for reviewing draft refs, and a future live LLM evaluator can populate the same draft contract without changing the promotion-review gate.
+
+## 2026-06-18 - Surface PEMS Advisory Reviews In The Operator Dashboard
+
+Context:
+Phase 36 created a safe advisory-draft ledger, but operators still needed to inspect drafts through raw JSON or API calls. The next phase should make the workbench usable without giving advisory material production authority.
+
+Options considered:
+- Keep Phase 36 as API-only until a separate admin app exists.
+- Build a standalone reviewer application.
+- Add a compact operator panel to the existing proof dashboard that uses the real workbench/review APIs.
+
+Decision:
+Add a `PEMS Reviewer Workbench` dashboard panel with ref-only draft display and approve, reject, and block buttons. The panel reads `/api/continuous-intelligence/pems/workbench` and writes explicit review rows through `/api/continuous-intelligence/pems/reviews` with `advisoryDraftId`.
+
+Reason:
+This gives a regular operator a real review surface now, keeps the implementation small, and preserves the core safety model. UI actions create auditable review records only; they do not make healthcare recommendations, dispatch OpenClaw, control browsers, contact payers, or write externally.
+
+Cost of changing later:
+Low. A future Phase 38 can add richer deterministic-vs-advisory diffs and live LLM evaluator provenance while keeping the same review API and advisory-only ledger.

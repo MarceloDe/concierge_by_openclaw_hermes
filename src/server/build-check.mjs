@@ -141,6 +141,9 @@ for (const file of requiredFiles) {
 }
 
 const finalVerificationReport = await readFile(resolve("docs/FINAL_SYSTEM_VERIFICATION_REPORT.md"), "utf8");
+const appHtml = await readFile(resolve("src/app/index.html"), "utf8");
+const appJs = await readFile(resolve("src/app/app.js"), "utf8");
+const appCss = await readFile(resolve("src/app/styles.css"), "utf8");
 for (const requiredFragment of [
   "Phase 10S AI2UI modes update",
   "Phase 10T research scheduler daemon update",
@@ -249,6 +252,37 @@ if (
   pemsWorkbenchProof.productionDrivingAllowed !== false
 ) {
   throw new Error("Phase 36 PEMS reviewer/evaluator workbench proof contract is incomplete.");
+}
+
+for (const requiredFragment of [
+  "PEMS Reviewer Workbench",
+  "pemsWorkbench",
+  "data-pems-review-action=\"approved\"",
+  "data-pems-review-action=\"rejected\"",
+  "data-pems-review-action=\"blocked\""
+]) {
+  if (!appHtml.includes(requiredFragment)) {
+    throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
+  }
+}
+for (const requiredFragment of [
+  "loadPemsWorkbench",
+  "renderPemsWorkbench",
+  "submitPemsWorkbenchReview",
+  "/api/continuous-intelligence/pems/workbench",
+  "/api/continuous-intelligence/pems/reviews",
+  "advisoryDraftId",
+  "rawAdvisoryNoteStored",
+  "rawConsistencyTraceStored"
+]) {
+  if (!appJs.includes(requiredFragment)) {
+    throw new Error(`Phase 37 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
+  }
+}
+for (const requiredFragment of ["pems-workbench-grid", "pems-review-form", "pems-review-actions"]) {
+  if (!appCss.includes(requiredFragment)) {
+    throw new Error(`Phase 37 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
+  }
 }
 
 if (!TABLES.includes("research_embedding_routes") || !TABLES.includes("research_embedding_jobs") || !TABLES.includes("research_embedding_index")) {
@@ -472,4 +506,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

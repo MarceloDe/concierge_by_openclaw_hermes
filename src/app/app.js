@@ -20,6 +20,11 @@ const phase4Status = document.querySelector("#phase4Status");
 const connectorProof = document.querySelector("#connectorProof");
 const connectorProofStatus = document.querySelector("#connectorProofStatus");
 const loadConnectorProofButton = document.querySelector("#loadConnectorProof");
+const pemsWorkbench = document.querySelector("#pemsWorkbench");
+const pemsWorkbenchStatus = document.querySelector("#pemsWorkbenchStatus");
+const loadPemsWorkbenchButton = document.querySelector("#loadPemsWorkbench");
+const pemsReviewRationale = document.querySelector("#pemsReviewRationale");
+const pemsReviewActionButtons = [...document.querySelectorAll("[data-pems-review-action]")];
 const researchStatus = document.querySelector("#researchStatus");
 const researchConsole = document.querySelector("#researchConsole");
 const loadHandoffsButton = document.querySelector("#loadHandoffs");
@@ -50,6 +55,8 @@ let runtimeEventSource = null;
 let runtimeStreamSessionId = null;
 let productSignedIn = false;
 let connectorProofLoadPromise = null;
+let latestPemsWorkbench = null;
+let pemsWorkbenchLoadPromise = null;
 
 const MVP_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
@@ -961,6 +968,161 @@ function renderConnectorProofError(error) {
       <p>${escapeHtml(error.message)}</p>
     </article>
   `;
+}
+
+function latestPemsDraftAvailable(payload = latestPemsWorkbench) {
+  return Boolean(payload?.latestDraft?.id && payload?.latestCandidate?.candidateId);
+}
+
+function setPemsReviewActionsEnabled(enabled) {
+  for (const button of pemsReviewActionButtons) {
+    button.disabled = !enabled;
+  }
+}
+
+function pemsDecisionLabel(decision) {
+  if (decision === "approved") return { reviewType: "human_review", decision: "approved", label: "approved" };
+  if (decision === "rejected") return { reviewType: "human_review", decision: "rejected", label: "rejected" };
+  return { reviewType: "safety_review", decision: "blocked", label: "blocked" };
+}
+
+function renderPemsWorkbench(payload) {
+  if (!pemsWorkbench) return;
+  latestPemsWorkbench = payload;
+  const draft = payload.latestDraft ?? {};
+  const candidate = payload.latestCandidate ?? {};
+  const gate = payload.latestGate ?? {};
+  const safety = payload.safety ?? {};
+  const reviewerUi = payload.reviewerUi ?? {
+    status: "phase37_pems_reviewer_ui_ready",
+    score: 88,
+    target: 88,
+    productionDrivingAllowed: false
+  };
+  const available = latestPemsDraftAvailable(payload);
+  if (pemsWorkbenchStatus) {
+    pemsWorkbenchStatus.textContent = `${reviewerUi.status ?? "phase37_pems_reviewer_ui_ready"} · ${reviewerUi.score ?? 88} / ${reviewerUi.target ?? 88}`;
+  }
+  setPemsReviewActionsEnabled(available);
+  pemsWorkbench.innerHTML = `
+    <article class="connector-card wide pems-workbench-summary">
+      <h3>Phase 37 UI Gate</h3>
+      <dl>
+        <dt>Status</dt>
+        <dd>${escapeHtml(reviewerUi.status ?? "phase37_pems_reviewer_ui_ready")}</dd>
+        <dt>Score</dt>
+        <dd>${escapeHtml(reviewerUi.score ?? 88)} / ${escapeHtml(reviewerUi.target ?? 88)}</dd>
+        <dt>Underlying queue</dt>
+        <dd>${escapeHtml(payload.status ?? "unknown")} · ${escapeHtml(payload.score ?? 0)} / ${escapeHtml(payload.target ?? 85)}</dd>
+        <dt>Drafts</dt>
+        <dd>${escapeHtml(payload.draftCount ?? 0)} total · ${escapeHtml(payload.readyDraftCount ?? 0)} ready · ${escapeHtml(payload.blockedDraftCount ?? 0)} blocked</dd>
+        <dt>Linked reviews</dt>
+        <dd>${escapeHtml(payload.advisoryLinkedReviewCount ?? 0)}</dd>
+        <dt>Authority</dt>
+        <dd>human reviewer + deterministic validator · production driving ${escapeHtml(reviewerUi.productionDrivingAllowed ? "enabled" : "disabled")}</dd>
+      </dl>
+    </article>
+    <article class="connector-card">
+      <h3>Latest Candidate</h3>
+      <dl>
+        <dt>Candidate</dt>
+        <dd>${escapeHtml(candidate.candidateId ?? "none")}</dd>
+        <dt>Workflow</dt>
+        <dd>${escapeHtml(candidate.workflow ?? "n/a")}</dd>
+        <dt>Shadow runs</dt>
+        <dd>${escapeHtml(candidate.shadowRunCount ?? 0)}</dd>
+        <dt>Promotion</dt>
+        <dd>${escapeHtml(candidate.promotionStatus ?? "waiting")}</dd>
+        <dt>Gate</dt>
+        <dd>${escapeHtml(gate.status ?? "not evaluated")}</dd>
+      </dl>
+    </article>
+    <article class="connector-card">
+      <h3>Advisory Draft</h3>
+      <dl>
+        <dt>Draft</dt>
+        <dd>${escapeHtml(draft.id ?? "none")}</dd>
+        <dt>Mode</dt>
+        <dd>${escapeHtml(draft.evaluatorMode ?? "n/a")}</dd>
+        <dt>Suggested review</dt>
+        <dd>${escapeHtml(draft.suggestedReviewType ?? "n/a")} · ${escapeHtml(draft.suggestedDecision ?? "n/a")}</dd>
+        <dt>Validator</dt>
+        <dd>${escapeHtml(draft.deterministicValidatorStatus ?? "n/a")}</dd>
+        <dt>Trace ref</dt>
+        <dd>${escapeHtml(draft.consistencyTraceRef ?? "none")}</dd>
+      </dl>
+    </article>
+    <article class="connector-card wide">
+      <h3>Ref-Only Review Material</h3>
+      <p>${escapeHtml(draft.advisoryNotePreview ?? "No advisory note preview available.")}</p>
+      <p class="status-text">${escapeHtml(draft.consistencyTracePreview ?? "No consistency trace preview available.")}</p>
+      <dl>
+        <dt>Raw advisory note</dt>
+        <dd>${escapeHtml(safety.rawAdvisoryNoteStored ? "stored" : "not stored")}</dd>
+        <dt>Raw consistency trace</dt>
+        <dd>${escapeHtml(safety.rawConsistencyTraceStored ? "stored" : "not stored")}</dd>
+        <dt>Decision boundary</dt>
+        <dd>${escapeHtml(safety.advisoryDraftsOnly ? "advisory only" : "attention required")} · ${escapeHtml(safety.humanReviewerAuthority ? "human authority" : "missing human authority")}</dd>
+      </dl>
+    </article>
+  `;
+}
+
+function renderPemsWorkbenchError(error) {
+  if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = error.message;
+  setPemsReviewActionsEnabled(false);
+  if (!pemsWorkbench) return;
+  pemsWorkbench.innerHTML = `
+    <article class="connector-card wide">
+      <h3>Workbench Load Failed</h3>
+      <p>${escapeHtml(error.message)}</p>
+    </article>
+  `;
+}
+
+async function loadPemsWorkbench() {
+  if (pemsWorkbenchLoadPromise) return pemsWorkbenchLoadPromise;
+  if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = "Loading workbench...";
+  pemsWorkbenchLoadPromise = (async () => {
+    const payload = await api("/api/continuous-intelligence/pems/workbench", { timeoutMs: 15000 });
+    renderPemsWorkbench(payload);
+    trace.textContent = JSON.stringify(payload, null, 2);
+    return payload;
+  })();
+  try {
+    return await pemsWorkbenchLoadPromise;
+  } finally {
+    pemsWorkbenchLoadPromise = null;
+  }
+}
+
+async function submitPemsWorkbenchReview(action) {
+  const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
+  if (!latestPemsDraftAvailable(current)) throw new Error("No advisory draft is available for review.");
+  const decision = pemsDecisionLabel(action);
+  const rationale = pemsReviewRationale?.value?.trim() || `Reviewer ${decision.label} advisory draft by ref.`;
+  const result = await api("/api/continuous-intelligence/pems/reviews", {
+    method: "POST",
+    body: JSON.stringify({
+      candidateId: current.latestCandidate.candidateId,
+      advisoryDraftId: current.latestDraft.id,
+      actorUserId: "operator_ui",
+      reviewType: decision.reviewType,
+      decision: decision.decision,
+      rationale,
+      metadata: {
+        phase: 37,
+        reviewerUiAction: action,
+        advisoryOnly: true,
+        rawRationaleStored: false,
+        productionDrivingAllowed: false
+      }
+    }),
+    timeoutMs: 15000
+  });
+  const refreshed = await loadPemsWorkbench();
+  trace.textContent = JSON.stringify({ review: result, workbench: refreshed }, null, 2);
+  return result;
 }
 
 async function loadConnectorProof() {
@@ -3990,6 +4152,34 @@ loadConnectorProofButton?.addEventListener("click", async () => {
   }
 });
 
+loadPemsWorkbenchButton?.addEventListener("click", async () => {
+  const restore = setBusy(loadPemsWorkbenchButton, "Loading...");
+  try {
+    await loadPemsWorkbench();
+  } catch (error) {
+    renderPemsWorkbenchError(error);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+for (const button of pemsReviewActionButtons) {
+  button.addEventListener("click", async () => {
+    const action = button.dataset.pemsReviewAction;
+    const restore = setBusy(button, "Recording...");
+    try {
+      const result = await submitPemsWorkbenchReview(action);
+      if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `Review ${result.review?.decision ?? action} recorded · workbench refreshed`;
+    } catch (error) {
+      renderPemsWorkbenchError(error);
+      trace.textContent = error.stack ?? error.message;
+    } finally {
+      restore();
+    }
+  });
+}
+
 sessions.addEventListener("click", async (event) => {
   const sessionId = event.target?.dataset?.useSession;
   if (!sessionId) return;
@@ -4032,8 +4222,12 @@ renderJourneyState();
 renderAnswerPanel();
 renderRuntimeTimeline();
 renderLiveWorkerGuide();
+setPemsReviewActionsEnabled(false);
 loadConnectorProof().catch((error) => {
   renderConnectorProofError(error);
+});
+loadPemsWorkbench().catch((error) => {
+  renderPemsWorkbenchError(error);
 });
 hydrateOperatorFromQuery();
 addMessage(

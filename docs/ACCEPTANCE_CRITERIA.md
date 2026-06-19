@@ -2392,3 +2392,21 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `pems_reviewer_evaluator_workbench`
+
+## Phase 37: PEMS Reviewer UI
+
+Acceptance criteria:
+- Dashboard includes a visible `PEMS Reviewer Workbench` panel.
+- The panel loads the real `/api/continuous-intelligence/pems/workbench` response.
+- The panel displays candidate, draft, evaluator mode, suggested review, deterministic validator status, consistency trace ref, sanitized advisory preview, sanitized trace preview, and safety flags.
+- Approve, reject, and block buttons write explicit review rows through `/api/continuous-intelligence/pems/reviews`.
+- UI review payloads include `advisoryDraftId`, `actorUserId`, `reviewType`, `decision`, safe rationale, and metadata flags.
+- UI review payloads do not include raw advisory note, raw consistency trace, raw OCR, raw frames, credentials, or secrets.
+- Connector proof includes `pems_reviewer_ui`.
+- The `continuous_procedural_memory` score can advance only to the Phase 37 reviewer-UI target while `productionDrivingAllowed=false`.
+
+Focused proof:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `pems_reviewer_ui`
