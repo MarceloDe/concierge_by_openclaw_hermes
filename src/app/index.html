@@ -39,6 +39,36 @@
           </div>
         </section>
 
+        <section class="review-panel pems-workbench-panel">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow">Phase 37</p>
+              <h2>PEMS Reviewer Workbench</h2>
+            </div>
+            <div class="review-actions">
+              <span id="pemsWorkbenchStatus">Not loaded</span>
+              <button id="loadPemsWorkbench" type="button">Load Workbench</button>
+            </div>
+          </div>
+          <div id="pemsWorkbench" class="pems-workbench-grid">
+            <article class="connector-card wide">
+              <h3>Waiting For Advisory Drafts</h3>
+              <p>Load the workbench to inspect ref-only evaluator drafts, consistency traces, and explicit review actions.</p>
+            </article>
+          </div>
+          <div class="pems-review-form" aria-label="PEMS advisory review controls">
+            <label>
+              Review rationale
+              <textarea id="pemsReviewRationale" rows="3">Reviewed advisory draft by ref. Deterministic validator and human reviewer authority remain required.</textarea>
+            </label>
+            <div class="pems-review-actions">
+              <button id="approvePemsDraft" type="button" data-pems-review-action="approved">Approve</button>
+              <button id="rejectPemsDraft" type="button" class="secondary-button" data-pems-review-action="rejected">Reject</button>
+              <button id="blockPemsDraft" type="button" class="secondary-button" data-pems-review-action="blocked">Block</button>
+            </div>
+          </div>
+        </section>
+
         <section class="member-panel">
           <label>
             Name

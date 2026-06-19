@@ -2811,3 +2811,32 @@ Gates:
 
 Next:
 Phase 37 should add an operator UI for reviewing advisory drafts, comparing deterministic and advisory output, and approving or rejecting by ref only.
+
+## Phase 37: PEMS Reviewer UI
+
+Goal:
+Expose the Phase 36 reviewer/evaluator workbench as a usable operator dashboard surface without changing healthcare authority.
+
+Build:
+- Add a `PEMS Reviewer Workbench` panel to the existing dashboard.
+- Load `/api/continuous-intelligence/pems/workbench` and render latest candidate, latest advisory draft, consistency trace ref, suggested review, validator status, and safety flags.
+- Add approve, reject, and block controls.
+- Submit explicit review rows to `/api/continuous-intelligence/pems/reviews` with `advisoryDraftId`.
+- Expose `pems_reviewer_ui` through connector proof.
+- Keep `productionDrivingAllowed=false`.
+
+Non-goals:
+- Do not implement live LLM evaluator generation in this phase.
+- Do not let UI actions bypass the promotion gate or become production recommendations.
+- Do not store or submit raw advisory notes, raw consistency traces, raw OCR, raw frames, credentials, or secrets.
+
+Gates:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `pems_reviewer_ui`
+- Browser/dashboard proof that the reviewer panel renders and the score reaches the Phase 37 UI target
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 38 should add richer deterministic-vs-advisory comparison and live-gated LLM evaluator provenance when credentials are present.

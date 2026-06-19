@@ -1,0 +1,26 @@
+{
+  "phase": 37,
+  "name": "pems-reviewer-ui",
+  "capturedAt": "2026-06-19T02:59:00Z",
+  "route": "http://127.0.0.1:4218/?phase=phase-37-pems-reviewer-ui",
+  "apiProof": {
+    "workbench": "artifacts/phase37/phase37-workbench-api-proof.json",
+    "connectorProof": "artifacts/phase37/phase37-connector-proof.json"
+  },
+  "visualProof": {
+    "workbenchPanel": "artifacts/phase37/phase37-dashboard-workbench-proof.png",
+    "scorePanel": "artifacts/phase37/phase37-dashboard-score-proof.png"
+  },
+  "assertions": {
+    "phase37StatusVisible": true,
+    "phase37ScoreVisible": "88 / 88",
+    "underlyingPhase36QueueVisible": true,
+    "reviewActionsVisible": [
+      "approved",
+      "rejected",
+      "blocked"
+    ],
+    "refOnlyReviewMaterialVisible": true,
+    "productionDrivingAllowed": false
+  }
+}

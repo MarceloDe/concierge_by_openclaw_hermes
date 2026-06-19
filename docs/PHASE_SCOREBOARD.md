@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 36 canonical scoreboard.
+Status: Phase 37 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 85 | Phase 36 reviewer/evaluator workbench | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, and `pems_candidate_evaluator_drafts` now exist; evaluator drafts and consistency traces are advisory material only, while explicit reviewer/validator/citation/safety gates remain authoritative and production decisioning remains disabled. |
+| continuous_procedural_memory | 88 | Phase 37 reviewer UI | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, and an operator reviewer UI now exist; evaluator drafts and UI controls are advisory/ref-only, while explicit reviewer/validator/citation/safety gates remain authoritative and production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -72,3 +72,15 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Score `continuous_procedural_memory` reaches only the Phase 36 reviewer-workbench target, not full production procedural automation.
 - `productionDrivingAllowed=false` remains enforced.
 - Tests prove sanitized draft storage, advisory-only behavior, explicit review linkage, and dashboard/API proof.
+
+## Phase 37 Acceptance Checklist
+
+- Dashboard exposes a `PEMS Reviewer Workbench` panel.
+- The panel loads `/api/continuous-intelligence/pems/workbench`.
+- The panel renders latest candidate id, promotion state, latest advisory draft id, evaluator mode, deterministic validator status, suggested review, consistency trace ref, sanitized previews, and safety flags.
+- Approve, reject, and block controls submit explicit review rows to `/api/continuous-intelligence/pems/reviews`.
+- UI actions include `advisoryDraftId` and never submit raw advisory notes, raw consistency traces, raw OCR, raw frames, credentials, or secrets.
+- Connector proof exposes `pems_reviewer_ui`.
+- Score `continuous_procedural_memory` reaches only the Phase 37 reviewer-UI target, not full production procedural automation.
+- `productionDrivingAllowed=false` remains enforced.
+- Tests and visual proof show the UI works for a regular operator.

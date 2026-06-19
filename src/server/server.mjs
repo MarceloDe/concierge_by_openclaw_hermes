@@ -1034,6 +1034,31 @@ async function safeDeploymentContractStatus() {
   };
 }
 
+function buildPemsReviewerUiProof() {
+  return {
+    status: "phase37_pems_reviewer_ui_ready",
+    ok: true,
+    mode: "ref_only_operator_review_ui",
+    score: 88,
+    target: 88,
+    route: "/",
+    apiRoutes: [
+      "/api/continuous-intelligence/pems/workbench",
+      "/api/continuous-intelligence/pems/reviews"
+    ],
+    actions: ["approved", "rejected", "blocked"],
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      refOnlyAdvisoryMaterial: true,
+      explicitReviewWriteRequired: true,
+      rawAdvisoryNoteStored: false,
+      rawConsistencyTraceStored: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1046,6 +1071,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsPromotion = buildPemsPromotionReadinessProof(pemsPromotionStatus);
   const pemsReviewerWorkbenchStatus = await getPemsReviewerWorkbenchStatus(store);
   const pemsReviewerWorkbench = buildPemsReviewerWorkbenchReadinessProof(pemsReviewerWorkbenchStatus);
+  const pemsReviewerUi = buildPemsReviewerUiProof();
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1105,6 +1131,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_reviewer_evaluator_workbench",
         status: pemsReviewerWorkbench.status,
         target: "Phase 36 lets evaluator draft notes and NeSTR-style consistency traces advise reviewers while human and deterministic review gates remain authoritative."
+      },
+      {
+        key: "pems_reviewer_ui",
+        status: pemsReviewerUi.status,
+        target: "Phase 37 exposes an operator-facing reviewer UI for ref-only advisory material and explicit approve/reject/block review actions."
       },
       {
         key: "docker_connector_deployment",
@@ -1607,6 +1638,20 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsReviewerWorkbench.productionDrivingAllowed,
         safety: pemsReviewerWorkbench.safety
       },
+      {
+        key: "pems_reviewer_ui",
+        status: pemsReviewerUi.status,
+        ok: pemsReviewerUi.ok,
+        mode: pemsReviewerUi.mode,
+        score: pemsReviewerUi.score,
+        target: pemsReviewerUi.target,
+        route: pemsReviewerUi.route,
+        apiRoutes: pemsReviewerUi.apiRoutes,
+        actions: pemsReviewerUi.actions,
+        advisoryOnly: pemsReviewerUi.advisoryOnly,
+        productionDrivingAllowed: pemsReviewerUi.productionDrivingAllowed,
+        safety: pemsReviewerUi.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1650,6 +1695,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsReviewerWorkbench.status,
         proof: "Phase 36 reviewer/evaluator workbench exposes sanitized advisory draft notes, consistency trace refs, and explicit human-review linkage."
+      },
+      {
+        route: "/",
+        required: true,
+        status: pemsReviewerUi.status,
+        proof: "Phase 37 reviewer UI renders ref-only advisory drafts and approve/reject/block controls backed by explicit review writes."
       }
     ],
     scores: [
@@ -1662,14 +1713,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score),
-        target: pemsReviewerWorkbench.target,
-        status: pemsReviewerWorkbench.status,
+        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score),
+        target: pemsReviewerUi.target,
+        status: pemsReviewerUi.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
         evaluatorDraftCount: pemsReviewerWorkbench.draftCount,
         advisoryLinkedReviewCount: pemsReviewerWorkbench.advisoryLinkedReviewCount,
+        reviewerUiActions: pemsReviewerUi.actions,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1830,6 +1882,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       continuousIntelligenceShadowOnly: true,
       continuousIntelligencePersistenceOnly: true,
       pemsReviewerWorkbenchAdvisoryOnly: true,
+      pemsReviewerUiRefOnly: true,
       cortexIsProjectMemoryOnly: true,
       nonMockedProofRequired: true,
       publicApi: "/api/v1",
@@ -1889,7 +1942,10 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/workbench") {
     const status = await getPemsReviewerWorkbenchStatus(store);
-    sendJson(res, 200, buildPemsReviewerWorkbenchReadinessProof(status));
+    sendJson(res, 200, {
+      ...buildPemsReviewerWorkbenchReadinessProof(status),
+      reviewerUi: buildPemsReviewerUiProof()
+    });
     return;
   }
 
