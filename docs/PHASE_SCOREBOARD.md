@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 0 | Proposal only | Phase 33 candidate: typed `CaseState`, G0-G8 gates, PEMS, and shadow-mode procedural reconstruction. |
+| continuous_procedural_memory | 60 | Phase 33 shadow scaffold | Typed `CaseState`, G0-G8 gates, PEMS, and shadow reconstruction exist; production decisioning remains disabled until maturity and review gates pass. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -27,3 +27,12 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Tests fail if the operating-system docs or proof keys are removed.
 - Cortex receives semantic and procedural mirrors through PR.
 
+## Phase 33 Acceptance Checklist
+
+- `src/concierge/continuousIntelligence.mjs` defines `brainstyworkers.case_state.v1` and `brainstyworkers.pems.v1`.
+- LangGraph includes a `case_state_shadow` node after evidence observation and before response composition.
+- G0-G8 gates are present in order and run in `shadow_only` mode.
+- PEMS can mark mature candidates trusted only after enough shadow runs, reviewer approvals, no safety incidents, and a score at or above threshold.
+- Connector proof exposes `continuous_procedural_memory_shadow` and `continuous_intelligence_shadow`.
+- Score `continuous_procedural_memory` passes only the Phase 33 shadow scaffold target, not full production procedural automation.
+- Tests prove no raw user input, raw source URL path, or Cortex-as-product-memory claim leaks into `CaseState`.

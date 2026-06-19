@@ -2462,3 +2462,22 @@ The project is now too large for implicit continuity. The safest path is not mor
 
 Cost of changing later:
 Low. These docs and proof keys do not change runtime healthcare behavior. They create a contract future phases can refine without weakening LangGraph/OpenClaw safety boundaries.
+
+## 2026-06-18 - Start Continuous Intelligence In Shadow Mode Only
+
+Context:
+Phase 32 established canonical goal-tied execution and identified Phase 33 as the first continuous-intelligence runtime slice. The long-term proposal calls for externalized `CaseState`, G0-G8 universal gates, procedural reconstruction, PEMS maturity, and later skill induction. The risk is letting an immature procedural-memory system silently drive healthcare recommendations or browser actions.
+
+Options considered:
+- Implement the whole continuous-learning stack at once.
+- Keep the proposal as docs only.
+- Add a deterministic shadow scaffold inside LangGraph: typed `CaseState`, G0-G8 gates, PEMS scoring, and shadow reconstruction proof, with production decisioning disabled.
+
+Decision:
+Add `src/concierge/continuousIntelligence.mjs` and a LangGraph `case_state_shadow` node after evidence observation. Expose `continuous_procedural_memory_shadow` and `continuous_intelligence_shadow` in connector proof. Score `continuous_procedural_memory` at the Phase 33 shadow target only, with `productionDrivingAllowed=false` and `pemsTrusted=false`.
+
+Reason:
+This makes the next intelligence layer real enough to test without giving it unsafe authority. It externalizes case state, proves the universal gates, and creates a maturity schema that later phases can populate from real traces and reviewer decisions.
+
+Cost of changing later:
+Low to moderate. Later phases can persist shadow runs, add NeSTR/RHO-style validators, and promote mature procedural candidates without changing the safety boundary that immature candidates cannot drive recommendations.

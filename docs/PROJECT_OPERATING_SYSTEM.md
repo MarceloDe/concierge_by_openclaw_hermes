@@ -76,13 +76,12 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Recommended Next Phases
 
-Phase 33 should implement the first continuous-intelligence slice:
+Phase 33 implements the first continuous-intelligence slice:
 
 - typed `CaseState`;
-- G0 through G8 LangGraph gate skeleton in shadow or proof mode;
-- explicit conditional edges and escalation interrupts;
+- G0 through G8 LangGraph gate skeleton in shadow mode;
+- a real `case_state_shadow` graph node before response composition;
 - PEMS maturity schema for procedural skill candidates;
 - dashboard proof that the new gate skeleton is active without changing unsafe action authority.
 
-Phase 32 does not implement that runtime. It creates the operating system so Phase 33 can be built with fewer hidden assumptions.
-
+Phase 33 does not let procedural reconstruction drive recommendations yet. It externalizes state, scores maturity, records proof, and keeps production decisioning disabled until a later phase proves enough shadow runs, reviewer approvals, cited evidence, and safety history.

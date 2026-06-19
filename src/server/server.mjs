@@ -70,6 +70,7 @@ import {
   suppressProductMemoryEpisode
 } from "../concierge/productMemory.mjs";
 import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
+import { buildContinuousIntelligenceReadinessProof } from "../concierge/continuousIntelligence.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1028,6 +1029,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const productMemory = await safeProductMemoryStatus();
   const deployment = await safeDeploymentContractStatus();
   const storage = getStorageReadiness({ deployment });
+  const continuousIntelligence = buildContinuousIntelligenceReadinessProof();
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1067,6 +1069,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "canonical_goal_tied_phase_execution",
         status: "implemented_phase32_operating_system",
         target: "All future phases use one Cortex-canonical RALPH loop, role-separated execution, non-mocked proof labels, dashboard scoring, and PR-based memory visibility."
+      },
+      {
+        key: "continuous_procedural_memory_shadow",
+        status: continuousIntelligence.status,
+        target: "Phase 33 introduces typed CaseState, G0-G8 universal gate skeleton, PEMS maturity schema, and shadow-mode procedural reconstruction without letting it drive healthcare answers."
       },
       {
         key: "docker_connector_deployment",
@@ -1504,6 +1511,20 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         roleSeparationRequired: true,
         nonMockedProofRequired: true
       },
+      {
+        key: "continuous_intelligence_shadow",
+        status: continuousIntelligence.status,
+        ok: continuousIntelligence.ok,
+        mode: continuousIntelligence.mode,
+        schemas: continuousIntelligence.schemas,
+        gateIds: continuousIntelligence.gateIds,
+        gateCount: continuousIntelligence.gateCount,
+        pemsTrusted: continuousIntelligence.pemsTrusted,
+        productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed,
+        score: continuousIntelligence.score,
+        target: continuousIntelligence.target,
+        safety: continuousIntelligence.shadow.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1529,6 +1550,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: "phase32_operating_system_documented",
         proof: "Canonical goal-tied RALPH operating system is mirrored in repo docs and must be mirrored in Cortex before the phase is done."
+      },
+      {
+        route: "src/concierge/continuousIntelligence.mjs",
+        required: true,
+        status: "phase33_shadow_scaffold_documented",
+        proof: "Typed CaseState, G0-G8 gate skeleton, PEMS maturity schema, and shadow reconstruction are implemented in a deterministic module."
       }
     ],
     scores: [
@@ -1538,6 +1565,14 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         score: 100,
         target: 100,
         status: "pass_phase32_operating_system_contract"
+      },
+      {
+        key: "continuous_procedural_memory",
+        score: continuousIntelligence.score,
+        target: continuousIntelligence.target,
+        status: "pass_phase33_shadow_scaffold_not_runtime_decisioning",
+        pemsTrusted: continuousIntelligence.pemsTrusted,
+        productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
       {
@@ -1694,6 +1729,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       fastApiIsPublicConnector: true,
       nodeIsInternalRuntime: true,
       canonicalGoalTiedPhaseExecution: true,
+      continuousIntelligenceShadowOnly: true,
       cortexIsProjectMemoryOnly: true,
       nonMockedProofRequired: true,
       publicApi: "/api/v1",

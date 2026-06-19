@@ -2696,3 +2696,34 @@ Gates:
 
 Next:
 Phase 33 should start the continuous-intelligence implementation: typed `CaseState`, G0-G8 conditional LangGraph gates, PEMS candidate maturity schema, and shadow-mode procedural reconstruction proof.
+
+## Phase 33: Continuous Intelligence Runtime Shadow Slice
+
+Goal:
+Implement the first continuous-procedural-intelligence runtime scaffold without allowing it to drive healthcare recommendations yet.
+
+Build:
+- Add a typed, sanitized `CaseState` contract for externalized case reasoning state.
+- Add a deterministic G0-G8 universal case gate evaluator.
+- Add a PEMS maturity schema and scorer for procedural skill candidates.
+- Add shadow-mode procedural reconstruction using cue/tag/content refs only.
+- Add a real LangGraph `case_state_shadow` node after evidence observation and before response composition.
+- Expose `continuous_procedural_memory_shadow` and `continuous_intelligence_shadow` through dashboard/API proof.
+- Keep `productionDrivingAllowed=false` and `pemsTrusted=false` for the Phase 33 readiness proof.
+
+Non-goals:
+- Do not replace Graphiti/FalkorDB product memory with Cortex.
+- Do not let procedural reconstruction choose the healthcare journey, final answer, approval state, or worker action.
+- Do not add nightly skill induction, RHO ranking, NeSTR adjudication, or autonomous Path B research writes in this phase.
+- Do not weaken PHI, egress, audit, approval, or source-pointer validation.
+
+Gates:
+- `node --test src/tests/continuous-intelligence.test.mjs src/tests/graph-topology.test.mjs src/tests/chat-ui-contract.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `continuous_procedural_memory_shadow`
+- Browser/dashboard proof for `continuous_intelligence_shadow`
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 34 should add shadow-run persistence and maturity accumulation from real resolved traces, still without allowing procedural skills to drive recommendations until PEMS and reviewer gates are green.
