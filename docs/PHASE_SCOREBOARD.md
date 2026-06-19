@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 34 canonical scoreboard.
+Status: Phase 35 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 70 | Phase 34 shadow persistence | Typed `CaseState`, G0-G8 gates, PEMS, shadow reconstruction, append-only shadow runs, and aggregate candidate maturity exist; production decisioning remains disabled until reviewer and safety gates pass. |
+| continuous_procedural_memory | 80 | Phase 35 supervised promotion gate | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, and `pems_candidate_promotion_reviews` now exist; supervised advisory requires reviewer, validator, citation, and safety gates while production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -47,3 +47,16 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - PEMS remains untrusted without reviewer approvals.
 - `productionDrivingAllowed=false` remains enforced.
 - Tests prove persisted payloads do not contain raw user input or raw source URLs.
+
+## Phase 35 Acceptance Checklist
+
+- `pems_candidate_promotion_reviews` exists as the audited reviewer/evaluator ledger.
+- `pems_candidate_maturity` records `supervised_advisory_allowed`, `promotion_status`, `last_reviewed_at`, and `promotion_json`.
+- PEMS promotion fails without at least two explicit human reviewer approvals.
+- PEMS promotion fails without a validator/evaluator pass.
+- PEMS promotion fails without citation/evidence sufficiency.
+- Any safety incident or safety review failure vetoes supervised advisory.
+- Connector proof exposes `pems_supervised_promotion_gate`.
+- Score `continuous_procedural_memory` reaches only the Phase 35 supervised-advisory target, not full production procedural automation.
+- `productionDrivingAllowed=false` remains enforced even when supervised advisory is allowed.
+- Tests prove promotion-review payloads store safe rationale previews and hashes, not raw sensitive text.

@@ -1,8 +1,26 @@
 # Acceptance Criteria
 
-Status: reset for MVP hardening and one-runtime proof.
+Status: Phase 35 continuous-intelligence promotion gate.
 
-Last updated: 2026-05-27
+Last updated: 2026-06-18
+
+## Phase 35: PEMS Supervised Promotion Gates
+
+Phase 35 is acceptable when:
+
+- `pems_candidate_promotion_reviews` exists and is part of the table allowlist.
+- Promotion reviews are written with bound-parameter store APIs and retain only rationale hashes plus sanitized previews.
+- `pems_candidate_maturity` records supervised advisory state separately from production-driving state.
+- A mature PEMS candidate cannot enter supervised advisory without at least two explicit human reviewer approvals.
+- A mature PEMS candidate cannot enter supervised advisory without a validator/evaluator pass.
+- A mature PEMS candidate cannot enter supervised advisory without citation/evidence sufficiency.
+- Any safety incident or safety-review failure vetoes supervised advisory.
+- `productionDrivingAllowed=false` remains true for every helper return, DB row, API proof check, and score object.
+- `GET /api/continuous-intelligence/pems/promotion` returns the promotion proof.
+- `POST /api/continuous-intelligence/pems/reviews` records a promotion review without storing raw rationale text.
+- `GET /api/proof/runs/server-connector-next-mobile-mvp` includes `pems_supervised_promotion_gate`.
+- The dashboard displays the updated proof through the existing connector-proof panel.
+- Focused promotion tests, `npm run build`, `npm run test:local`, API proof, and visual proof pass.
 
 ## MVP Hardening Criteria
 

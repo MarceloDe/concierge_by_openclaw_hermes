@@ -10,6 +10,25 @@ Each decision includes:
 - Reason
 - Cost of changing later
 
+## 2026-06-18: PEMS Promotion Is Supervised Advisory Only
+
+Context:
+Phase 34 created durable continuous-intelligence shadows and aggregate PEMS candidate maturity, but the system had no explicit path for reviewer/evaluator promotion. A high-scoring candidate could be represented as mature in the scoring helper, while actual reviewer approvals, validator checks, citation sufficiency, and safety vetoes were not yet auditable first-class state.
+
+Options considered:
+- Treat the Phase 34 maturity score as enough to trust a candidate.
+- Add production-driving procedural automation once the score passes.
+- Add an audited supervised-advisory promotion gate while keeping production driving disabled.
+
+Decision:
+Add `pems_candidate_promotion_reviews` and deterministic promotion gate logic. A candidate can enter `supervised_advisory_allowed` only after explicit human reviewer approvals, validator/evaluator pass, citation/evidence sufficiency, and zero safety incidents. `productionDrivingAllowed=false` remains hard-coded.
+
+Reason:
+This advances less-deterministic, learned procedural intelligence without confusing advisory review with autonomous healthcare decisioning. The gate gives future LLM/NeSTR evaluator work a safe ledger to write into while LangGraph remains healthcare authority.
+
+Cost of changing later:
+Low to medium. Future phases can add LLM-assisted evaluator drafts or reviewer workbench UI on top of the review ledger. Production-driving automation would require a separate architecture and safety decision.
+
 ## 2026-05-17: Implementation Must Wait For Product Interview
 
 Context:

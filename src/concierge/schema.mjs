@@ -37,6 +37,7 @@ export const TABLES = [
   "research_scheduler_daemon_state",
   "continuous_intelligence_shadow_runs",
   "pems_candidate_maturity",
+  "pems_candidate_promotion_reviews",
   "operator_tool_proposals",
   "openclaw_skills",
   "workflow_runs",
@@ -696,10 +697,30 @@ CREATE TABLE IF NOT EXISTS pems_candidate_maturity (
   safety_incident_count INTEGER NOT NULL DEFAULT 0,
   latest_score INTEGER NOT NULL DEFAULT 0,
   trusted INTEGER NOT NULL DEFAULT 0,
+  supervised_advisory_allowed INTEGER NOT NULL DEFAULT 0,
+  promotion_status TEXT NOT NULL DEFAULT 'shadow_review_required',
+  last_reviewed_at TEXT,
   production_driving_allowed INTEGER NOT NULL DEFAULT 0,
   maturity_json TEXT NOT NULL DEFAULT '{}',
+  promotion_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  actor_user_id TEXT,
+  review_type TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  evidence_ref_count INTEGER NOT NULL DEFAULT 0,
+  validator_pass_count INTEGER NOT NULL DEFAULT 0,
+  safety_incident_count INTEGER NOT NULL DEFAULT 0,
+  rationale_hash TEXT NOT NULL,
+  rationale_preview TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id)
 );
 
 CREATE TABLE IF NOT EXISTS operator_tool_proposals (
