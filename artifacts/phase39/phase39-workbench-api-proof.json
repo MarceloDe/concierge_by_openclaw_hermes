@@ -1,0 +1,464 @@
+{
+  "version": "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1",
+  "status": "phase36_reviewer_evaluator_workbench_active",
+  "ok": true,
+  "mode": "supervised_advisory_workbench_only",
+  "score": 85,
+  "target": 85,
+  "candidateCount": 1,
+  "supervisedAdvisoryCandidateCount": 0,
+  "draftCount": 3,
+  "llmAssistedDraftCount": 3,
+  "consistencyTraceDraftCount": 1,
+  "readyDraftCount": 3,
+  "blockedDraftCount": 0,
+  "filteredDraftCount": 3,
+  "liveGeneratedDraftCount": 2,
+  "liveProofDraftCount": 2,
+  "mockedDraftCount": 0,
+  "reviewCount": 1,
+  "advisoryLinkedReviewCount": 1,
+  "productionDrivingAllowed": false,
+  "latestDraft": {
+    "id": "pems_eval_draft_f8248f51-4a03-4fb8-a794-4c6b2d2b4523",
+    "candidateId": "pems_40d7cea4abb98732",
+    "actorUserId": "codex_phase39_live_proof_corrected",
+    "draftType": "evaluator_draft_note",
+    "evaluatorMode": "llm_assisted_advisory",
+    "status": "draft_ready_for_human_review",
+    "deterministicValidatorStatus": "pass",
+    "suggestedReviewType": "human_review",
+    "suggestedDecision": "pass",
+    "advisoryNoteHash": "63a88a353386ab637e51aeec6033839c29e6217ae49755fd51676d52c5768c66",
+    "advisoryNotePreview": "Phase 39 ref-only advisory draft: Reviewer must validate the corrected draft against the cited source pointer (phase36_public_example). Do not include or store ",
+    "consistencyTraceRef": "pems_consistency_trace_0780ff0ab257dfbd",
+    "consistencyTraceHash": "68c9390e5da5c60d8b6f06e9ddffb062e08509629909d936754cfa00f907d6c5",
+    "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+    "metadata": {
+      "phase": 39,
+      "liveEvaluatorGeneration": true,
+      "sourcePointerIds": [
+        "phase36_public_example"
+      ],
+      "citationClosure": [
+        "phase36_public_example"
+      ],
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:7cec727a87a04c06",
+      "egressObserved": true,
+      "liveLlmEvaluatorUsed": true,
+      "mockedLlmOutput": false,
+      "outboundPayloadHash": "7cec727a87a04c06e6a226a8bfc42d0c3dd24202df616b2e8081e3d9e1a2d118",
+      "completionHash": "c753ea181271cd75430ea6792c3126dcd3e2a57890f402f52851e7152cc4502c",
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawSourceStored": false,
+      "productionDrivingAllowed": false,
+      "advisoryOnly": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "deterministicValidatorAuthority": true,
+      "humanReviewerAuthority": true
+    },
+    "createdAt": "2026-06-20T04:23:47.849Z",
+    "updatedAt": "2026-06-20T04:23:47.849Z"
+  },
+  "draftQueue": [
+    {
+      "id": "pems_eval_draft_f8248f51-4a03-4fb8-a794-4c6b2d2b4523",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "codex_phase39_live_proof_corrected",
+      "draftType": "evaluator_draft_note",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "draft_ready_for_human_review",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "human_review",
+      "suggestedDecision": "pass",
+      "advisoryNoteHash": "63a88a353386ab637e51aeec6033839c29e6217ae49755fd51676d52c5768c66",
+      "advisoryNotePreview": "Phase 39 ref-only advisory draft: Reviewer must validate the corrected draft against the cited source pointer (phase36_public_example). Do not include or store ",
+      "consistencyTraceRef": "pems_consistency_trace_0780ff0ab257dfbd",
+      "consistencyTraceHash": "68c9390e5da5c60d8b6f06e9ddffb062e08509629909d936754cfa00f907d6c5",
+      "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+      "metadata": {
+        "phase": 39,
+        "liveEvaluatorGeneration": true,
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "citationClosure": [
+          "phase36_public_example"
+        ],
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:7cec727a87a04c06",
+        "egressObserved": true,
+        "liveLlmEvaluatorUsed": true,
+        "mockedLlmOutput": false,
+        "outboundPayloadHash": "7cec727a87a04c06e6a226a8bfc42d0c3dd24202df616b2e8081e3d9e1a2d118",
+        "completionHash": "c753ea181271cd75430ea6792c3126dcd3e2a57890f402f52851e7152cc4502c",
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true
+      },
+      "createdAt": "2026-06-20T04:23:47.849Z",
+      "updatedAt": "2026-06-20T04:23:47.849Z"
+    },
+    {
+      "id": "pems_eval_draft_c2c6ee1b-66b7-4d4a-a1df-d07f79c2ddba",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "codex_phase39_live_proof",
+      "draftType": "evaluator_draft_note",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "draft_ready_for_human_review",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "human_review",
+      "suggestedDecision": "pass",
+      "advisoryNoteHash": "d1ff54f3a2cdaa2e73c899946a21c9c8d3e185d4f2bcdc5a9e994ad43a81c248",
+      "advisoryNotePreview": "Reviewed candidate pems_40d7cea4abb98732 using source pointer(s) [phase36_public_example]. Deterministic validator: pass. Promotion status: shadow_review_requir",
+      "consistencyTraceRef": "pems_consistency_trace_abe92e0e6ff8b5dd",
+      "consistencyTraceHash": "792c1fb1af46ff4a919ca75849fca80275ef23548fa4e37e6d2a72d112ed65b4",
+      "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+      "metadata": {
+        "phase": 36,
+        "liveEvaluatorGeneration": true,
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "citationClosure": [
+          "phase36_public_example"
+        ],
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:356fe3230a2fadda",
+        "egressObserved": true,
+        "liveLlmEvaluatorUsed": true,
+        "mockedLlmOutput": false,
+        "outboundPayloadHash": "356fe3230a2faddad6eba286921e2e6ed9a1449b919d7d6ec8a01cbcf5c8dceb",
+        "completionHash": "b1d04f1cc1bb839082536ee2eb2a0efd0d036f2c8e5ddc3adfd8912e1242038a",
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true
+      },
+      "createdAt": "2026-06-20T04:22:51.611Z",
+      "updatedAt": "2026-06-20T04:22:51.611Z"
+    },
+    {
+      "id": "pems_eval_draft_37213dbd-9d5c-4357-b402-303a55ab85d1",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "phase36_evaluator",
+      "draftType": "nestr_consistency_trace",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "draft_ready_for_human_review",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "validator_evaluation",
+      "suggestedDecision": "pass",
+      "advisoryNoteHash": "45b1b9f95e9e4c55fcf49653c32f93d688255a4b20fc0d038db49915a1b14eb0",
+      "advisoryNotePreview": "Phase 36 safe advisory draft: source pointer refs are sufficient; no raw PHI included.",
+      "consistencyTraceRef": "pems_consistency_trace_1f8ab99f98200667",
+      "consistencyTraceHash": "20a3954b259dbc09495324c3e4628e979aa131abddc0bb2e67d8a607795b0adc",
+      "consistencyTracePreview": "{\"traceKind\":\"nestr_consistency_trace\",\"sourcePointerIds\":[\"phase36_public_example\"],\"refOnly\":true}",
+      "metadata": {
+        "proofSeed": "phase36_dashboard_api",
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "phase": 36,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true,
+        "productionDrivingAllowed": false
+      },
+      "createdAt": "2026-06-19T02:28:05.090Z",
+      "updatedAt": "2026-06-19T02:28:05.090Z"
+    }
+  ],
+  "appliedFilters": {
+    "draftStatus": "all",
+    "evaluatorMode": "all",
+    "candidateId": null,
+    "liveOnly": false
+  },
+  "filterOptions": {
+    "draftStatuses": [
+      "all",
+      "draft_ready_for_human_review",
+      "needs_reviewer_attention",
+      "blocked_by_validator"
+    ],
+    "evaluatorModes": [
+      "all",
+      "deterministic_validator_advisory",
+      "llm_assisted_advisory",
+      "nestr_consistency_trace"
+    ],
+    "liveOnly": [
+      false,
+      true
+    ]
+  },
+  "latestCandidate": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "workflow": "eligibility_benefits_navigation",
+    "selectedSkillKey": "insurance_portal_browser",
+    "shadowRunCount": 10,
+    "latestScore": 100,
+    "supervisedAdvisoryAllowed": false,
+    "promotionStatus": "shadow_review_required",
+    "productionDrivingAllowed": false,
+    "updatedAt": "2026-06-19T02:28:05.090Z"
+  },
+  "latestGate": {
+    "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+    "status": "shadow_review_required",
+    "ok": false,
+    "supervisedAdvisoryAllowed": false,
+    "productionDrivingAllowed": false,
+    "candidateId": "pems_40d7cea4abb98732",
+    "counts": {
+      "humanApprovals": 0,
+      "humanRejections": 0,
+      "validatorPasses": 1,
+      "validatorFailures": 0,
+      "citationPasses": 0,
+      "citationFailures": 0,
+      "citationEvidenceRefCount": 0,
+      "safetyIncidentCount": 0,
+      "reviewCount": 1
+    },
+    "requirements": [
+      {
+        "key": "maturity_score",
+        "ok": true,
+        "actual": 100,
+        "target": 85
+      },
+      {
+        "key": "shadow_runs",
+        "ok": true,
+        "actual": 10,
+        "target": 10
+      },
+      {
+        "key": "human_reviewer_approvals",
+        "ok": false,
+        "actual": 0,
+        "target": 2
+      },
+      {
+        "key": "validator_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evaluation_passes",
+        "ok": false,
+        "actual": 0,
+        "target": 1
+      },
+      {
+        "key": "citation_evidence_refs",
+        "ok": true,
+        "actual": 10,
+        "target": 1
+      },
+      {
+        "key": "safety_incidents",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      },
+      {
+        "key": "production_driving_disabled",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      }
+    ],
+    "safety": {
+      "rawRationaleStored": false,
+      "rawSourceStored": false,
+      "supervisedAdvisoryOnly": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "safety": {
+    "advisoryDraftsOnly": true,
+    "deterministicValidatorAuthority": true,
+    "humanReviewerAuthority": true,
+    "rawAdvisoryNoteStored": false,
+    "rawConsistencyTraceStored": false,
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "rawSourceStored": false,
+    "productionDrivingAllowed": false
+  },
+  "reviewerUi": {
+    "status": "phase37_pems_reviewer_ui_ready",
+    "ok": true,
+    "mode": "ref_only_operator_review_ui",
+    "score": 88,
+    "target": 88,
+    "route": "/",
+    "apiRoutes": [
+      "/api/continuous-intelligence/pems/workbench",
+      "/api/continuous-intelligence/pems/reviews"
+    ],
+    "actions": [
+      "approved",
+      "rejected",
+      "blocked"
+    ],
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "refOnlyAdvisoryMaterial": true,
+      "explicitReviewWriteRequired": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerComparison": {
+    "version": "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1",
+    "status": "phase38_reviewer_comparison_provenance_ready",
+    "ok": true,
+    "mode": "deterministic_vs_advisory_ref_only",
+    "score": 90,
+    "target": 90,
+    "candidateId": "pems_40d7cea4abb98732",
+    "advisoryDraftId": "pems_eval_draft_f8248f51-4a03-4fb8-a794-4c6b2d2b4523",
+    "comparisonRows": [
+      {
+        "key": "validator_decision",
+        "label": "Validator decision",
+        "deterministicLabel": "deterministic validator",
+        "deterministicValue": "pass",
+        "advisoryLabel": "advisory suggestion",
+        "advisoryValue": "pass",
+        "agreement": true
+      },
+      {
+        "key": "promotion_gate",
+        "label": "Promotion gate",
+        "deterministicLabel": "gate status",
+        "deterministicValue": "shadow_review_required",
+        "advisoryLabel": "draft status",
+        "advisoryValue": "draft_ready_for_human_review",
+        "agreement": true
+      },
+      {
+        "key": "citation_refs",
+        "label": "Cited evidence refs",
+        "deterministicLabel": "gate evidence refs",
+        "deterministicValue": 10,
+        "advisoryLabel": "advisory source refs",
+        "advisoryValue": 1,
+        "agreement": true
+      },
+      {
+        "key": "production_boundary",
+        "label": "Production boundary",
+        "deterministicLabel": "deterministic policy",
+        "deterministicValue": "disabled",
+        "advisoryLabel": "advisory policy",
+        "advisoryValue": "disabled",
+        "agreement": true
+      }
+    ],
+    "evidenceChips": [
+      {
+        "id": "phase36_public_example",
+        "kind": "source_pointer_ref",
+        "rawSourceStored": false
+      }
+    ],
+    "evaluatorProvenance": {
+      "evaluatorMode": "llm_assisted_advisory",
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:7cec727a87a04c06",
+      "liveGated": true,
+      "liveLlmEvaluation": true,
+      "egressObserved": true,
+      "liveProofClaimed": true,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false
+    },
+    "safety": {
+      "refOnlyComparison": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "liveEvaluatorFiltering": {
+    "version": "2026-06-20.phase39-live-evaluator-generation-filtering.v1",
+    "status": "phase39_live_evaluator_filtering_ready",
+    "ok": true,
+    "mode": "live_gated_advisory_generation_and_filtering",
+    "score": 92,
+    "target": 92,
+    "openAiConfigured": true,
+    "draftCount": 3,
+    "filteredDraftCount": 3,
+    "liveGeneratedDraftCount": 2,
+    "liveProofDraftCount": 2,
+    "mockedDraftCount": 0,
+    "appliedFilters": {
+      "draftStatus": "all",
+      "evaluatorMode": "all",
+      "candidateId": null,
+      "liveOnly": false
+    },
+    "filterOptions": {
+      "draftStatuses": [
+        "all",
+        "draft_ready_for_human_review",
+        "needs_reviewer_attention",
+        "blocked_by_validator"
+      ],
+      "evaluatorModes": [
+        "all",
+        "deterministic_validator_advisory",
+        "llm_assisted_advisory",
+        "nestr_consistency_trace"
+      ],
+      "liveOnly": [
+        false,
+        true
+      ]
+    },
+    "liveProofClaimed": true,
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "liveRequiresObservedEgress": true,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawSourceStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  }
+}

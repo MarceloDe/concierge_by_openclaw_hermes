@@ -2576,3 +2576,22 @@ This improves operator judgment without increasing production authority or requi
 
 Cost of changing later:
 Low. A future phase can add live-gated evaluator generation or multi-draft filtering using the same `reviewerComparison` shape and advisory-only ledger.
+
+## 2026-06-20 - Add Live-Gated Evaluator Generation And Reviewer Filters
+
+Context:
+Phase 38 exposed comparison and provenance, but it still relied on existing advisory drafts. Cortex named Phase 39 as the point where real live-gated evaluator generation and deeper filtering should begin, while preserving the no-mocked-proof and advisory-only boundaries.
+
+Options considered:
+- Let any UI user create arbitrary LLM evaluator notes.
+- Add live evaluator output directly to promotion reviews.
+- Add a source-pointer-gated live draft endpoint that writes only to the existing advisory draft ledger and lets reviewers filter drafts.
+
+Decision:
+Add `createLiveGatedPemsEvaluatorDraft`, expose `POST /api/continuous-intelligence/pems/live-evaluator-drafts`, extend the workbench with filters, and expose `pems_live_evaluator_generation_filtering` through connector proof.
+
+Reason:
+This makes the system less deterministic in the right place: the LLM can produce advisory reviewer material, but deterministic source-pointer, outbound-egress, human-review, and production-disabled gates remain authoritative. Mocked or injected LLM output is useful for tests but never counts as live proof.
+
+Cost of changing later:
+Low. The live evaluator path is additive and uses the existing evaluator-draft ledger. A future provider or LangSmith trace integration can replace the model call while keeping the ledger, filters, proof key, and safety metadata.

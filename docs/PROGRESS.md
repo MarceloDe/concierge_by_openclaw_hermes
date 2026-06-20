@@ -8427,3 +8427,56 @@ Browser/dashboard proof:
   - `artifacts/phase38/phase38-dashboard-workbench-proof.png`;
   - `artifacts/phase38/phase38-dashboard-comparison-proof.png`;
   - `artifacts/phase38/phase38-dashboard-provenance-proof.png`.
+
+## Phase 39 PEMS Live Evaluator Generation And Filtering
+
+Status: Verified locally on branch `phase-39-live-evaluator-filters`.
+
+Slice name:
+- Live-gated evaluator draft creation and reviewer filtering.
+
+Context:
+- Phase 38 exposed deterministic-vs-advisory comparison and evaluator provenance.
+- Cortex Phase 38 named Phase 39 as live-gated advisory generation and reviewer filtering, while preserving the advisory/ref-only boundary.
+
+Implemented code and docs:
+- Added `PEMS_LIVE_EVALUATOR_FILTERING_VERSION`.
+- Added `createLiveGatedPemsEvaluatorDraft()` with source-pointer requirements, OpenAI credential gating, outbound payload observation, safe advisory preview storage, completion hashing, egress refs, and mocked-output non-proof metadata.
+- Added filter-aware `getPemsReviewerWorkbenchStatus()` support for draft status, evaluator mode, candidate id, and live-only filters.
+- Added `buildPemsLiveEvaluatorFilteringProof()` and connector proof key `pems_live_evaluator_generation_filtering`.
+- Added `POST /api/continuous-intelligence/pems/live-evaluator-drafts`.
+- Extended `/api/continuous-intelligence/pems/workbench` with `liveEvaluatorFiltering`, `appliedFilters`, `filterOptions`, `filteredDraftCount`, and `draftQueue`.
+- Updated the dashboard PEMS workbench with Phase 39 filter controls, filtered draft queue, live evaluator gate, generate-live-draft action, live proof state, and mocked-output proof status.
+
+Safety decision:
+- Missing source pointer IDs fail closed before model invocation.
+- Missing model credentials fail closed before model invocation.
+- Mocked or injected LLM output never counts as live proof.
+- Draft metadata excludes raw prompts, raw completions, raw source text, raw OCR, raw frames, credentials, secrets, and PHI.
+- Phase 39 remains advisory-only and keeps `productionDrivingAllowed=false`.
+
+Verification result:
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 16/16 tests.
+- `npm run build` passed and names the Phase 39 live evaluator/filtering contract.
+- `npm run test:local` passed with 224 total tests: 222 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- Real live evaluator proof ran against configured OpenAI and returned `phase39_live_evaluator_draft_created` with `liveProofClaimed=true`, observed egress ref, model ref, source pointer ids, metadata phase `39`, and `productionDrivingAllowed=false`.
+- API proof at `http://127.0.0.1:4218/api/continuous-intelligence/pems/workbench` shows `phase39_live_evaluator_filtering_ready`, `92 / 92`, live generated draft count, live proof draft count, and filter metadata.
+- Connector proof at `http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp` shows `pems_live_evaluator_generation_filtering`, `continuous_procedural_memory` at `92 / 92`, `liveProofClaimed=true`, and production driving disabled.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4218/?phase=phase-39-live-evaluator-filters`
+- In-app browser DOM proof verified Phase 39, `92 / 92`, observed egress draft, reviewer filters, mocked-output proof never counted, and production-driving disabled.
+- Screenshot capture through the in-app browser timed out on the tall dashboard, so the saved PNG artifacts were captured through bundled local Playwright after the in-app DOM proof passed.
+- Visual and API proof artifacts:
+  - `artifacts/phase39/phase39-live-evaluator-response.json`;
+  - `artifacts/phase39/phase39-workbench-api-proof.json`;
+  - `artifacts/phase39/phase39-workbench-filtered-api-proof.json`;
+  - `artifacts/phase39/phase39-connector-proof.json`;
+  - `artifacts/phase39/phase39-dashboard-dom-proof.json`;
+  - `artifacts/phase39/phase39-dashboard-browser-dom-proof.json`;
+  - `artifacts/phase39/phase39-dashboard-filtered-dom-proof.json`;
+  - `artifacts/phase39/phase39-playwright-visual-proof.json`;
+  - `artifacts/phase39/phase39-dashboard-workbench-proof.png`;
+  - `artifacts/phase39/phase39-dashboard-provenance-proof.png`;
+  - `artifacts/phase39/phase39-dashboard-filtered-proof.png`.

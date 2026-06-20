@@ -8,9 +8,11 @@ import { createBrainstyLangGraph, LANGGRAPH_RUNNER_VERSION } from "../concierge/
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
+  buildPemsLiveEvaluatorFilteringProof,
   buildPemsPromotionReadinessProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
+  PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
   PEMS_REVIEWER_COMPARISON_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
   PEMS_PROMOTION_GATE_VERSION
@@ -290,12 +292,43 @@ if (
   throw new Error("Phase 38 PEMS reviewer comparison/provenance proof contract is incomplete.");
 }
 
+const pemsLiveEvaluatorProof = buildPemsLiveEvaluatorFilteringProof(
+  {
+    draftCount: 2,
+    filteredDraftCount: 1,
+    liveGeneratedDraftCount: 1,
+    liveProofDraftCount: 1,
+    mockedDraftCount: 0,
+    appliedFilters: { draftStatus: "draft_ready_for_human_review", evaluatorMode: "llm_assisted_advisory", candidateId: null, liveOnly: true },
+    filterOptions: {
+      draftStatuses: ["all", "draft_ready_for_human_review", "needs_reviewer_attention", "blocked_by_validator"],
+      evaluatorModes: ["all", "deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"],
+      liveOnly: [false, true]
+    }
+  },
+  { openAiConfigured: true }
+);
+if (
+  pemsLiveEvaluatorProof.version !== PEMS_LIVE_EVALUATOR_FILTERING_VERSION ||
+  pemsLiveEvaluatorProof.status !== "phase39_live_evaluator_filtering_ready" ||
+  pemsLiveEvaluatorProof.score !== 92 ||
+  pemsLiveEvaluatorProof.liveProofClaimed !== true ||
+  pemsLiveEvaluatorProof.safety.mockedLlmOutputCountsAsProof !== false ||
+  pemsLiveEvaluatorProof.safety.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 39 PEMS live evaluator/filtering proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
   "data-pems-review-action=\"approved\"",
   "data-pems-review-action=\"rejected\"",
-  "data-pems-review-action=\"blocked\""
+  "data-pems-review-action=\"blocked\"",
+  "generatePemsLiveDraft",
+  "pemsDraftStatusFilter",
+  "pemsEvaluatorModeFilter",
+  "pemsLiveOnlyFilter"
 ]) {
   if (!appHtml.includes(requiredFragment)) {
     throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
@@ -310,16 +343,21 @@ for (const requiredFragment of [
   "advisoryDraftId",
   "rawAdvisoryNoteStored",
   "rawConsistencyTraceStored",
-  "Phase 38 Comparison Gate",
+  "Phase 39 Live Evaluator Gate",
   "Deterministic Vs Advisory Comparison",
   "Evaluator Provenance",
-  "liveProofClaimed"
+  "liveProofClaimed",
+  "generatePemsLiveEvaluatorDraft",
+  "/api/continuous-intelligence/pems/live-evaluator-drafts",
+  "currentPemsWorkbenchQuery",
+  "renderPemsDraftQueue",
+  "Mocked output proof"
 ]) {
   if (!appJs.includes(requiredFragment)) {
     throw new Error(`Phase 38 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-evidence-chips"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
     throw new Error(`Phase 38 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
@@ -546,4 +584,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

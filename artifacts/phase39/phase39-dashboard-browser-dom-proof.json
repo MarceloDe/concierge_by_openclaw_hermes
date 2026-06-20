@@ -1,0 +1,13 @@
+{
+  "hasLiveGate": true,
+  "hasMockedProof": true,
+  "hasObservedEgress": true,
+  "hasPhase39": true,
+  "hasProductionDisabled": true,
+  "hasReadyScore": true,
+  "hasReviewerFilters": true,
+  "panelPreview": "PHASE 39\n\nPEMS Reviewer Workbench\nphase39_live_evaluator_filtering_ready · 92 / 92\nLoad Workbench\nGenerate Live Draft\nDraft status\nAll\nReady\nNeeds attention\nBlocked\nEvaluator mode\nAll\nLLM assisted\nDeterministic advisory\nNeSTR trace\nLive egress only\nPhase 39 Live Evaluator Gate\nStatus\nphase39_live_evaluator_filtering_ready\nScore\n92 / 92\nLive proof\nobserved egress draft\nFiltered drafts\n3 / 3\nUnderlying UI gate\nphase37_pems_reviewer_ui_ready · 88 / 88\nComparison gate\nphase38_reviewer_comparison_provenance_ready · 90 / 90\nUnderlying workbench\nphase36_reviewer_evaluator_workbench_active · 85 / 85\nDrafts\n3 total · 3 ready · 0 blocked\nLinked reviews\n1\nAuthority\nhuman reviewer + deterministic validator · production driving disabled\nReviewer Filters\nStatus filter\nall\nMode filter\nall\nLive only\nno\ndraft_ready_for_human_review\nllm_assisted_advisory · pass\ndraft_ready_for_human_review\nllm_assisted_advisory · pass\ndraft_ready_for_human_review\nllm_assisted_advisory · pass\nLatest Candidate\nCandidate\npems_40d7cea4abb98732\nWorkflow\neligibility_benefits_navigation\nShadow runs\n10\nPromotion\nshadow_review_required\nGate\nshadow_review_required\nAdvisory Draft\nDraft\npems_eval_draft_f8248f51-4a03-4fb8-a794-4",
+  "status": "phase39_live_evaluator_filtering_ready · 92 / 92",
+  "title": "Brainstyworkers AI Concierge",
+  "url": "http://127.0.0.1:4218/?phase=phase-39-live-evaluator-filters"
+}

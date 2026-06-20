@@ -73,9 +73,11 @@ import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
+  buildPemsLiveEvaluatorFilteringProof,
   buildPemsPromotionReadinessProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
+  createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
   getContinuousIntelligencePersistenceStatus,
   getPemsPromotionGateStatus,
@@ -1064,6 +1066,10 @@ function buildPemsReviewerComparisonProof(status) {
   return buildPemsReviewerComparisonProvenance(status);
 }
 
+function buildPemsLiveEvaluatorProof(status) {
+  return buildPemsLiveEvaluatorFilteringProof(status, { openAiConfigured: getOpenAiConfig().configured });
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1078,6 +1084,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsReviewerWorkbench = buildPemsReviewerWorkbenchReadinessProof(pemsReviewerWorkbenchStatus);
   const pemsReviewerUi = buildPemsReviewerUiProof();
   const pemsReviewerComparison = buildPemsReviewerComparisonProof(pemsReviewerWorkbenchStatus);
+  const pemsLiveEvaluatorFiltering = buildPemsLiveEvaluatorProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1147,6 +1154,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_reviewer_comparison_provenance",
         status: pemsReviewerComparison.status,
         target: "Phase 38 renders deterministic-vs-advisory comparison rows, cited evidence chips, and live-gated evaluator provenance without automatic production recommendations."
+      },
+      {
+        key: "pems_live_evaluator_generation_filtering",
+        status: pemsLiveEvaluatorFiltering.status,
+        target: "Phase 39 creates live-gated advisory drafts only through observed egress and adds reviewer filters without counting mocked LLM output as proof."
       },
       {
         key: "docker_connector_deployment",
@@ -1678,6 +1690,25 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsReviewerComparison.safety.productionDrivingAllowed,
         safety: pemsReviewerComparison.safety
       },
+      {
+        key: "pems_live_evaluator_generation_filtering",
+        status: pemsLiveEvaluatorFiltering.status,
+        ok: pemsLiveEvaluatorFiltering.ok,
+        mode: pemsLiveEvaluatorFiltering.mode,
+        score: pemsLiveEvaluatorFiltering.score,
+        target: pemsLiveEvaluatorFiltering.target,
+        openAiConfigured: pemsLiveEvaluatorFiltering.openAiConfigured,
+        draftCount: pemsLiveEvaluatorFiltering.draftCount,
+        filteredDraftCount: pemsLiveEvaluatorFiltering.filteredDraftCount,
+        liveGeneratedDraftCount: pemsLiveEvaluatorFiltering.liveGeneratedDraftCount,
+        liveProofDraftCount: pemsLiveEvaluatorFiltering.liveProofDraftCount,
+        mockedDraftCount: pemsLiveEvaluatorFiltering.mockedDraftCount,
+        appliedFilters: pemsLiveEvaluatorFiltering.appliedFilters,
+        filterOptions: pemsLiveEvaluatorFiltering.filterOptions,
+        liveProofClaimed: pemsLiveEvaluatorFiltering.liveProofClaimed,
+        productionDrivingAllowed: pemsLiveEvaluatorFiltering.productionDrivingAllowed,
+        safety: pemsLiveEvaluatorFiltering.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1733,6 +1764,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsReviewerComparison.status,
         proof: "Phase 38 reviewer comparison panel renders deterministic-vs-advisory rows, source-pointer chips, and evaluator provenance without claiming production authority."
+      },
+      {
+        route: "/",
+        required: true,
+        status: pemsLiveEvaluatorFiltering.status,
+        proof: "Phase 39 reviewer workbench can filter drafts and only marks live evaluator proof when observed egress created a non-mocked advisory draft."
       }
     ],
     scores: [
@@ -1745,9 +1782,9 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score, pemsReviewerComparison.score),
-        target: pemsReviewerComparison.target,
-        status: pemsReviewerComparison.status,
+        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score, pemsReviewerComparison.score, pemsLiveEvaluatorFiltering.score),
+        target: pemsLiveEvaluatorFiltering.target,
+        status: pemsLiveEvaluatorFiltering.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
@@ -1755,7 +1792,9 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         advisoryLinkedReviewCount: pemsReviewerWorkbench.advisoryLinkedReviewCount,
         reviewerUiActions: pemsReviewerUi.actions,
         comparisonRows: pemsReviewerComparison.comparisonRows.length,
-        liveProofClaimed: pemsReviewerComparison.evaluatorProvenance.liveProofClaimed,
+        liveProofClaimed: pemsLiveEvaluatorFiltering.liveProofClaimed,
+        liveGeneratedDraftCount: pemsLiveEvaluatorFiltering.liveGeneratedDraftCount,
+        filteredDraftCount: pemsLiveEvaluatorFiltering.filteredDraftCount,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1976,12 +2015,32 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/workbench") {
-    const status = await getPemsReviewerWorkbenchStatus(store);
+    const status = await getPemsReviewerWorkbenchStatus(store, {
+      draftStatus: url.searchParams.get("draftStatus"),
+      evaluatorMode: url.searchParams.get("evaluatorMode"),
+      candidateId: url.searchParams.get("candidateId"),
+      liveOnly: url.searchParams.get("liveOnly")
+    });
     sendJson(res, 200, {
       ...buildPemsReviewerWorkbenchReadinessProof(status),
       reviewerUi: buildPemsReviewerUiProof(),
-      reviewerComparison: buildPemsReviewerComparisonProof(status)
+      reviewerComparison: buildPemsReviewerComparisonProof(status),
+      liveEvaluatorFiltering: buildPemsLiveEvaluatorProof(status)
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/continuous-intelligence/pems/live-evaluator-drafts") {
+    const body = await readJson(req);
+    const result = await createLiveGatedPemsEvaluatorDraft(store, {
+      candidateId: body.candidateId,
+      actorUserId: body.actorUserId ?? "live_evaluator",
+      deterministicValidatorStatus: body.deterministicValidatorStatus ?? "pass",
+      reviewerQuestion: body.reviewerQuestion ?? "Generate a ref-only advisory evaluator draft for the human reviewer.",
+      sourcePointerIds: body.sourcePointerIds ?? [],
+      modelConfig: getOpenAiConfig()
+    });
+    sendJson(res, result.ok === false ? 424 : 200, result);
     return;
   }
 

@@ -1,0 +1,51 @@
+{
+  "request": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "actorUserId": "codex_phase39_live_proof_corrected",
+    "deterministicValidatorStatus": "pass",
+    "reviewerQuestion": "Generate a corrected Phase 39 ref-only advisory evaluator draft using only cited source pointer IDs.",
+    "sourcePointerIds": [
+      "phase36_public_example"
+    ]
+  },
+  "responseStatus": 200,
+  "live": {
+    "version": "2026-06-20.phase39-live-evaluator-generation-filtering.v1",
+    "status": "phase39_live_evaluator_draft_created",
+    "ok": true,
+    "candidateId": "pems_40d7cea4abb98732",
+    "draft": {
+      "id": "pems_eval_draft_f8248f51-4a03-4fb8-a794-4c6b2d2b4523",
+      "candidate_id": "pems_40d7cea4abb98732",
+      "actor_user_id": "codex_phase39_live_proof_corrected",
+      "draft_type": "evaluator_draft_note",
+      "evaluator_mode": "llm_assisted_advisory",
+      "status": "draft_ready_for_human_review",
+      "deterministic_validator_status": "pass",
+      "suggested_review_type": "human_review",
+      "suggested_decision": "pass",
+      "advisory_note_hash": "63a88a353386ab637e51aeec6033839c29e6217ae49755fd51676d52c5768c66",
+      "advisory_note_preview": "Phase 39 ref-only advisory draft: Reviewer must validate the corrected draft against the cited source pointer (phase36_public_example). Do not include or store ",
+      "consistency_trace_ref": "pems_consistency_trace_0780ff0ab257dfbd",
+      "consistency_trace_hash": "68c9390e5da5c60d8b6f06e9ddffb062e08509629909d936754cfa00f907d6c5",
+      "consistency_trace_preview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+      "metadata_json": "{\"phase\":39,\"liveEvaluatorGeneration\":true,\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_public_example\"],\"evaluatorModelRef\":\"openai:gpt-5-mini\",\"modelProviderRef\":\"openai\",\"egressTraceRef\":\"outbound_payload:7cec727a87a04c06\",\"egressObserved\":true,\"liveLlmEvaluatorUsed\":true,\"mockedLlmOutput\":false,\"outboundPayloadHash\":\"7cec727a87a04c06e6a226a8bfc42d0c3dd24202df616b2e8081e3d9e1a2d118\",\"completionHash\":\"c753ea181271cd75430ea6792c3126dcd3e2a57890f402f52851e7152cc4502c\",\"rawPromptStored\":false,\"rawCompletionStored\":false,\"rawSourceStored\":false,\"productionDrivingAllowed\":false,\"advisoryOnly\":true,\"rawAdvisoryNoteStored\":false,\"rawConsistencyTraceStored\":false,\"deterministicValidatorAuthority\":true,\"humanReviewerAuthority\":true}",
+      "created_at": "2026-06-20T04:23:47.849Z",
+      "updated_at": "2026-06-20T04:23:47.849Z",
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false
+    },
+    "egressTraceRef": "outbound_payload:7cec727a87a04c06",
+    "modelRef": "openai:gpt-5-mini",
+    "liveProofClaimed": true,
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawSourceStored": false,
+      "mockedLlmOutputCountsAsProof": false,
+      "productionDrivingAllowed": false
+    }
+  }
+}
