@@ -1,0 +1,15 @@
+{
+  "workbenchStatus": "phase41_reviewer_claim_revision_ready",
+  "workbenchScore": 96,
+  "workbenchTarget": 96,
+  "claimRevisionCount": 2,
+  "deterministicReclosurePassed": true,
+  "sourcePointerBounded": true,
+  "productionDrivingAllowed": false,
+  "connectorStatus": "phase41_reviewer_claim_revision_ready",
+  "connectorScore": 96,
+  "connectorTarget": 96,
+  "rawRevisionStored": false,
+  "revisionCreatesEvidence": false,
+  "latestRevisionPreview": "The cited source pointer does not support automatic enrollment without consent."
+}

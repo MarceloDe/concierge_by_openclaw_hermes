@@ -42,7 +42,7 @@
         <section class="review-panel pems-workbench-panel">
           <div class="review-header">
             <div>
-              <p class="eyebrow">Phase 40</p>
+              <p class="eyebrow">Phase 41</p>
               <h2>PEMS Reviewer Workbench</h2>
             </div>
             <div class="review-actions">
@@ -82,6 +82,11 @@
             </article>
           </div>
           <div class="pems-review-form" aria-label="PEMS advisory review controls">
+            <label>
+              Claim revision
+              <textarea id="pemsClaimRevisionText" rows="3">Revise the unsupported advisory claim using only cited source-pointer support before any approval.</textarea>
+            </label>
+            <button id="recordPemsClaimRevision" type="button" class="secondary-button">Record Claim Revision</button>
             <label>
               Review rationale
               <textarea id="pemsReviewRationale" rows="3">Reviewed advisory draft by ref. Deterministic validator and human reviewer authority remain required.</textarea>

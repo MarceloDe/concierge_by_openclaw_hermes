@@ -1,0 +1,15 @@
+{
+  "approveDisabled": true,
+  "blockDisabled": false,
+  "hasPhase41": true,
+  "hasProductionDisabled": true,
+  "hasRawNotStored": true,
+  "hasReclosurePassed": true,
+  "hasRefinedRevision": true,
+  "hasRevisionPanel": true,
+  "hasRevisionRows": true,
+  "rejectDisabled": false,
+  "reviseDisabled": false,
+  "status": "phase41_reviewer_claim_revision_ready · 96 / 96",
+  "url": "http://127.0.0.1:4218/?phase=phase-41-reviewer-claim-revisions"
+}

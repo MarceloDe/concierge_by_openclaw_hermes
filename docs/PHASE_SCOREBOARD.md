@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 40 canonical scoreboard.
+Status: Phase 41 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 94 | Phase 40 live claim citation closure | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, reviewer filters, and claim-level citation closure labels now exist; evaluator drafts, claim labels, suggested edits, and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, unsupported/low-confidence claims visibly veto approval, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
+| continuous_procedural_memory | 96 | Phase 41 reviewer claim revisions | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, `pems_candidate_claim_revisions`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, reviewer filters, claim-level citation closure labels, and reviewer claim revision records now exist; evaluator drafts, claim labels, suggested edits, revision records, and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, unsupported/low-confidence claims visibly veto approval until revised or blocked, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -122,3 +122,17 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Claim labels do not create evidence and do not drive healthcare answers, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or payer writes.
 - Score `continuous_procedural_memory` reaches only the Phase 40 claim-closure target while `productionDrivingAllowed=false`.
 - Tests and visual proof show the claim-closure panel works for a regular operator.
+
+## Phase 41 Acceptance Checklist
+
+- `pems_candidate_claim_revisions` exists as an append-only reviewer revision ledger.
+- `PEMS_REVIEWER_CLAIM_REVISION_VERSION` is defined.
+- Reviewer revisions bind candidate id, advisory draft id, claim id/hash, actor id, original claim hash/preview, suggested edit hash/preview, revised claim hash/preview, source pointer IDs, and deterministic reclosure.
+- Deterministic reclosure uses only allowed source pointer IDs from the source draft.
+- Raw original claims, raw suggested edits, raw revised claims, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
+- Workbench API returns `reviewerClaimRevisions`.
+- Connector proof exposes `pems_reviewer_claim_revisions`.
+- Dashboard renders a reviewer claim revision panel with before/suggested/revised rows, reclosure state, source pointers, and advisory-only safety.
+- Revision records do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, or write to payer portals.
+- Score `continuous_procedural_memory` reaches only the Phase 41 revision-record target while `productionDrivingAllowed=false`.
+- Tests and visual proof show the revision panel works for a regular operator.

@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 40 canonical guide.
+Status: Phase 41 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -76,7 +76,7 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Active Intelligence Phase
 
-Phase 40 adds claim-level citation closure for live evaluator outputs on top of the Phase 39 live evaluator/filtering layer:
+Phase 41 adds reviewer claim revision records on top of the Phase 40 claim citation closure layer:
 
 - append-only shadow-run ledger;
 - aggregate PEMS candidate maturity;
@@ -102,19 +102,23 @@ Phase 40 adds claim-level citation closure for live evaluator outputs on top of 
 - supported, low-confidence, and unsupported claim separation;
 - reviewer-side suggested edits for unsupported or low-confidence claims;
 - approval veto visibility when claim closure requires edits;
+- append-only reviewer claim revision records;
+- original and revised claim hashes with safe previews only;
+- deterministic reclosure for revised claims using allowed source pointer IDs;
+- before/suggested/revised dashboard diff rows without raw source text;
 - existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
-- dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, `pems_reviewer_evaluator_workbench`, `pems_reviewer_ui`, `pems_reviewer_comparison_provenance`, `pems_live_evaluator_generation_filtering`, and `pems_live_claim_citation_closure`;
+- dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, `pems_reviewer_evaluator_workbench`, `pems_reviewer_ui`, `pems_reviewer_comparison_provenance`, `pems_live_evaluator_generation_filtering`, `pems_live_claim_citation_closure`, and `pems_reviewer_claim_revisions`;
 - production decisioning still disabled.
 
-Phase 40 does not let live evaluator drafts, claim labels, suggested edits, reviewer filters, comparison rows, or provenance refs drive production recommendations. The UI is an operator surface for explicit review rows only. It renders advisory draft previews, claim hashes/previews, source-pointer IDs, consistency trace refs, comparison rows, evidence chips, provenance refs, filter counts, and draft queues without raw notes, raw traces, raw prompts, raw claims, raw sources, or raw completions, and every action keeps `productionDrivingAllowed=false`.
+Phase 41 does not let live evaluator drafts, claim labels, suggested edits, reviewer revision records, reviewer filters, comparison rows, or provenance refs drive production recommendations. The UI is an operator surface for explicit review rows only. It renders advisory draft previews, claim hashes/previews, source-pointer IDs, consistency trace refs, comparison rows, evidence chips, provenance refs, filter counts, draft queues, and before/after revision previews without raw notes, raw traces, raw prompts, raw claims, raw sources, or raw completions, and every action keeps `productionDrivingAllowed=false`.
 
 ## Recommended Next Phases
 
-Phase 41 should connect reviewer claim edits into explicit ref-only revision records while preserving human authority:
+Phase 42 should connect revised claim records to explicit reviewer follow-up workflows while preserving human authority:
 
-- persist reviewer-side suggested edits as ref-only revision proposals;
-- keep unsupported, low-confidence, and supported advisory claims visible through the review lifecycle;
-- add a deterministic before/after diff without storing raw source text;
+- allow reviewers to attach a revision record to a later explicit review decision;
+- show revision history across the review lifecycle;
+- keep deterministic validators, citation checks, safety gates, and human approvals authoritative;
 - no automatic production recommendations.
 
-Phase 41 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
+Phase 42 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.

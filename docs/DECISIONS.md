@@ -2606,3 +2606,16 @@ Consequences:
 - Claim labels can veto approval and ask for reviewer edits.
 - Claim labels do not create evidence, promote artifacts, drive final answers, or enable production decisioning.
 - Phase 41 can add explicit reviewer revision records without rewriting the Phase 40 closure contract.
+
+## Phase 41: Store Reviewer Claim Revisions In A Dedicated Ledger
+
+Decision: Phase 41 adds `pems_candidate_claim_revisions` instead of mutating evaluator draft metadata or promotion review rows.
+
+Rationale: Evaluator drafts are advisory model material and promotion reviews are human/deterministic gate decisions. Reviewer claim revisions are a separate object: they preserve before/after claim hashes, suggested edit previews, source pointer refs, and deterministic reclosure without becoming evidence or approval. A dedicated ledger keeps the lifecycle auditable and append-only.
+
+Consequences:
+
+- A reviewer can record a revised claim without approving the advisory draft.
+- Deterministic reclosure can pass the revision while production decisioning remains disabled.
+- Future phases can link revision records to explicit review decisions without rewriting draft or review schemas.
+- Raw claims and raw source text remain excluded from reviewer surfaces.
