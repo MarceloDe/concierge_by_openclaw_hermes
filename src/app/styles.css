@@ -771,6 +771,68 @@ button:disabled {
   background: #f7fbf8;
 }
 
+.pems-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin: 12px 0;
+}
+
+.pems-filter-bar label {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  font-size: 13px;
+  color: #4b5f57;
+}
+
+.pems-filter-bar select {
+  min-height: 38px;
+  border: 1px solid #d9e4dd;
+  border-radius: 6px;
+  background: #fff;
+  color: #17221f;
+  padding: 0 10px;
+}
+
+.pems-filter-bar .inline-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: auto;
+  min-height: 38px;
+}
+
+.pems-draft-queue {
+  display: grid;
+  gap: 8px;
+}
+
+.pems-draft-pill {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d9e4dd;
+  border-radius: 6px;
+  background: #f7fbf8;
+  color: #17221f;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.pems-draft-pill:hover,
+.pems-draft-pill:focus {
+  background: #eef7f2;
+  color: #17221f;
+}
+
+.pems-draft-pill span {
+  color: #5a6c65;
+  font-size: 12px;
+}
+
 .pems-comparison-table {
   border: 1px solid #d9e4dd;
   border-radius: 8px;
@@ -1366,6 +1428,7 @@ pre {
   .connector-proof-grid,
   .research-grid,
   .pems-workbench-grid,
+  .pems-filter-bar,
   .pems-review-form {
     grid-template-columns: 1fr;
   }

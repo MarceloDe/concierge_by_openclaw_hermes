@@ -2428,3 +2428,24 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `pems_reviewer_comparison_provenance`
+
+## Phase 39: PEMS Live Evaluator Generation And Filtering
+
+Acceptance criteria:
+- `src/concierge/continuousIntelligence.mjs` exports `PEMS_LIVE_EVALUATOR_FILTERING_VERSION`.
+- `createLiveGatedPemsEvaluatorDraft()` requires a PEMS candidate, source pointer IDs, configured model credentials, and observed outbound egress.
+- If source pointers or model credentials are missing, live evaluator generation fails closed and creates no draft.
+- Injected or mocked LLM output may be tested but must never count as live proof.
+- Live evaluator drafts store only safe advisory previews, hashes, source pointer IDs, model refs, egress refs, and safety flags.
+- Workbench status supports filters for draft status, evaluator mode, candidate id, and live-only mode.
+- Workbench API returns `liveEvaluatorFiltering`, `appliedFilters`, `filterOptions`, `filteredDraftCount`, and a safe `draftQueue`.
+- Dashboard renders Phase 39 filter controls, filtered draft queue, live evaluator gate, live proof state, and mocked-output proof state.
+- Connector proof exposes `pems_live_evaluator_generation_filtering`.
+- The `continuous_procedural_memory` score can advance only to the Phase 39 live-evaluator/filtering target while `productionDrivingAllowed=false`.
+- No Phase 39 path drives healthcare answers, LangGraph routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, payer writes, or medical advice.
+
+Focused proof:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `pems_live_evaluator_generation_filtering`

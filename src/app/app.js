@@ -23,6 +23,10 @@ const loadConnectorProofButton = document.querySelector("#loadConnectorProof");
 const pemsWorkbench = document.querySelector("#pemsWorkbench");
 const pemsWorkbenchStatus = document.querySelector("#pemsWorkbenchStatus");
 const loadPemsWorkbenchButton = document.querySelector("#loadPemsWorkbench");
+const generatePemsLiveDraftButton = document.querySelector("#generatePemsLiveDraft");
+const pemsDraftStatusFilter = document.querySelector("#pemsDraftStatusFilter");
+const pemsEvaluatorModeFilter = document.querySelector("#pemsEvaluatorModeFilter");
+const pemsLiveOnlyFilter = document.querySelector("#pemsLiveOnlyFilter");
 const pemsReviewRationale = document.querySelector("#pemsReviewRationale");
 const pemsReviewActionButtons = [...document.querySelectorAll("[data-pems-review-action]")];
 const researchStatus = document.querySelector("#researchStatus");
@@ -1019,6 +1023,35 @@ function renderEvidenceChips(chips = []) {
   return `<div class="pems-evidence-chips">${chips.map((chip) => `<span>${escapeHtml(chip.id)}</span>`).join("")}</div>`;
 }
 
+function currentPemsWorkbenchQuery() {
+  const params = new URLSearchParams();
+  const draftStatus = pemsDraftStatusFilter?.value ?? "all";
+  const evaluatorMode = pemsEvaluatorModeFilter?.value ?? "all";
+  if (draftStatus && draftStatus !== "all") params.set("draftStatus", draftStatus);
+  if (evaluatorMode && evaluatorMode !== "all") params.set("evaluatorMode", evaluatorMode);
+  if (pemsLiveOnlyFilter?.checked) params.set("liveOnly", "true");
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+function renderPemsDraftQueue(drafts = []) {
+  if (!drafts.length) return `<p class="status-text">No drafts match the current filter.</p>`;
+  return `
+    <div class="pems-draft-queue">
+      ${drafts
+        .map(
+          (draft) => `
+            <button type="button" class="pems-draft-pill" data-pems-candidate-id="${escapeHtml(draft.candidateId)}" data-pems-draft-id="${escapeHtml(draft.id)}">
+              <strong>${escapeHtml(draft.status)}</strong>
+              <span>${escapeHtml(draft.evaluatorMode)} · ${escapeHtml(draft.suggestedDecision)}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderPemsWorkbench(payload) {
   if (!pemsWorkbench) return;
   latestPemsWorkbench = payload;
@@ -1036,6 +1069,13 @@ function renderPemsWorkbench(payload) {
     safety: { productionDrivingAllowed: false }
   };
   const provenance = comparison.evaluatorProvenance ?? {};
+  const liveGate = payload.liveEvaluatorFiltering ?? {
+    status: "phase39_live_evaluator_filtering_ready_no_live_draft",
+    score: 90,
+    target: 92,
+    liveProofClaimed: false,
+    appliedFilters: {}
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1044,19 +1084,25 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${comparison.status ?? "phase38_reviewer_comparison_waiting_for_draft"} · ${comparison.score ?? 88} / ${comparison.target ?? 90}`;
+    pemsWorkbenchStatus.textContent = `${liveGate.status ?? comparison.status ?? "phase39_live_evaluator_filtering_waiting"} · ${liveGate.score ?? comparison.score ?? 90} / ${liveGate.target ?? 92}`;
   }
   setPemsReviewActionsEnabled(available);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 38 Comparison Gate</h3>
+      <h3>Phase 39 Live Evaluator Gate</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(comparison.status ?? "phase38_reviewer_comparison_waiting_for_draft")}</dd>
+        <dd>${escapeHtml(liveGate.status ?? "phase39_live_evaluator_filtering_waiting")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(comparison.score ?? 88)} / ${escapeHtml(comparison.target ?? 90)}</dd>
+        <dd>${escapeHtml(liveGate.score ?? 90)} / ${escapeHtml(liveGate.target ?? 92)}</dd>
+        <dt>Live proof</dt>
+        <dd>${escapeHtml(liveGate.liveProofClaimed ? "observed egress draft" : "not claimed")}</dd>
+        <dt>Filtered drafts</dt>
+        <dd>${escapeHtml(liveGate.filteredDraftCount ?? payload.filteredDraftCount ?? 0)} / ${escapeHtml(liveGate.draftCount ?? payload.draftCount ?? 0)}</dd>
         <dt>Underlying UI gate</dt>
         <dd>${escapeHtml(reviewerUi.status ?? "phase37_pems_reviewer_ui_ready")} · ${escapeHtml(reviewerUi.score ?? 88)} / ${escapeHtml(reviewerUi.target ?? 88)}</dd>
+        <dt>Comparison gate</dt>
+        <dd>${escapeHtml(comparison.status ?? "phase38_reviewer_comparison_waiting_for_draft")} · ${escapeHtml(comparison.score ?? 88)} / ${escapeHtml(comparison.target ?? 90)}</dd>
         <dt>Underlying workbench</dt>
         <dd>${escapeHtml(payload.status ?? "unknown")} · ${escapeHtml(payload.score ?? 0)} / ${escapeHtml(payload.target ?? 85)}</dd>
         <dt>Drafts</dt>
@@ -1066,6 +1112,18 @@ function renderPemsWorkbench(payload) {
         <dt>Authority</dt>
         <dd>human reviewer + deterministic validator · production driving ${escapeHtml(reviewerUi.productionDrivingAllowed ? "enabled" : "disabled")}</dd>
       </dl>
+    </article>
+    <article class="connector-card wide">
+      <h3>Reviewer Filters</h3>
+      <dl>
+        <dt>Status filter</dt>
+        <dd>${escapeHtml(liveGate.appliedFilters?.draftStatus ?? payload.appliedFilters?.draftStatus ?? "all")}</dd>
+        <dt>Mode filter</dt>
+        <dd>${escapeHtml(liveGate.appliedFilters?.evaluatorMode ?? payload.appliedFilters?.evaluatorMode ?? "all")}</dd>
+        <dt>Live only</dt>
+        <dd>${escapeHtml((liveGate.appliedFilters?.liveOnly ?? payload.appliedFilters?.liveOnly) ? "yes" : "no")}</dd>
+      </dl>
+      ${renderPemsDraftQueue(payload.draftQueue ?? [])}
     </article>
     <article class="connector-card">
       <h3>Latest Candidate</h3>
@@ -1130,6 +1188,8 @@ function renderPemsWorkbench(payload) {
         <dd>${escapeHtml(provenance.egressTraceRef ?? "not_provided")}</dd>
         <dt>Live proof</dt>
         <dd>${escapeHtml(provenance.liveProofClaimed ? "observed" : "not claimed")}</dd>
+        <dt>Mocked output proof</dt>
+        <dd>${escapeHtml(provenance.mockedLlmOutputCountsAsProof ? "attention" : "never counted")}</dd>
         <dt>Raw prompt/output</dt>
         <dd>${escapeHtml(provenance.rawPromptStored || provenance.rawCompletionStored ? "attention" : "not stored")}</dd>
       </dl>
@@ -1153,7 +1213,7 @@ async function loadPemsWorkbench() {
   if (pemsWorkbenchLoadPromise) return pemsWorkbenchLoadPromise;
   if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = "Loading workbench...";
   pemsWorkbenchLoadPromise = (async () => {
-    const payload = await api("/api/continuous-intelligence/pems/workbench", { timeoutMs: 15000 });
+    const payload = await api(`/api/continuous-intelligence/pems/workbench${currentPemsWorkbenchQuery()}`, { timeoutMs: 15000 });
     renderPemsWorkbench(payload);
     trace.textContent = JSON.stringify(payload, null, 2);
     return payload;
@@ -1163,6 +1223,28 @@ async function loadPemsWorkbench() {
   } finally {
     pemsWorkbenchLoadPromise = null;
   }
+}
+
+async function generatePemsLiveEvaluatorDraft() {
+  const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
+  const candidateId = current.latestCandidate?.candidateId;
+  if (!candidateId) throw new Error("No PEMS candidate is available for live evaluator generation.");
+  const sourcePointerIds = (current.reviewerComparison?.evidenceChips ?? []).map((chip) => chip.id).filter(Boolean);
+  if (!sourcePointerIds.length) throw new Error("Live evaluator generation requires source-pointer chips.");
+  const result = await api("/api/continuous-intelligence/pems/live-evaluator-drafts", {
+    method: "POST",
+    body: JSON.stringify({
+      candidateId,
+      actorUserId: "operator_ui_live_evaluator",
+      deterministicValidatorStatus: current.latestDraft?.deterministicValidatorStatus ?? "pass",
+      reviewerQuestion: "Generate a ref-only advisory evaluator draft for this candidate using only cited source pointer IDs.",
+      sourcePointerIds
+    }),
+    timeoutMs: 90000
+  });
+  const refreshed = await loadPemsWorkbench();
+  trace.textContent = JSON.stringify({ liveEvaluator: result, workbench: refreshed }, null, 2);
+  return result;
 }
 
 async function submitPemsWorkbenchReview(action) {
@@ -1180,7 +1262,7 @@ async function submitPemsWorkbenchReview(action) {
       decision: decision.decision,
       rationale,
       metadata: {
-        phase: 37,
+        phase: 39,
         reviewerUiAction: action,
         advisoryOnly: true,
         rawRationaleStored: false,
@@ -4232,6 +4314,30 @@ loadPemsWorkbenchButton?.addEventListener("click", async () => {
     restore();
   }
 });
+
+generatePemsLiveDraftButton?.addEventListener("click", async () => {
+  const restore = setBusy(generatePemsLiveDraftButton, "Generating...");
+  try {
+    const result = await generatePemsLiveEvaluatorDraft();
+    if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "live evaluator draft requested"} · workbench refreshed`;
+  } catch (error) {
+    renderPemsWorkbenchError(error);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+for (const control of [pemsDraftStatusFilter, pemsEvaluatorModeFilter, pemsLiveOnlyFilter].filter(Boolean)) {
+  control.addEventListener("change", async () => {
+    try {
+      await loadPemsWorkbench();
+    } catch (error) {
+      renderPemsWorkbenchError(error);
+      trace.textContent = error.stack ?? error.message;
+    }
+  });
+}
 
 for (const button of pemsReviewActionButtons) {
   button.addEventListener("click", async () => {

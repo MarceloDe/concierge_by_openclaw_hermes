@@ -2870,3 +2870,33 @@ Gates:
 
 Next:
 Phase 39 should add live-gated evaluator generation and reviewer filtering only when credentials and observed egress are present.
+
+## Phase 39: PEMS Live Evaluator Generation And Filtering
+
+Goal:
+Add the first real live-gated evaluator draft path and make the reviewer workbench filterable without changing the advisory-only authority boundary.
+
+Build:
+- Add a Phase 39 proof contract for live evaluator generation and reviewer filtering.
+- Add `createLiveGatedPemsEvaluatorDraft()` behind outbound payload observation.
+- Require source pointer IDs and configured model credentials before live generation.
+- Store only advisory previews, hashes, source pointer IDs, model refs, egress refs, and safety flags.
+- Add workbench filters for draft status, evaluator mode, candidate id, and live-only views.
+- Add dashboard controls for filters and live draft generation.
+- Add connector proof key `pems_live_evaluator_generation_filtering`.
+
+Non-goals:
+- No automatic production recommendations.
+- No payer actions, portal writes, external messages, credential entry, or medical advice.
+- No raw prompt, raw completion, raw source text, raw OCR text, raw frames, credentials, secrets, or PHI in evaluator draft metadata or dashboard proof.
+
+Gates:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `pems_live_evaluator_generation_filtering`
+- Browser/dashboard proof that the live evaluator/filtering panel renders and the score reaches the Phase 39 target
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 40 should add claim-level citation closure display and reviewer-side advisory edits, still ref-only and human-gated.

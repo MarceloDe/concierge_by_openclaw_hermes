@@ -1,0 +1,49 @@
+{
+  "phase": 39,
+  "generatedAt": "2026-06-20T04:24:08.438Z",
+  "liveResponseStatus": 200,
+  "liveStatus": "phase39_live_evaluator_draft_created",
+  "liveProofClaimed": true,
+  "liveDraftMetadataPhase": 39,
+  "workbenchStatus": "phase39_live_evaluator_filtering_ready",
+  "workbenchScore": 92,
+  "workbenchTarget": 92,
+  "liveProofDraftCount": 2,
+  "filteredStatus": "phase39_live_evaluator_filtering_ready",
+  "filteredDraftCount": 2,
+  "connectorGoal": {
+    "key": "pems_live_evaluator_generation_filtering",
+    "status": "phase39_live_evaluator_filtering_ready",
+    "target": "Phase 39 creates live-gated advisory drafts only through observed egress and adds reviewer filters without counting mocked LLM output as proof."
+  },
+  "continuousProceduralMemory": {
+    "key": "continuous_procedural_memory",
+    "score": 92,
+    "target": 92,
+    "status": "phase39_live_evaluator_filtering_ready",
+    "pemsTrusted": false,
+    "shadowRunCount": 10,
+    "supervisedAdvisoryCandidateCount": 0,
+    "evaluatorDraftCount": 3,
+    "advisoryLinkedReviewCount": 1,
+    "reviewerUiActions": [
+      "approved",
+      "rejected",
+      "blocked"
+    ],
+    "comparisonRows": 4,
+    "liveProofClaimed": true,
+    "liveGeneratedDraftCount": 2,
+    "filteredDraftCount": 3,
+    "productionDrivingAllowed": false
+  },
+  "safety": {
+    "liveRequiresObservedEgress": true,
+    "mockedLlmOutputCountsAsProof": false,
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "rawSourceStored": false,
+    "automaticProductionRecommendation": false,
+    "productionDrivingAllowed": false
+  }
+}

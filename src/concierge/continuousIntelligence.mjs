@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
+import { ChatOpenAI } from "@langchain/openai";
+import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 
 export const CASE_STATE_SCHEMA_VERSION = "brainstyworkers.case_state.v1";
 export const PEMS_SCHEMA_VERSION = "brainstyworkers.pems.v1";
@@ -7,6 +9,7 @@ export const CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION = "2026-06-18.phase34-s
 export const PEMS_PROMOTION_GATE_VERSION = "2026-06-18.phase35-pems-supervised-promotion-gate.v1";
 export const PEMS_REVIEW_WORKBENCH_VERSION = "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1";
 export const PEMS_REVIEWER_COMPARISON_VERSION = "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1";
+export const PEMS_LIVE_EVALUATOR_FILTERING_VERSION = "2026-06-20.phase39-live-evaluator-generation-filtering.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -467,6 +470,78 @@ function advisoryDraftStatus({ deterministicValidatorStatus, suggestedDecision }
   return "draft_ready_for_human_review";
 }
 
+function normalizeWorkbenchFilter(value, allowedValues) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized || normalized === "all") return null;
+  return allowedValues.includes(normalized) ? normalized : null;
+}
+
+function filteredDraftWhere(filters = {}) {
+  const clauses = [];
+  const params = [];
+  const status = normalizeWorkbenchFilter(filters.draftStatus, [
+    "draft_ready_for_human_review",
+    "needs_reviewer_attention",
+    "blocked_by_validator"
+  ]);
+  const evaluatorMode = normalizeWorkbenchFilter(filters.evaluatorMode, [
+    "deterministic_validator_advisory",
+    "llm_assisted_advisory",
+    "nestr_consistency_trace"
+  ]);
+  const candidateId = String(filters.candidateId ?? "").trim();
+  if (status) {
+    clauses.push("status = ?");
+    params.push(status);
+  }
+  if (evaluatorMode) {
+    clauses.push("evaluator_mode = ?");
+    params.push(evaluatorMode);
+  }
+  if (candidateId) {
+    clauses.push("candidate_id = ?");
+    params.push(candidateId);
+  }
+  if (filters.liveOnly === true || filters.liveOnly === "true" || filters.liveOnly === "1") {
+    clauses.push("metadata_json LIKE '%\"liveLlmEvaluatorUsed\":true%'");
+    clauses.push("metadata_json LIKE '%\"egressObserved\":true%'");
+    clauses.push("metadata_json NOT LIKE '%\"mockedLlmOutput\":true%'");
+  }
+  return {
+    whereSql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    params,
+    appliedFilters: {
+      draftStatus: status ?? "all",
+      evaluatorMode: evaluatorMode ?? "all",
+      candidateId: candidateId || null,
+      liveOnly: Boolean(filters.liveOnly === true || filters.liveOnly === "true" || filters.liveOnly === "1")
+    }
+  };
+}
+
+function formatPemsDraftRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    candidateId: row.candidate_id,
+    actorUserId: row.actor_user_id,
+    draftType: row.draft_type,
+    evaluatorMode: row.evaluator_mode,
+    status: row.status,
+    deterministicValidatorStatus: row.deterministic_validator_status,
+    suggestedReviewType: row.suggested_review_type,
+    suggestedDecision: row.suggested_decision,
+    advisoryNoteHash: row.advisory_note_hash,
+    advisoryNotePreview: row.advisory_note_preview,
+    consistencyTraceRef: row.consistency_trace_ref,
+    consistencyTraceHash: row.consistency_trace_hash,
+    consistencyTracePreview: row.consistency_trace_preview,
+    metadata: parseJson(row.metadata_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 function reviewCount(reviews, predicate) {
   return reviews.filter(predicate).length;
 }
@@ -683,6 +758,7 @@ export async function createPemsEvaluatorDraft(
   const normalizedSuggestedDecision = normalizeReviewDecision(suggestedDecision);
   const traceText = typeof consistencyTrace === "string" ? consistencyTrace : JSON.stringify(consistencyTrace ?? {});
   const traceHash = hashText(traceText);
+  const safeMetadata = jsonValue(metadata, {});
   const status = advisoryDraftStatus({
     deterministicValidatorStatus: normalizedValidatorStatus,
     suggestedDecision: normalizedSuggestedDecision
@@ -707,8 +783,8 @@ export async function createPemsEvaluatorDraft(
       consistency_trace_hash: traceHash,
       consistency_trace_preview: safePreview(traceText, 160),
       metadata_json: JSON.stringify({
-        ...jsonValue(metadata, {}),
-        phase: 36,
+        ...safeMetadata,
+        phase: safeMetadata.phase ?? 36,
         advisoryOnly: true,
         rawAdvisoryNoteStored: false,
         rawConsistencyTraceStored: false,
@@ -738,6 +814,229 @@ export async function createPemsEvaluatorDraft(
       productionDrivingAllowed: false
     };
   });
+}
+
+function liveEvaluatorBlocked(status, reason, details = {}) {
+  return {
+    version: PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
+    status,
+    ok: false,
+    blocked: true,
+    reason,
+    ...details,
+    advisoryOnly: true,
+    liveProofClaimed: false,
+    productionDrivingAllowed: false,
+    safety: {
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawSourceStored: false,
+      mockedLlmOutputCountsAsProof: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function parseLiveEvaluatorContent(content) {
+  const text = String(content ?? "");
+  try {
+    const parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
+    return {
+      advisoryNote: safePreview(parsed.advisoryNote ?? parsed.advisory_note ?? parsed.summary ?? text, 700),
+      suggestedDecision: normalizeReviewDecision(parsed.suggestedDecision ?? parsed.suggested_decision ?? "pass"),
+      suggestedReviewType: normalizeReviewType(parsed.suggestedReviewType ?? parsed.suggested_review_type ?? "validator_evaluation"),
+      citationClosure: safeList(parsed.citationClosure ?? parsed.citation_closure ?? parsed.sourcePointerIds ?? parsed.source_pointer_ids)
+    };
+  } catch {
+    return {
+      advisoryNote: safePreview(text, 700),
+      suggestedDecision: "pass",
+      suggestedReviewType: "validator_evaluation",
+      citationClosure: []
+    };
+  }
+}
+
+function buildLiveEvaluatorMessages({ candidate, sourcePointerIds, deterministicValidatorStatus, reviewerQuestion }) {
+  return [
+    {
+      role: "system",
+      content:
+        "You are a supervised advisory evaluator for Brainstyworkers PEMS. Use only source pointer IDs and structured refs. Do not invent facts, do not include PHI, do not recommend production use, and return compact JSON."
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        task: "create_ref_only_advisory_draft_for_human_reviewer",
+        outputSchema: {
+          advisoryNote: "short safe reviewer note with no raw source text",
+          suggestedReviewType: "validator_evaluation | citation_evaluation | safety_review | human_review",
+          suggestedDecision: "pass | fail | blocked | approved | rejected",
+          citationClosure: ["source_pointer_id"]
+        },
+        candidate: {
+          candidateId: candidate?.candidate_id ?? candidate?.candidateId ?? null,
+          workflow: candidate?.workflow ?? null,
+          selectedSkillKey: candidate?.selected_skill_key ?? candidate?.selectedSkillKey ?? null,
+          shadowRunCount: rowNumber(candidate?.shadow_run_count ?? candidate?.shadowRunCount),
+          latestScore: rowNumber(candidate?.latest_score ?? candidate?.latestScore),
+          promotionStatus: candidate?.promotion_status ?? candidate?.promotionStatus ?? null,
+          productionDrivingAllowed: false
+        },
+        deterministicValidatorStatus,
+        allowedSourcePointerIds: sourcePointerIds,
+        sourcePointers: sourcePointerIds.map((id) => ({ id, kind: "source_pointer_ref" })),
+        reviewerQuestion: safePreview(reviewerQuestion, 240),
+        safety: {
+          rawPromptStoredInDraft: false,
+          rawCompletionStoredInDraft: false,
+          productionDrivingAllowed: false
+        }
+      })
+    }
+  ];
+}
+
+export async function createLiveGatedPemsEvaluatorDraft(
+  store,
+  {
+    candidateId,
+    actorUserId = "live_evaluator",
+    deterministicValidatorStatus = "pass",
+    reviewerQuestion = "Generate a ref-only advisory evaluator draft for the human reviewer.",
+    sourcePointerIds = [],
+    modelConfig = {},
+    mockedLlmOutput = false,
+    createdAt = new Date().toISOString()
+  } = {},
+  { llmInvoker = null } = {}
+) {
+  if (!store) throw new Error("A store is required to create a live-gated PEMS evaluator draft.");
+  const normalizedCandidateId = String(candidateId ?? "").trim();
+  const candidate = normalizedCandidateId
+    ? await store.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId })
+    : await store.get(
+        `SELECT *
+           FROM pems_candidate_maturity
+          ORDER BY updated_at DESC
+          LIMIT 1;`
+      );
+  if (!candidate) return liveEvaluatorBlocked("phase39_live_evaluator_blocked_missing_candidate", "No PEMS candidate is available for live evaluator generation.");
+
+  const normalizedSourcePointerIds = safeList(sourcePointerIds);
+  if (!normalizedSourcePointerIds.length) {
+    return liveEvaluatorBlocked("phase39_live_evaluator_blocked_missing_source_pointers", "Live evaluator generation requires source pointer IDs.", {
+      candidateId: candidate.candidate_id
+    });
+  }
+
+  const apiKeyConfigured = Boolean(modelConfig.configured ?? process.env.OPENAI_API_KEY);
+  const model = modelConfig.model || process.env.OPENAI_MODEL || "gpt-5-mini";
+  const baseURL = modelConfig.baseURL || process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  if (!apiKeyConfigured && !llmInvoker) {
+    return liveEvaluatorBlocked("phase39_live_evaluator_blocked_missing_model_key", "OPENAI_API_KEY is not configured.", {
+      candidateId: candidate.candidate_id,
+      model
+    });
+  }
+
+  const messages = buildLiveEvaluatorMessages({
+    candidate,
+    sourcePointerIds: normalizedSourcePointerIds,
+    deterministicValidatorStatus,
+    reviewerQuestion
+  });
+  const payloadObservation = await recordOutboundPayloadObservation(store, {
+    sessionId: null,
+    payload: { model, baseURL, messages },
+    payloadType: "openai_pems_live_evaluator_messages",
+    destination: "openai",
+    policyMode: "source_pointer_or_safe_control_payload",
+    requireSourcePointers: true
+  });
+
+  let responseContent;
+  try {
+    if (llmInvoker) {
+      responseContent = await llmInvoker(messages, { model, baseURL, payloadObservation });
+    } else {
+      const llm = new ChatOpenAI({
+        model,
+        timeout: 60000,
+        maxRetries: 1,
+        configuration: { baseURL }
+      });
+      const response = await llm.invoke(messages);
+      responseContent = response.content;
+    }
+  } catch (error) {
+    return liveEvaluatorBlocked("phase39_live_evaluator_failed", safePreview(error.message, 240), {
+      candidateId: candidate.candidate_id,
+      model,
+      egressTraceRef: `outbound_payload:${payloadObservation.payloadHash.slice(0, 16)}`
+    });
+  }
+
+  const parsed = parseLiveEvaluatorContent(responseContent);
+  const completionHash = hashText(responseContent);
+  const result = await createPemsEvaluatorDraft(store, {
+    candidateId: candidate.candidate_id,
+    actorUserId,
+    draftType: "evaluator_draft_note",
+    evaluatorMode: "llm_assisted_advisory",
+    deterministicValidatorStatus,
+    suggestedReviewType: parsed.suggestedReviewType,
+    suggestedDecision: parsed.suggestedDecision,
+    advisoryNote: parsed.advisoryNote,
+    consistencyTrace: {
+      traceKind: "phase39_live_evaluator_ref_trace",
+      candidateId: candidate.candidate_id,
+      sourcePointerIds: normalizedSourcePointerIds,
+      citationClosure: parsed.citationClosure,
+      completionHash,
+      rawCompletionStored: false
+    },
+    metadata: {
+      phase: 39,
+      liveEvaluatorGeneration: true,
+      sourcePointerIds: normalizedSourcePointerIds,
+      citationClosure: parsed.citationClosure,
+      evaluatorModelRef: `openai:${safePreview(model, 48)}`,
+      modelProviderRef: "openai",
+      egressTraceRef: `outbound_payload:${payloadObservation.payloadHash.slice(0, 16)}`,
+      egressObserved: true,
+      liveLlmEvaluatorUsed: true,
+      mockedLlmOutput: Boolean(mockedLlmOutput || llmInvoker),
+      outboundPayloadHash: payloadObservation.payloadHash,
+      completionHash,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawSourceStored: false,
+      productionDrivingAllowed: false
+    },
+    createdAt
+  });
+  return {
+    version: PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
+    status: result.draft.metadata_json?.includes?.('"mockedLlmOutput":true')
+      ? "phase39_live_evaluator_mocked_output_not_proof"
+      : "phase39_live_evaluator_draft_created",
+    ok: true,
+    candidateId: candidate.candidate_id,
+    draft: result.draft,
+    egressTraceRef: `outbound_payload:${payloadObservation.payloadHash.slice(0, 16)}`,
+    modelRef: `openai:${safePreview(model, 48)}`,
+    liveProofClaimed: !Boolean(mockedLlmOutput || llmInvoker),
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawSourceStored: false,
+      mockedLlmOutputCountsAsProof: false,
+      productionDrivingAllowed: false
+    }
+  };
 }
 
 export function summarizeContinuousIntelligenceShadowForPersistence(shadow) {
@@ -1171,7 +1470,7 @@ export function buildPemsPromotionReadinessProof(status = {}) {
   };
 }
 
-export async function getPemsReviewerWorkbenchStatus(store) {
+export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
   if (!store) {
     return {
       version: PEMS_REVIEW_WORKBENCH_VERSION,
@@ -1184,6 +1483,7 @@ export async function getPemsReviewerWorkbenchStatus(store) {
       productionDrivingAllowed: false
     };
   }
+  const draftFilter = filteredDraftWhere(filters);
   const candidateCounts = await store.get(
     `SELECT
        COUNT(*) AS candidateCount,
@@ -1199,6 +1499,19 @@ export async function getPemsReviewerWorkbenchStatus(store) {
        COALESCE(SUM(CASE WHEN status = 'blocked_by_validator' THEN 1 ELSE 0 END), 0) AS blockedDraftCount
      FROM pems_candidate_evaluator_drafts;`
   );
+  const liveDraftCounts = await store.get(
+    `SELECT
+       COALESCE(SUM(CASE WHEN metadata_json LIKE '%"liveEvaluatorGeneration":true%' THEN 1 ELSE 0 END), 0) AS liveGeneratedDraftCount,
+       COALESCE(SUM(CASE WHEN metadata_json LIKE '%"liveLlmEvaluatorUsed":true%' AND metadata_json LIKE '%"egressObserved":true%' AND metadata_json NOT LIKE '%"mockedLlmOutput":true%' THEN 1 ELSE 0 END), 0) AS liveProofDraftCount,
+       COALESCE(SUM(CASE WHEN metadata_json LIKE '%"mockedLlmOutput":true%' THEN 1 ELSE 0 END), 0) AS mockedDraftCount
+     FROM pems_candidate_evaluator_drafts;`
+  );
+  const filteredDraftCounts = await store.get(
+    `SELECT COUNT(*) AS filteredDraftCount
+       FROM pems_candidate_evaluator_drafts
+      ${draftFilter.whereSql};`,
+    draftFilter.params
+  );
   const reviewCounts = await store.get(
     `SELECT
        COUNT(*) AS reviewCount,
@@ -1210,9 +1523,23 @@ export async function getPemsReviewerWorkbenchStatus(store) {
             deterministic_validator_status, suggested_review_type, suggested_decision,
             advisory_note_hash, advisory_note_preview, consistency_trace_ref,
             consistency_trace_hash, consistency_trace_preview, metadata_json, created_at, updated_at
-       FROM pems_candidate_evaluator_drafts
+     FROM pems_candidate_evaluator_drafts
+      ${draftFilter.whereSql}
       ORDER BY created_at DESC
       LIMIT 1;`
+    ,
+    draftFilter.params
+  );
+  const draftQueueRows = await store.all(
+    `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
+            deterministic_validator_status, suggested_review_type, suggested_decision,
+            advisory_note_hash, advisory_note_preview, consistency_trace_ref,
+            consistency_trace_hash, consistency_trace_preview, metadata_json, created_at, updated_at
+       FROM pems_candidate_evaluator_drafts
+      ${draftFilter.whereSql}
+      ORDER BY created_at DESC
+      LIMIT 8;`,
+    draftFilter.params
   );
   const latestCandidate = latestDraft?.candidate_id
     ? await store.findOne("pems_candidate_maturity", { candidate_id: latestDraft.candidate_id })
@@ -1239,34 +1566,25 @@ export async function getPemsReviewerWorkbenchStatus(store) {
     candidateCount: rowNumber(candidateCounts?.candidateCount),
     supervisedAdvisoryCandidateCount: rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount),
     draftCount: draftCountValue,
+    filteredDraftCount: rowNumber(filteredDraftCounts?.filteredDraftCount),
     llmAssistedDraftCount: rowNumber(draftCounts?.llmAssistedDraftCount),
     consistencyTraceDraftCount: rowNumber(draftCounts?.consistencyTraceDraftCount),
     readyDraftCount: rowNumber(draftCounts?.readyDraftCount),
     blockedDraftCount: rowNumber(draftCounts?.blockedDraftCount),
+    liveGeneratedDraftCount: rowNumber(liveDraftCounts?.liveGeneratedDraftCount),
+    liveProofDraftCount: rowNumber(liveDraftCounts?.liveProofDraftCount),
+    mockedDraftCount: rowNumber(liveDraftCounts?.mockedDraftCount),
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
-    latestDraft: latestDraft
-      ? {
-          id: latestDraft.id,
-          candidateId: latestDraft.candidate_id,
-          actorUserId: latestDraft.actor_user_id,
-          draftType: latestDraft.draft_type,
-          evaluatorMode: latestDraft.evaluator_mode,
-          status: latestDraft.status,
-          deterministicValidatorStatus: latestDraft.deterministic_validator_status,
-          suggestedReviewType: latestDraft.suggested_review_type,
-          suggestedDecision: latestDraft.suggested_decision,
-          advisoryNoteHash: latestDraft.advisory_note_hash,
-          advisoryNotePreview: latestDraft.advisory_note_preview,
-          consistencyTraceRef: latestDraft.consistency_trace_ref,
-          consistencyTraceHash: latestDraft.consistency_trace_hash,
-          consistencyTracePreview: latestDraft.consistency_trace_preview,
-          metadata: parseJson(latestDraft.metadata_json, {}),
-          createdAt: latestDraft.created_at,
-          updatedAt: latestDraft.updated_at
-        }
-      : null,
+    appliedFilters: draftFilter.appliedFilters,
+    filterOptions: {
+      draftStatuses: ["all", "draft_ready_for_human_review", "needs_reviewer_attention", "blocked_by_validator"],
+      evaluatorModes: ["all", "deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"],
+      liveOnly: [false, true]
+    },
+    draftQueue: draftQueueRows.map(formatPemsDraftRow),
+    latestDraft: formatPemsDraftRow(latestDraft),
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -1287,6 +1605,8 @@ export async function getPemsReviewerWorkbenchStatus(store) {
       humanReviewerAuthority: true,
       rawAdvisoryNoteStored: false,
       rawConsistencyTraceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
       rawSourceStored: false,
       productionDrivingAllowed: false
     }
@@ -1315,10 +1635,21 @@ export function buildPemsReviewerWorkbenchReadinessProof(status = {}) {
     consistencyTraceDraftCount: status.consistencyTraceDraftCount ?? 0,
     readyDraftCount: status.readyDraftCount ?? 0,
     blockedDraftCount: status.blockedDraftCount ?? 0,
+    filteredDraftCount: status.filteredDraftCount ?? status.draftCount ?? 0,
+    liveGeneratedDraftCount: status.liveGeneratedDraftCount ?? 0,
+    liveProofDraftCount: status.liveProofDraftCount ?? 0,
+    mockedDraftCount: status.mockedDraftCount ?? 0,
     reviewCount: status.reviewCount ?? 0,
     advisoryLinkedReviewCount: status.advisoryLinkedReviewCount ?? 0,
     productionDrivingAllowed: false,
     latestDraft: status.latestDraft ?? null,
+    draftQueue: status.draftQueue ?? [],
+    appliedFilters: status.appliedFilters ?? { draftStatus: "all", evaluatorMode: "all", candidateId: null, liveOnly: false },
+    filterOptions: status.filterOptions ?? {
+      draftStatuses: ["all", "draft_ready_for_human_review", "needs_reviewer_attention", "blocked_by_validator"],
+      evaluatorModes: ["all", "deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"],
+      liveOnly: [false, true]
+    },
     latestCandidate: status.latestCandidate ?? null,
     latestGate: status.latestGate ?? null,
     safety: status.safety ?? {
@@ -1327,6 +1658,43 @@ export function buildPemsReviewerWorkbenchReadinessProof(status = {}) {
       humanReviewerAuthority: true,
       rawAdvisoryNoteStored: false,
       rawConsistencyTraceStored: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsLiveEvaluatorFilteringProof(status = {}, { openAiConfigured = Boolean(process.env.OPENAI_API_KEY) } = {}) {
+  const hasLiveProof = (status.liveProofDraftCount ?? 0) > 0;
+  const filterReady = Boolean(status.filterOptions && status.appliedFilters && Number.isFinite(Number(status.filteredDraftCount ?? 0)));
+  return {
+    version: PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
+    status: hasLiveProof
+      ? "phase39_live_evaluator_filtering_ready"
+      : openAiConfigured
+        ? "phase39_live_evaluator_filtering_ready_no_live_draft"
+        : "phase39_live_evaluator_filtering_blocked_missing_model_key",
+    ok: filterReady && (hasLiveProof || openAiConfigured),
+    mode: "live_gated_advisory_generation_and_filtering",
+    score: hasLiveProof ? 92 : filterReady ? 90 : 88,
+    target: 92,
+    openAiConfigured,
+    draftCount: status.draftCount ?? 0,
+    filteredDraftCount: status.filteredDraftCount ?? status.draftCount ?? 0,
+    liveGeneratedDraftCount: status.liveGeneratedDraftCount ?? 0,
+    liveProofDraftCount: status.liveProofDraftCount ?? 0,
+    mockedDraftCount: status.mockedDraftCount ?? 0,
+    appliedFilters: status.appliedFilters ?? { draftStatus: "all", evaluatorMode: "all", candidateId: null, liveOnly: false },
+    filterOptions: status.filterOptions ?? {},
+    liveProofClaimed: hasLiveProof,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      liveRequiresObservedEgress: true,
+      mockedLlmOutputCountsAsProof: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawSourceStored: false,
+      automaticProductionRecommendation: false,
       productionDrivingAllowed: false
     }
   };

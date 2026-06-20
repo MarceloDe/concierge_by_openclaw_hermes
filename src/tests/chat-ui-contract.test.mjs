@@ -351,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 38 adds richer reviewer comparison and evaluator provenance/);
+  assert.match(projectOperatingSystem, /Phase 39 adds live-gated advisory generation and reviewer filtering/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -371,13 +371,13 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
 });
 
 test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
-  assert.match(projectOperatingSystem, /Phase 38 adds richer reviewer comparison and evaluator provenance/);
+  assert.match(projectOperatingSystem, /Phase 39 adds live-gated advisory generation and reviewer filtering/);
   assert.match(projectOperatingSystem, /append-only shadow-run ledger/);
   assert.match(projectOperatingSystem, /case_state_shadow/);
   assert.match(projectOperatingSystem, /production decisioning still disabled/);
 
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
-  assert.match(phaseScoreboard, /Phase 38 reviewer comparison/);
+  assert.match(phaseScoreboard, /Phase 39 live evaluator filtering/);
   assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
   assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
   assert.match(phaseScoreboard, /continuous_intelligence_shadow_runs/);
@@ -390,8 +390,11 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(continuousIntelligence, /PEMS_PROMOTION_GATE_VERSION/);
   assert.match(continuousIntelligence, /PEMS_REVIEW_WORKBENCH_VERSION/);
   assert.match(continuousIntelligence, /PEMS_REVIEWER_COMPARISON_VERSION/);
+  assert.match(continuousIntelligence, /PEMS_LIVE_EVALUATOR_FILTERING_VERSION/);
   assert.match(continuousIntelligence, /evaluatePemsPromotionGate/);
   assert.match(continuousIntelligence, /createPemsEvaluatorDraft/);
+  assert.match(continuousIntelligence, /createLiveGatedPemsEvaluatorDraft/);
+  assert.match(continuousIntelligence, /buildPemsLiveEvaluatorFilteringProof/);
   assert.match(continuousIntelligence, /buildPemsReviewerComparisonProvenance/);
   assert.match(continuousIntelligence, /UNIVERSAL_CASE_GATES/);
   assert.match(continuousIntelligence, /productionDrivingAllowed: false/);
@@ -405,10 +408,12 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /pems_reviewer_evaluator_workbench/);
   assert.match(serverMjs, /pems_reviewer_ui/);
   assert.match(serverMjs, /pems_reviewer_comparison_provenance/);
+  assert.match(serverMjs, /pems_live_evaluator_generation_filtering/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/promotion/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/reviews/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/workbench/);
   assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/evaluator-drafts/);
+  assert.match(serverMjs, /\/api\/continuous-intelligence\/pems\/live-evaluator-drafts/);
   assert.match(serverMjs, /pemsTrusted/);
   assert.match(serverMjs, /productionDrivingAllowed/);
   assert.match(serverMjs, /continuousIntelligenceShadowOnly/);
@@ -418,10 +423,15 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /pemsReviewerComparisonRefOnly/);
 });
 
-test("Phase 38 PEMS reviewer UI exposes comparison and provenance controls", () => {
+test("Phase 39 PEMS reviewer UI exposes live evaluator generation and filtering controls", () => {
   assert.match(indexHtml, /PEMS Reviewer Workbench/);
+  assert.match(indexHtml, /Phase 39/);
   assert.match(indexHtml, /id="pemsWorkbench"/);
   assert.match(indexHtml, /id="loadPemsWorkbench"/);
+  assert.match(indexHtml, /id="generatePemsLiveDraft"/);
+  assert.match(indexHtml, /id="pemsDraftStatusFilter"/);
+  assert.match(indexHtml, /id="pemsEvaluatorModeFilter"/);
+  assert.match(indexHtml, /id="pemsLiveOnlyFilter"/);
   assert.match(indexHtml, /id="pemsReviewRationale"/);
   assert.match(indexHtml, /data-pems-review-action="approved"/);
   assert.match(indexHtml, /data-pems-review-action="rejected"/);
@@ -429,15 +439,22 @@ test("Phase 38 PEMS reviewer UI exposes comparison and provenance controls", () 
 
   assert.match(appJs, /loadPemsWorkbench/);
   assert.match(appJs, /renderPemsWorkbench/);
+  assert.match(appJs, /currentPemsWorkbenchQuery/);
+  assert.match(appJs, /renderPemsDraftQueue/);
+  assert.match(appJs, /generatePemsLiveEvaluatorDraft/);
   assert.match(appJs, /submitPemsWorkbenchReview/);
   assert.match(appJs, /\/api\/continuous-intelligence\/pems\/workbench/);
+  assert.match(appJs, /\/api\/continuous-intelligence\/pems\/live-evaluator-drafts/);
   assert.match(appJs, /\/api\/continuous-intelligence\/pems\/reviews/);
-  assert.match(appJs, /Phase 38 Comparison Gate/);
+  assert.match(appJs, /Phase 39 Live Evaluator Gate/);
   assert.match(appJs, /Underlying UI gate/);
+  assert.match(appJs, /Comparison gate/);
   assert.match(appJs, /Underlying workbench/);
+  assert.match(appJs, /Reviewer Filters/);
   assert.match(appJs, /Deterministic Vs Advisory Comparison/);
   assert.match(appJs, /Evaluator Provenance/);
   assert.match(appJs, /liveProofClaimed/);
+  assert.match(appJs, /Mocked output proof/);
   assert.match(appJs, /advisoryDraftId/);
   assert.match(appJs, /rawAdvisoryNoteStored/);
   assert.match(appJs, /rawConsistencyTraceStored/);
@@ -448,10 +465,16 @@ test("Phase 38 PEMS reviewer UI exposes comparison and provenance controls", () 
   assert.match(serverMjs, /ref_only_operator_review_ui/);
   assert.match(serverMjs, /pems_reviewer_ui/);
   assert.match(serverMjs, /reviewerComparison: buildPemsReviewerComparisonProof/);
+  assert.match(serverMjs, /liveEvaluatorFiltering: buildPemsLiveEvaluatorProof/);
   assert.match(continuousIntelligence, /phase38_reviewer_comparison_provenance_ready/);
+  assert.match(continuousIntelligence, /phase39_live_evaluator_filtering_ready/);
+  assert.match(continuousIntelligence, /mockedLlmOutputCountsAsProof: false/);
   assert.match(serverMjs, /pems_reviewer_comparison_provenance/);
+  assert.match(serverMjs, /pems_live_evaluator_generation_filtering/);
 
   assert.match(appCss, /pems-workbench-grid/);
+  assert.match(appCss, /pems-filter-bar/);
+  assert.match(appCss, /pems-draft-queue/);
   assert.match(appCss, /pems-comparison-table/);
   assert.match(appCss, /pems-evidence-chips/);
   assert.match(appCss, /pems-review-form/);

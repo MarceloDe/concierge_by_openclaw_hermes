@@ -8,8 +8,10 @@ import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildCaseState,
   buildContinuousIntelligenceShadow,
+  buildPemsLiveEvaluatorFilteringProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
+  createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
   getPemsReviewerWorkbenchStatus,
   persistContinuousIntelligenceShadowRun,
@@ -157,4 +159,80 @@ test("PEMS reviewer workbench stores sanitized evaluator drafts without changing
   assert.equal(reviews.length, 1);
   assert.match(reviews[0].metadata_json, new RegExp(created.draft.id));
   assert.match(reviews[0].metadata_json, /"advisoryOnly":true/);
+});
+
+test("Phase 39 live-gated evaluator generation remains ref-only and filters drafts without mocked proof", async () => {
+  const store = await createStore();
+  const { candidateId } = await createMatureCandidate(store);
+
+  const blocked = await createLiveGatedPemsEvaluatorDraft(store, {
+    candidateId,
+    sourcePointerIds: [],
+    modelConfig: { configured: true, model: "gpt-5-mini", baseURL: "https://api.openai.com/v1" }
+  });
+  assert.equal(blocked.status, "phase39_live_evaluator_blocked_missing_source_pointers");
+  assert.equal(blocked.liveProofClaimed, false);
+
+  const generated = await createLiveGatedPemsEvaluatorDraft(
+    store,
+    {
+      candidateId,
+      actorUserId: "phase39_test",
+      sourcePointerIds: ["artifact_phase39"],
+      modelConfig: { configured: true, model: "gpt-5-mini", baseURL: "https://api.openai.com/v1" }
+    },
+    {
+      llmInvoker: async () =>
+        JSON.stringify({
+          advisoryNote: "The cited source pointer supports a validator review, but this remains advisory only.",
+          suggestedReviewType: "validator_evaluation",
+          suggestedDecision: "pass",
+          citationClosure: ["artifact_phase39"]
+        })
+    }
+  );
+
+  assert.equal(generated.version, "2026-06-20.phase39-live-evaluator-generation-filtering.v1");
+  assert.equal(generated.status, "phase39_live_evaluator_mocked_output_not_proof");
+  assert.equal(generated.ok, true);
+  assert.equal(generated.liveProofClaimed, false);
+  assert.equal(generated.safety.rawPromptStored, false);
+  assert.equal(generated.safety.rawCompletionStored, false);
+  assert.equal(generated.productionDrivingAllowed, false);
+
+  const filtered = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "draft_ready_for_human_review",
+    liveOnly: true
+  });
+  assert.equal(filtered.appliedFilters.evaluatorMode, "llm_assisted_advisory");
+  assert.equal(filtered.appliedFilters.draftStatus, "draft_ready_for_human_review");
+  assert.equal(filtered.appliedFilters.liveOnly, true);
+  assert.equal(filtered.liveGeneratedDraftCount, 1);
+  assert.equal(filtered.liveProofDraftCount, 0);
+  assert.equal(filtered.mockedDraftCount, 1);
+  assert.equal(filtered.filteredDraftCount, 0);
+  assert.equal(filtered.draftQueue.length, 0);
+
+  const allDrafts = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "draft_ready_for_human_review"
+  });
+  assert.equal(allDrafts.filteredDraftCount, 1);
+  assert.equal(allDrafts.draftQueue.length, 1);
+  assert.equal(allDrafts.draftQueue[0].metadata.rawPromptStored, false);
+  assert.equal(allDrafts.draftQueue[0].metadata.rawCompletionStored, false);
+
+  const proof = buildPemsLiveEvaluatorFilteringProof(filtered, { openAiConfigured: true });
+  assert.equal(proof.status, "phase39_live_evaluator_filtering_ready_no_live_draft");
+  assert.equal(proof.score, 90);
+  assert.equal(proof.target, 92);
+  assert.equal(proof.liveProofClaimed, false);
+  assert.equal(proof.safety.mockedLlmOutputCountsAsProof, false);
+
+  const liveProof = buildPemsLiveEvaluatorFilteringProof({ ...filtered, filteredDraftCount: 1, liveProofDraftCount: 1 }, { openAiConfigured: true });
+  assert.equal(liveProof.status, "phase39_live_evaluator_filtering_ready");
+  assert.equal(liveProof.score, 92);
+  assert.equal(liveProof.liveProofClaimed, true);
+  assert.equal(liveProof.productionDrivingAllowed, false);
 });
