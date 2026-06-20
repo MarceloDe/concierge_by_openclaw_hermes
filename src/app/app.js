@@ -978,9 +978,15 @@ function latestPemsDraftAvailable(payload = latestPemsWorkbench) {
   return Boolean(payload?.latestDraft?.id && payload?.latestCandidate?.candidateId);
 }
 
-function setPemsReviewActionsEnabled(enabled) {
+function pemsClaimClosureVetoed(payload = latestPemsWorkbench) {
+  const closure = payload?.liveClaimCitationClosure ?? payload?.latestClaimCitationClosure ?? payload?.latestDraft?.claimCitationClosure;
+  return Boolean(closure?.reviewerEditRequired || (closure?.unsupportedCount ?? 0) > 0 || (closure?.lowConfidenceCount ?? 0) > 0);
+}
+
+function setPemsReviewActionsEnabled(enabled, payload = latestPemsWorkbench) {
+  const vetoed = pemsClaimClosureVetoed(payload);
   for (const button of pemsReviewActionButtons) {
-    button.disabled = !enabled;
+    button.disabled = !enabled || (vetoed && button.dataset.pemsReviewAction === "approved");
   }
 }
 
@@ -1021,6 +1027,33 @@ function renderPemsComparisonRows(rows = []) {
 function renderEvidenceChips(chips = []) {
   if (!chips.length) return `<p class="status-text">No source-pointer chips attached to this advisory draft.</p>`;
   return `<div class="pems-evidence-chips">${chips.map((chip) => `<span>${escapeHtml(chip.id)}</span>`).join("")}</div>`;
+}
+
+function renderPemsClaimCitationClosure(closure = {}) {
+  const claims = closure.claims ?? [];
+  if (!claims.length) return `<p class="status-text">No advisory claims are available for citation closure yet.</p>`;
+  return `
+    <div class="pems-claim-closure-table" role="table" aria-label="PEMS claim citation closure">
+      <div class="pems-claim-closure-head" role="row">
+        <span>Claim</span>
+        <span>Label</span>
+        <span>Source pointers</span>
+        <span>Reviewer edit</span>
+      </div>
+      ${claims
+        .map(
+          (claim) => `
+            <div class="pems-claim-closure-row ${escapeHtml(claim.status ?? "unsupported")}" role="row">
+              <span>${escapeHtml(claim.claimPreview ?? "claim")}</span>
+              <span>${escapeHtml(claim.status ?? "unsupported")}</span>
+              <span>${escapeHtml((claim.sourcePointerIds ?? []).join(", ") || "none")}</span>
+              <span>${escapeHtml(claim.requiresReviewerEdit ? claim.suggestedEditPreview || "required" : "not required")}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function currentPemsWorkbenchQuery() {
@@ -1076,6 +1109,17 @@ function renderPemsWorkbench(payload) {
     liveProofClaimed: false,
     appliedFilters: {}
   };
+  const claimClosure = payload.liveClaimCitationClosure ?? payload.latestClaimCitationClosure ?? draft.claimCitationClosure ?? {
+    status: "phase40_claim_citation_closure_waiting_for_claims",
+    score: 90,
+    target: 94,
+    claimCount: 0,
+    supportedCount: 0,
+    unsupportedCount: 0,
+    lowConfidenceCount: 0,
+    reviewerEditRequired: false,
+    claims: []
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1084,17 +1128,23 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${liveGate.status ?? comparison.status ?? "phase39_live_evaluator_filtering_waiting"} · ${liveGate.score ?? comparison.score ?? 90} / ${liveGate.target ?? 92}`;
+    pemsWorkbenchStatus.textContent = `${claimClosure.status ?? liveGate.status ?? "phase40_claim_citation_closure_waiting"} · ${claimClosure.score ?? liveGate.score ?? 90} / ${claimClosure.target ?? liveGate.target ?? 94}`;
   }
-  setPemsReviewActionsEnabled(available);
+  setPemsReviewActionsEnabled(available, payload);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 39 Live Evaluator Gate</h3>
+      <h3>Phase 40 Claim Citation Closure</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(liveGate.status ?? "phase39_live_evaluator_filtering_waiting")}</dd>
+        <dd>${escapeHtml(claimClosure.status ?? "phase40_claim_citation_closure_waiting_for_claims")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(liveGate.score ?? 90)} / ${escapeHtml(liveGate.target ?? 92)}</dd>
+        <dd>${escapeHtml(claimClosure.score ?? 90)} / ${escapeHtml(claimClosure.target ?? 94)}</dd>
+        <dt>Claim labels</dt>
+        <dd>${escapeHtml(claimClosure.supportedCount ?? 0)} supported · ${escapeHtml(claimClosure.lowConfidenceCount ?? 0)} low confidence · ${escapeHtml(claimClosure.unsupportedCount ?? 0)} unsupported</dd>
+        <dt>Reviewer edit</dt>
+        <dd>${escapeHtml(claimClosure.reviewerEditRequired ? "required before approval" : "not required")}</dd>
+        <dt>Phase 39 gate</dt>
+        <dd>${escapeHtml(liveGate.status ?? "phase39_live_evaluator_filtering_waiting")} · ${escapeHtml(liveGate.score ?? 90)} / ${escapeHtml(liveGate.target ?? 92)}</dd>
         <dt>Live proof</dt>
         <dd>${escapeHtml(liveGate.liveProofClaimed ? "observed egress draft" : "not claimed")}</dd>
         <dt>Filtered drafts</dt>
@@ -1167,6 +1217,18 @@ function renderPemsWorkbench(payload) {
         <dt>Decision boundary</dt>
         <dd>${escapeHtml(safety.advisoryDraftsOnly ? "advisory only" : "attention required")} · ${escapeHtml(safety.humanReviewerAuthority ? "human authority" : "missing human authority")}</dd>
       </dl>
+    </article>
+    <article class="connector-card wide">
+      <h3>Claim Citation Closure</h3>
+      <dl>
+        <dt>Verdict</dt>
+        <dd>${escapeHtml(claimClosure.verdict ?? "not evaluated")}</dd>
+        <dt>Source-pointer bounded</dt>
+        <dd>${escapeHtml(claimClosure.sourcePointerBounded === false ? "attention" : "yes")}</dd>
+        <dt>Raw claim/source</dt>
+        <dd>not stored</dd>
+      </dl>
+      ${renderPemsClaimCitationClosure(claimClosure)}
     </article>
     <article class="connector-card wide">
       <h3>Deterministic Vs Advisory Comparison</h3>
@@ -1251,6 +1313,9 @@ async function submitPemsWorkbenchReview(action) {
   const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
   if (!latestPemsDraftAvailable(current)) throw new Error("No advisory draft is available for review.");
   const decision = pemsDecisionLabel(action);
+  if (action === "approved" && pemsClaimClosureVetoed(current)) {
+    throw new Error("Claim citation closure requires reviewer edits before approval. Use Reject or Block for this advisory draft.");
+  }
   const rationale = pemsReviewRationale?.value?.trim() || `Reviewer ${decision.label} advisory draft by ref.`;
   const result = await api("/api/continuous-intelligence/pems/reviews", {
     method: "POST",
@@ -1262,8 +1327,10 @@ async function submitPemsWorkbenchReview(action) {
       decision: decision.decision,
       rationale,
       metadata: {
-        phase: 39,
+        phase: 40,
         reviewerUiAction: action,
+        claimCitationClosureVerdict: current.liveClaimCitationClosure?.verdict ?? current.latestClaimCitationClosure?.verdict ?? null,
+        reviewerEditRequired: pemsClaimClosureVetoed(current),
         advisoryOnly: true,
         rawRationaleStored: false,
         productionDrivingAllowed: false

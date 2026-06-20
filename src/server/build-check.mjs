@@ -8,10 +8,12 @@ import { createBrainstyLangGraph, LANGGRAPH_RUNNER_VERSION } from "../concierge/
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
+  buildPemsLiveClaimCitationClosureProof,
   buildPemsLiveEvaluatorFilteringProof,
   buildPemsPromotionReadinessProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
+  PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
   PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
   PEMS_REVIEWER_COMPARISON_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
@@ -319,6 +321,44 @@ if (
   throw new Error("Phase 39 PEMS live evaluator/filtering proof contract is incomplete.");
 }
 
+const pemsClaimCitationClosureProof = buildPemsLiveClaimCitationClosureProof({
+  liveProofDraftCount: 1,
+  latestDraft: {
+    id: "draft_1",
+    candidateId: "candidate_1",
+    metadata: {
+      liveEvaluatorGeneration: true,
+      liveLlmEvaluatorUsed: true,
+      egressObserved: true,
+      mockedLlmOutput: false,
+      sourcePointerIds: ["source_pointer_1"],
+      claimCitationClosure: [
+        {
+          claimPreview: "The benefit is supported by the source pointer.",
+          status: "supported",
+          sourcePointerIds: ["source_pointer_1"]
+        },
+        {
+          claimPreview: "The deductible is definitely waived.",
+          status: "unsupported",
+          sourcePointerIds: [],
+          suggestedEditPreview: "Remove the unsupported deductible waiver claim."
+        }
+      ]
+    }
+  }
+});
+if (
+  pemsClaimCitationClosureProof.version !== PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION ||
+  pemsClaimCitationClosureProof.status !== "phase40_claim_citation_closure_veto_visible" ||
+  pemsClaimCitationClosureProof.score !== 94 ||
+  pemsClaimCitationClosureProof.unsupportedCount !== 1 ||
+  pemsClaimCitationClosureProof.safety.unsupportedClaimsVetoApproval !== true ||
+  pemsClaimCitationClosureProof.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 40 PEMS claim citation closure proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
@@ -328,7 +368,8 @@ for (const requiredFragment of [
   "generatePemsLiveDraft",
   "pemsDraftStatusFilter",
   "pemsEvaluatorModeFilter",
-  "pemsLiveOnlyFilter"
+  "pemsLiveOnlyFilter",
+  "Phase 40"
 ]) {
   if (!appHtml.includes(requiredFragment)) {
     throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
@@ -343,7 +384,7 @@ for (const requiredFragment of [
   "advisoryDraftId",
   "rawAdvisoryNoteStored",
   "rawConsistencyTraceStored",
-  "Phase 39 Live Evaluator Gate",
+  "Phase 40 Claim Citation Closure",
   "Deterministic Vs Advisory Comparison",
   "Evaluator Provenance",
   "liveProofClaimed",
@@ -351,15 +392,19 @@ for (const requiredFragment of [
   "/api/continuous-intelligence/pems/live-evaluator-drafts",
   "currentPemsWorkbenchQuery",
   "renderPemsDraftQueue",
-  "Mocked output proof"
+  "Mocked output proof",
+  "renderPemsClaimCitationClosure",
+  "liveClaimCitationClosure",
+  "pemsClaimClosureVetoed",
+  "Claim citation closure requires reviewer edits before approval"
 ]) {
   if (!appJs.includes(requiredFragment)) {
-    throw new Error(`Phase 38 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 40 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-evidence-chips"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
-    throw new Error(`Phase 38 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 40 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
 }
 
@@ -584,4 +629,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

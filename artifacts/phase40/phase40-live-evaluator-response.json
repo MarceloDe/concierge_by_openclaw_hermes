@@ -1,0 +1,39 @@
+{
+  "version": "2026-06-20.phase39-live-evaluator-generation-filtering.v1",
+  "status": "phase39_live_evaluator_draft_created",
+  "ok": true,
+  "candidateId": "pems_40d7cea4abb98732",
+  "draft": {
+    "id": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+    "candidate_id": "pems_40d7cea4abb98732",
+    "actor_user_id": "operator_ui_phase40_live_evaluator",
+    "draft_type": "evaluator_draft_note",
+    "evaluator_mode": "llm_assisted_advisory",
+    "status": "needs_reviewer_attention",
+    "deterministic_validator_status": "pass",
+    "suggested_review_type": "citation_evaluation",
+    "suggested_decision": "blocked",
+    "advisory_note_hash": "3b47ee634d1f9c71a549ff2ebcefa5d276161de0245e4c2d3ec0a7fafa7c419c",
+    "advisory_note_preview": "One claim is supported by the provided source pointer; a second claim lacks supporting evidence and requires verification before acceptance.",
+    "consistency_trace_ref": "pems_consistency_trace_66462db3ca78f57b",
+    "consistency_trace_hash": "1fdfd868a22cd2731f26e3c677e2765249d9c4cef5188ba8dd2b88d90f139cc1",
+    "consistency_trace_preview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+    "metadata_json": "{\"phase\":39,\"liveEvaluatorGeneration\":true,\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_public_example\"],\"claimCitationClosure\":[{\"id\":\"pems_claim_a3fb5a6b68ac016e\",\"claimHash\":\"da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a\",\"claimPreview\":\"The document describes the eligibility criteria for the program.\",\"status\":\"supported\",\"sourcePointerIds\":[\"phase36_public_example\"],\"sourcePointerCount\":1,\"confidence\":0.9,\"explanationPreview\":\"The cited source pointer contains relevant statements consistent with a description of eligibility criteria.\",\"suggestedEditPreview\":\"\",\"requiresReviewerEdit\":false,\"rawClaimStored\":false,\"rawSourceStored\":false},{\"id\":\"pems_claim_d994ea836ea5c17c\",\"claimHash\":\"7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f\",\"claimPreview\":\"Users are automatically enrolled without consent when signing up.\",\"status\":\"unsupported\",\"sourcePointerIds\":[],\"sourcePointerCount\":0,\"confidence\":0.1,\"explanationPreview\":\"No evidence in the available source pointer supports a claim of automatic enrollment without consent.\",\"suggestedEditPreview\":\"Remove this assertion or replace it with a verifiable statement and add a supporting source pointer.\",\"requiresReviewerEdit\":true,\"rawClaimStored\":false,\"rawSourceStored\":false}],\"claimCitationClosureSummary\":{\"version\":\"2026-06-20.phase40-live-claim-citation-closure.v1\",\"status\":\"phase40_claim_citation_closure_vetoed\",\"verdict\":\"unsupported_claims_found\",\"claimCount\":2,\"supportedCount\":1,\"lowConfidenceCount\":0,\"unsupportedCount\":1,\"reviewerEditRequired\":true,\"unsupportedClaimHashes\":[\"7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f\"],\"productionDrivingAllowed\":false},\"claimLevelCitationClosure\":true,\"evaluatorModelRef\":\"openai:gpt-5-mini\",\"modelProviderRef\":\"openai\",\"egressTraceRef\":\"outbound_payload:bf5673aa292864b8\",\"egressObserved\":true,\"liveLlmEvaluatorUsed\":true,\"mockedLlmOutput\":false,\"outboundPayloadHash\":\"bf5673aa292864b8b4ec79539d1569d33a0b3508267176498a3bd124378e5f09\",\"completionHash\":\"edb0d5d25816d3dbf5e5db0b1ebdd704fce275e6888d89624d813404b092330f\",\"rawPromptStored\":false,\"rawCompletionStored\":false,\"rawClaimStored\":false,\"rawSourceStored\":false,\"productionDrivingAllowed\":false,\"advisoryOnly\":true,\"rawAdvisoryNoteStored\":false,\"rawConsistencyTraceStored\":false,\"deterministicValidatorAuthority\":true,\"humanReviewerAuthority\":true}",
+    "created_at": "2026-06-20T14:06:56.173Z",
+    "updated_at": "2026-06-20T14:06:56.173Z",
+    "rawAdvisoryNoteStored": false,
+    "rawConsistencyTraceStored": false
+  },
+  "egressTraceRef": "outbound_payload:bf5673aa292864b8",
+  "modelRef": "openai:gpt-5-mini",
+  "liveProofClaimed": true,
+  "advisoryOnly": true,
+  "productionDrivingAllowed": false,
+  "safety": {
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "rawSourceStored": false,
+    "mockedLlmOutputCountsAsProof": false,
+    "productionDrivingAllowed": false
+  }
+}

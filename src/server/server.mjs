@@ -73,6 +73,7 @@ import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
 import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
+  buildPemsLiveClaimCitationClosureProof,
   buildPemsLiveEvaluatorFilteringProof,
   buildPemsPromotionReadinessProof,
   buildPemsReviewerComparisonProvenance,
@@ -1070,6 +1071,10 @@ function buildPemsLiveEvaluatorProof(status) {
   return buildPemsLiveEvaluatorFilteringProof(status, { openAiConfigured: getOpenAiConfig().configured });
 }
 
+function buildPemsClaimCitationClosureProof(status) {
+  return buildPemsLiveClaimCitationClosureProof(status);
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1085,6 +1090,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsReviewerUi = buildPemsReviewerUiProof();
   const pemsReviewerComparison = buildPemsReviewerComparisonProof(pemsReviewerWorkbenchStatus);
   const pemsLiveEvaluatorFiltering = buildPemsLiveEvaluatorProof(pemsReviewerWorkbenchStatus);
+  const pemsClaimCitationClosure = buildPemsClaimCitationClosureProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1159,6 +1165,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_live_evaluator_generation_filtering",
         status: pemsLiveEvaluatorFiltering.status,
         target: "Phase 39 creates live-gated advisory drafts only through observed egress and adds reviewer filters without counting mocked LLM output as proof."
+      },
+      {
+        key: "pems_live_claim_citation_closure",
+        status: pemsClaimCitationClosure.status,
+        target: "Phase 40 labels live evaluator advisory claims as supported, low confidence, or unsupported and makes unsupported claims a visible reviewer veto without creating evidence."
       },
       {
         key: "docker_connector_deployment",
@@ -1709,6 +1720,26 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsLiveEvaluatorFiltering.productionDrivingAllowed,
         safety: pemsLiveEvaluatorFiltering.safety
       },
+      {
+        key: "pems_live_claim_citation_closure",
+        status: pemsClaimCitationClosure.status,
+        ok: pemsClaimCitationClosure.ok,
+        mode: pemsClaimCitationClosure.mode,
+        score: pemsClaimCitationClosure.score,
+        target: pemsClaimCitationClosure.target,
+        claimCount: pemsClaimCitationClosure.claimCount,
+        supportedCount: pemsClaimCitationClosure.supportedCount,
+        unsupportedCount: pemsClaimCitationClosure.unsupportedCount,
+        lowConfidenceCount: pemsClaimCitationClosure.lowConfidenceCount,
+        reviewerEditRequired: pemsClaimCitationClosure.reviewerEditRequired,
+        sourcePointerBounded: pemsClaimCitationClosure.sourcePointerBounded,
+        liveEvaluatorDraft: pemsClaimCitationClosure.liveEvaluatorDraft,
+        claimClosureDraftCount: pemsClaimCitationClosure.claimClosureDraftCount,
+        claimClosureVetoDraftCount: pemsClaimCitationClosure.claimClosureVetoDraftCount,
+        claims: pemsClaimCitationClosure.claims,
+        productionDrivingAllowed: pemsClaimCitationClosure.productionDrivingAllowed,
+        safety: pemsClaimCitationClosure.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1770,6 +1801,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsLiveEvaluatorFiltering.status,
         proof: "Phase 39 reviewer workbench can filter drafts and only marks live evaluator proof when observed egress created a non-mocked advisory draft."
+      },
+      {
+        route: "/",
+        required: true,
+        status: pemsClaimCitationClosure.status,
+        proof: "Phase 40 reviewer workbench labels advisory claims, shows source-pointer support, and vetoes unsupported or low-confidence claims without creating evidence."
       }
     ],
     scores: [
@@ -1782,9 +1819,9 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score, pemsReviewerComparison.score, pemsLiveEvaluatorFiltering.score),
-        target: pemsLiveEvaluatorFiltering.target,
-        status: pemsLiveEvaluatorFiltering.status,
+        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score, pemsReviewerComparison.score, pemsLiveEvaluatorFiltering.score, pemsClaimCitationClosure.score),
+        target: pemsClaimCitationClosure.target,
+        status: pemsClaimCitationClosure.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
@@ -1795,6 +1832,10 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         liveProofClaimed: pemsLiveEvaluatorFiltering.liveProofClaimed,
         liveGeneratedDraftCount: pemsLiveEvaluatorFiltering.liveGeneratedDraftCount,
         filteredDraftCount: pemsLiveEvaluatorFiltering.filteredDraftCount,
+        claimCount: pemsClaimCitationClosure.claimCount,
+        unsupportedCount: pemsClaimCitationClosure.unsupportedCount,
+        lowConfidenceCount: pemsClaimCitationClosure.lowConfidenceCount,
+        reviewerEditRequired: pemsClaimCitationClosure.reviewerEditRequired,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -2025,7 +2066,8 @@ async function handleApi(req, res, url) {
       ...buildPemsReviewerWorkbenchReadinessProof(status),
       reviewerUi: buildPemsReviewerUiProof(),
       reviewerComparison: buildPemsReviewerComparisonProof(status),
-      liveEvaluatorFiltering: buildPemsLiveEvaluatorProof(status)
+      liveEvaluatorFiltering: buildPemsLiveEvaluatorProof(status),
+      liveClaimCitationClosure: buildPemsClaimCitationClosureProof(status)
     });
     return;
   }

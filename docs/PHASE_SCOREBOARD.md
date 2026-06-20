@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 39 canonical scoreboard.
+Status: Phase 40 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 92 | Phase 39 live evaluator filtering | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, and reviewer filters now exist; evaluator drafts and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
+| continuous_procedural_memory | 94 | Phase 40 live claim citation closure | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, reviewer filters, and claim-level citation closure labels now exist; evaluator drafts, claim labels, suggested edits, and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, unsupported/low-confidence claims visibly veto approval, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -109,3 +109,16 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Connector proof exposes `pems_live_evaluator_generation_filtering`.
 - Score `continuous_procedural_memory` reaches only the Phase 39 live-evaluator/filtering target while `productionDrivingAllowed=false`.
 - Tests and visual proof show the live evaluator/filtering panel works for a regular operator.
+
+## Phase 40 Acceptance Checklist
+
+- Live evaluator prompt schema asks for claim-level citation closure labels.
+- Stored PEMS draft metadata includes claim hashes/previews, allowed source-pointer IDs, labels, suggested edits, and summary counts only.
+- Raw claims, raw source text, raw prompt text, and raw completion text are not stored in reviewer surfaces.
+- Workbench API returns `liveClaimCitationClosure` with supported, low-confidence, unsupported, reviewer-edit, source-pointer-bounded, and safety fields.
+- Connector proof exposes `pems_live_claim_citation_closure`.
+- Dashboard renders a claim citation closure table with supported, low-confidence, and unsupported labels.
+- Unsupported or low-confidence claims visibly require reviewer edits and disable approval while reject/block remain available.
+- Claim labels do not create evidence and do not drive healthcare answers, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or payer writes.
+- Score `continuous_procedural_memory` reaches only the Phase 40 claim-closure target while `productionDrivingAllowed=false`.
+- Tests and visual proof show the claim-closure panel works for a regular operator.

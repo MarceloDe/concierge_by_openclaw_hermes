@@ -1,0 +1,14 @@
+{
+  "approveDisabled": true,
+  "blockDisabled": false,
+  "hasPhase40": true,
+  "hasProductionDisabled": true,
+  "hasRawNotStored": true,
+  "hasReviewerEdit": true,
+  "hasScore": true,
+  "hasSourcePointer": true,
+  "hasUnsupported": true,
+  "rejectDisabled": false,
+  "statusText": "phase40_claim_citation_closure_veto_visible · 94 / 94",
+  "url": "http://127.0.0.1:4218/?phase=phase-40-live-claim-citation-closure"
+}

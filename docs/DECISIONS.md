@@ -2595,3 +2595,14 @@ This makes the system less deterministic in the right place: the LLM can produce
 
 Cost of changing later:
 Low. The live evaluator path is additive and uses the existing evaluator-draft ledger. A future provider or LangSmith trace integration can replace the model call while keeping the ledger, filters, proof key, and safety metadata.
+## Phase 40: Keep Claim Citation Closure Inside PEMS Draft Metadata
+
+Decision: Phase 40 stores claim-level citation closure for live evaluator outputs inside the PEMS evaluator draft metadata instead of reusing the research claim-evaluation table.
+
+Rationale: Research citation closure judges answer previews against trusted reviewed research artifacts. PEMS claim closure is narrower: it labels advisory evaluator claims against the draft's already allowed source pointer IDs. Keeping it inside draft metadata prevents the labels from becoming a new evidence source, keeps the UI ref-only, and preserves the human reviewer plus deterministic validator boundary.
+
+Consequences:
+
+- Claim labels can veto approval and ask for reviewer edits.
+- Claim labels do not create evidence, promote artifacts, drive final answers, or enable production decisioning.
+- Phase 41 can add explicit reviewer revision records without rewriting the Phase 40 closure contract.
