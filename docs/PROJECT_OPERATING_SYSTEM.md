@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 37 canonical guide.
+Status: Phase 38 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -76,7 +76,7 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Active Intelligence Phase
 
-Phase 37 exposes the Phase 36 reviewer/evaluator workbench through an operator-facing UI:
+Phase 38 adds richer reviewer comparison and evaluator provenance on top of the Phase 37 workbench:
 
 - append-only shadow-run ledger;
 - aggregate PEMS candidate maturity;
@@ -91,19 +91,23 @@ Phase 37 exposes the Phase 36 reviewer/evaluator workbench through an operator-f
 - advisory material linkage into explicit promotion-review records;
 - dashboard UI for ref-only advisory review;
 - approve, reject, and block controls that submit explicit review rows;
+- deterministic-vs-advisory comparison rows;
+- source-pointer evidence chips for advisory drafts;
+- evaluator provenance refs, including model and egress refs when present;
+- live-gated LLM provenance without counting mocked output as live proof;
 - existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
-- dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, `pems_reviewer_evaluator_workbench`, and `pems_reviewer_ui`;
+- dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, `pems_reviewer_evaluator_workbench`, `pems_reviewer_ui`, and `pems_reviewer_comparison_provenance`;
 - production decisioning still disabled.
 
-Phase 37 does not let reviewer UI actions drive production recommendations. The UI is an operator surface for explicit review rows only. It renders advisory draft previews and consistency trace refs without raw notes or raw traces, and every action keeps `productionDrivingAllowed=false`.
+Phase 38 does not let reviewer comparison or evaluator provenance drive production recommendations. The UI is an operator surface for explicit review rows only. It renders advisory draft previews, consistency trace refs, comparison rows, evidence chips, and provenance refs without raw notes, raw traces, raw prompts, or raw completions, and every action keeps `productionDrivingAllowed=false`.
 
 ## Recommended Next Phases
 
-Phase 38 should add richer reviewer comparison and live evaluator provenance:
+Phase 39 should add live evaluator generation and deeper reviewer filters only if credentials and observed egress are present:
 
-- reviewer diff between deterministic and advisory outputs;
-- live-gated LLM evaluator provenance when credentials are present;
-- clearer cited evidence chips for each advisory draft;
+- live-gated evaluator draft creation with observed egress;
+- reviewer filters across multiple candidates and drafts;
+- richer citation closure display for each advisory claim;
 - no automatic production recommendations.
 
-Phase 38 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
+Phase 39 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.

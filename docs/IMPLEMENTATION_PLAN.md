@@ -2840,3 +2840,33 @@ Gates:
 
 Next:
 Phase 38 should add richer deterministic-vs-advisory comparison and live-gated LLM evaluator provenance when credentials are present.
+
+## Phase 38: PEMS Reviewer Comparison And Provenance
+
+Goal:
+Make the reviewer workbench useful for operator judgment by showing deterministic-vs-advisory comparison rows, source-pointer chips, and evaluator provenance refs without granting advisory material production authority.
+
+Build:
+- Add a Phase 38 comparison/provenance contract derived from existing safe workbench rows.
+- Include deterministic validator/gate facts beside advisory draft facts.
+- Render source-pointer chips from safe advisory metadata.
+- Render evaluator provenance refs for evaluator mode, model ref, provider ref, and observed egress ref when present.
+- Expose `pems_reviewer_comparison_provenance` through connector proof.
+- Keep `productionDrivingAllowed=false`.
+
+Non-goals:
+- Do not generate new live LLM evaluator drafts in this phase.
+- Do not count mocked LLM output as live proof.
+- Do not store raw prompts, raw completions, raw advisory notes, raw traces, raw OCR, raw frames, credentials, or secrets.
+- Do not let comparison output drive recommendations, routing, approvals, browser actions, OpenClaw dispatch, payer contact, external messages, or writes.
+
+Gates:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- API proof for `pems_reviewer_comparison_provenance`
+- Browser/dashboard proof that the comparison/provenance panel renders and the score reaches the Phase 38 target
+- Cortex semantic/episodic mirror after verification
+
+Next:
+Phase 39 should add live-gated evaluator generation and reviewer filtering only when credentials and observed egress are present.

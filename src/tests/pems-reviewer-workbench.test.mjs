@@ -8,6 +8,7 @@ import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildCaseState,
   buildContinuousIntelligenceShadow,
+  buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
   createPemsEvaluatorDraft,
   getPemsReviewerWorkbenchStatus,
@@ -88,7 +89,15 @@ test("PEMS reviewer workbench stores sanitized evaluator drafts without changing
       claim: "Coverage explanation matches source pointer artifact_phase36.",
       rawFrameText: "never store this raw trace text"
     },
-    metadata: { evaluatorModelRef: "private-model-ref", sourcePointerIds: ["artifact_phase36"] }
+    metadata: {
+      evaluatorModelRef: "private-model-ref",
+      modelProviderRef: "observed-egress-provider",
+      egressTraceRef: "egress_trace_phase38",
+      sourcePointerIds: ["artifact_phase36"],
+      liveLlmEvaluatorUsed: true,
+      egressObserved: true,
+      mockedLlmOutput: true
+    }
   });
 
   assert.equal(created.version, "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1");
@@ -126,6 +135,23 @@ test("PEMS reviewer workbench stores sanitized evaluator drafts without changing
   assert.equal(afterReview.target, 85);
   assert.equal(afterReview.advisoryLinkedReviewCount, 1);
   assert.equal(afterReview.productionDrivingAllowed, false);
+
+  const comparison = buildPemsReviewerComparisonProvenance(afterReview);
+  assert.equal(comparison.version, "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1");
+  assert.equal(comparison.status, "phase38_reviewer_comparison_provenance_ready");
+  assert.equal(comparison.score, 90);
+  assert.equal(comparison.target, 90);
+  assert.equal(comparison.comparisonRows.length, 4);
+  assert.ok(comparison.comparisonRows.some((row) => row.key === "validator_decision"));
+  assert.deepEqual(comparison.evidenceChips, [{ id: "artifact_phase36", kind: "source_pointer_ref", rawSourceStored: false }]);
+  assert.equal(comparison.evaluatorProvenance.liveLlmEvaluation, true);
+  assert.equal(comparison.evaluatorProvenance.egressObserved, true);
+  assert.equal(comparison.evaluatorProvenance.liveProofClaimed, false);
+  assert.equal(comparison.evaluatorProvenance.mockedLlmOutputCountsAsProof, false);
+  assert.equal(comparison.evaluatorProvenance.rawPromptStored, false);
+  assert.equal(comparison.evaluatorProvenance.rawCompletionStored, false);
+  assert.equal(comparison.safety.automaticProductionRecommendation, false);
+  assert.equal(comparison.safety.productionDrivingAllowed, false);
 
   const reviews = await store.list("pems_candidate_promotion_reviews", { candidate_id: candidateId });
   assert.equal(reviews.length, 1);

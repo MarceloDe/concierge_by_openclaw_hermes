@@ -8378,3 +8378,52 @@ Browser/dashboard proof:
   - `artifacts/phase37/phase37-dashboard-proof.json`;
   - `artifacts/phase37/phase37-dashboard-workbench-proof.png`;
   - `artifacts/phase37/phase37-dashboard-score-proof.png`.
+
+Next phase:
+- Phase 38 should add deterministic-vs-advisory comparison rows, source-pointer evidence chips, and evaluator provenance refs without letting advisory material become production authority.
+
+## Phase 38 PEMS Reviewer Comparison And Provenance
+
+Status: Verified locally on branch `phase-38-reviewer-comparison-provenance`.
+
+Slice name:
+- Operator-facing deterministic-vs-advisory comparison and evaluator provenance.
+
+Context:
+- Phase 37 exposed the reviewer workbench in the dashboard.
+- Cortex Phase 37 named Phase 38 as richer reviewer comparison and provenance, while keeping comparison output advisory/ref-only.
+
+Implemented code and docs:
+- Added `PEMS_REVIEWER_COMPARISON_VERSION`.
+- Added `buildPemsReviewerComparisonProvenance` to derive deterministic-vs-advisory comparison rows from existing safe workbench state.
+- Extended the workbench API with `reviewerComparison`.
+- Extended connector proof with `pems_reviewer_comparison_provenance`.
+- Added dashboard rendering for comparison rows, source-pointer chips, and evaluator provenance refs.
+- Updated build guards, UI contract tests, PEMS workbench tests, operating docs, scoreboard, acceptance criteria, implementation plan, and decisions.
+
+Safety decision:
+- The comparison is a reviewer aid only.
+- Mocked LLM output never counts as live LLM proof.
+- Raw prompts, raw completions, raw advisory notes, raw traces, raw OCR, raw frames, credentials, and secrets remain excluded.
+- The comparison cannot drive healthcare answers, workflow routing, approvals, browser actions, OpenClaw dispatch, payer contact, external messages, or writes.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification result:
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 15/15 tests.
+- `npm run build` passed and names the Phase 38 reviewer comparison/provenance contract.
+- `npm run test:local` passed with 223 total tests: 221 passed, 0 failed, and 2 expected live-gated skips.
+- API proof at `http://127.0.0.1:4218/api/continuous-intelligence/pems/workbench` shows `reviewerComparison` at `90 / 90`, four comparison rows, one source-pointer chip, `liveProofClaimed=false`, and `productionDrivingAllowed=false`.
+- Connector proof at `http://127.0.0.1:4218/api/proof/runs/server-connector-next-mobile-mvp` shows `pems_reviewer_comparison_provenance`, `continuous_procedural_memory` at `90 / 90`, `comparisonRows=4`, `liveProofClaimed=false`, and production driving disabled.
+
+Browser/dashboard proof:
+- Dashboard URL: `http://127.0.0.1:4218/?phase=phase-38-reviewer-comparison-provenance`
+- Browser DOM proof verified `phase38_reviewer_comparison_provenance_ready`, `90 / 90`, deterministic-vs-advisory comparison rows, source-pointer chip `phase36_public_example`, evaluator provenance, and live proof not claimed.
+- Visual and API proof artifacts:
+  - `artifacts/phase38/phase38-workbench-api-proof.json`;
+  - `artifacts/phase38/phase38-connector-proof.json`;
+  - `artifacts/phase38/phase38-dashboard-proof.json`;
+  - `artifacts/phase38/phase38-dashboard-dom-proof.json`;
+  - `artifacts/phase38/phase38-dashboard-workbench-proof.png`;
+  - `artifacts/phase38/phase38-dashboard-comparison-proof.png`;
+  - `artifacts/phase38/phase38-dashboard-provenance-proof.png`.

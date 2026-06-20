@@ -986,6 +986,39 @@ function pemsDecisionLabel(decision) {
   return { reviewType: "safety_review", decision: "blocked", label: "blocked" };
 }
 
+function renderPemsComparisonRows(rows = []) {
+  if (!rows.length) {
+    return `<p>No deterministic/advisory comparison rows are available yet.</p>`;
+  }
+  return `
+    <div class="pems-comparison-table" role="table" aria-label="Deterministic and advisory comparison">
+      <div class="pems-comparison-head" role="row">
+        <span>Check</span>
+        <span>Deterministic</span>
+        <span>Advisory</span>
+        <span>Agreement</span>
+      </div>
+      ${rows
+        .map(
+          (row) => `
+            <div class="pems-comparison-row" role="row">
+              <span>${escapeHtml(row.label ?? row.key ?? "comparison")}</span>
+              <span>${escapeHtml(row.deterministicValue ?? "n/a")}</span>
+              <span>${escapeHtml(row.advisoryValue ?? "n/a")}</span>
+              <span>${escapeHtml(row.agreement ? "aligned" : "review")}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderEvidenceChips(chips = []) {
+  if (!chips.length) return `<p class="status-text">No source-pointer chips attached to this advisory draft.</p>`;
+  return `<div class="pems-evidence-chips">${chips.map((chip) => `<span>${escapeHtml(chip.id)}</span>`).join("")}</div>`;
+}
+
 function renderPemsWorkbench(payload) {
   if (!pemsWorkbench) return;
   latestPemsWorkbench = payload;
@@ -993,6 +1026,16 @@ function renderPemsWorkbench(payload) {
   const candidate = payload.latestCandidate ?? {};
   const gate = payload.latestGate ?? {};
   const safety = payload.safety ?? {};
+  const comparison = payload.reviewerComparison ?? {
+    status: "phase38_reviewer_comparison_waiting_for_draft",
+    score: 88,
+    target: 90,
+    comparisonRows: [],
+    evidenceChips: [],
+    evaluatorProvenance: {},
+    safety: { productionDrivingAllowed: false }
+  };
+  const provenance = comparison.evaluatorProvenance ?? {};
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1001,18 +1044,20 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${reviewerUi.status ?? "phase37_pems_reviewer_ui_ready"} · ${reviewerUi.score ?? 88} / ${reviewerUi.target ?? 88}`;
+    pemsWorkbenchStatus.textContent = `${comparison.status ?? "phase38_reviewer_comparison_waiting_for_draft"} · ${comparison.score ?? 88} / ${comparison.target ?? 90}`;
   }
   setPemsReviewActionsEnabled(available);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 37 UI Gate</h3>
+      <h3>Phase 38 Comparison Gate</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(reviewerUi.status ?? "phase37_pems_reviewer_ui_ready")}</dd>
+        <dd>${escapeHtml(comparison.status ?? "phase38_reviewer_comparison_waiting_for_draft")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(reviewerUi.score ?? 88)} / ${escapeHtml(reviewerUi.target ?? 88)}</dd>
-        <dt>Underlying queue</dt>
+        <dd>${escapeHtml(comparison.score ?? 88)} / ${escapeHtml(comparison.target ?? 90)}</dd>
+        <dt>Underlying UI gate</dt>
+        <dd>${escapeHtml(reviewerUi.status ?? "phase37_pems_reviewer_ui_ready")} · ${escapeHtml(reviewerUi.score ?? 88)} / ${escapeHtml(reviewerUi.target ?? 88)}</dd>
+        <dt>Underlying workbench</dt>
         <dd>${escapeHtml(payload.status ?? "unknown")} · ${escapeHtml(payload.score ?? 0)} / ${escapeHtml(payload.target ?? 85)}</dd>
         <dt>Drafts</dt>
         <dd>${escapeHtml(payload.draftCount ?? 0)} total · ${escapeHtml(payload.readyDraftCount ?? 0)} ready · ${escapeHtml(payload.blockedDraftCount ?? 0)} blocked</dd>
@@ -1063,6 +1108,30 @@ function renderPemsWorkbench(payload) {
         <dd>${escapeHtml(safety.rawConsistencyTraceStored ? "stored" : "not stored")}</dd>
         <dt>Decision boundary</dt>
         <dd>${escapeHtml(safety.advisoryDraftsOnly ? "advisory only" : "attention required")} · ${escapeHtml(safety.humanReviewerAuthority ? "human authority" : "missing human authority")}</dd>
+      </dl>
+    </article>
+    <article class="connector-card wide">
+      <h3>Deterministic Vs Advisory Comparison</h3>
+      ${renderPemsComparisonRows(comparison.comparisonRows)}
+    </article>
+    <article class="connector-card">
+      <h3>Cited Evidence Chips</h3>
+      ${renderEvidenceChips(comparison.evidenceChips)}
+      <p class="status-text">Raw source content is not stored in the reviewer UI.</p>
+    </article>
+    <article class="connector-card">
+      <h3>Evaluator Provenance</h3>
+      <dl>
+        <dt>Mode</dt>
+        <dd>${escapeHtml(provenance.evaluatorMode ?? "not_available")}</dd>
+        <dt>Model ref</dt>
+        <dd>${escapeHtml(provenance.evaluatorModelRef ?? "not_provided")}</dd>
+        <dt>Egress ref</dt>
+        <dd>${escapeHtml(provenance.egressTraceRef ?? "not_provided")}</dd>
+        <dt>Live proof</dt>
+        <dd>${escapeHtml(provenance.liveProofClaimed ? "observed" : "not claimed")}</dd>
+        <dt>Raw prompt/output</dt>
+        <dd>${escapeHtml(provenance.rawPromptStored || provenance.rawCompletionStored ? "attention" : "not stored")}</dd>
       </dl>
     </article>
   `;

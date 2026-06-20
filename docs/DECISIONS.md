@@ -2557,3 +2557,22 @@ This gives a regular operator a real review surface now, keeps the implementatio
 
 Cost of changing later:
 Low. A future Phase 38 can add richer deterministic-vs-advisory diffs and live LLM evaluator provenance while keeping the same review API and advisory-only ledger.
+
+## 2026-06-19 - Add Reviewer Comparison And Provenance Without Production Authority
+
+Context:
+Phase 37 made the PEMS workbench usable, but the reviewer still had to mentally compare deterministic gate facts against advisory draft facts. Cortex named Phase 38 as the richer comparison/provenance phase while preserving the same advisory-only boundary.
+
+Options considered:
+- Generate new live LLM evaluator output immediately.
+- Add another database table for comparison rows.
+- Derive deterministic-vs-advisory comparison and provenance from the existing safe draft, gate, and metadata rows.
+
+Decision:
+Add `buildPemsReviewerComparisonProvenance`, expose `reviewerComparison` through the workbench API, render comparison rows/evidence chips/provenance in the operator dashboard, and expose `pems_reviewer_comparison_provenance` through connector proof.
+
+Reason:
+This improves operator judgment without increasing production authority or requiring a live model key. The comparison is deterministic and ref-only, while live LLM provenance can be represented only when observed egress refs exist. Mocked LLM output never counts as live proof.
+
+Cost of changing later:
+Low. A future phase can add live-gated evaluator generation or multi-draft filtering using the same `reviewerComparison` shape and advisory-only ledger.

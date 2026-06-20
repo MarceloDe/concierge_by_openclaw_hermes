@@ -771,6 +771,61 @@ button:disabled {
   background: #f7fbf8;
 }
 
+.pems-comparison-table {
+  border: 1px solid #d9e4dd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pems-comparison-head,
+.pems-comparison-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr 86px;
+  gap: 0;
+}
+
+.pems-comparison-head span,
+.pems-comparison-row span {
+  border-right: 1px solid #d9e4dd;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+
+.pems-comparison-head span:last-child,
+.pems-comparison-row span:last-child {
+  border-right: 0;
+}
+
+.pems-comparison-head {
+  background: #eef6f2;
+  color: #123b32;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.pems-comparison-row {
+  border-top: 1px solid #d9e4dd;
+  font-size: 13px;
+}
+
+.pems-evidence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pems-evidence-chips span {
+  border: 1px solid #c8d9cf;
+  border-radius: 999px;
+  background: #f4faf7;
+  color: #123b32;
+  font-size: 12px;
+  padding: 5px 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .pems-review-form {
   border-top: 1px solid #dbe4dd;
   display: grid;
@@ -1313,6 +1368,17 @@ pre {
   .pems-workbench-grid,
   .pems-review-form {
     grid-template-columns: 1fr;
+  }
+
+  .pems-comparison-head,
+  .pems-comparison-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pems-comparison-head span,
+  .pems-comparison-row span {
+    border-right: 0;
+    border-top: 1px solid #d9e4dd;
   }
 
   .phase4-grid {

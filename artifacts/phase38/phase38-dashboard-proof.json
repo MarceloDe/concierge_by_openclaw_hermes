@@ -1,0 +1,28 @@
+{
+  "phase": 38,
+  "name": "pems-reviewer-comparison-provenance",
+  "capturedAt": "2026-06-20T03:49:32Z",
+  "route": "http://127.0.0.1:4218/?phase=phase-38-reviewer-comparison-provenance",
+  "apiProof": {
+    "workbench": "artifacts/phase38/phase38-workbench-api-proof.json",
+    "connectorProof": "artifacts/phase38/phase38-connector-proof.json"
+  },
+  "visualProof": {
+    "workbenchPanel": "artifacts/phase38/phase38-dashboard-workbench-proof.png",
+    "comparisonPanel": "artifacts/phase38/phase38-dashboard-comparison-proof.png",
+    "provenancePanel": "artifacts/phase38/phase38-dashboard-provenance-proof.png",
+    "domProof": "artifacts/phase38/phase38-dashboard-dom-proof.json"
+  },
+  "assertions": {
+    "phase38StatusVisible": true,
+    "phase38ScoreVisible": "90 / 90",
+    "comparisonRowsVisible": 4,
+    "sourcePointerChipVisible": true,
+    "evaluatorProvenanceVisible": true,
+    "liveProofClaimed": false,
+    "mockedLlmOutputCountsAsProof": false,
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "productionDrivingAllowed": false
+  }
+}
