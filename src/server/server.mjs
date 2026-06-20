@@ -74,6 +74,7 @@ import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
   buildPemsPromotionReadinessProof,
+  buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
   createPemsEvaluatorDraft,
   getContinuousIntelligencePersistenceStatus,
@@ -1059,6 +1060,10 @@ function buildPemsReviewerUiProof() {
   };
 }
 
+function buildPemsReviewerComparisonProof(status) {
+  return buildPemsReviewerComparisonProvenance(status);
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1072,6 +1077,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsReviewerWorkbenchStatus = await getPemsReviewerWorkbenchStatus(store);
   const pemsReviewerWorkbench = buildPemsReviewerWorkbenchReadinessProof(pemsReviewerWorkbenchStatus);
   const pemsReviewerUi = buildPemsReviewerUiProof();
+  const pemsReviewerComparison = buildPemsReviewerComparisonProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1136,6 +1142,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_reviewer_ui",
         status: pemsReviewerUi.status,
         target: "Phase 37 exposes an operator-facing reviewer UI for ref-only advisory material and explicit approve/reject/block review actions."
+      },
+      {
+        key: "pems_reviewer_comparison_provenance",
+        status: pemsReviewerComparison.status,
+        target: "Phase 38 renders deterministic-vs-advisory comparison rows, cited evidence chips, and live-gated evaluator provenance without automatic production recommendations."
       },
       {
         key: "docker_connector_deployment",
@@ -1652,6 +1663,21 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsReviewerUi.productionDrivingAllowed,
         safety: pemsReviewerUi.safety
       },
+      {
+        key: "pems_reviewer_comparison_provenance",
+        status: pemsReviewerComparison.status,
+        ok: pemsReviewerComparison.ok,
+        mode: pemsReviewerComparison.mode,
+        score: pemsReviewerComparison.score,
+        target: pemsReviewerComparison.target,
+        candidateId: pemsReviewerComparison.candidateId,
+        advisoryDraftId: pemsReviewerComparison.advisoryDraftId,
+        comparisonRows: pemsReviewerComparison.comparisonRows,
+        evidenceChips: pemsReviewerComparison.evidenceChips,
+        evaluatorProvenance: pemsReviewerComparison.evaluatorProvenance,
+        productionDrivingAllowed: pemsReviewerComparison.safety.productionDrivingAllowed,
+        safety: pemsReviewerComparison.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1701,6 +1727,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsReviewerUi.status,
         proof: "Phase 37 reviewer UI renders ref-only advisory drafts and approve/reject/block controls backed by explicit review writes."
+      },
+      {
+        route: "/",
+        required: true,
+        status: pemsReviewerComparison.status,
+        proof: "Phase 38 reviewer comparison panel renders deterministic-vs-advisory rows, source-pointer chips, and evaluator provenance without claiming production authority."
       }
     ],
     scores: [
@@ -1713,15 +1745,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       },
       {
         key: "continuous_procedural_memory",
-        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score),
-        target: pemsReviewerUi.target,
-        status: pemsReviewerUi.status,
+        score: Math.max(pemsPromotion.score, pemsReviewerWorkbench.score, pemsReviewerUi.score, pemsReviewerComparison.score),
+        target: pemsReviewerComparison.target,
+        status: pemsReviewerComparison.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
         evaluatorDraftCount: pemsReviewerWorkbench.draftCount,
         advisoryLinkedReviewCount: pemsReviewerWorkbench.advisoryLinkedReviewCount,
         reviewerUiActions: pemsReviewerUi.actions,
+        comparisonRows: pemsReviewerComparison.comparisonRows.length,
+        liveProofClaimed: pemsReviewerComparison.evaluatorProvenance.liveProofClaimed,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -1883,6 +1917,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       continuousIntelligencePersistenceOnly: true,
       pemsReviewerWorkbenchAdvisoryOnly: true,
       pemsReviewerUiRefOnly: true,
+      pemsReviewerComparisonRefOnly: true,
       cortexIsProjectMemoryOnly: true,
       nonMockedProofRequired: true,
       publicApi: "/api/v1",
@@ -1944,7 +1979,8 @@ async function handleApi(req, res, url) {
     const status = await getPemsReviewerWorkbenchStatus(store);
     sendJson(res, 200, {
       ...buildPemsReviewerWorkbenchReadinessProof(status),
-      reviewerUi: buildPemsReviewerUiProof()
+      reviewerUi: buildPemsReviewerUiProof(),
+      reviewerComparison: buildPemsReviewerComparisonProof(status)
     });
     return;
   }

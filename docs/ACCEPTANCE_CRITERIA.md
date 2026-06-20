@@ -2410,3 +2410,21 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `pems_reviewer_ui`
+
+## Phase 38: PEMS Reviewer Comparison And Provenance
+
+Acceptance criteria:
+- Workbench responses include a `reviewerComparison` object.
+- `reviewerComparison` includes deterministic-vs-advisory rows for validator decision, promotion gate, cited evidence refs, and production boundary.
+- `reviewerComparison` includes source-pointer chips from advisory metadata without raw source content.
+- `reviewerComparison` includes evaluator provenance refs for evaluator mode, model ref, provider ref, and egress ref when present.
+- Raw prompts, raw completions, raw advisory notes, raw consistency traces, raw OCR, raw frames, credentials, and secrets are not returned.
+- Mocked LLM output does not count as live LLM proof.
+- Connector proof includes `pems_reviewer_comparison_provenance`.
+- The `continuous_procedural_memory` score can advance only to the Phase 38 reviewer-comparison target while `productionDrivingAllowed=false`.
+
+Focused proof:
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs`
+- `npm run build`
+- `npm run test:local`
+- Browser/API proof for `pems_reviewer_comparison_provenance`

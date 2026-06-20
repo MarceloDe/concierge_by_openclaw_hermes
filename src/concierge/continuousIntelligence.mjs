@@ -6,6 +6,7 @@ export const CONTINUOUS_INTELLIGENCE_SHADOW_VERSION = "2026-06-18.phase33-contin
 export const CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION = "2026-06-18.phase34-shadow-persistence.v1";
 export const PEMS_PROMOTION_GATE_VERSION = "2026-06-18.phase35-pems-supervised-promotion-gate.v1";
 export const PEMS_REVIEW_WORKBENCH_VERSION = "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1";
+export const PEMS_REVIEWER_COMPARISON_VERSION = "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -406,6 +407,14 @@ function jsonValue(value, fallback = {}) {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "string") return parseJson(value, fallback);
   return value;
+}
+
+function safeList(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => safePreview(item, 64))
+    .filter(Boolean)
+    .slice(0, 12);
 }
 
 function pemsInputsFromAggregate(aggregate) {
@@ -1318,6 +1327,109 @@ export function buildPemsReviewerWorkbenchReadinessProof(status = {}) {
       humanReviewerAuthority: true,
       rawAdvisoryNoteStored: false,
       rawConsistencyTraceStored: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function comparisonAgreement(row) {
+  if (row.key === "validator_decision") {
+    return row.deterministicValue === "pass" && ["pass", "approved"].includes(row.advisoryValue);
+  }
+  if (row.key === "production_boundary") return row.deterministicValue === "disabled" && row.advisoryValue === "disabled";
+  if (row.key === "citation_refs") return row.deterministicValue >= 1 && row.advisoryValue >= 1;
+  if (row.key === "promotion_gate") return row.deterministicValue !== "supervised_advisory_allowed" || row.advisoryValue === "draft_ready_for_human_review";
+  return false;
+}
+
+export function buildPemsReviewerComparisonProvenance(status = {}) {
+  const draft = status.latestDraft ?? null;
+  const candidate = status.latestCandidate ?? null;
+  const gate = status.latestGate ?? null;
+  const metadata = jsonValue(draft?.metadata, {});
+  const sourcePointerIds = safeList(metadata.sourcePointerIds);
+  const deterministicCitationRequirement = gate?.requirements?.find((item) => item.key === "citation_evidence_refs");
+  const deterministicEvidenceRefCount = rowNumber(deterministicCitationRequirement?.actual ?? candidate?.evidenceRefCount ?? 0);
+  const comparisonRows = draft
+    ? [
+        {
+          key: "validator_decision",
+          label: "Validator decision",
+          deterministicLabel: "deterministic validator",
+          deterministicValue: draft.deterministicValidatorStatus ?? "pending",
+          advisoryLabel: "advisory suggestion",
+          advisoryValue: draft.suggestedDecision ?? "blocked",
+          agreement: null
+        },
+        {
+          key: "promotion_gate",
+          label: "Promotion gate",
+          deterministicLabel: "gate status",
+          deterministicValue: gate?.status ?? "not_evaluated",
+          advisoryLabel: "draft status",
+          advisoryValue: draft.status ?? "draft_unavailable",
+          agreement: null
+        },
+        {
+          key: "citation_refs",
+          label: "Cited evidence refs",
+          deterministicLabel: "gate evidence refs",
+          deterministicValue: deterministicEvidenceRefCount,
+          advisoryLabel: "advisory source refs",
+          advisoryValue: sourcePointerIds.length,
+          agreement: null
+        },
+        {
+          key: "production_boundary",
+          label: "Production boundary",
+          deterministicLabel: "deterministic policy",
+          deterministicValue: gate?.productionDrivingAllowed ? "enabled" : "disabled",
+          advisoryLabel: "advisory policy",
+          advisoryValue: metadata.productionDrivingAllowed ? "enabled" : "disabled",
+          agreement: null
+        }
+      ].map((row) => ({ ...row, agreement: comparisonAgreement(row) }))
+    : [];
+  const liveLlmEvaluation = metadata.liveLlmEvaluatorUsed === true;
+  const egressObserved = metadata.egressObserved === true || Boolean(metadata.egressTraceRef);
+  const mockedLlmOutput = metadata.mockedLlmOutput === true;
+  const liveProofClaimed = liveLlmEvaluation && egressObserved && !mockedLlmOutput;
+  const ready = Boolean(draft && candidate && comparisonRows.length > 0);
+  return {
+    version: PEMS_REVIEWER_COMPARISON_VERSION,
+    status: ready ? "phase38_reviewer_comparison_provenance_ready" : "phase38_reviewer_comparison_waiting_for_draft",
+    ok: true,
+    mode: "deterministic_vs_advisory_ref_only",
+    score: ready ? 90 : 88,
+    target: 90,
+    candidateId: candidate?.candidateId ?? draft?.candidateId ?? null,
+    advisoryDraftId: draft?.id ?? null,
+    comparisonRows,
+    evidenceChips: sourcePointerIds.map((id) => ({
+      id,
+      kind: "source_pointer_ref",
+      rawSourceStored: false
+    })),
+    evaluatorProvenance: {
+      evaluatorMode: draft?.evaluatorMode ?? "not_available",
+      evaluatorModelRef: safePreview(metadata.evaluatorModelRef ?? metadata.modelRef ?? "not_provided", 80),
+      modelProviderRef: safePreview(metadata.modelProviderRef ?? metadata.modelProvider ?? "not_provided", 80),
+      egressTraceRef: safePreview(metadata.egressTraceRef ?? metadata.egressObservationRef ?? "not_provided", 80),
+      liveGated: true,
+      liveLlmEvaluation,
+      egressObserved,
+      liveProofClaimed,
+      mockedLlmOutputCountsAsProof: false,
+      rawPromptStored: false,
+      rawCompletionStored: false
+    },
+    safety: {
+      refOnlyComparison: true,
+      rawAdvisoryNoteStored: false,
+      rawConsistencyTraceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      automaticProductionRecommendation: false,
       productionDrivingAllowed: false
     }
   };

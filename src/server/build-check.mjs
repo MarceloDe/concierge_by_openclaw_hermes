@@ -9,7 +9,9 @@ import {
   buildContinuousIntelligencePersistenceReadinessProof,
   buildContinuousIntelligenceReadinessProof,
   buildPemsPromotionReadinessProof,
+  buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
+  PEMS_REVIEWER_COMPARISON_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
   PEMS_PROMOTION_GATE_VERSION
 } from "../concierge/continuousIntelligence.mjs";
@@ -254,6 +256,40 @@ if (
   throw new Error("Phase 36 PEMS reviewer/evaluator workbench proof contract is incomplete.");
 }
 
+const pemsComparisonProof = buildPemsReviewerComparisonProvenance({
+  latestDraft: {
+    id: "draft_1",
+    candidateId: "candidate_1",
+    evaluatorMode: "llm_assisted_advisory",
+    status: "draft_ready_for_human_review",
+    deterministicValidatorStatus: "pass",
+    suggestedDecision: "pass",
+    metadata: {
+      sourcePointerIds: ["source_pointer_1"],
+      evaluatorModelRef: "model-ref",
+      egressTraceRef: "egress-trace",
+      liveLlmEvaluatorUsed: true,
+      egressObserved: true,
+      mockedLlmOutput: true
+    }
+  },
+  latestCandidate: { candidateId: "candidate_1" },
+  latestGate: {
+    status: "shadow_review_required",
+    productionDrivingAllowed: false,
+    requirements: [{ key: "citation_evidence_refs", actual: 1, target: 1 }]
+  }
+});
+if (
+  pemsComparisonProof.version !== PEMS_REVIEWER_COMPARISON_VERSION ||
+  pemsComparisonProof.status !== "phase38_reviewer_comparison_provenance_ready" ||
+  pemsComparisonProof.score !== 90 ||
+  pemsComparisonProof.evaluatorProvenance.liveProofClaimed !== false ||
+  pemsComparisonProof.safety.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 38 PEMS reviewer comparison/provenance proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
@@ -273,15 +309,19 @@ for (const requiredFragment of [
   "/api/continuous-intelligence/pems/reviews",
   "advisoryDraftId",
   "rawAdvisoryNoteStored",
-  "rawConsistencyTraceStored"
+  "rawConsistencyTraceStored",
+  "Phase 38 Comparison Gate",
+  "Deterministic Vs Advisory Comparison",
+  "Evaluator Provenance",
+  "liveProofClaimed"
 ]) {
   if (!appJs.includes(requiredFragment)) {
-    throw new Error(`Phase 37 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 38 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-review-form", "pems-review-actions"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
-    throw new Error(`Phase 37 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 38 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
 }
 
@@ -506,4 +546,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

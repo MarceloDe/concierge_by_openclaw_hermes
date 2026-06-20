@@ -1,0 +1,9 @@
+{
+  "hasPhase38Status": true,
+  "hasPhase38Score": true,
+  "hasComparison": true,
+  "hasEvidenceChip": true,
+  "hasProvenance": true,
+  "liveProofNotClaimed": true,
+  "textExcerpt": "Phase 38 Comparison Gate\nStatus\nphase38_reviewer_comparison_provenance_ready\nScore\n90 / 90\nUnderlying UI gate\nphase37_pems_reviewer_ui_ready · 88 / 88\nUnderlying workbench\nphase36_reviewer_evaluator_workbench_active · 85 / 85\nDrafts\n1 total · 1 ready · 0 blocked\nLinked reviews\n1\nAuthority\nhuman reviewer + deterministic validator · production driving disabled\nLatest Candidate\nCandidate\npems_40d7cea4abb98732\nWorkflow\neligibility_benefits_navigation\nShadow runs\n10\nPromotion\nshadow_review_required\nGate\nshadow_review_required\nAdvisory Draft\nDraft\npems_eval_draft_37213dbd-9d5c-4357-b402-303a55ab85d1\nMode\nllm_assisted_advisory\nSuggested review\nvalidator_evaluation · pass\nValidator\npass\nTrace ref\npems_consistency_trace_1f8ab99f98200667\nRef-Only Review Material\n\nPhase 36 safe advisory draft: source pointer refs are sufficient; no raw PHI included.\n\n{\"traceKind\":\"nestr_consistency_trace\",\"sourcePointerIds\":[\"phase36_public_example\"],\"refOnly\":true}\n\nRaw advisory note\nnot stored\nRaw consistency trace\nnot stored\nDecision boundary\nadvisory only · human authority\nDeterministic Vs Advisory Comparison\nCHECK\nDETERMINISTIC\nADVISORY\nAGREEMENT\nValidator decision\npass\npass\naligned\nPromotion gate\nshadow_review_required\ndraft_ready_for_human_review\naligned\nCited evidence refs\n10\n1\naligned\nProduction boundary\ndisabled\ndisabled\naligned\nCited Evidence Chips\nphase36_public_example\n\nRaw source content is not stored in the reviewer UI.\n\nEvaluator Provenance\nMode\nllm_assisted_advisory\nModel ref\nnot_provided\nEgress ref\nnot_provided\nLive proof\nnot claimed\nRaw prompt/output\nnot stored"
+}
