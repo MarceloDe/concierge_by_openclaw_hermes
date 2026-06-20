@@ -839,26 +839,44 @@ button:disabled {
   overflow: hidden;
 }
 
+.pems-claim-closure-table {
+  border: 1px solid #d9e4dd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .pems-comparison-head,
-.pems-comparison-row {
+.pems-comparison-row,
+.pems-claim-closure-head,
+.pems-claim-closure-row {
   display: grid;
   grid-template-columns: 1.1fr 1fr 1fr 86px;
   gap: 0;
 }
 
+.pems-claim-closure-head,
+.pems-claim-closure-row {
+  grid-template-columns: minmax(180px, 1.5fr) 130px minmax(140px, 1fr) minmax(160px, 1fr);
+}
+
 .pems-comparison-head span,
-.pems-comparison-row span {
+.pems-comparison-row span,
+.pems-claim-closure-head span,
+.pems-claim-closure-row span {
   border-right: 1px solid #d9e4dd;
   padding: 8px;
   overflow-wrap: anywhere;
 }
 
 .pems-comparison-head span:last-child,
-.pems-comparison-row span:last-child {
+.pems-comparison-row span:last-child,
+.pems-claim-closure-head span:last-child,
+.pems-claim-closure-row span:last-child {
   border-right: 0;
 }
 
-.pems-comparison-head {
+.pems-comparison-head,
+.pems-claim-closure-head {
   background: #eef6f2;
   color: #123b32;
   font-size: 12px;
@@ -866,9 +884,21 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.pems-comparison-row {
+.pems-comparison-row,
+.pems-claim-closure-row {
   border-top: 1px solid #d9e4dd;
   font-size: 13px;
+}
+
+.pems-claim-closure-row.unsupported span:nth-child(2),
+.pems-claim-closure-row.low_confidence span:nth-child(2) {
+  color: #7f2e23;
+  font-weight: 700;
+}
+
+.pems-claim-closure-row.supported span:nth-child(2) {
+  color: #14593d;
+  font-weight: 700;
 }
 
 .pems-evidence-chips {
@@ -1434,12 +1464,16 @@ pre {
   }
 
   .pems-comparison-head,
-  .pems-comparison-row {
+  .pems-comparison-row,
+  .pems-claim-closure-head,
+  .pems-claim-closure-row {
     grid-template-columns: 1fr;
   }
 
   .pems-comparison-head span,
-  .pems-comparison-row span {
+  .pems-comparison-row span,
+  .pems-claim-closure-head span,
+  .pems-claim-closure-row span {
     border-right: 0;
     border-top: 1px solid #d9e4dd;
   }

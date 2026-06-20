@@ -2900,3 +2900,29 @@ Gates:
 
 Next:
 Phase 40 should add claim-level citation closure display and reviewer-side advisory edits, still ref-only and human-gated.
+## Phase 40: PEMS Live Claim Citation Closure
+
+Goal: make live evaluator advisory output safer for human review by labeling each advisory claim as supported, low confidence, or unsupported against the draft's allowed source pointer IDs.
+
+Scope:
+
+- Add a Phase 40 PEMS claim-citation-closure contract in `src/concierge/continuousIntelligence.mjs`.
+- Extend live evaluator output parsing to accept claim-level closure rows with source pointer IDs, confidence, explanations, and reviewer-side suggested edits.
+- Store only claim hashes, safe previews, labels, allowed source pointer IDs, suggested edit previews, and summary counts in draft metadata.
+- Expose `liveClaimCitationClosure` through `/api/continuous-intelligence/pems/workbench`.
+- Expose `pems_live_claim_citation_closure` through the connector proof run.
+- Render a dashboard claim-closure table and disable approval when unsupported or low-confidence claims require edits.
+
+Non-goals:
+
+- Do not make PEMS production-driving.
+- Do not create evidence from claim labels.
+- Do not store raw prompts, raw completions, raw claims, raw source text, raw OCR, raw frames, credentials, or PHI.
+- Do not allow claim labels to drive healthcare answers, routing, OpenClaw dispatch, payer contact, external messages, or payer writes.
+
+Acceptance:
+
+- Focused PEMS tests prove unsupported claims are source-pointer filtered and veto approval.
+- Build checks fail if the Phase 40 proof, UI strings, or CSS table are removed.
+- Full local tests pass.
+- Dashboard visual proof shows the Phase 40 score, claim labels, reviewer edit requirement, and production driving disabled.

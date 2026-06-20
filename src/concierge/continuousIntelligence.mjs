@@ -10,6 +10,7 @@ export const PEMS_PROMOTION_GATE_VERSION = "2026-06-18.phase35-pems-supervised-p
 export const PEMS_REVIEW_WORKBENCH_VERSION = "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1";
 export const PEMS_REVIEWER_COMPARISON_VERSION = "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1";
 export const PEMS_LIVE_EVALUATOR_FILTERING_VERSION = "2026-06-20.phase39-live-evaluator-generation-filtering.v1";
+export const PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION = "2026-06-20.phase40-live-claim-citation-closure.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -420,6 +421,108 @@ function safeList(value) {
     .slice(0, 12);
 }
 
+function normalizeClaimStatus(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["supported", "low_confidence", "unsupported"].includes(normalized)) return normalized;
+  return "unsupported";
+}
+
+function safeSourcePointerIds(value, allowedIds = []) {
+  const allowed = new Set(safeList(allowedIds));
+  return safeList(value).filter((id) => !allowed.size || allowed.has(id));
+}
+
+function normalizePemsClaimCitationClosure(value, { allowedSourcePointerIds = [] } = {}) {
+  const claims = Array.isArray(value) ? value : [];
+  return claims
+    .map((item, index) => {
+      const claimPreview = safePreview(item?.claim ?? item?.text ?? item?.claimPreview ?? item?.claim_preview, 220);
+      const status = normalizeClaimStatus(item?.status ?? item?.label);
+      const sourcePointerIds = safeSourcePointerIds(item?.sourcePointerIds ?? item?.source_pointer_ids ?? item?.citations ?? [], allowedSourcePointerIds);
+      const effectiveStatus = sourcePointerIds.length || status !== "supported" ? status : "low_confidence";
+      const suggestedEditPreview = safePreview(item?.suggestedEdit ?? item?.suggested_edit ?? item?.revision ?? "", 220);
+      if (!claimPreview) return null;
+      return {
+        id: stableRef("pems_claim", index, claimPreview),
+        claimHash: hashText(claimPreview),
+        claimPreview,
+        status: effectiveStatus,
+        sourcePointerIds,
+        sourcePointerCount: sourcePointerIds.length,
+        confidence: Math.max(0, Math.min(1, Number(item?.confidence ?? (effectiveStatus === "supported" ? 0.8 : 0.25)) || 0)),
+        explanationPreview: safePreview(item?.explanation ?? item?.reason ?? "", 180),
+        suggestedEditPreview,
+        requiresReviewerEdit: effectiveStatus !== "supported",
+        rawClaimStored: false,
+        rawSourceStored: false
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function pemsClaimCitationClosureSummary(claims = []) {
+  const supportedCount = claims.filter((claim) => claim.status === "supported").length;
+  const lowConfidenceCount = claims.filter((claim) => claim.status === "low_confidence").length;
+  const unsupportedCount = claims.filter((claim) => claim.status === "unsupported").length;
+  const claimCount = claims.length;
+  const verdict =
+    claimCount === 0
+      ? "no_claims_detected"
+      : unsupportedCount > 0
+        ? "unsupported_claims_found"
+        : lowConfidenceCount > 0
+          ? "low_confidence_claims_found"
+          : "all_claims_supported";
+  return {
+    version: PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
+    status:
+      verdict === "all_claims_supported"
+        ? "phase40_claim_citation_closure_passed"
+        : verdict === "no_claims_detected"
+          ? "phase40_claim_citation_closure_no_claims"
+          : "phase40_claim_citation_closure_vetoed",
+    verdict,
+    claimCount,
+    supportedCount,
+    lowConfidenceCount,
+    unsupportedCount,
+    reviewerEditRequired: unsupportedCount > 0 || lowConfidenceCount > 0,
+    unsupportedClaimHashes: claims.filter((claim) => claim.status !== "supported").map((claim) => claim.claimHash),
+    productionDrivingAllowed: false
+  };
+}
+
+export function buildPemsDraftClaimCitationClosure(draft = {}) {
+  const metadata = jsonValue(draft?.metadata ?? draft?.metadata_json, {});
+  const allowedSourcePointerIds = safeList(metadata.sourcePointerIds);
+  const claims = normalizePemsClaimCitationClosure(metadata.claimCitationClosure ?? metadata.claim_citation_closure ?? [], {
+    allowedSourcePointerIds
+  });
+  const summary = pemsClaimCitationClosureSummary(claims);
+  return {
+    ...summary,
+    claims,
+    allowedSourcePointerIds,
+    advisoryDraftId: draft?.id ?? null,
+    candidateId: draft?.candidateId ?? draft?.candidate_id ?? null,
+    sourcePointerBounded: claims.every((claim) => claim.status !== "supported" || claim.sourcePointerIds.length > 0),
+    liveEvaluatorDraft:
+      metadata.liveEvaluatorGeneration === true &&
+      metadata.liveLlmEvaluatorUsed === true &&
+      metadata.egressObserved === true &&
+      metadata.mockedLlmOutput !== true,
+    safety: {
+      rawClaimStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      reviewerEditRequiredForUnsupported: summary.reviewerEditRequired,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
 function pemsInputsFromAggregate(aggregate) {
   return {
     candidateId: aggregate.candidateId,
@@ -521,7 +624,7 @@ function filteredDraftWhere(filters = {}) {
 
 function formatPemsDraftRow(row) {
   if (!row) return null;
-  return {
+  const formatted = {
     id: row.id,
     candidateId: row.candidate_id,
     actorUserId: row.actor_user_id,
@@ -539,6 +642,10 @@ function formatPemsDraftRow(row) {
     metadata: parseJson(row.metadata_json, {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+  return {
+    ...formatted,
+    claimCitationClosure: buildPemsDraftClaimCitationClosure(formatted)
   };
 }
 
@@ -837,22 +944,28 @@ function liveEvaluatorBlocked(status, reason, details = {}) {
   };
 }
 
-function parseLiveEvaluatorContent(content) {
+function parseLiveEvaluatorContent(content, { allowedSourcePointerIds = [] } = {}) {
   const text = String(content ?? "");
   try {
     const parsed = JSON.parse(text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim());
+    const claimCitationClosure = normalizePemsClaimCitationClosure(
+      parsed.claimCitationClosure ?? parsed.claim_citation_closure ?? parsed.claims ?? [],
+      { allowedSourcePointerIds }
+    );
     return {
       advisoryNote: safePreview(parsed.advisoryNote ?? parsed.advisory_note ?? parsed.summary ?? text, 700),
       suggestedDecision: normalizeReviewDecision(parsed.suggestedDecision ?? parsed.suggested_decision ?? "pass"),
       suggestedReviewType: normalizeReviewType(parsed.suggestedReviewType ?? parsed.suggested_review_type ?? "validator_evaluation"),
-      citationClosure: safeList(parsed.citationClosure ?? parsed.citation_closure ?? parsed.sourcePointerIds ?? parsed.source_pointer_ids)
+      citationClosure: safeList(parsed.citationClosure ?? parsed.citation_closure ?? parsed.sourcePointerIds ?? parsed.source_pointer_ids),
+      claimCitationClosure
     };
   } catch {
     return {
       advisoryNote: safePreview(text, 700),
       suggestedDecision: "pass",
       suggestedReviewType: "validator_evaluation",
-      citationClosure: []
+      citationClosure: [],
+      claimCitationClosure: []
     };
   }
 }
@@ -872,7 +985,17 @@ function buildLiveEvaluatorMessages({ candidate, sourcePointerIds, deterministic
           advisoryNote: "short safe reviewer note with no raw source text",
           suggestedReviewType: "validator_evaluation | citation_evaluation | safety_review | human_review",
           suggestedDecision: "pass | fail | blocked | approved | rejected",
-          citationClosure: ["source_pointer_id"]
+          citationClosure: ["source_pointer_id"],
+          claimCitationClosure: [
+            {
+              claim: "short factual advisory claim preview",
+              status: "supported | low_confidence | unsupported",
+              sourcePointerIds: ["source_pointer_id"],
+              confidence: 0.0,
+              explanation: "short safe reason",
+              suggestedEdit: "short reviewer-side edit when unsupported or low confidence"
+            }
+          ]
         },
         candidate: {
           candidateId: candidate?.candidate_id ?? candidate?.candidateId ?? null,
@@ -888,8 +1011,10 @@ function buildLiveEvaluatorMessages({ candidate, sourcePointerIds, deterministic
         sourcePointers: sourcePointerIds.map((id) => ({ id, kind: "source_pointer_ref" })),
         reviewerQuestion: safePreview(reviewerQuestion, 240),
         safety: {
+          claimLevelCitationClosureRequired: true,
           rawPromptStoredInDraft: false,
           rawCompletionStoredInDraft: false,
+          rawClaimStoredInDraft: false,
           productionDrivingAllowed: false
         }
       })
@@ -977,7 +1102,8 @@ export async function createLiveGatedPemsEvaluatorDraft(
     });
   }
 
-  const parsed = parseLiveEvaluatorContent(responseContent);
+  const parsed = parseLiveEvaluatorContent(responseContent, { allowedSourcePointerIds: normalizedSourcePointerIds });
+  const closureSummary = pemsClaimCitationClosureSummary(parsed.claimCitationClosure);
   const completionHash = hashText(responseContent);
   const result = await createPemsEvaluatorDraft(store, {
     candidateId: candidate.candidate_id,
@@ -985,14 +1111,16 @@ export async function createLiveGatedPemsEvaluatorDraft(
     draftType: "evaluator_draft_note",
     evaluatorMode: "llm_assisted_advisory",
     deterministicValidatorStatus,
-    suggestedReviewType: parsed.suggestedReviewType,
-    suggestedDecision: parsed.suggestedDecision,
+    suggestedReviewType: closureSummary.reviewerEditRequired ? "citation_evaluation" : parsed.suggestedReviewType,
+    suggestedDecision: closureSummary.reviewerEditRequired ? "blocked" : parsed.suggestedDecision,
     advisoryNote: parsed.advisoryNote,
     consistencyTrace: {
       traceKind: "phase39_live_evaluator_ref_trace",
       candidateId: candidate.candidate_id,
       sourcePointerIds: normalizedSourcePointerIds,
       citationClosure: parsed.citationClosure,
+      claimCitationClosure: parsed.claimCitationClosure,
+      claimCitationClosureSummary: closureSummary,
       completionHash,
       rawCompletionStored: false
     },
@@ -1001,6 +1129,9 @@ export async function createLiveGatedPemsEvaluatorDraft(
       liveEvaluatorGeneration: true,
       sourcePointerIds: normalizedSourcePointerIds,
       citationClosure: parsed.citationClosure,
+      claimCitationClosure: parsed.claimCitationClosure,
+      claimCitationClosureSummary: closureSummary,
+      claimLevelCitationClosure: true,
       evaluatorModelRef: `openai:${safePreview(model, 48)}`,
       modelProviderRef: "openai",
       egressTraceRef: `outbound_payload:${payloadObservation.payloadHash.slice(0, 16)}`,
@@ -1011,6 +1142,7 @@ export async function createLiveGatedPemsEvaluatorDraft(
       completionHash,
       rawPromptStored: false,
       rawCompletionStored: false,
+      rawClaimStored: false,
       rawSourceStored: false,
       productionDrivingAllowed: false
     },
@@ -1553,6 +1685,13 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
   const latestReviews = latestCandidate?.candidate_id ? await listPemsPromotionReviewsForCandidate(store, latestCandidate.candidate_id) : [];
   const latestGate = latestCandidate ? evaluatePemsPromotionGate(latestCandidate, latestReviews) : null;
   const draftCountValue = rowNumber(draftCounts?.draftCount);
+  const formattedDraftQueue = draftQueueRows.map(formatPemsDraftRow);
+  const formattedLatestDraft = formatPemsDraftRow(latestDraft);
+  const latestClaimCitationClosure = buildPemsDraftClaimCitationClosure(formattedLatestDraft);
+  const closureReadyDraftCount = formattedDraftQueue.filter((draft) => (draft?.claimCitationClosure?.claimCount ?? 0) > 0).length;
+  const closureVetoDraftCount = formattedDraftQueue.filter(
+    (draft) => (draft?.claimCitationClosure?.unsupportedCount ?? 0) > 0 || (draft?.claimCitationClosure?.lowConfidenceCount ?? 0) > 0
+  ).length;
   const status =
     draftCountValue > 0
       ? "phase36_reviewer_evaluator_workbench_active"
@@ -1574,6 +1713,8 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     liveGeneratedDraftCount: rowNumber(liveDraftCounts?.liveGeneratedDraftCount),
     liveProofDraftCount: rowNumber(liveDraftCounts?.liveProofDraftCount),
     mockedDraftCount: rowNumber(liveDraftCounts?.mockedDraftCount),
+    claimClosureDraftCount: closureReadyDraftCount,
+    claimClosureVetoDraftCount: closureVetoDraftCount,
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
@@ -1583,8 +1724,9 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
       evaluatorModes: ["all", "deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"],
       liveOnly: [false, true]
     },
-    draftQueue: draftQueueRows.map(formatPemsDraftRow),
-    latestDraft: formatPemsDraftRow(latestDraft),
+    draftQueue: formattedDraftQueue,
+    latestDraft: formattedLatestDraft,
+    latestClaimCitationClosure,
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -1695,6 +1837,55 @@ export function buildPemsLiveEvaluatorFilteringProof(status = {}, { openAiConfig
       rawCompletionStored: false,
       rawSourceStored: false,
       automaticProductionRecommendation: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsLiveClaimCitationClosureProof(status = {}) {
+  const closure = status.latestClaimCitationClosure ?? buildPemsDraftClaimCitationClosure(status.latestDraft);
+  const hasClosure = (closure.claimCount ?? 0) > 0;
+  const hasVeto = (closure.unsupportedCount ?? 0) > 0 || (closure.lowConfidenceCount ?? 0) > 0;
+  const hasSupported = (closure.supportedCount ?? 0) > 0;
+  const sourcePointerBounded = closure.sourcePointerBounded !== false;
+  const liveEvaluatorDraft = closure.liveEvaluatorDraft === true || (status.liveProofDraftCount ?? 0) > 0;
+  const ready = hasClosure && sourcePointerBounded && (hasSupported || hasVeto);
+  return {
+    version: PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
+    status: ready
+      ? hasVeto
+        ? "phase40_claim_citation_closure_veto_visible"
+        : "phase40_claim_citation_closure_supported"
+      : hasClosure
+        ? "phase40_claim_citation_closure_incomplete"
+        : "phase40_claim_citation_closure_waiting_for_claims",
+    ok: ready,
+    mode: "live_evaluator_claim_citation_closure",
+    score: ready ? 94 : hasClosure ? 92 : 90,
+    target: 94,
+    claimCount: closure.claimCount ?? 0,
+    supportedCount: closure.supportedCount ?? 0,
+    unsupportedCount: closure.unsupportedCount ?? 0,
+    lowConfidenceCount: closure.lowConfidenceCount ?? 0,
+    reviewerEditRequired: closure.reviewerEditRequired ?? false,
+    sourcePointerBounded,
+    liveEvaluatorDraft,
+    claimClosureDraftCount: status.claimClosureDraftCount ?? (hasClosure ? 1 : 0),
+    claimClosureVetoDraftCount: status.claimClosureVetoDraftCount ?? (hasVeto ? 1 : 0),
+    advisoryDraftId: closure.advisoryDraftId ?? null,
+    candidateId: closure.candidateId ?? null,
+    verdict: closure.verdict,
+    claims: closure.claims ?? [],
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawClaimStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      claimLabelsCreateEvidence: false,
+      unsupportedClaimsVetoApproval: hasVeto,
+      reviewerEditRequiredForUnsupported: hasVeto,
       productionDrivingAllowed: false
     }
   };

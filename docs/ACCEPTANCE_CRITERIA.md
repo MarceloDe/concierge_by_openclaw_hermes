@@ -2449,3 +2449,17 @@ Focused proof:
 - `npm run build`
 - `npm run test:local`
 - Browser/API proof for `pems_live_evaluator_generation_filtering`
+## Phase 40: PEMS Live Claim Citation Closure
+
+- `PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION` is defined.
+- Live evaluator output may include `claimCitationClosure` rows with claim preview, status, source pointer IDs, confidence, explanation, and suggested edit.
+- Source pointer IDs in claim rows are filtered to the draft's allowed source pointer IDs.
+- Supported claims require at least one allowed source pointer ID; otherwise they downgrade to low confidence.
+- Unsupported or low-confidence claims set `reviewerEditRequired=true`.
+- Workbench API returns `liveClaimCitationClosure`.
+- Connector proof exposes `pems_live_claim_citation_closure`.
+- Dashboard renders `Claim Citation Closure` with supported, low-confidence, and unsupported labels.
+- Approval is blocked in the UI while unsupported or low-confidence claims require reviewer edits.
+- Reject and block actions remain available.
+- Raw claims, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
+- `productionDrivingAllowed=false` remains enforced.

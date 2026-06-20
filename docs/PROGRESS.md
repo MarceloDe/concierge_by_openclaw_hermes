@@ -8480,3 +8480,48 @@ Browser/dashboard proof:
   - `artifacts/phase39/phase39-dashboard-workbench-proof.png`;
   - `artifacts/phase39/phase39-dashboard-provenance-proof.png`;
   - `artifacts/phase39/phase39-dashboard-filtered-proof.png`.
+## Phase 40 PEMS Live Claim Citation Closure
+
+Status: Implemented locally on branch `phase-40-live-claim-citation-closure`.
+
+What changed:
+
+- Added `PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION`.
+- Added claim-level citation closure normalization for live evaluator outputs.
+- Live evaluator output can now carry supported, low-confidence, and unsupported claim rows.
+- Supported claim rows are source-pointer bounded; unsupported or low-confidence rows require reviewer edits.
+- Draft metadata stores claim hashes/previews, allowed source pointer IDs, labels, suggested edit previews, and closure summary counts only.
+- Workbench API returns `liveClaimCitationClosure`.
+- Connector proof exposes `pems_live_claim_citation_closure`.
+- Dashboard renders a `Claim Citation Closure` table and disables approval when closure requires reviewer edits.
+- Reject and block remain available for vetoed advisory drafts.
+
+Safety:
+
+- Claim labels do not create evidence.
+- Claim labels do not drive production recommendations, healthcare answers, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or payer writes.
+- Raw claims, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, and PHI remain excluded.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification:
+
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 17/17 tests.
+- `npm run build` passed and names the Phase 40 live claim citation closure contract.
+- `npm run test:local` passed with 225 total tests, 223 passed, 0 failed, and 2 expected skips.
+- `git diff --check` passed.
+- Targeted secret and PHI scans over `src`, `docs`, and `artifacts/phase40` passed.
+- A live OpenAI-gated evaluator draft was created from the workbench API with one supported claim and one unsupported claim; mocked LLM output does not count as live proof.
+- The filtered workbench API showed `phase40_claim_citation_closure_veto_visible`, score `94 / 94`, `supported=1`, `unsupported=1`, `sourcePointerBounded=true`, `reviewerEditRequired=true`, and `productionDrivingAllowed=false`.
+- The connector proof raised `continuous_procedural_memory` to the Phase 40 target while keeping PEMS untrusted and advisory-only.
+- The dashboard DOM proof showed Phase 40 visible, unsupported claim visible, raw claim/source not stored, approval disabled, and reject/block enabled.
+- The in-app browser DOM proof passed; screenshot capture used the local Playwright fallback after the in-app browser screenshot call timed out.
+
+Artifacts:
+
+- `artifacts/phase40/phase40-live-evaluator-response.json`
+- `artifacts/phase40/phase40-workbench-filtered-api-proof.json`
+- `artifacts/phase40/phase40-connector-proof.json`
+- `artifacts/phase40/phase40-dashboard-dom-proof.json`
+- `artifacts/phase40/phase40-playwright-visual-proof.json`
+- `artifacts/phase40/phase40-dashboard-claim-closure-proof.png`

@@ -8,6 +8,7 @@ import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildCaseState,
   buildContinuousIntelligenceShadow,
+  buildPemsLiveClaimCitationClosureProof,
   buildPemsLiveEvaluatorFilteringProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
@@ -187,7 +188,15 @@ test("Phase 39 live-gated evaluator generation remains ref-only and filters draf
           advisoryNote: "The cited source pointer supports a validator review, but this remains advisory only.",
           suggestedReviewType: "validator_evaluation",
           suggestedDecision: "pass",
-          citationClosure: ["artifact_phase39"]
+          citationClosure: ["artifact_phase39"],
+          claimCitationClosure: [
+            {
+              claim: "The cited source pointer supports a validator review.",
+              status: "supported",
+              sourcePointerIds: ["artifact_phase39"],
+              confidence: 0.92
+            }
+          ]
         })
     }
   );
@@ -235,4 +244,72 @@ test("Phase 39 live-gated evaluator generation remains ref-only and filters draf
   assert.equal(liveProof.score, 92);
   assert.equal(liveProof.liveProofClaimed, true);
   assert.equal(liveProof.productionDrivingAllowed, false);
+});
+
+test("Phase 40 claim citation closure labels unsupported live evaluator claims and keeps approval advisory-only", async () => {
+  const store = await createStore();
+  const { candidateId } = await createMatureCandidate(store);
+
+  const generated = await createLiveGatedPemsEvaluatorDraft(
+    store,
+    {
+      candidateId,
+      actorUserId: "phase40_test",
+      sourcePointerIds: ["artifact_phase40"],
+      modelConfig: { configured: true, model: "gpt-5-mini", baseURL: "https://api.openai.com/v1" }
+    },
+    {
+      llmInvoker: async () =>
+        JSON.stringify({
+          advisoryNote: "One claim is supported. The deductible is definitely waived is unsupported and must be edited.",
+          suggestedReviewType: "validator_evaluation",
+          suggestedDecision: "pass",
+          citationClosure: ["artifact_phase40"],
+          claimCitationClosure: [
+            {
+              claim: "The cited source pointer supports a validator review.",
+              status: "supported",
+              sourcePointerIds: ["artifact_phase40"],
+              confidence: 0.93
+            },
+            {
+              claim: "The deductible is definitely waived.",
+              status: "unsupported",
+              sourcePointerIds: ["artifact_not_allowed"],
+              confidence: 0.12,
+              suggestedEdit: "Remove the deductible waiver claim unless a cited source pointer supports it."
+            }
+          ]
+        })
+    }
+  );
+
+  assert.equal(generated.status, "phase39_live_evaluator_mocked_output_not_proof");
+  assert.equal(generated.productionDrivingAllowed, false);
+
+  const status = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "needs_reviewer_attention"
+  });
+  assert.equal(status.latestClaimCitationClosure.version, "2026-06-20.phase40-live-claim-citation-closure.v1");
+  assert.equal(status.latestDraft.status, "needs_reviewer_attention");
+  assert.equal(status.latestClaimCitationClosure.claimCount, 2);
+  assert.equal(status.latestClaimCitationClosure.supportedCount, 1);
+  assert.equal(status.latestClaimCitationClosure.unsupportedCount, 1);
+  assert.equal(status.latestClaimCitationClosure.reviewerEditRequired, true);
+  assert.deepEqual(status.latestClaimCitationClosure.claims[1].sourcePointerIds, []);
+  assert.equal(status.latestClaimCitationClosure.claims[1].requiresReviewerEdit, true);
+  assert.equal(status.latestClaimCitationClosure.safety.rawClaimStored, false);
+  assert.equal(status.latestClaimCitationClosure.safety.rawSourceStored, false);
+
+  const proof = buildPemsLiveClaimCitationClosureProof(status);
+  assert.equal(proof.status, "phase40_claim_citation_closure_veto_visible");
+  assert.equal(proof.score, 94);
+  assert.equal(proof.target, 94);
+  assert.equal(proof.unsupportedCount, 1);
+  assert.equal(proof.reviewerEditRequired, true);
+  assert.equal(proof.sourcePointerBounded, true);
+  assert.equal(proof.safety.claimLabelsCreateEvidence, false);
+  assert.equal(proof.safety.unsupportedClaimsVetoApproval, true);
+  assert.equal(proof.productionDrivingAllowed, false);
 });
