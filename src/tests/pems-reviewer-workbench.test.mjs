@@ -10,12 +10,14 @@ import {
   buildContinuousIntelligenceShadow,
   buildPemsLiveClaimCitationClosureProof,
   buildPemsLiveEvaluatorFilteringProof,
+  buildPemsReviewerClaimRevisionProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
   createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
   getPemsReviewerWorkbenchStatus,
   persistContinuousIntelligenceShadowRun,
+  recordPemsClaimRevision,
   recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
 
@@ -311,5 +313,94 @@ test("Phase 40 claim citation closure labels unsupported live evaluator claims a
   assert.equal(proof.sourcePointerBounded, true);
   assert.equal(proof.safety.claimLabelsCreateEvidence, false);
   assert.equal(proof.safety.unsupportedClaimsVetoApproval, true);
+  assert.equal(proof.productionDrivingAllowed, false);
+});
+
+test("Phase 41 reviewer claim revisions persist before and after hashes with deterministic reclosure", async () => {
+  const store = await createStore();
+  const { candidateId } = await createMatureCandidate(store);
+
+  await createLiveGatedPemsEvaluatorDraft(
+    store,
+    {
+      candidateId,
+      actorUserId: "phase41_test",
+      sourcePointerIds: ["artifact_phase41"],
+      modelConfig: { configured: true, model: "gpt-5-mini", baseURL: "https://api.openai.com/v1" }
+    },
+    {
+      llmInvoker: async () =>
+        JSON.stringify({
+          advisoryNote: "The unsupported claim needs reviewer revision before approval.",
+          suggestedReviewType: "validator_evaluation",
+          suggestedDecision: "pass",
+          citationClosure: ["artifact_phase41"],
+          claimCitationClosure: [
+            {
+              claim: "The cited source pointer supports a validator review.",
+              status: "supported",
+              sourcePointerIds: ["artifact_phase41"],
+              confidence: 0.93
+            },
+            {
+              claim: "The deductible is definitely waived.",
+              status: "unsupported",
+              sourcePointerIds: [],
+              confidence: 0.12,
+              suggestedEdit: "Revise to say the deductible waiver is not supported by the cited source pointer."
+            }
+          ]
+        })
+    }
+  );
+
+  const before = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "needs_reviewer_attention"
+  });
+  const unsupportedClaim = before.latestClaimCitationClosure.claims.find((claim) => claim.status === "unsupported");
+  assert.ok(unsupportedClaim);
+
+  const revision = await recordPemsClaimRevision(store, {
+    candidateId,
+    advisoryDraftId: before.latestDraft.id,
+    claimId: unsupportedClaim.id,
+    actorUserId: "human_reviewer",
+    revisedClaim: "The cited source pointer does not support a deductible waiver.",
+    sourcePointerIds: ["artifact_phase41"],
+    metadata: { reviewerUiAction: "record_claim_revision" }
+  });
+
+  assert.equal(revision.version, "2026-06-20.phase41-reviewer-claim-revision-records.v1");
+  assert.equal(revision.status, "revision_reclosure_passed");
+  assert.equal(revision.deterministicReclosure.status, "phase41_revision_reclosure_passed");
+  assert.equal(revision.revision.sourcePointerIds[0], "artifact_phase41");
+  assert.notEqual(revision.revision.originalClaimHash, revision.revision.revisedClaimHash);
+  assert.equal(revision.safety.rawOriginalClaimStored, false);
+  assert.equal(revision.safety.rawSuggestedEditStored, false);
+  assert.equal(revision.safety.rawRevisedClaimStored, false);
+  assert.equal(revision.safety.rawSourceStored, false);
+  assert.equal(revision.safety.revisionCreatesEvidence, false);
+  assert.equal(revision.productionDrivingAllowed, false);
+
+  const after = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "needs_reviewer_attention"
+  });
+  assert.equal(after.claimRevisionCount, 1);
+  assert.equal(after.claimRevisionReclosedCount, 1);
+  assert.equal(after.latestClaimRevision.originalClaimHash, unsupportedClaim.claimHash);
+  assert.equal(after.latestClaimRevision.deterministicReclosure.sourcePointerBounded, true);
+  assert.equal(after.latestClaimRevision.safety.revisionCreatesEvidence, false);
+
+  const proof = buildPemsReviewerClaimRevisionProof(after);
+  assert.equal(proof.status, "phase41_reviewer_claim_revision_ready");
+  assert.equal(proof.score, 96);
+  assert.equal(proof.target, 96);
+  assert.equal(proof.deterministicReclosurePassed, true);
+  assert.equal(proof.sourcePointerBounded, true);
+  assert.equal(proof.preservesOriginalAndRevisedHashes, true);
+  assert.equal(proof.safety.revisionCreatesEvidence, false);
+  assert.equal(proof.safety.revisionBypassesHumanReview, false);
   assert.equal(proof.productionDrivingAllowed, false);
 });

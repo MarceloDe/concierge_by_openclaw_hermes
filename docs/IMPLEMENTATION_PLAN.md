@@ -2926,3 +2926,31 @@ Acceptance:
 - Build checks fail if the Phase 40 proof, UI strings, or CSS table are removed.
 - Full local tests pass.
 - Dashboard visual proof shows the Phase 40 score, claim labels, reviewer edit requirement, and production driving disabled.
+
+## Phase 41: PEMS Reviewer Claim Revision Records
+
+Goal: let a human reviewer turn a vetoed advisory claim into an explicit ref-only revision record, then re-run deterministic citation closure on that revision without creating evidence or production authority.
+
+Scope:
+
+- Add a `pems_candidate_claim_revisions` append-only ledger.
+- Add `PEMS_REVIEWER_CLAIM_REVISION_VERSION`.
+- Add a safe revision writer that binds candidate, advisory draft, claim id/hash, actor, original claim hash/preview, suggested edit hash/preview, revised claim hash/preview, allowed source pointer IDs, and deterministic reclosure.
+- Expose `POST /api/continuous-intelligence/pems/claim-revisions`.
+- Expose `reviewerClaimRevisions` through `/api/continuous-intelligence/pems/workbench`.
+- Expose `pems_reviewer_claim_revisions` through connector proof.
+- Render Phase 41 revision status and before/suggested/revised rows in the dashboard.
+
+Non-goals:
+
+- Do not make revisions production-driving.
+- Do not create evidence from reviewer edits.
+- Do not store raw claims, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, or PHI.
+- Do not allow revisions to drive healthcare answers, routing, OpenClaw dispatch, payer contact, external messages, or payer writes.
+
+Acceptance:
+
+- Focused PEMS tests prove reviewer revisions preserve before/after hashes and deterministic reclosure passes only with allowed source pointer IDs.
+- Build checks fail if the Phase 41 proof, API route, UI strings, CSS diff table, or schema table are removed.
+- Full local tests pass.
+- Dashboard visual proof shows the Phase 41 score, revision count, deterministic reclosure, before/suggested/revised rows, and production driving disabled.

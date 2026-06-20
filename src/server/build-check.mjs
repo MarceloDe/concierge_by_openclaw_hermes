@@ -11,10 +11,12 @@ import {
   buildPemsLiveClaimCitationClosureProof,
   buildPemsLiveEvaluatorFilteringProof,
   buildPemsPromotionReadinessProof,
+  buildPemsReviewerClaimRevisionProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerWorkbenchReadinessProof,
   PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
   PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
+  PEMS_REVIEWER_CLAIM_REVISION_VERSION,
   PEMS_REVIEWER_COMPARISON_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
   PEMS_PROMOTION_GATE_VERSION
@@ -217,12 +219,14 @@ if (
   !TABLES.includes("pems_candidate_maturity") ||
   !TABLES.includes("pems_candidate_promotion_reviews") ||
   !TABLES.includes("pems_candidate_evaluator_drafts") ||
+  !TABLES.includes("pems_candidate_claim_revisions") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews") ||
-  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_evaluator_drafts")
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_evaluator_drafts") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions")
 ) {
-  throw new Error("Database schema is missing Phase 36 continuous-intelligence review workbench tables");
+  throw new Error("Database schema is missing Phase 41 continuous-intelligence review workbench tables");
 }
 
 const pemsPromotionProof = buildPemsPromotionReadinessProof({
@@ -359,6 +363,32 @@ if (
   throw new Error("Phase 40 PEMS claim citation closure proof contract is incomplete.");
 }
 
+const pemsClaimRevisionProof = buildPemsReviewerClaimRevisionProof({
+  claimRevisionCount: 1,
+  claimRevisionReclosedCount: 1,
+  latestClaimRevision: {
+    id: "revision_1",
+    originalClaimHash: "original_hash",
+    revisedClaimHash: "revised_hash",
+    sourcePointerIds: ["source_pointer_1"],
+    deterministicReclosure: {
+      status: "phase41_revision_reclosure_passed",
+      sourcePointerBounded: true
+    }
+  }
+});
+if (
+  pemsClaimRevisionProof.version !== PEMS_REVIEWER_CLAIM_REVISION_VERSION ||
+  pemsClaimRevisionProof.status !== "phase41_reviewer_claim_revision_ready" ||
+  pemsClaimRevisionProof.score !== 96 ||
+  pemsClaimRevisionProof.deterministicReclosurePassed !== true ||
+  pemsClaimRevisionProof.preservesOriginalAndRevisedHashes !== true ||
+  pemsClaimRevisionProof.safety.revisionCreatesEvidence !== false ||
+  pemsClaimRevisionProof.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 41 PEMS reviewer claim revision proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
@@ -369,7 +399,9 @@ for (const requiredFragment of [
   "pemsDraftStatusFilter",
   "pemsEvaluatorModeFilter",
   "pemsLiveOnlyFilter",
-  "Phase 40"
+  "recordPemsClaimRevision",
+  "pemsClaimRevisionText",
+  "Phase 41"
 ]) {
   if (!appHtml.includes(requiredFragment)) {
     throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
@@ -384,7 +416,7 @@ for (const requiredFragment of [
   "advisoryDraftId",
   "rawAdvisoryNoteStored",
   "rawConsistencyTraceStored",
-  "Phase 40 Claim Citation Closure",
+  "Phase 41 Reviewer Claim Revisions",
   "Deterministic Vs Advisory Comparison",
   "Evaluator Provenance",
   "liveProofClaimed",
@@ -394,7 +426,11 @@ for (const requiredFragment of [
   "renderPemsDraftQueue",
   "Mocked output proof",
   "renderPemsClaimCitationClosure",
+  "renderPemsClaimRevision",
   "liveClaimCitationClosure",
+  "reviewerClaimRevisions",
+  "submitPemsClaimRevision",
+  "/api/continuous-intelligence/pems/claim-revisions",
   "pemsClaimClosureVetoed",
   "Claim citation closure requires reviewer edits before approval"
 ]) {
@@ -402,7 +438,7 @@ for (const requiredFragment of [
     throw new Error(`Phase 40 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-evidence-chips"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-revision-diff", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
     throw new Error(`Phase 40 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
@@ -629,4 +665,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

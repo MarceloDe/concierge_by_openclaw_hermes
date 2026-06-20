@@ -1,0 +1,17 @@
+{
+  "candidateId": "pems_40d7cea4abb98732",
+  "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+  "claimId": "pems_claim_d994ea836ea5c17c",
+  "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+  "actorUserId": "operator_visual_phase41",
+  "revisedClaim": "The cited source pointer does not support automatic enrollment without consent.",
+  "sourcePointerIds": [
+    "phase36_public_example"
+  ],
+  "metadata": {
+    "phase": 41,
+    "proofRun": "phase41_visual_api_refined",
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false
+  }
+}

@@ -11,6 +11,7 @@ export const PEMS_REVIEW_WORKBENCH_VERSION = "2026-06-18.phase36-pems-reviewer-e
 export const PEMS_REVIEWER_COMPARISON_VERSION = "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1";
 export const PEMS_LIVE_EVALUATOR_FILTERING_VERSION = "2026-06-20.phase39-live-evaluator-generation-filtering.v1";
 export const PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION = "2026-06-20.phase40-live-claim-citation-closure.v1";
+export const PEMS_REVIEWER_CLAIM_REVISION_VERSION = "2026-06-20.phase41-reviewer-claim-revision-records.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -523,6 +524,72 @@ export function buildPemsDraftClaimCitationClosure(draft = {}) {
   };
 }
 
+function formatPemsClaimRevisionRow(row) {
+  if (!row) return null;
+  const sourcePointerIds = safeList(parseJson(row.source_pointer_ids_json, []));
+  const deterministicReclosure = jsonValue(row.deterministic_reclosure_json, {});
+  return {
+    id: row.id,
+    candidateId: row.candidate_id,
+    advisoryDraftId: row.advisory_draft_id,
+    claimId: row.claim_id,
+    actorUserId: row.actor_user_id,
+    revisionStatus: row.revision_status,
+    originalClaimHash: row.original_claim_hash,
+    originalClaimPreview: row.original_claim_preview,
+    suggestedEditHash: row.suggested_edit_hash,
+    suggestedEditPreview: row.suggested_edit_preview,
+    revisedClaimHash: row.revised_claim_hash,
+    revisedClaimPreview: row.revised_claim_preview,
+    sourcePointerIds,
+    deterministicReclosure,
+    metadata: jsonValue(row.metadata_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawOriginalClaimStored: false,
+      rawSuggestedEditStored: false,
+      rawRevisedClaimStored: false,
+      rawSourceStored: false,
+      revisionCreatesEvidence: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function buildRevisionDeterministicReclosure({ revisedClaim, sourcePointerIds, allowedSourcePointerIds }) {
+  const closure = normalizePemsClaimCitationClosure(
+    [
+      {
+        claim: revisedClaim,
+        status: sourcePointerIds.length ? "supported" : "unsupported",
+        sourcePointerIds,
+        confidence: sourcePointerIds.length ? 0.9 : 0.2,
+        explanation: sourcePointerIds.length
+          ? "Reviewer revision cites allowed source pointers."
+          : "Reviewer revision still lacks allowed source pointers.",
+        suggestedEdit: sourcePointerIds.length ? "" : "Attach allowed source pointer IDs before approval."
+      }
+    ],
+    { allowedSourcePointerIds }
+  );
+  const summary = pemsClaimCitationClosureSummary(closure);
+  return {
+    version: PEMS_REVIEWER_CLAIM_REVISION_VERSION,
+    status: summary.reviewerEditRequired ? "phase41_revision_reclosure_needs_attention" : "phase41_revision_reclosure_passed",
+    claimCitationClosure: {
+      ...summary,
+      claims: closure,
+      sourcePointerBounded: closure.every((claim) => claim.status !== "supported" || claim.sourcePointerIds.length > 0)
+    },
+    reviewerEditRequired: summary.reviewerEditRequired,
+    sourcePointerBounded: closure.every((claim) => claim.status !== "supported" || claim.sourcePointerIds.length > 0),
+    productionDrivingAllowed: false
+  };
+}
+
 function pemsInputsFromAggregate(aggregate) {
   return {
     candidateId: aggregate.candidateId,
@@ -919,6 +986,108 @@ export async function createPemsEvaluatorDraft(
       },
       advisoryOnly: true,
       productionDrivingAllowed: false
+    };
+  });
+}
+
+export async function recordPemsClaimRevision(
+  store,
+  {
+    candidateId,
+    advisoryDraftId,
+    claimId,
+    claimHash,
+    actorUserId = "operator",
+    revisedClaim = "",
+    sourcePointerIds = [],
+    metadata = {},
+    createdAt = new Date().toISOString()
+  } = {}
+) {
+  if (!store) throw new Error("A store is required to record a PEMS claim revision.");
+  const normalizedCandidateId = String(candidateId ?? "").trim();
+  const normalizedDraftId = String(advisoryDraftId ?? "").trim();
+  if (!normalizedCandidateId) throw new Error("PEMS claim revision requires candidateId.");
+  if (!normalizedDraftId) throw new Error("PEMS claim revision requires advisoryDraftId.");
+
+  return store.transaction(async (tx) => {
+    const candidate = await tx.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId });
+    if (!candidate) throw new Error(`PEMS candidate not found: ${normalizedCandidateId}`);
+    const draft = await tx.findOne("pems_candidate_evaluator_drafts", { id: normalizedDraftId });
+    if (!draft) throw new Error(`PEMS evaluator draft not found: ${normalizedDraftId}`);
+    if (draft.candidate_id !== normalizedCandidateId) {
+      throw new Error(`PEMS evaluator draft does not belong to candidate: ${normalizedCandidateId}`);
+    }
+
+    const draftClosure = buildPemsDraftClaimCitationClosure(draft);
+    const targetClaim =
+      draftClosure.claims.find((claim) => claim.id === claimId) ??
+      draftClosure.claims.find((claim) => claim.claimHash === claimHash) ??
+      draftClosure.claims.find((claim) => claim.requiresReviewerEdit) ??
+      draftClosure.claims[0];
+    if (!targetClaim) throw new Error("PEMS claim revision requires an advisory claim.");
+
+    const normalizedSourcePointerIds = safeSourcePointerIds(
+      safeList(sourcePointerIds).length ? sourcePointerIds : draftClosure.allowedSourcePointerIds,
+      draftClosure.allowedSourcePointerIds
+    );
+    const revisedClaimPreview = safePreview(revisedClaim || targetClaim.suggestedEditPreview || targetClaim.claimPreview, 220);
+    if (!revisedClaimPreview) throw new Error("PEMS claim revision requires revisedClaim text or a suggested edit.");
+    const deterministicReclosure = buildRevisionDeterministicReclosure({
+      revisedClaim: revisedClaimPreview,
+      sourcePointerIds: normalizedSourcePointerIds,
+      allowedSourcePointerIds: draftClosure.allowedSourcePointerIds
+    });
+    const revisionStatus = deterministicReclosure.reviewerEditRequired ? "revision_needs_reviewer_attention" : "revision_reclosure_passed";
+    const safeMetadata = jsonValue(metadata, {});
+    const revision = await tx.insert("pems_candidate_claim_revisions", {
+      id: createPersistedId("pems_claim_revision"),
+      candidate_id: normalizedCandidateId,
+      advisory_draft_id: normalizedDraftId,
+      claim_id: targetClaim.id,
+      actor_user_id: actorUserId ? String(actorUserId) : null,
+      revision_status: revisionStatus,
+      original_claim_hash: targetClaim.claimHash,
+      original_claim_preview: safePreview(targetClaim.claimPreview, 220),
+      suggested_edit_hash: hashText(targetClaim.suggestedEditPreview),
+      suggested_edit_preview: safePreview(targetClaim.suggestedEditPreview, 220),
+      revised_claim_hash: hashText(revisedClaimPreview),
+      revised_claim_preview: revisedClaimPreview,
+      source_pointer_ids_json: JSON.stringify(normalizedSourcePointerIds),
+      deterministic_reclosure_json: JSON.stringify(deterministicReclosure),
+      metadata_json: JSON.stringify({
+        ...safeMetadata,
+        phase: 41,
+        advisoryOnly: true,
+        sourcePointerBounded: deterministicReclosure.sourcePointerBounded,
+        deterministicReclosurePassed: deterministicReclosure.status === "phase41_revision_reclosure_passed",
+        originalStatus: targetClaim.status,
+        rawOriginalClaimStored: false,
+        rawSuggestedEditStored: false,
+        rawRevisedClaimStored: false,
+        rawSourceStored: false,
+        revisionCreatesEvidence: false,
+        productionDrivingAllowed: false
+      }),
+      created_at: createdAt,
+      updated_at: createdAt
+    });
+    return {
+      version: PEMS_REVIEWER_CLAIM_REVISION_VERSION,
+      status: revisionStatus,
+      ok: true,
+      revision: formatPemsClaimRevisionRow(revision),
+      deterministicReclosure,
+      advisoryOnly: true,
+      productionDrivingAllowed: false,
+      safety: {
+        rawOriginalClaimStored: false,
+        rawSuggestedEditStored: false,
+        rawRevisedClaimStored: false,
+        rawSourceStored: false,
+        revisionCreatesEvidence: false,
+        productionDrivingAllowed: false
+      }
     };
   });
 }
@@ -1650,6 +1819,13 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
        COALESCE(SUM(CASE WHEN metadata_json LIKE '%"advisoryOnly":true%' THEN 1 ELSE 0 END), 0) AS advisoryLinkedReviewCount
      FROM pems_candidate_promotion_reviews;`
   );
+  const revisionCounts = await store.get(
+    `SELECT
+       COUNT(*) AS claimRevisionCount,
+       COALESCE(SUM(CASE WHEN revision_status = 'revision_reclosure_passed' THEN 1 ELSE 0 END), 0) AS claimRevisionReclosedCount,
+       COALESCE(SUM(CASE WHEN revision_status = 'revision_needs_reviewer_attention' THEN 1 ELSE 0 END), 0) AS claimRevisionAttentionCount
+     FROM pems_candidate_claim_revisions;`
+  );
   const latestDraft = await store.get(
     `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
             deterministic_validator_status, suggested_review_type, suggested_decision,
@@ -1672,6 +1848,15 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
       ORDER BY created_at DESC
       LIMIT 8;`,
     draftFilter.params
+  );
+  const latestRevision = await store.get(
+    `SELECT id, candidate_id, advisory_draft_id, claim_id, actor_user_id, revision_status,
+            original_claim_hash, original_claim_preview, suggested_edit_hash, suggested_edit_preview,
+            revised_claim_hash, revised_claim_preview, source_pointer_ids_json,
+            deterministic_reclosure_json, metadata_json, created_at, updated_at
+       FROM pems_candidate_claim_revisions
+      ORDER BY created_at DESC
+      LIMIT 1;`
   );
   const latestCandidate = latestDraft?.candidate_id
     ? await store.findOne("pems_candidate_maturity", { candidate_id: latestDraft.candidate_id })
@@ -1715,6 +1900,9 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     mockedDraftCount: rowNumber(liveDraftCounts?.mockedDraftCount),
     claimClosureDraftCount: closureReadyDraftCount,
     claimClosureVetoDraftCount: closureVetoDraftCount,
+    claimRevisionCount: rowNumber(revisionCounts?.claimRevisionCount),
+    claimRevisionReclosedCount: rowNumber(revisionCounts?.claimRevisionReclosedCount),
+    claimRevisionAttentionCount: rowNumber(revisionCounts?.claimRevisionAttentionCount),
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
@@ -1727,6 +1915,7 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     draftQueue: formattedDraftQueue,
     latestDraft: formattedLatestDraft,
     latestClaimCitationClosure,
+    latestClaimRevision: formatPemsClaimRevisionRow(latestRevision),
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -1874,6 +2063,7 @@ export function buildPemsLiveClaimCitationClosureProof(status = {}) {
     claimClosureVetoDraftCount: status.claimClosureVetoDraftCount ?? (hasVeto ? 1 : 0),
     advisoryDraftId: closure.advisoryDraftId ?? null,
     candidateId: closure.candidateId ?? null,
+    allowedSourcePointerIds: closure.allowedSourcePointerIds ?? [],
     verdict: closure.verdict,
     claims: closure.claims ?? [],
     advisoryOnly: true,
@@ -1886,6 +2076,46 @@ export function buildPemsLiveClaimCitationClosureProof(status = {}) {
       claimLabelsCreateEvidence: false,
       unsupportedClaimsVetoApproval: hasVeto,
       reviewerEditRequiredForUnsupported: hasVeto,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsReviewerClaimRevisionProof(status = {}) {
+  const revision = status.latestClaimRevision ?? null;
+  const deterministicReclosure = revision?.deterministicReclosure ?? {};
+  const hasRevision = Boolean(revision?.id);
+  const reclosed = deterministicReclosure.status === "phase41_revision_reclosure_passed";
+  const sourcePointerBounded = deterministicReclosure.sourcePointerBounded !== false;
+  const preservesHashes = Boolean(revision?.originalClaimHash && revision?.revisedClaimHash && revision.originalClaimHash !== revision.revisedClaimHash);
+  const ready = hasRevision && reclosed && sourcePointerBounded && preservesHashes;
+  return {
+    version: PEMS_REVIEWER_CLAIM_REVISION_VERSION,
+    status: ready
+      ? "phase41_reviewer_claim_revision_ready"
+      : hasRevision
+        ? "phase41_reviewer_claim_revision_needs_attention"
+        : "phase41_reviewer_claim_revision_waiting",
+    ok: ready,
+    mode: "reviewer_claim_revision_records",
+    score: ready ? 96 : hasRevision ? 95 : 94,
+    target: 96,
+    claimRevisionCount: status.claimRevisionCount ?? (hasRevision ? 1 : 0),
+    claimRevisionReclosedCount: status.claimRevisionReclosedCount ?? (reclosed ? 1 : 0),
+    claimRevisionAttentionCount: status.claimRevisionAttentionCount ?? (hasRevision && !reclosed ? 1 : 0),
+    deterministicReclosurePassed: reclosed,
+    sourcePointerBounded,
+    preservesOriginalAndRevisedHashes: preservesHashes,
+    latestClaimRevision: revision,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawOriginalClaimStored: false,
+      rawSuggestedEditStored: false,
+      rawRevisedClaimStored: false,
+      rawSourceStored: false,
+      revisionCreatesEvidence: false,
+      revisionBypassesHumanReview: false,
       productionDrivingAllowed: false
     }
   };

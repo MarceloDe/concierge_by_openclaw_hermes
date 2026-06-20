@@ -28,6 +28,8 @@ const pemsDraftStatusFilter = document.querySelector("#pemsDraftStatusFilter");
 const pemsEvaluatorModeFilter = document.querySelector("#pemsEvaluatorModeFilter");
 const pemsLiveOnlyFilter = document.querySelector("#pemsLiveOnlyFilter");
 const pemsReviewRationale = document.querySelector("#pemsReviewRationale");
+const pemsClaimRevisionText = document.querySelector("#pemsClaimRevisionText");
+const recordPemsClaimRevisionButton = document.querySelector("#recordPemsClaimRevision");
 const pemsReviewActionButtons = [...document.querySelectorAll("[data-pems-review-action]")];
 const researchStatus = document.querySelector("#researchStatus");
 const researchConsole = document.querySelector("#researchConsole");
@@ -983,10 +985,19 @@ function pemsClaimClosureVetoed(payload = latestPemsWorkbench) {
   return Boolean(closure?.reviewerEditRequired || (closure?.unsupportedCount ?? 0) > 0 || (closure?.lowConfidenceCount ?? 0) > 0);
 }
 
+function firstEditablePemsClaim(payload = latestPemsWorkbench) {
+  const closure = payload?.liveClaimCitationClosure ?? payload?.latestClaimCitationClosure ?? payload?.latestDraft?.claimCitationClosure;
+  const claims = closure?.claims ?? [];
+  return claims.find((claim) => claim.requiresReviewerEdit) ?? claims.find((claim) => claim.status !== "supported") ?? claims[0] ?? null;
+}
+
 function setPemsReviewActionsEnabled(enabled, payload = latestPemsWorkbench) {
   const vetoed = pemsClaimClosureVetoed(payload);
   for (const button of pemsReviewActionButtons) {
     button.disabled = !enabled || (vetoed && button.dataset.pemsReviewAction === "approved");
+  }
+  if (recordPemsClaimRevisionButton) {
+    recordPemsClaimRevisionButton.disabled = !enabled || !firstEditablePemsClaim(payload);
   }
 }
 
@@ -1056,6 +1067,32 @@ function renderPemsClaimCitationClosure(closure = {}) {
   `;
 }
 
+function renderPemsClaimRevision(revisionProof = {}) {
+  const revision = revisionProof.latestClaimRevision;
+  if (!revision) return `<p class="status-text">No reviewer claim revision record exists yet.</p>`;
+  return `
+    <dl>
+      <dt>Status</dt>
+      <dd>${escapeHtml(revisionProof.status ?? revision.revisionStatus ?? "unknown")}</dd>
+      <dt>Revision count</dt>
+      <dd>${escapeHtml(revisionProof.claimRevisionCount ?? 0)} total · ${escapeHtml(revisionProof.claimRevisionReclosedCount ?? 0)} reclosed</dd>
+      <dt>Reclosure</dt>
+      <dd>${escapeHtml(revisionProof.deterministicReclosurePassed ? "passed" : "needs attention")}</dd>
+      <dt>Hashes</dt>
+      <dd>${escapeHtml(revisionProof.preservesOriginalAndRevisedHashes ? "original + revised preserved" : "attention")}</dd>
+      <dt>Source pointers</dt>
+      <dd>${escapeHtml((revision.sourcePointerIds ?? []).join(", ") || "none")}</dd>
+      <dt>Raw revision/source</dt>
+      <dd>not stored</dd>
+    </dl>
+    <div class="pems-revision-diff" role="table" aria-label="PEMS reviewer claim revision diff">
+      <div role="row"><span>Original</span><span>${escapeHtml(revision.originalClaimPreview ?? "n/a")}</span></div>
+      <div role="row"><span>Suggested</span><span>${escapeHtml(revision.suggestedEditPreview ?? "n/a")}</span></div>
+      <div role="row"><span>Revised</span><span>${escapeHtml(revision.revisedClaimPreview ?? "n/a")}</span></div>
+    </div>
+  `;
+}
+
 function currentPemsWorkbenchQuery() {
   const params = new URLSearchParams();
   const draftStatus = pemsDraftStatusFilter?.value ?? "all";
@@ -1120,6 +1157,14 @@ function renderPemsWorkbench(payload) {
     reviewerEditRequired: false,
     claims: []
   };
+  const claimRevision = payload.reviewerClaimRevisions ?? {
+    status: "phase41_reviewer_claim_revision_waiting",
+    score: 94,
+    target: 96,
+    claimRevisionCount: 0,
+    latestClaimRevision: null,
+    productionDrivingAllowed: false
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1128,17 +1173,21 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${claimClosure.status ?? liveGate.status ?? "phase40_claim_citation_closure_waiting"} · ${claimClosure.score ?? liveGate.score ?? 90} / ${claimClosure.target ?? liveGate.target ?? 94}`;
+    pemsWorkbenchStatus.textContent = `${claimRevision.status ?? claimClosure.status ?? "phase41_reviewer_claim_revision_waiting"} · ${claimRevision.score ?? claimClosure.score ?? 94} / ${claimRevision.target ?? claimClosure.target ?? 96}`;
   }
   setPemsReviewActionsEnabled(available, payload);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 40 Claim Citation Closure</h3>
+      <h3>Phase 41 Reviewer Claim Revisions</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(claimClosure.status ?? "phase40_claim_citation_closure_waiting_for_claims")}</dd>
+        <dd>${escapeHtml(claimRevision.status ?? "phase41_reviewer_claim_revision_waiting")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(claimClosure.score ?? 90)} / ${escapeHtml(claimClosure.target ?? 94)}</dd>
+        <dd>${escapeHtml(claimRevision.score ?? 94)} / ${escapeHtml(claimRevision.target ?? 96)}</dd>
+        <dt>Revision records</dt>
+        <dd>${escapeHtml(claimRevision.claimRevisionCount ?? 0)} total · ${escapeHtml(claimRevision.claimRevisionReclosedCount ?? 0)} reclosed</dd>
+        <dt>Phase 40 gate</dt>
+        <dd>${escapeHtml(claimClosure.status ?? "phase40_claim_citation_closure_waiting_for_claims")} · ${escapeHtml(claimClosure.score ?? 90)} / ${escapeHtml(claimClosure.target ?? 94)}</dd>
         <dt>Claim labels</dt>
         <dd>${escapeHtml(claimClosure.supportedCount ?? 0)} supported · ${escapeHtml(claimClosure.lowConfidenceCount ?? 0)} low confidence · ${escapeHtml(claimClosure.unsupportedCount ?? 0)} unsupported</dd>
         <dt>Reviewer edit</dt>
@@ -1229,6 +1278,10 @@ function renderPemsWorkbench(payload) {
         <dd>not stored</dd>
       </dl>
       ${renderPemsClaimCitationClosure(claimClosure)}
+    </article>
+    <article class="connector-card wide">
+      <h3>Reviewer Claim Revision</h3>
+      ${renderPemsClaimRevision(claimRevision)}
     </article>
     <article class="connector-card wide">
       <h3>Deterministic Vs Advisory Comparison</h3>
@@ -1340,6 +1393,42 @@ async function submitPemsWorkbenchReview(action) {
   });
   const refreshed = await loadPemsWorkbench();
   trace.textContent = JSON.stringify({ review: result, workbench: refreshed }, null, 2);
+  return result;
+}
+
+async function submitPemsClaimRevision() {
+  const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
+  if (!latestPemsDraftAvailable(current)) throw new Error("No advisory draft is available for claim revision.");
+  const claim = firstEditablePemsClaim(current);
+  if (!claim) throw new Error("No advisory claim is available for revision.");
+  const closure = current.liveClaimCitationClosure ?? current.latestClaimCitationClosure ?? current.latestDraft?.claimCitationClosure ?? {};
+  const revisedClaim = pemsClaimRevisionText?.value?.trim() || claim.suggestedEditPreview || claim.claimPreview;
+  const result = await api("/api/continuous-intelligence/pems/claim-revisions", {
+    method: "POST",
+    body: JSON.stringify({
+      candidateId: current.latestCandidate.candidateId,
+      advisoryDraftId: current.latestDraft.id,
+      claimId: claim.id,
+      claimHash: claim.claimHash,
+      actorUserId: "operator_ui",
+      revisedClaim,
+      sourcePointerIds: closure.allowedSourcePointerIds ?? claim.sourcePointerIds ?? [],
+      metadata: {
+        phase: 41,
+        reviewerUiAction: "record_claim_revision",
+        originalClaimStatus: claim.status,
+        advisoryOnly: true,
+        rawOriginalClaimStored: false,
+        rawSuggestedEditStored: false,
+        rawRevisedClaimStored: false,
+        rawSourceStored: false,
+        productionDrivingAllowed: false
+      }
+    }),
+    timeoutMs: 15000
+  });
+  const refreshed = await loadPemsWorkbench();
+  trace.textContent = JSON.stringify({ claimRevision: result, workbench: refreshed }, null, 2);
   return result;
 }
 
@@ -4387,6 +4476,19 @@ generatePemsLiveDraftButton?.addEventListener("click", async () => {
   try {
     const result = await generatePemsLiveEvaluatorDraft();
     if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "live evaluator draft requested"} · workbench refreshed`;
+  } catch (error) {
+    renderPemsWorkbenchError(error);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+recordPemsClaimRevisionButton?.addEventListener("click", async () => {
+  const restore = setBusy(recordPemsClaimRevisionButton, "Recording...");
+  try {
+    const result = await submitPemsClaimRevision();
+    if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "claim revision recorded"} · workbench refreshed`;
   } catch (error) {
     renderPemsWorkbenchError(error);
     trace.textContent = error.stack ?? error.message;

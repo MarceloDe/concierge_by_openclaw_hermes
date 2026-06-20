@@ -2463,3 +2463,16 @@ Focused proof:
 - Reject and block actions remain available.
 - Raw claims, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
 - `productionDrivingAllowed=false` remains enforced.
+
+## Phase 41: PEMS Reviewer Claim Revision Records
+
+- `PEMS_REVIEWER_CLAIM_REVISION_VERSION` is defined.
+- `pems_candidate_claim_revisions` exists.
+- Reviewer revisions bind candidate id, advisory draft id, claim id/hash, actor id, original claim hash/preview, suggested edit hash/preview, revised claim hash/preview, source pointer IDs, and deterministic reclosure.
+- Deterministic reclosure uses only source pointer IDs allowed by the source draft.
+- Workbench API returns `reviewerClaimRevisions`.
+- Connector proof exposes `pems_reviewer_claim_revisions`.
+- Dashboard renders `Reviewer Claim Revision` with before/suggested/revised rows.
+- Revision records do not create evidence or production authority.
+- Raw original claims, raw suggested edits, raw revised claims, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
+- `productionDrivingAllowed=false` remains enforced.

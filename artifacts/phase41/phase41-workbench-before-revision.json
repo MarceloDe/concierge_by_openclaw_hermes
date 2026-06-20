@@ -1,0 +1,699 @@
+{
+  "version": "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1",
+  "status": "phase36_reviewer_evaluator_workbench_active",
+  "ok": true,
+  "mode": "supervised_advisory_workbench_only",
+  "score": 85,
+  "target": 85,
+  "candidateCount": 1,
+  "supervisedAdvisoryCandidateCount": 0,
+  "draftCount": 4,
+  "llmAssistedDraftCount": 4,
+  "consistencyTraceDraftCount": 1,
+  "readyDraftCount": 3,
+  "blockedDraftCount": 0,
+  "filteredDraftCount": 1,
+  "liveGeneratedDraftCount": 3,
+  "liveProofDraftCount": 3,
+  "mockedDraftCount": 0,
+  "reviewCount": 1,
+  "advisoryLinkedReviewCount": 1,
+  "productionDrivingAllowed": false,
+  "latestDraft": {
+    "id": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+    "candidateId": "pems_40d7cea4abb98732",
+    "actorUserId": "operator_ui_phase40_live_evaluator",
+    "draftType": "evaluator_draft_note",
+    "evaluatorMode": "llm_assisted_advisory",
+    "status": "needs_reviewer_attention",
+    "deterministicValidatorStatus": "pass",
+    "suggestedReviewType": "citation_evaluation",
+    "suggestedDecision": "blocked",
+    "advisoryNoteHash": "3b47ee634d1f9c71a549ff2ebcefa5d276161de0245e4c2d3ec0a7fafa7c419c",
+    "advisoryNotePreview": "One claim is supported by the provided source pointer; a second claim lacks supporting evidence and requires verification before acceptance.",
+    "consistencyTraceRef": "pems_consistency_trace_66462db3ca78f57b",
+    "consistencyTraceHash": "1fdfd868a22cd2731f26e3c677e2765249d9c4cef5188ba8dd2b88d90f139cc1",
+    "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+    "metadata": {
+      "phase": 39,
+      "liveEvaluatorGeneration": true,
+      "sourcePointerIds": [
+        "phase36_public_example"
+      ],
+      "citationClosure": [
+        "phase36_public_example"
+      ],
+      "claimCitationClosure": [
+        {
+          "id": "pems_claim_a3fb5a6b68ac016e",
+          "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+          "claimPreview": "The document describes the eligibility criteria for the program.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "phase36_public_example"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.9,
+          "explanationPreview": "The cited source pointer contains relevant statements consistent with a description of eligibility criteria.",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        },
+        {
+          "id": "pems_claim_d994ea836ea5c17c",
+          "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+          "claimPreview": "Users are automatically enrolled without consent when signing up.",
+          "status": "unsupported",
+          "sourcePointerIds": [],
+          "sourcePointerCount": 0,
+          "confidence": 0.1,
+          "explanationPreview": "No evidence in the available source pointer supports a claim of automatic enrollment without consent.",
+          "suggestedEditPreview": "Remove this assertion or replace it with a verifiable statement and add a supporting source pointer.",
+          "requiresReviewerEdit": true,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "claimCitationClosureSummary": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_vetoed",
+        "verdict": "unsupported_claims_found",
+        "claimCount": 2,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 1,
+        "reviewerEditRequired": true,
+        "unsupportedClaimHashes": [
+          "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+        ],
+        "productionDrivingAllowed": false
+      },
+      "claimLevelCitationClosure": true,
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:bf5673aa292864b8",
+      "egressObserved": true,
+      "liveLlmEvaluatorUsed": true,
+      "mockedLlmOutput": false,
+      "outboundPayloadHash": "bf5673aa292864b8b4ec79539d1569d33a0b3508267176498a3bd124378e5f09",
+      "completionHash": "edb0d5d25816d3dbf5e5db0b1ebdd704fce275e6888d89624d813404b092330f",
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawClaimStored": false,
+      "rawSourceStored": false,
+      "productionDrivingAllowed": false,
+      "advisoryOnly": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "deterministicValidatorAuthority": true,
+      "humanReviewerAuthority": true
+    },
+    "createdAt": "2026-06-20T14:06:56.173Z",
+    "updatedAt": "2026-06-20T14:06:56.173Z",
+    "claimCitationClosure": {
+      "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+      "status": "phase40_claim_citation_closure_vetoed",
+      "verdict": "unsupported_claims_found",
+      "claimCount": 2,
+      "supportedCount": 1,
+      "lowConfidenceCount": 0,
+      "unsupportedCount": 1,
+      "reviewerEditRequired": true,
+      "unsupportedClaimHashes": [
+        "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+      ],
+      "productionDrivingAllowed": false,
+      "claims": [
+        {
+          "id": "pems_claim_a3fb5a6b68ac016e",
+          "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+          "claimPreview": "The document describes the eligibility criteria for the program.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "phase36_public_example"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.9,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        },
+        {
+          "id": "pems_claim_d994ea836ea5c17c",
+          "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+          "claimPreview": "Users are automatically enrolled without consent when signing up.",
+          "status": "unsupported",
+          "sourcePointerIds": [],
+          "sourcePointerCount": 0,
+          "confidence": 0.1,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": true,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "allowedSourcePointerIds": [
+        "phase36_public_example"
+      ],
+      "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+      "candidateId": "pems_40d7cea4abb98732",
+      "sourcePointerBounded": true,
+      "liveEvaluatorDraft": true,
+      "safety": {
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "reviewerEditRequiredForUnsupported": true,
+        "productionDrivingAllowed": false
+      }
+    }
+  },
+  "draftQueue": [
+    {
+      "id": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "operator_ui_phase40_live_evaluator",
+      "draftType": "evaluator_draft_note",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "needs_reviewer_attention",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "citation_evaluation",
+      "suggestedDecision": "blocked",
+      "advisoryNoteHash": "3b47ee634d1f9c71a549ff2ebcefa5d276161de0245e4c2d3ec0a7fafa7c419c",
+      "advisoryNotePreview": "One claim is supported by the provided source pointer; a second claim lacks supporting evidence and requires verification before acceptance.",
+      "consistencyTraceRef": "pems_consistency_trace_66462db3ca78f57b",
+      "consistencyTraceHash": "1fdfd868a22cd2731f26e3c677e2765249d9c4cef5188ba8dd2b88d90f139cc1",
+      "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+      "metadata": {
+        "phase": 39,
+        "liveEvaluatorGeneration": true,
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "citationClosure": [
+          "phase36_public_example"
+        ],
+        "claimCitationClosure": [
+          {
+            "id": "pems_claim_a3fb5a6b68ac016e",
+            "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+            "claimPreview": "The document describes the eligibility criteria for the program.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "phase36_public_example"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.9,
+            "explanationPreview": "The cited source pointer contains relevant statements consistent with a description of eligibility criteria.",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_d994ea836ea5c17c",
+            "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+            "claimPreview": "Users are automatically enrolled without consent when signing up.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "No evidence in the available source pointer supports a claim of automatic enrollment without consent.",
+            "suggestedEditPreview": "Remove this assertion or replace it with a verifiable statement and add a supporting source pointer.",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "claimCitationClosureSummary": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_vetoed",
+          "verdict": "unsupported_claims_found",
+          "claimCount": 2,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 1,
+          "reviewerEditRequired": true,
+          "unsupportedClaimHashes": [
+            "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+          ],
+          "productionDrivingAllowed": false
+        },
+        "claimLevelCitationClosure": true,
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:bf5673aa292864b8",
+        "egressObserved": true,
+        "liveLlmEvaluatorUsed": true,
+        "mockedLlmOutput": false,
+        "outboundPayloadHash": "bf5673aa292864b8b4ec79539d1569d33a0b3508267176498a3bd124378e5f09",
+        "completionHash": "edb0d5d25816d3dbf5e5db0b1ebdd704fce275e6888d89624d813404b092330f",
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true
+      },
+      "createdAt": "2026-06-20T14:06:56.173Z",
+      "updatedAt": "2026-06-20T14:06:56.173Z",
+      "claimCitationClosure": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_vetoed",
+        "verdict": "unsupported_claims_found",
+        "claimCount": 2,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 1,
+        "reviewerEditRequired": true,
+        "unsupportedClaimHashes": [
+          "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+        ],
+        "productionDrivingAllowed": false,
+        "claims": [
+          {
+            "id": "pems_claim_a3fb5a6b68ac016e",
+            "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+            "claimPreview": "The document describes the eligibility criteria for the program.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "phase36_public_example"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.9,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_d994ea836ea5c17c",
+            "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+            "claimPreview": "Users are automatically enrolled without consent when signing up.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "allowedSourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+        "candidateId": "pems_40d7cea4abb98732",
+        "sourcePointerBounded": true,
+        "liveEvaluatorDraft": true,
+        "safety": {
+          "rawClaimStored": false,
+          "rawSourceStored": false,
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "reviewerEditRequiredForUnsupported": true,
+          "productionDrivingAllowed": false
+        }
+      }
+    }
+  ],
+  "appliedFilters": {
+    "draftStatus": "needs_reviewer_attention",
+    "evaluatorMode": "llm_assisted_advisory",
+    "candidateId": null,
+    "liveOnly": false
+  },
+  "filterOptions": {
+    "draftStatuses": [
+      "all",
+      "draft_ready_for_human_review",
+      "needs_reviewer_attention",
+      "blocked_by_validator"
+    ],
+    "evaluatorModes": [
+      "all",
+      "deterministic_validator_advisory",
+      "llm_assisted_advisory",
+      "nestr_consistency_trace"
+    ],
+    "liveOnly": [
+      false,
+      true
+    ]
+  },
+  "latestCandidate": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "workflow": "eligibility_benefits_navigation",
+    "selectedSkillKey": "insurance_portal_browser",
+    "shadowRunCount": 10,
+    "latestScore": 100,
+    "supervisedAdvisoryAllowed": false,
+    "promotionStatus": "shadow_review_required",
+    "productionDrivingAllowed": false,
+    "updatedAt": "2026-06-19T02:28:05.090Z"
+  },
+  "latestGate": {
+    "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+    "status": "shadow_review_required",
+    "ok": false,
+    "supervisedAdvisoryAllowed": false,
+    "productionDrivingAllowed": false,
+    "candidateId": "pems_40d7cea4abb98732",
+    "counts": {
+      "humanApprovals": 0,
+      "humanRejections": 0,
+      "validatorPasses": 1,
+      "validatorFailures": 0,
+      "citationPasses": 0,
+      "citationFailures": 0,
+      "citationEvidenceRefCount": 0,
+      "safetyIncidentCount": 0,
+      "reviewCount": 1
+    },
+    "requirements": [
+      {
+        "key": "maturity_score",
+        "ok": true,
+        "actual": 100,
+        "target": 85
+      },
+      {
+        "key": "shadow_runs",
+        "ok": true,
+        "actual": 10,
+        "target": 10
+      },
+      {
+        "key": "human_reviewer_approvals",
+        "ok": false,
+        "actual": 0,
+        "target": 2
+      },
+      {
+        "key": "validator_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evaluation_passes",
+        "ok": false,
+        "actual": 0,
+        "target": 1
+      },
+      {
+        "key": "citation_evidence_refs",
+        "ok": true,
+        "actual": 10,
+        "target": 1
+      },
+      {
+        "key": "safety_incidents",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      },
+      {
+        "key": "production_driving_disabled",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      }
+    ],
+    "safety": {
+      "rawRationaleStored": false,
+      "rawSourceStored": false,
+      "supervisedAdvisoryOnly": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "safety": {
+    "advisoryDraftsOnly": true,
+    "deterministicValidatorAuthority": true,
+    "humanReviewerAuthority": true,
+    "rawAdvisoryNoteStored": false,
+    "rawConsistencyTraceStored": false,
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "rawSourceStored": false,
+    "productionDrivingAllowed": false
+  },
+  "reviewerUi": {
+    "status": "phase37_pems_reviewer_ui_ready",
+    "ok": true,
+    "mode": "ref_only_operator_review_ui",
+    "score": 88,
+    "target": 88,
+    "route": "/",
+    "apiRoutes": [
+      "/api/continuous-intelligence/pems/workbench",
+      "/api/continuous-intelligence/pems/reviews"
+    ],
+    "actions": [
+      "approved",
+      "rejected",
+      "blocked"
+    ],
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "refOnlyAdvisoryMaterial": true,
+      "explicitReviewWriteRequired": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerComparison": {
+    "version": "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1",
+    "status": "phase38_reviewer_comparison_provenance_ready",
+    "ok": true,
+    "mode": "deterministic_vs_advisory_ref_only",
+    "score": 90,
+    "target": 90,
+    "candidateId": "pems_40d7cea4abb98732",
+    "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+    "comparisonRows": [
+      {
+        "key": "validator_decision",
+        "label": "Validator decision",
+        "deterministicLabel": "deterministic validator",
+        "deterministicValue": "pass",
+        "advisoryLabel": "advisory suggestion",
+        "advisoryValue": "blocked",
+        "agreement": false
+      },
+      {
+        "key": "promotion_gate",
+        "label": "Promotion gate",
+        "deterministicLabel": "gate status",
+        "deterministicValue": "shadow_review_required",
+        "advisoryLabel": "draft status",
+        "advisoryValue": "needs_reviewer_attention",
+        "agreement": true
+      },
+      {
+        "key": "citation_refs",
+        "label": "Cited evidence refs",
+        "deterministicLabel": "gate evidence refs",
+        "deterministicValue": 10,
+        "advisoryLabel": "advisory source refs",
+        "advisoryValue": 1,
+        "agreement": true
+      },
+      {
+        "key": "production_boundary",
+        "label": "Production boundary",
+        "deterministicLabel": "deterministic policy",
+        "deterministicValue": "disabled",
+        "advisoryLabel": "advisory policy",
+        "advisoryValue": "disabled",
+        "agreement": true
+      }
+    ],
+    "evidenceChips": [
+      {
+        "id": "phase36_public_example",
+        "kind": "source_pointer_ref",
+        "rawSourceStored": false
+      }
+    ],
+    "evaluatorProvenance": {
+      "evaluatorMode": "llm_assisted_advisory",
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:bf5673aa292864b8",
+      "liveGated": true,
+      "liveLlmEvaluation": true,
+      "egressObserved": true,
+      "liveProofClaimed": true,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false
+    },
+    "safety": {
+      "refOnlyComparison": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "liveEvaluatorFiltering": {
+    "version": "2026-06-20.phase39-live-evaluator-generation-filtering.v1",
+    "status": "phase39_live_evaluator_filtering_ready",
+    "ok": true,
+    "mode": "live_gated_advisory_generation_and_filtering",
+    "score": 92,
+    "target": 92,
+    "openAiConfigured": true,
+    "draftCount": 4,
+    "filteredDraftCount": 1,
+    "liveGeneratedDraftCount": 3,
+    "liveProofDraftCount": 3,
+    "mockedDraftCount": 0,
+    "appliedFilters": {
+      "draftStatus": "needs_reviewer_attention",
+      "evaluatorMode": "llm_assisted_advisory",
+      "candidateId": null,
+      "liveOnly": false
+    },
+    "filterOptions": {
+      "draftStatuses": [
+        "all",
+        "draft_ready_for_human_review",
+        "needs_reviewer_attention",
+        "blocked_by_validator"
+      ],
+      "evaluatorModes": [
+        "all",
+        "deterministic_validator_advisory",
+        "llm_assisted_advisory",
+        "nestr_consistency_trace"
+      ],
+      "liveOnly": [
+        false,
+        true
+      ]
+    },
+    "liveProofClaimed": true,
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "liveRequiresObservedEgress": true,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawSourceStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "liveClaimCitationClosure": {
+    "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+    "status": "phase40_claim_citation_closure_veto_visible",
+    "ok": true,
+    "mode": "live_evaluator_claim_citation_closure",
+    "score": 94,
+    "target": 94,
+    "claimCount": 2,
+    "supportedCount": 1,
+    "unsupportedCount": 1,
+    "lowConfidenceCount": 0,
+    "reviewerEditRequired": true,
+    "sourcePointerBounded": true,
+    "liveEvaluatorDraft": true,
+    "claimClosureDraftCount": 1,
+    "claimClosureVetoDraftCount": 1,
+    "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+    "candidateId": "pems_40d7cea4abb98732",
+    "allowedSourcePointerIds": [
+      "phase36_public_example"
+    ],
+    "verdict": "unsupported_claims_found",
+    "claims": [
+      {
+        "id": "pems_claim_a3fb5a6b68ac016e",
+        "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+        "claimPreview": "The document describes the eligibility criteria for the program.",
+        "status": "supported",
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "sourcePointerCount": 1,
+        "confidence": 0.9,
+        "explanationPreview": "",
+        "suggestedEditPreview": "",
+        "requiresReviewerEdit": false,
+        "rawClaimStored": false,
+        "rawSourceStored": false
+      },
+      {
+        "id": "pems_claim_d994ea836ea5c17c",
+        "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+        "claimPreview": "Users are automatically enrolled without consent when signing up.",
+        "status": "unsupported",
+        "sourcePointerIds": [],
+        "sourcePointerCount": 0,
+        "confidence": 0.1,
+        "explanationPreview": "",
+        "suggestedEditPreview": "",
+        "requiresReviewerEdit": true,
+        "rawClaimStored": false,
+        "rawSourceStored": false
+      }
+    ],
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawClaimStored": false,
+      "rawSourceStored": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "claimLabelsCreateEvidence": false,
+      "unsupportedClaimsVetoApproval": true,
+      "reviewerEditRequiredForUnsupported": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerClaimRevisions": {
+    "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+    "status": "phase41_reviewer_claim_revision_waiting",
+    "ok": false,
+    "mode": "reviewer_claim_revision_records",
+    "score": 94,
+    "target": 96,
+    "claimRevisionCount": 0,
+    "claimRevisionReclosedCount": 0,
+    "claimRevisionAttentionCount": 0,
+    "deterministicReclosurePassed": false,
+    "sourcePointerBounded": true,
+    "preservesOriginalAndRevisedHashes": false,
+    "latestClaimRevision": null,
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawOriginalClaimStored": false,
+      "rawSuggestedEditStored": false,
+      "rawRevisedClaimStored": false,
+      "rawSourceStored": false,
+      "revisionCreatesEvidence": false,
+      "revisionBypassesHumanReview": false,
+      "productionDrivingAllowed": false
+    }
+  }
+}

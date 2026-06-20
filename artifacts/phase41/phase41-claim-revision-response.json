@@ -1,0 +1,134 @@
+{
+  "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+  "status": "revision_reclosure_passed",
+  "ok": true,
+  "revision": {
+    "id": "pems_claim_revision_7f846efe-8ea6-4190-a80c-8da952151cd3",
+    "candidateId": "pems_40d7cea4abb98732",
+    "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+    "claimId": "pems_claim_d994ea836ea5c17c",
+    "actorUserId": "operator_visual_phase41",
+    "revisionStatus": "revision_reclosure_passed",
+    "originalClaimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+    "originalClaimPreview": "Users are automatically enrolled without consent when signing up.",
+    "suggestedEditHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "suggestedEditPreview": "",
+    "revisedClaimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+    "revisedClaimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+    "sourcePointerIds": [
+      "phase36_public_example"
+    ],
+    "deterministicReclosure": {
+      "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+      "status": "phase41_revision_reclosure_passed",
+      "claimCitationClosure": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_passed",
+        "verdict": "all_claims_supported",
+        "claimCount": 1,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 0,
+        "reviewerEditRequired": false,
+        "unsupportedClaimHashes": [],
+        "productionDrivingAllowed": false,
+        "claims": [
+          {
+            "id": "pems_claim_3ed5e9d2c01569a3",
+            "claimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+            "claimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "phase36_public_example"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.9,
+            "explanationPreview": "Reviewer revision cites allowed source pointers.",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "sourcePointerBounded": true
+      },
+      "reviewerEditRequired": false,
+      "sourcePointerBounded": true,
+      "productionDrivingAllowed": false
+    },
+    "metadata": {
+      "phase": 41,
+      "proofRun": "phase41_visual_api_refined",
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "sourcePointerBounded": true,
+      "deterministicReclosurePassed": true,
+      "originalStatus": "unsupported",
+      "rawOriginalClaimStored": false,
+      "rawSuggestedEditStored": false,
+      "rawRevisedClaimStored": false,
+      "rawSourceStored": false,
+      "revisionCreatesEvidence": false
+    },
+    "createdAt": "2026-06-20T15:30:43.070Z",
+    "updatedAt": "2026-06-20T15:30:43.070Z",
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawOriginalClaimStored": false,
+      "rawSuggestedEditStored": false,
+      "rawRevisedClaimStored": false,
+      "rawSourceStored": false,
+      "revisionCreatesEvidence": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "deterministicReclosure": {
+    "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+    "status": "phase41_revision_reclosure_passed",
+    "claimCitationClosure": {
+      "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+      "status": "phase40_claim_citation_closure_passed",
+      "verdict": "all_claims_supported",
+      "claimCount": 1,
+      "supportedCount": 1,
+      "lowConfidenceCount": 0,
+      "unsupportedCount": 0,
+      "reviewerEditRequired": false,
+      "unsupportedClaimHashes": [],
+      "productionDrivingAllowed": false,
+      "claims": [
+        {
+          "id": "pems_claim_3ed5e9d2c01569a3",
+          "claimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+          "claimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "phase36_public_example"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.9,
+          "explanationPreview": "Reviewer revision cites allowed source pointers.",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "sourcePointerBounded": true
+    },
+    "reviewerEditRequired": false,
+    "sourcePointerBounded": true,
+    "productionDrivingAllowed": false
+  },
+  "advisoryOnly": true,
+  "productionDrivingAllowed": false,
+  "safety": {
+    "rawOriginalClaimStored": false,
+    "rawSuggestedEditStored": false,
+    "rawRevisedClaimStored": false,
+    "rawSourceStored": false,
+    "revisionCreatesEvidence": false,
+    "productionDrivingAllowed": false
+  }
+}

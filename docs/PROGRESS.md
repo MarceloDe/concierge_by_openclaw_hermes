@@ -8525,3 +8525,47 @@ Artifacts:
 - `artifacts/phase40/phase40-dashboard-dom-proof.json`
 - `artifacts/phase40/phase40-playwright-visual-proof.json`
 - `artifacts/phase40/phase40-dashboard-claim-closure-proof.png`
+
+## Phase 41 PEMS Reviewer Claim Revision Records
+
+Status: Implemented and visually verified locally on branch `phase-41-reviewer-claim-revisions`.
+
+What changed:
+
+- Added `PEMS_REVIEWER_CLAIM_REVISION_VERSION`.
+- Added `pems_candidate_claim_revisions` as an append-only reviewer revision ledger.
+- Added safe reviewer revision recording for candidate id, advisory draft id, claim id/hash, actor id, original claim hash/preview, suggested edit hash/preview, revised claim hash/preview, source pointer IDs, and deterministic reclosure.
+- Added `POST /api/continuous-intelligence/pems/claim-revisions`.
+- Workbench API returns `reviewerClaimRevisions`.
+- Connector proof exposes `pems_reviewer_claim_revisions`.
+- Dashboard renders `Reviewer Claim Revision` with before/suggested/revised rows and deterministic reclosure status.
+
+Safety:
+
+- Revision records do not create evidence.
+- Revision records do not drive production recommendations, healthcare answers, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or payer writes.
+- Raw original claims, raw suggested edits, raw revised claims, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, and PHI remain excluded.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification:
+
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 18/18 tests.
+- `npm run build` passed and names the Phase 41 reviewer claim revision contract.
+- `npm run test:local` passed with 226 total tests, 224 passed, 0 failed, and 2 expected skips.
+- API proof showed `phase41_reviewer_claim_revision_ready`, score `96 / 96`, deterministic reclosure passed, source-pointer bounded, raw revision not stored, revision creates no evidence, and `productionDrivingAllowed=false`.
+- In-app browser DOM proof showed Phase 41 visible, revision panel visible, before/suggested/revised rows visible, raw revision/source not stored, approval disabled, and reject/block/revise available.
+- Full-page screenshot capture through the in-app browser timed out, so visual screenshots used the local Playwright fallback.
+
+Artifacts:
+
+- `artifacts/phase41/phase41-workbench-before-revision.json`
+- `artifacts/phase41/phase41-claim-revision-request.json`
+- `artifacts/phase41/phase41-claim-revision-response.json`
+- `artifacts/phase41/phase41-workbench-after-revision.json`
+- `artifacts/phase41/phase41-connector-proof.json`
+- `artifacts/phase41/phase41-api-proof-summary.json`
+- `artifacts/phase41/phase41-dashboard-dom-proof.json`
+- `artifacts/phase41/phase41-playwright-visual-proof.json`
+- `artifacts/phase41/phase41-dashboard-reviewer-claim-revision-proof.png`
+- `artifacts/phase41/phase41-dashboard-reviewer-claim-revision-panel.png`
