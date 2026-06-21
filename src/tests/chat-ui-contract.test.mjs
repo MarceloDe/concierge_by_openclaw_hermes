@@ -692,10 +692,12 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpJs, /renderMemoryDetails/);
   assert.match(mvpJs, /AI2UI_BLOCK_CONTRACT_VERSION/);
   assert.match(mvpJs, /AI2UI_MODE_BLOCKS/);
+  assert.match(mvpJs, /cost_comparison/);
   assert.match(mvpJs, /setUiMode/);
   assert.match(mvpJs, /localStorage\.setItem\("brainstyworkers\.mvp\.uiMode"/);
   assert.match(mvpJs, /ai2uiBlocks/);
   assert.match(mvpJs, /renderAi2UiBlocks/);
+  assert.match(mvpJs, /renderCostComparisonBlock/);
   assert.match(mvpJs, /renderUnknownAi2UiBlock/);
   assert.match(mvpJs, /Unsupported UI block/);
   assert.match(mvpJs, /uploaded_document_context/);
@@ -707,6 +709,8 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpCss, /memory-panel/);
   assert.match(mvpCss, /mode-switch/);
   assert.match(mvpCss, /ai2ui-block-grid/);
+  assert.match(mvpCss, /cost-comparison-grid/);
+  assert.match(mvpCss, /cost-comparison-row/);
   assert.match(mvpCss, /body\[data-ui-mode="chat"\]/);
   assert.match(mvpCss, /body\[data-ui-mode="guided"\]/);
   assert.match(mvpCss, /body\[data-ui-mode="bento"\]/);

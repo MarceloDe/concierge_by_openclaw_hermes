@@ -829,6 +829,41 @@ textarea {
   color: #5d6b73;
 }
 
+.cost-comparison-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.cost-comparison-row {
+  background: #fff;
+  border: 1px solid #d7e0e6;
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  padding: 9px;
+}
+
+.cost-comparison-row strong,
+.cost-comparison-row b,
+.cost-comparison-row span,
+.cost-comparison-row small {
+  overflow-wrap: anywhere;
+}
+
+.cost-comparison-row b {
+  color: #123b32;
+  font-size: 13px;
+  text-align: right;
+}
+
+.cost-comparison-row span,
+.cost-comparison-row small {
+  color: #5d6b73;
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+
 .ai2ui-checklist {
   display: grid;
   gap: 6px;

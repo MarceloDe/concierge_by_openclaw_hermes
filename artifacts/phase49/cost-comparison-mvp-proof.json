@@ -1,0 +1,37 @@
+{
+  "blockTitles": [
+    "Answer",
+    "Cost Comparison",
+    "Workflow",
+    "Approval Gate",
+    "Worker",
+    "Citations",
+    "Product Memory",
+    "Safety Boundary",
+    "Next Steps"
+  ],
+  "busyButtonCount": 0,
+  "comparisonRows": [
+    "Reviewed evidence snippet $1,250 Compare with current plan terms, provider network status, and claim context before acting. research_artifacts/research_artifact_4f7a76f1-4b00-418f-8bc6-3e5857aaf512",
+    "Reviewed evidence snippet $1,250 Compare with current plan terms, provider network status, and claim context before acting. research_artifacts/research_artifact_50350b38-c4e0-4cc1-82cb-33dc0dec0731"
+  ],
+  "costComparisonVisible": true,
+  "finalAnswerPreview": "LangGraph routed this request to eligibility_benefits_navigation and answered from operator-reviewed research evidence.\n\nRouting evidence: eligibility_benefits_navigation for journey coverage_understanding; executable=true; score=14; missing data pointer portal_accounts.\n\nReviewed evidence used:\n- Phase 49 Unique Cost Comparison: Phase 49 Unique Cost Comparison Unique Reviewed Cost Comparison phase49costunique1782075267474 phase49costunique1782075267474 option A has a $1,250 deductible remaining before insurance starts paying. phase49costunique1782075267474 option B has 20% coinsurance after the deductible for the cited covered service. phase49costunique1782075267474 no exact provide (confidence high, score 14)\n- Phase 49 Cost Comparison: Phase 49 Cost Comparison Reviewed Cost Comparison The reviewed cost comparison says option A has a $1,250 deductible remaining before insurance starts paying. Option B has 20% coinsurance after the deductible for the cited covered service. No exact provider price is guaranteed by this evidence. (confidence high, score 11)\n\nSource pointers: research_artifacts/research_artifact_4f7a76f1-4b00-418f-8bc6-3e5857aaf512, research_artifacts/research_artifa",
+  "heading": "eligibility_benefits_navigation",
+  "metrics": [
+    "Intent eligibility_benefits_question",
+    "LLM not reported",
+    "Approval approved_consumed",
+    "Worker captured_trusted_research_evidence",
+    "Source pointers 2",
+    "Skills insurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser",
+    "Memory degraded",
+    "Handoff none",
+    "Backend Node direct",
+    "Facade task none"
+  ],
+  "sourceTextContainsRawSensitiveFixture": false,
+  "title": "Brainstyworkers Concierge MVP",
+  "url": "http://127.0.0.1:4218/mvp?phase=phase-49-cost-comparison-journey",
+  "consoleErrors": []
+}

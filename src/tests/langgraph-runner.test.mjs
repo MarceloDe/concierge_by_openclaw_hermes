@@ -353,6 +353,7 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
             <body>
               <h1>Reviewed deductible research</h1>
               <p>The annual deductible evidence says the deductible applies before coinsurance for covered services.</p>
+              <p>The reviewed cost comparison says option A has a $1,250 deductible remaining and option B has 20% coinsurance after deductible.</p>
               <p>Fixture email pii@example.com must stay out of audit rows.</p>
             </body>
           </html>
@@ -363,7 +364,7 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
       user,
       session,
       channel: session.channel,
-      userInput: "What does reviewed evidence say about my annual deductible before coinsurance?",
+      userInput: "Can you compare my deductible and coinsurance cost options from reviewed evidence?",
       rawMessage: { source: "phase10i_research_grounding_test", useLiveModel: false, executeEvidenceObservation: false }
     });
 
@@ -379,6 +380,13 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
     assert.match(result.state.final_response, /Source pointers: research_artifacts\//);
     assert.doesNotMatch(result.state.final_response, /not executed in this slice/i);
     assert.deepEqual(result.state.evidence_observation.actionsTaken, ["trusted_research_evidence_search"]);
+    const costComparisonBlock = result.state.ai2ui_blocks.find((block) => block.type === "cost_comparison");
+    assert.ok(costComparisonBlock);
+    assert.equal(costComparisonBlock.payload.status, "single_source_backed_cost_signal");
+    assert.equal(costComparisonBlock.payload.safety.noFabricatedExactPrices, true);
+    assert.equal(costComparisonBlock.payload.safety.everyRowHasSourcePointer, true);
+    assert.ok(costComparisonBlock.payload.rows.length >= 1);
+    assert.ok(costComparisonBlock.payload.rows.every((row) => row.sourcePointerIds.includes(`research_artifacts/${artifact.id}`)));
 
     const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
     const auditText = JSON.stringify(auditRows);

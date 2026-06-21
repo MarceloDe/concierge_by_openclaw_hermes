@@ -784,13 +784,28 @@ if (
 const ai2uiBlocks = buildAi2UiBlocksFromState({
   graph_trace_id: "build_check_trace",
   workflow: "eligibility_benefits_navigation",
+  user_input: "Compare my deductible and coinsurance costs.",
   final_response: "Build check answer.",
-  source_pointers: [],
+  source_pointers: [
+    {
+      table: "coverage_balances",
+      id: "balance_build_check",
+      summary: "Deductible: total $2,000, spent $500, remaining $1,500",
+      balanceType: "deductible",
+      totalAmount: 2000,
+      spentAmount: 500,
+      remainingAmount: 1500
+    }
+  ],
   evidence_observation: { status: "waiting_for_approval", actionsTaken: [] },
   product_memory_retain: { adapter: "graphiti", status: "not_reported" }
 });
 const unknownAi2ui = normalizeAi2UiBlocks([{ type: "future_block", payload: { ok: true } }]);
-if (!ai2uiBlocks.some((block) => block.type === "answer_markdown") || unknownAi2ui[0]?.type !== "unknown") {
+if (
+  !ai2uiBlocks.some((block) => block.type === "answer_markdown") ||
+  !ai2uiBlocks.some((block) => block.type === "cost_comparison" && block.payload?.safety?.noFabricatedExactPrices === true) ||
+  unknownAi2ui[0]?.type !== "unknown"
+) {
   throw new Error("AI2UI block contract or unknown-block fallback is incomplete.");
 }
 
