@@ -3,13 +3,13 @@ import { createId, nowIso } from "./database.mjs";
 import { maskDirectIdentifiers } from "./modelPayloadPolicy.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const RESEARCH_OPS_VERSION = "2026-06-21.phase47-review-queues.v1";
+export const RESEARCH_OPS_VERSION = "2026-06-21.phase48-research-entity-extraction.v1";
 
 const ACTIVE_SOURCE_STATUSES = new Set(["active_registry", "approved", "active", "enabled"]);
 const SOURCE_STATUSES = new Set(["pending_review", "active_registry", "approved", "rejected", "disabled"]);
@@ -275,6 +275,88 @@ function boundedLimit(value, fallback = 50, max = 200) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(Math.floor(parsed), max);
+}
+
+const RESEARCH_ENTITY_PATTERNS = [
+  { type: "money_amount", label: "Money amount", regex: /\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?/g, confidence: 0.92 },
+  { type: "percentage", label: "Percentage", regex: /\b\d{1,3}(?:\.\d+)?\s?%/g, confidence: 0.9 },
+  { type: "procedure_code", label: "Procedure/CPT code", regex: /\b(?:CPT|HCPCS|procedure code)\s*[:#]?\s*([A-Z]?\d{4,5})\b/gi, confidence: 0.88 },
+  { type: "diagnosis_code", label: "Diagnosis/ICD code", regex: /\b(?:ICD-?10|diagnosis code)\s*[:#]?\s*([A-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?)\b/gi, confidence: 0.88 },
+  { type: "date", label: "Date", regex: /\b(?:\d{1,2}\/\d{1,2}\/\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/gi, confidence: 0.82 },
+  { type: "payer", label: "Payer", regex: /\b(?:Aetna|Cigna|UnitedHealthcare|United Healthcare|Blue Cross|Blue Shield|BCBS|Humana|Kaiser|Anthem|Oscar|Molina|Centene|Medicare|Medicaid)\b/gi, confidence: 0.84 },
+  { type: "benefit_term", label: "Benefit term", regex: /\b(?:deductible|coinsurance|copay|co-pay|out[- ]of[- ]pocket|OOP|prior authorization|authorization|appeal|denial|claim|EOB|eligibility|benefit|covered service|allowed amount)\b/gi, confidence: 0.78 },
+  { type: "pharmacy_term", label: "Pharmacy/formulary term", regex: /\b(?:pharmacy|formulary|prescription|rx|tier\s+\d|generic|brand(?:-name)?|specialty drug|prior authorization required)\b/gi, confidence: 0.78 },
+  { type: "network_term", label: "Network/provider term", regex: /\b(?:in[- ]network|out[- ]of[- ]network|provider|facility|specialist|referral|PCP|primary care|network)\b/gi, confidence: 0.76 }
+];
+
+function pageNumberForIndex(text, index) {
+  const before = String(text ?? "").slice(0, Math.max(0, index));
+  const matches = Array.from(before.matchAll(/\[page\s+(\d+)\]/gi));
+  const latest = matches.at(-1);
+  return latest ? Number(latest[1]) : null;
+}
+
+function entityEvidencePreview(text, start, end) {
+  const left = Math.max(0, start - 80);
+  const right = Math.min(String(text ?? "").length, end + 80);
+  return safePreview(String(text ?? "").slice(left, right).replace(/\s+/g, " ").trim(), 260);
+}
+
+function normalizeEntityValue(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function extractResearchEntitiesFromText(text, { artifactId, runId, sourceId = null, sourceUrl = "", extractionHash = "", limit = 120 } = {}) {
+  const sourceText = String(text ?? "");
+  const seen = new Set();
+  const entities = [];
+  for (const pattern of RESEARCH_ENTITY_PATTERNS) {
+    pattern.regex.lastIndex = 0;
+    for (const match of sourceText.matchAll(pattern.regex)) {
+      const matchedValue = match[1] ?? match[0];
+      const normalizedValue = normalizeEntityValue(matchedValue);
+      if (!normalizedValue) continue;
+      const matchIndex = Number(match.index ?? -1);
+      if (matchIndex < 0) continue;
+      const matchOffset = Math.max(0, String(match[0]).indexOf(matchedValue));
+      const spanStart = matchIndex + matchOffset;
+      const spanEnd = spanStart + String(matchedValue).length;
+      const key = `${pattern.type}:${normalizedValue.toLowerCase()}:${spanStart}:${spanEnd}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const sourceUrlParts = urlSafetyParts(sourceUrl);
+      entities.push({
+        artifactId,
+        runId,
+        sourceId,
+        entityType: pattern.type,
+        label: pattern.label,
+        normalizedValue,
+        valueHash: sha256(normalizedValue.toLowerCase()),
+        sourcePointer: {
+          table: "research_artifacts",
+          id: artifactId,
+          sourceHost: sourceUrlParts.host,
+          sourceUrlHash: sourceUrlParts.urlHash,
+          extractionHash
+        },
+        pageNumber: pageNumberForIndex(sourceText, spanStart),
+        spanStart,
+        spanEnd,
+        confidence: pattern.confidence,
+        evidencePreview: entityEvidencePreview(sourceText, spanStart, spanEnd),
+        metadata: {
+          extractor: "deterministic_research_entity_extractor_v1",
+          spanBasis: "extracted_text",
+          rawValueReturned: false,
+          sourcePointerPayloadReturned: false,
+          version: RESEARCH_OPS_VERSION
+        }
+      });
+      if (entities.length >= limit) return entities;
+    }
+  }
+  return entities.sort((left, right) => left.spanStart - right.spanStart || left.entityType.localeCompare(right.entityType));
 }
 
 const RESEARCH_STOP_WORDS = new Set([
@@ -604,6 +686,77 @@ function normalizeRunEvent(row) {
     payload: parseJson(row.payload_json, {}),
     createdAt: row.created_at
   };
+}
+
+function normalizeResearchEntity(row) {
+  if (!row) return null;
+  const metadata = parseJson(row.metadata_json, {});
+  return {
+    id: row.id,
+    artifactId: row.artifact_id,
+    runId: row.run_id,
+    sourceId: row.source_id ?? null,
+    entityType: row.entity_type,
+    label: row.label,
+    normalizedValue: row.normalized_value,
+    valueHash: row.value_hash,
+    sourcePointer:
+      metadata.sourcePointer ?? {
+        table: "research_artifacts",
+        id: row.artifact_id
+      },
+    pageNumber: row.page_number === null || row.page_number === undefined ? null : Number(row.page_number),
+    spanStart: Number(row.span_start ?? 0),
+    spanEnd: Number(row.span_end ?? 0),
+    confidence: Number(row.confidence ?? 0),
+    evidencePreview: row.evidence_preview ?? "",
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+async function replaceResearchEntitiesForArtifact(store, artifact, extractedText, { actorUserId = null } = {}) {
+  const sourceText = String(extractedText ?? "");
+  await store.all(`DELETE FROM research_entities WHERE artifact_id = ${sql(artifact.id)};`);
+  const extracted = extractResearchEntitiesFromText(sourceText, {
+    artifactId: artifact.id,
+    runId: artifact.runId,
+    sourceId: artifact.sourceId,
+    sourceUrl: artifact.sourceUrl,
+    extractionHash: artifact.extractionHash
+  });
+  const time = nowIso();
+  const rows = [];
+  for (const entity of extracted) {
+    const row = {
+      id: createId("research_entity"),
+      artifact_id: artifact.id,
+      run_id: artifact.runId,
+      source_id: artifact.sourceId ?? null,
+      entity_type: entity.entityType,
+      label: entity.label,
+      normalized_value: entity.normalizedValue,
+      value_hash: entity.valueHash,
+      page_number: entity.pageNumber,
+      span_start: entity.spanStart,
+      span_end: entity.spanEnd,
+      confidence: entity.confidence,
+      evidence_preview: entity.evidencePreview,
+      metadata_json: json({
+        ...entity.metadata,
+        actorUserId,
+        sourcePointer: entity.sourcePointer,
+        rawArtifactTextReturned: false,
+        rawEntityContextReturned: false
+      }),
+      created_at: time,
+      updated_at: time
+    };
+    await store.insert("research_entities", row);
+    rows.push(row);
+  }
+  return rows.map(normalizeResearchEntity);
 }
 
 function normalizeSchedule(row) {
@@ -1674,7 +1827,15 @@ async function createResearchArtifact(
     created_at: time
   };
   await store.insert("research_artifacts", row);
-  return normalizeArtifact(row);
+  const artifact = normalizeArtifact(row);
+  const entities = await replaceResearchEntitiesForArtifact(store, artifact, extractedText, {
+    actorUserId: metadata.actorUserId ?? null
+  });
+  return {
+    ...artifact,
+    entityCount: entities.length,
+    entities: entities.slice(0, 20)
+  };
 }
 
 export async function ingestResearchDocumentUpload(
@@ -3148,6 +3309,104 @@ export async function listResearchArtifacts(store, { citationStatus = null, runI
       quarantined: quarantined?.count ?? 0,
       mockUntrusted: mockUntrusted?.count ?? 0
     }
+  };
+}
+
+export async function listResearchEntities(store, { artifactId = null, runId = null, sourceId = null, entityType = null, limit = 50 } = {}) {
+  const conditions = [];
+  if (artifactId) conditions.push(`artifact_id = ${sql(artifactId)}`);
+  if (runId) conditions.push(`run_id = ${sql(runId)}`);
+  if (sourceId) conditions.push(`source_id = ${sql(sourceId)}`);
+  if (entityType) conditions.push(`entity_type = ${sql(entityType)}`);
+  const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
+  const bounded = boundedLimit(limit, 50, 200);
+  const rows = await store.all(`SELECT * FROM research_entities${where} ORDER BY created_at DESC, span_start ASC LIMIT ${bounded};`);
+  const counts = await store.all("SELECT entity_type, COUNT(*) AS count FROM research_entities GROUP BY entity_type ORDER BY count DESC, entity_type ASC;");
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    filters: { artifactId, runId, sourceId, entityType, limit: bounded },
+    counts: {
+      total: counts.reduce((sum, row) => sum + Number(row.count ?? 0), 0),
+      byType: Object.fromEntries(counts.map((row) => [row.entity_type, Number(row.count ?? 0)]))
+    },
+    entities: rows.map(normalizeResearchEntity),
+    safety: {
+      rawArtifactTextReturned: false,
+      rawEntityContextReturned: false,
+      sourcePointerPayloadsReturned: false,
+      pageNumbersReturned: true,
+      spansAreCharacterOffsets: true,
+      confidenceReturned: true
+    }
+  };
+}
+
+export async function extractResearchEntitiesForArtifact(store, { artifactId, actorUserId = null } = {}) {
+  if (!artifactId) throw new ResearchOpsError("Research artifact id is required for entity extraction.", 400);
+  const artifactRow = await store.findOne("research_artifacts", { id: artifactId });
+  if (!artifactRow) throw new ResearchOpsError("Research artifact not found.", 404);
+  const artifact = normalizeArtifact(artifactRow);
+  const rawArtifactPath = artifact.metadata?.rawArtifactPath;
+  let extractionText = artifact.safeTextPreview ?? "";
+  let extractionMethod = "safe_preview_fallback";
+  if (rawArtifactPath) {
+    try {
+      const raw = await readFile(rawArtifactPath, "utf8");
+      extractionText = stripHtml(raw);
+      extractionMethod = "local_raw_artifact_store";
+    } catch (error) {
+      extractionMethod = `safe_preview_fallback_after_${error?.code ?? "read_error"}`;
+    }
+  }
+  const entities = await replaceResearchEntitiesForArtifact(store, artifact, extractionText, { actorUserId });
+  const event = await createResearchRunEvent(store, {
+    runId: artifact.runId,
+    eventType: "research_entities_extracted",
+    status: "completed",
+    summary: `Research entity extraction completed for ${artifact.title ?? artifact.id}.`,
+    payload: {
+      actorUserId,
+      artifactId: artifact.id,
+      sourceId: artifact.sourceId,
+      entityCount: entities.length,
+      entityTypes: Array.from(new Set(entities.map((entity) => entity.entityType))).sort(),
+      extractionHash: artifact.extractionHash,
+      rawArtifactTextReturned: false,
+      rawEntityContextReturned: false
+    }
+  });
+  const auditEvent = await audit(store, null, "research_entities_extracted", {
+    actorUserId,
+    artifactId: artifact.id,
+    runId: artifact.runId,
+    sourceId: artifact.sourceId,
+    entityCount: entities.length,
+    entityTypeCounts: entities.reduce((counts, entity) => ({ ...counts, [entity.entityType]: (counts[entity.entityType] ?? 0) + 1 }), {}),
+    extractionHash: artifact.extractionHash,
+    extractionMethod,
+    rawArtifactTextReturned: false,
+    rawEntityContextReturned: false,
+    sourcePointerPayloadsReturned: false
+  });
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    status: "research_entities_extracted",
+    artifact,
+    entityCount: entities.length,
+    entities,
+    event,
+    audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash },
+    safety: {
+      rawArtifactTextReturned: false,
+      rawEntityContextReturned: false,
+      sourcePointerPayloadsReturned: false,
+      spansAreCharacterOffsets: true,
+      pageNumbersReturned: true,
+      confidenceReturned: true
+    },
+    actionsTaken: ["research_entities_extracted", "source_spans_recorded", "entity_hashes_persisted"]
   };
 }
 

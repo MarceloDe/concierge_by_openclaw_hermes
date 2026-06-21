@@ -40,8 +40,10 @@ import {
   getResearchRun,
   getResearchWorkerStatus,
   ingestResearchDocumentUpload,
+  extractResearchEntitiesForArtifact,
   listResearchArtifacts,
   listCitationClosureEvaluations,
+  listResearchEntities,
   listResearchRunEvents,
   listResearchRuns,
   listResearchSchedules,
@@ -3556,6 +3558,25 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/research/entities") {
+    try {
+      sendJson(
+        res,
+        200,
+        await listResearchEntities(store, {
+          artifactId: url.searchParams.get("artifactId") ?? url.searchParams.get("artifact_id") ?? null,
+          runId: url.searchParams.get("runId") ?? url.searchParams.get("run_id") ?? null,
+          sourceId: url.searchParams.get("sourceId") ?? url.searchParams.get("source_id") ?? null,
+          entityType: url.searchParams.get("entityType") ?? url.searchParams.get("entity_type") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 50)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
   if (req.method === "GET" && (url.pathname === "/api/research/search" || url.pathname === "/api/research/evidence")) {
     try {
       sendJson(
@@ -3568,6 +3589,24 @@ async function handleApi(req, res, url) {
           runId: url.searchParams.get("runId") ?? url.searchParams.get("run_id") ?? null,
           sourceId: url.searchParams.get("sourceId") ?? url.searchParams.get("source_id") ?? null,
           limit: Number(url.searchParams.get("limit") ?? 10)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname.startsWith("/api/research/artifacts/") && url.pathname.endsWith("/entities/extract")) {
+    const body = await readJson(req);
+    const artifactId = decodeURIComponent(url.pathname.replace("/api/research/artifacts/", "").replace("/entities/extract", "").replace(/\/$/, ""));
+    try {
+      sendJson(
+        res,
+        200,
+        await extractResearchEntitiesForArtifact(store, {
+          artifactId,
+          actorUserId: body.actorUserId ?? body.userId ?? null
         })
       );
     } catch (error) {

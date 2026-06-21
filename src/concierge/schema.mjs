@@ -32,6 +32,7 @@ export const TABLES = [
   "research_embedding_jobs",
   "research_embedding_index",
   "research_graph_builds",
+  "research_entities",
   "research_claim_evaluations",
   "research_schedules",
   "research_scheduler_daemon_state",
@@ -591,6 +592,28 @@ CREATE TABLE IF NOT EXISTS research_graph_builds (
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_entities (
+  id TEXT PRIMARY KEY,
+  artifact_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  source_id TEXT,
+  entity_type TEXT NOT NULL,
+  label TEXT NOT NULL,
+  normalized_value TEXT NOT NULL,
+  value_hash TEXT NOT NULL,
+  page_number INTEGER,
+  span_start INTEGER NOT NULL,
+  span_end INTEGER NOT NULL,
+  confidence REAL NOT NULL,
+  evidence_preview TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (artifact_id) REFERENCES research_artifacts(id),
+  FOREIGN KEY (run_id) REFERENCES research_runs(id),
+  FOREIGN KEY (source_id) REFERENCES knowledge_sources(id)
 );
 
 CREATE TABLE IF NOT EXISTS research_claim_evaluations (

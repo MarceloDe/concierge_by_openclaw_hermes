@@ -20,8 +20,10 @@ import {
   getResearchReviewQueues,
   getResearchWorkerStatus,
   ingestResearchDocumentUpload,
+  extractResearchEntitiesForArtifact,
   listCitationClosureEvaluations,
   listResearchArtifacts,
+  listResearchEntities,
   listResearchRunEvents,
   listResearchRuns,
   listResearchSchedules,
@@ -510,9 +512,32 @@ test("operator research document upload creates pending-review KB artifact with 
     const queue = await listResearchArtifacts(store, { citationStatus: "extracted_pending_review" });
     assert.ok(queue.artifacts.some((artifact) => artifact.id === uploaded.artifact.id));
 
+    const entities = await listResearchEntities(store, { artifactId: uploaded.artifact.id, limit: 20 });
+    assert.equal(entities.ok, true);
+    assert.equal(entities.safety.rawArtifactTextReturned, false);
+    assert.equal(entities.safety.spansAreCharacterOffsets, true);
+    assert.ok(entities.entities.some((entity) => entity.entityType === "benefit_term" && entity.normalizedValue.toLowerCase() === "deductible"));
+    const amount = entities.entities.find((entity) => entity.entityType === "money_amount");
+    assert.equal(amount?.normalizedValue, "$1,500");
+    assert.equal(amount?.sourcePointer?.id, uploaded.artifact.id);
+    assert.equal(typeof amount?.spanStart, "number");
+    assert.ok(Number(amount?.spanEnd) > Number(amount?.spanStart));
+    assert.ok(Number(amount?.confidence) > 0.7);
+
+    const extracted = await extractResearchEntitiesForArtifact(store, {
+      artifactId: uploaded.artifact.id,
+      actorUserId: "operator_research_pdf_upload"
+    });
+    assert.equal(extracted.status, "research_entities_extracted");
+    assert.ok(extracted.entityCount >= 2);
+    assert.equal(extracted.audit.eventType, "research_entities_extracted");
+    assert.equal(extracted.safety.rawArtifactTextReturned, false);
+    assert.ok(extracted.actionsTaken.includes("source_spans_recorded"));
+
     const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
     const auditText = JSON.stringify(auditRows);
     assert.match(auditText, /research_document_uploaded/);
+    assert.match(auditText, /research_entities_extracted/);
     assert.doesNotMatch(auditText, /upload-probe@example\.com/);
     assert.doesNotMatch(auditText, /123-45-6789/);
     assert.doesNotMatch(auditText, /annual deductible is \$1,500/);

@@ -1,0 +1,22 @@
+{
+  "url": "http://127.0.0.1:4218/?phase=phase-48-research-entity-extraction",
+  "title": "Brainstyworkers AI Concierge",
+  "proof": {
+    "cards": [
+      "Research Entity Extraction\nStatus\nentities_loaded · 8 entities shown\nTypes\n{\"benefit_term\":3,\"network_term\":2,\"money_amount\":1,\"payer\":1,\"procedure_code\":1}\nArtifact\nall artifacts\nSafety\nraw artifact hidden · previews only\nSpans\ncharacter offsets · confidence included\nActions\nnone\nPayer\nAetna · payer · confidence 0.84\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 179-184\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\n33abdbb846e795f7f4ffd436880f9236dcd2e39e4 Extraction method: utf8_text [page 2] Aetna plan example: the annual deductible is $1,500 before coinsurance starts. Prior\n\nBenefit term\ndeductible · benefit_term · confidence 0.78\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 210-220\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\n6dcd2e39e4 Extraction method: utf8_text [page 2] Aetna plan example: the annual deductible is $1,500 before coinsurance starts. Prior authorization may be required for pr\n\nMoney amount\n$1,500 · money_amount · confidence 0.92\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 224-230\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\nraction method: utf8_text [page 2] Aetna plan example: the annual deductible is $1,500 before coinsurance starts. Prior authorization may be required for procedure co\n\nBenefit term\ncoinsurance · benefit_term · confidence 0.78\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 238-249\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\n: utf8_text [page 2] Aetna plan example: the annual deductible is $1,500 before coinsurance starts. Prior authorization may be required for procedure code CPT 97110. The p\n\nBenefit term\nPrior authorization · benefit_term · confidence 0.78\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 258-277\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\nAetna plan example: the annual deductible is $1,500 before coinsurance starts. Prior authorization may be required for procedure code CPT 97110. The provider must be in-network.\n\nProcedure/CPT code\n97110 · procedure_code · confidence 0.88\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 317-322\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\ncoinsurance starts. Prior authorization may be required for procedure code CPT 97110. The provider must be in-network.\n\nNetwork/provider term\nprovider · network_term · confidence 0.76\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 328-336\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\ne starts. Prior authorization may be required for procedure code CPT 97110. The provider must be in-network.\n\nNetwork/provider term\nin-network · network_term · confidence 0.76\nartifact research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923 · page 2 · span 345-355\nsource research_artifacts:research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923\n\nuthorization may be required for procedure code CPT 97110. The provider must be in-network."
+    ],
+    "hasConfidence": true,
+    "hasDeductible": true,
+    "hasMoneyAmount": true,
+    "hasPage": true,
+    "hasPanel": true,
+    "hasSourcePointer": true,
+    "hasSpan": true,
+    "leaksRawSourceUrl": false,
+    "status": "8 extracted research entities"
+  },
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "artifactId": "research_artifact_a6e8144e-d1d1-40a5-a8c8-d63e94108923",
+  "verifiedAt": "2026-06-21T20:38:03.739Z"
+}
