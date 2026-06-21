@@ -1192,6 +1192,19 @@ def describe_browser_sandbox_provider_contract(
         and private_proof_chain_ready
         and final_enablement_allowed
     )
+    execution_write_gate = {
+        "status": (
+            "execution_v2_write_gate_ready"
+            if os.environ.get("WEFELLA_EXECUTION_WRITE_ENABLED") == "1" and private_launch_execution_ready
+            else "execution_v2_write_gate_blocked"
+        ),
+        "writeEnabled": os.environ.get("WEFELLA_EXECUTION_WRITE_ENABLED") == "1",
+        "requiresPrivateLaunchExecution": True,
+        "privateLaunchExecutionReady": private_launch_execution_ready,
+        "committedDefaultOff": True,
+        "credentialEntryAllowed": False,
+        "autonomousWritesAllowed": False
+    }
     provider_ready = bool(
         selected_provider == "hosted_remote"
         and selected_ready
@@ -1400,6 +1413,7 @@ def describe_browser_sandbox_provider_contract(
             "rawOcrTextReturned": False,
             "rawInputReturned": False
         },
+        "executionV2WriteGate": execution_write_gate,
         "hostedProviderAdapterReady": adapter_contract_ready,
         "hostedProviderHttpAdapterReady": http_adapter_harness_ready,
         "hostedProviderLiveLifecycleHarnessReady": live_lifecycle_harness_ready,

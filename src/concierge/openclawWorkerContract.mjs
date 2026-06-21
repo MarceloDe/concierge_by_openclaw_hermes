@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export const OPENCLAW_WORKER_CONTRACT_VERSION = "2026-05-28.openclaw-worker-contract.v2";
+export const OPENCLAW_WORKER_CONTRACT_VERSION = "2026-06-21.openclaw-worker-contract.v3";
 
 export const DEFAULT_OPENCLAW_RUNTIME_TARGET = {
   runtime: "official_openclaw_cli",
@@ -78,6 +78,18 @@ function approvalScopeFrom(validation, envelope) {
   return validation?.requiredInputs?.approval_scope ?? envelope?.approval_scope ?? envelope?.raw_input?.approvalScope ?? "read_only_observation";
 }
 
+function normalizeBoundWriteApproval(writeApproval = null) {
+  if (!writeApproval?.approvalGateId || !writeApproval?.actionSchemaDigest || !writeApproval?.targetUrl) return null;
+  return {
+    approvalGateId: writeApproval.approvalGateId,
+    actionSchemaDigest: writeApproval.actionSchemaDigest,
+    targetUrl: writeApproval.targetUrl,
+    executionMode: writeApproval.executionMode ?? "approved_single_write_action_only",
+    consumedAt: writeApproval.approval?.consumedAt ?? writeApproval.consumedAt ?? null,
+    allowedAction: writeApproval.approval?.allowedAction ?? writeApproval.actionSchema?.actionType ?? null
+  };
+}
+
 export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
   const runtimeTarget = {
     ...DEFAULT_OPENCLAW_RUNTIME_TARGET,
@@ -101,6 +113,7 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       skillKey: validation?.skillKey,
       workflowKey
     });
+  const boundWriteApproval = normalizeBoundWriteApproval(options.boundWriteApproval);
 
   return {
     schemaVersion: OPENCLAW_WORKER_CONTRACT_VERSION,
@@ -158,9 +171,20 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       workerMayUsePasswordManagerOrHandleAuthChallenges: false,
       workerMayContactPayer: false,
       workerMaySendExternalMessage: false,
-      workerMaySubmitForms: false,
+      workerMaySubmitForms: Boolean(boundWriteApproval),
       workerMayEnterCredentials: false,
       workerMayProvideMedicalAdvice: false
+    },
+    writeControls: {
+      version: "2026-06-21.execution-v2-worker-write-controls.v1",
+      writeRuntimeDefault: "off",
+      writeCapabilityScope: boundWriteApproval ? "per_job_single_approved_action" : "not_granted",
+      boundApproval: boundWriteApproval,
+      credentialEntryAllowed: false,
+      payerContactAllowed: false,
+      externalMessagingAllowed: false,
+      broadFormSubmissionAllowed: false,
+      requiresSingleUseApprovalToken: true
     },
     insuranceSitePlaybook: {
       taskUnderstandingRequired: true,
@@ -412,7 +436,17 @@ export function validateOpenClawWorkerPlan(plan) {
     }
     if (job.deterministicControls?.workerMayEnterCredentials !== false) issues.push("Worker must not enter credentials.");
     if (job.deterministicControls?.workerMayContactPayer !== false) issues.push("Worker payer contact still requires a separate explicit approval gate.");
-    if (job.deterministicControls?.workerMaySubmitForms !== false) issues.push("Worker form submission still requires a separate explicit approval gate.");
+    if (job.deterministicControls?.workerMaySubmitForms === true) {
+      if (job.writeControls?.writeCapabilityScope !== "per_job_single_approved_action") {
+        issues.push("Worker form submission requires per-job single-action write scope.");
+      }
+      if (!job.writeControls?.boundApproval?.approvalGateId || !job.writeControls?.boundApproval?.actionSchemaDigest || !job.writeControls?.boundApproval?.targetUrl) {
+        issues.push("Worker form submission requires a bound write approval token, action digest, and exact target URL.");
+      }
+    }
+    if (job.deterministicControls?.workerMaySubmitForms !== false && job.deterministicControls?.workerMaySubmitForms !== true) {
+      issues.push("Worker form submission capability must be an explicit boolean.");
+    }
     if (job.executionMode !== "proposal_only") issues.push("Worker job must remain proposal_only in this slice.");
     if ((job.actionsTaken ?? []).length) issues.push("Worker job actionsTaken must be empty before execution.");
     if (!job.worker?.profile || !job.worker?.agentId || !job.worker?.workspace) {

@@ -1294,3 +1294,17 @@ Phase 10T research scheduler daemon contract:
 Next likely phase after 10T:
 
 - Implement research knowledge-base PDF upload/extraction endpoints and dashboard path (`C17`, `D13`, `D14`), then analytics and budget/kill-switch controls.
+
+Execution Architecture V2 corrective track:
+
+- As of 2026-06-21, the write-capable direction is a separate v2 track, not a mutation of the existing read-only spine.
+- Committed defaults remain deterministic and non-live:
+  - `BRAINSTY_WORKER_RUNTIME=deterministic`,
+  - `WEFELLA_EXECUTION_WRITE_ENABLED=0`.
+- The future LLM-manager runtime may propose actions only inside LangGraph-assigned OpenClaw tasks.
+- Every irreversible write requires a human-approved, single-use, expiring token bound to the exact task, session, user, workflow, action schema digest, and URL.
+- The narrow write execution mode is `approved_single_write_action_only`.
+- Credentials, passkeys, passwords, OTP, 2FA, captcha, password-manager access, and login screens remain human-only via supervised takeover.
+- The agent must not harvest, store, replay, or type credentials.
+- Payer contact and external messaging remain hard blocked until a separately documented approval design exists.
+- This v2 track does not enable live PHI writes; live enablement requires out-of-band compliance sign-off, private provider secrets/configuration, final human review, and explicit flag flips.
