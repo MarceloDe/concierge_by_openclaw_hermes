@@ -569,6 +569,11 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         await enforce_rate_limit(app, request, principal=principal, scope="research")
         return await app.state.node_client.get_json("/api/research/citation-closure", params=query_for_actor(request, principal))
 
+    @app.post("/api/research/documents")
+    async def upload_research_document(request_context: Request, body: dict[str, Any] = Body(...), principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="research")
+        return await app.state.node_client.post_json("/api/research/documents", body_for_actor(body, principal))
+
     @app.post("/api/research/citation-closure/evaluate")
     async def evaluate_research_citation_closure(request_context: Request, body: dict[str, Any] = Body(...), principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="research")

@@ -8744,3 +8744,32 @@ Remaining before PR:
 
 - Open the worker PR for `feature/execution-v2-llm-manager`.
 - Update Cortex after the project PR state is ready.
+
+## Phase 45 Research Knowledge-Base PDF Upload And Extraction - 2026-06-21
+
+Goal:
+- Close final verification rows `C17`, `D13`, and `D14` with a real operator research document upload/extraction path.
+
+Implemented:
+- Added `POST /api/research/documents` in Node.
+- Added FastAPI proxy `POST /api/research/documents` behind operator/admin RBAC with actor binding.
+- Added local PDF/text extraction in `src/concierge/researchOps.mjs`.
+- Added creation of an uploaded-document knowledge source, completed research run, `research_document_upload_extracted` event, and pending-review research artifact.
+- Added dashboard file controls and a research upload proof card.
+- Kept uploaded research artifacts out of trusted retrieval until the existing artifact review gate approves them.
+- Hardened dashboard action rows so the trace panel cannot overlap operator controls during visual testing.
+
+Safety:
+- API and dashboard return hashes, safe preview, extraction metadata, and citation status only.
+- Raw document bytes and raw extracted text are not returned; the dashboard may show the existing sanitized safe preview while citation status remains `extracted_pending_review`.
+- Audit stores hashes/IDs and safety flags, not raw document bodies or identifiers.
+
+Verification:
+- `node --check src/concierge/researchOps.mjs && node --check src/server/server.mjs && node --check src/app/app.js`
+- `python3 -m py_compile project/api/main.py project/tests/test_fastapi_facade.py`
+- `node --test src/tests/research-ops.test.mjs src/tests/chat-ui-contract.test.mjs` - 26 passed.
+- `python3 -m unittest project.tests.test_fastapi_facade` - 53 passed, 2 expected skips.
+- `npm run test:local` - 233 passed, 2 expected skips.
+- `npm run build` - passed.
+- `git diff --check` - passed.
+- Visual dashboard proof passed with 0 console errors and 0 page errors: `artifacts/phase45/research-document-upload-browser-proof.png` and `artifacts/phase45/research-document-upload-browser-proof.json`.

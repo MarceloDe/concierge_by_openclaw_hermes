@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const RESEARCH_OPS_VERSION = "2026-06-01.phase10p-claim-citation-closure.v1";
+export const RESEARCH_OPS_VERSION = "2026-06-21.phase45-research-document-upload.v1";
 
 const ACTIVE_SOURCE_STATUSES = new Set(["active_registry", "approved", "active", "enabled"]);
 const SOURCE_STATUSES = new Set(["pending_review", "active_registry", "approved", "rejected", "disabled"]);
@@ -38,6 +38,13 @@ const TEXTUAL_CONTENT_TYPES = [
   "application/rss+xml"
 ];
 const MAX_FETCH_BYTES = Number(process.env.BRAINSTY_RESEARCH_FETCH_MAX_BYTES ?? 1024 * 1024);
+const MAX_RESEARCH_UPLOAD_BYTES = Number(process.env.BRAINSTY_RESEARCH_UPLOAD_MAX_BYTES ?? 5 * 1024 * 1024);
+const RESEARCH_UPLOAD_CONTENT_TYPES = new Map([
+  ["application/pdf", "pdf"],
+  ["text/plain", "text"],
+  ["text/markdown", "text"],
+  ["text/csv", "text"]
+]);
 function researchArtifactDir() {
   return process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR || "data/research-artifacts";
 }
@@ -94,6 +101,113 @@ function slug(value) {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 80);
+}
+
+function safeFilename(value, fallback = "research-document") {
+  const basename = String(value ?? "")
+    .replaceAll("\\", "/")
+    .split("/")
+    .at(-1)
+    ?.replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 180);
+  return basename || fallback;
+}
+
+function normalizeContentType(value = "") {
+  return String(value || "").split(";", 1)[0].trim().toLowerCase();
+}
+
+function decodeBase64Upload(value = "") {
+  const raw = String(value ?? "").trim();
+  const payload = raw.includes(",") && raw.split(",", 1)[0].startsWith("data:") ? raw.split(",", 2)[1] : raw;
+  try {
+    return Buffer.from(payload, "base64");
+  } catch {
+    throw new ResearchOpsError("Research document upload payload is not valid base64.", 400);
+  }
+}
+
+function decodeResearchTextUpload(buffer) {
+  return buffer.toString("utf8").replace(/\u0000/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function printableTextFallback(buffer) {
+  const text = buffer.toString("utf8").replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim();
+  const alphaCount = (text.match(/[A-Za-z]/g) ?? []).length;
+  return alphaCount >= 20 ? text : "";
+}
+
+async function extractResearchPdfUpload(buffer, { filename = "research-document.pdf" } = {}) {
+  const uploadDir = resolve(researchArtifactDir(), "uploads");
+  await mkdir(uploadDir, { recursive: true });
+  const contentHash = sha256(buffer);
+  const uploadPath = join(uploadDir, `${contentHash.slice(0, 16)}-${safeFilename(filename, "research-document.pdf")}`);
+  await writeFile(uploadPath, buffer);
+  const script = [
+    "import json, sys",
+    "path = sys.argv[1]",
+    "try:",
+    "    from pypdf import PdfReader",
+    "    reader = PdfReader(path)",
+    "    pages = []",
+    "    for idx, page in enumerate(reader.pages[:50], start=1):",
+    "        text = page.extract_text() or ''",
+    "        if text.strip():",
+    "            pages.append(f'[page {idx}]\\n{text}')",
+    "    combined = '\\n\\n'.join(pages)",
+    "    print(json.dumps({'ok': bool(combined.strip()), 'text': combined, 'method': 'pypdf', 'page_count': len(reader.pages), 'blockers': [] if combined.strip() else ['PDF text extraction produced no readable text.']}))",
+    "except Exception as exc:",
+    "    print(json.dumps({'ok': False, 'text': '', 'method': 'pypdf', 'page_count': None, 'blockers': [f'PDF extraction failed: {exc.__class__.__name__}']}))"
+  ].join("\n");
+  try {
+    const { stdout } = await execFileAsync("python3", ["-c", script, uploadPath], {
+      timeout: 30000,
+      maxBuffer: 1024 * 1024 * 10
+    });
+    const parsed = parseJson(stdout, {});
+    if (parsed.ok && String(parsed.text ?? "").trim()) {
+      return {
+        status: "completed",
+        method: parsed.method ?? "pypdf",
+        text: String(parsed.text ?? ""),
+        pageCount: Number(parsed.page_count ?? 0) || null,
+        blockers: [],
+        localUploadPath: uploadPath
+      };
+    }
+    const fallback = printableTextFallback(buffer);
+    return {
+      status: fallback ? "partial" : "blocked",
+      method: fallback ? "pdf_utf8_fallback" : parsed.method ?? "pypdf",
+      text: fallback,
+      pageCount: Number(parsed.page_count ?? 0) || null,
+      blockers: parsed.blockers ?? ["PDF text extraction produced no readable text."],
+      localUploadPath: uploadPath
+    };
+  } catch (error) {
+    const fallback = printableTextFallback(buffer);
+    return {
+      status: fallback ? "partial" : "blocked",
+      method: fallback ? "pdf_utf8_fallback" : "pypdf_subprocess",
+      text: fallback,
+      pageCount: null,
+      blockers: [safePreview(error?.message ?? error, 240)],
+      localUploadPath: uploadPath
+    };
+  }
+}
+
+async function extractResearchDocumentUpload(buffer, { contentType, filename } = {}) {
+  if (contentType === "application/pdf") return extractResearchPdfUpload(buffer, { filename });
+  return {
+    status: "completed",
+    method: "utf8_text",
+    text: decodeResearchTextUpload(buffer),
+    pageCount: 1,
+    blockers: [],
+    localUploadPath: null
+  };
 }
 
 function addHoursIso(isoValue, hours) {
@@ -1334,6 +1448,210 @@ async function createResearchArtifact(
   };
   await store.insert("research_artifacts", row);
   return normalizeArtifact(row);
+}
+
+export async function ingestResearchDocumentUpload(
+  store,
+  {
+    actorUserId = null,
+    filename = "research-document.pdf",
+    contentType = "application/pdf",
+    contentBase64,
+    title = null,
+    workflowKeys = ["general_rag"],
+    documentKind = "research_knowledge_base_pdf",
+    sourceStatus = "approved",
+    authorityLevel = "operator_uploaded",
+    topic = ""
+  } = {}
+) {
+  const normalizedContentType = normalizeContentType(contentType);
+  if (!RESEARCH_UPLOAD_CONTENT_TYPES.has(normalizedContentType)) {
+    throw new ResearchOpsError("Research document upload supports PDF, plain text, markdown, or CSV only.", 400);
+  }
+  if (!contentBase64) throw new ResearchOpsError("Research document upload requires contentBase64.", 400);
+  const buffer = decodeBase64Upload(contentBase64);
+  if (!buffer.length) throw new ResearchOpsError("Research document upload is empty.", 400);
+  if (buffer.byteLength > MAX_RESEARCH_UPLOAD_BYTES) {
+    throw new ResearchOpsError(`Research document upload exceeds the configured ${MAX_RESEARCH_UPLOAD_BYTES} byte limit.`, 413);
+  }
+  if (!SOURCE_STATUSES.has(sourceStatus) || sourceStatus === "rejected" || sourceStatus === "disabled") {
+    throw new ResearchOpsError("Research document source status must be approved, active, active_registry, enabled, or pending_review.", 400);
+  }
+  const safeName = safeFilename(filename, normalizedContentType === "application/pdf" ? "research-document.pdf" : "research-document.txt");
+  const extracted = await extractResearchDocumentUpload(buffer, { contentType: normalizedContentType, filename: safeName });
+  const extractedText = String(extracted.text ?? "").trim();
+  if (!extractedText) {
+    throw new ResearchOpsError(`Research document extraction failed: ${(extracted.blockers ?? []).join("; ") || "no readable text"}`, 422);
+  }
+  const time = nowIso();
+  const uploadSha256 = sha256(buffer);
+  const sourceKey = `research_upload_${slug(title || safeName)}_${uploadSha256.slice(0, 12)}`;
+  const existing = await store.findOne("knowledge_sources", { source_key: sourceKey });
+  if (existing) throw new ResearchOpsError("This research document upload already exists as a knowledge source.", 409);
+  const sourceUrl = `https://local.research-upload.invalid/${uploadSha256.slice(0, 16)}/${encodeURIComponent(safeName)}`;
+  const sourceRow = {
+    id: createId("ksrc"),
+    source_key: sourceKey,
+    title: safePreview(title || safeName, 240),
+    source_type: "uploaded_research_document",
+    authority_level: authorityLevel,
+    base_url: sourceUrl,
+    workflow_keys_json: json(Array.isArray(workflowKeys) ? workflowKeys.slice(0, 12) : ["general_rag"]),
+    refresh_policy: "manual_reupload_required",
+    access_method: "operator_upload_local_extraction",
+    status: sourceStatus,
+    priority: 250,
+    last_run_at: time,
+    last_status: "completed",
+    metadata_json: json({
+      documentKind,
+      filename: safeName,
+      contentType: normalizedContentType,
+      byteSize: buffer.byteLength,
+      uploadSha256,
+      localUploadPath: extracted.localUploadPath ? "[local-research-upload-store]" : null,
+      rawDocumentReturned: false,
+      rawTextReturned: false,
+      createdVia: "research_document_upload_api",
+      version: RESEARCH_OPS_VERSION
+    }),
+    proposed_by: actorUserId,
+    approved_by: ACTIVE_SOURCE_STATUSES.has(sourceStatus) ? actorUserId : null,
+    reviewed_at: ACTIVE_SOURCE_STATUSES.has(sourceStatus) ? time : null,
+    created_at: time,
+    updated_at: time
+  };
+  await store.insert("knowledge_sources", sourceRow);
+  const runRow = {
+    id: createId("research_run"),
+    source_id: sourceRow.id,
+    source_key: sourceRow.source_key,
+    actor_user_id: actorUserId,
+    run_type: "manual_research_document_upload",
+    workflow_key: Array.isArray(workflowKeys) && workflowKeys[0] ? workflowKeys[0] : "general_rag",
+    status: "completed",
+    topic: safePreview(topic || title || safeName, 240),
+    query_json: json({
+      documentKind,
+      filename: safeName,
+      contentType: normalizedContentType,
+      uploadSha256,
+      operatorUploadedDocument: true
+    }),
+    summary: `Research document upload extracted ${extractedText.length} characters from ${safeName}; artifact is pending citation review.`,
+    retry_of_run_id: null,
+    metadata_json: json({
+      documentKind,
+      extractionStatus: extracted.status,
+      extractionMethod: extracted.method,
+      pageCount: extracted.pageCount,
+      blockers: extracted.blockers ?? [],
+      version: RESEARCH_OPS_VERSION
+    }),
+    started_at: time,
+    completed_at: time,
+    created_at: time,
+    updated_at: time
+  };
+  await store.insert("research_runs", runRow);
+  const artifact = await createResearchArtifact(store, {
+    runId: runRow.id,
+    sourceId: sourceRow.id,
+    artifactType: normalizedContentType === "application/pdf" ? "operator_uploaded_pdf_extraction" : "operator_uploaded_text_extraction",
+    sourceUrl,
+    title: sourceRow.title,
+    rawText: [
+      `Research document upload: ${safeName}`,
+      `Upload SHA-256: ${uploadSha256}`,
+      `Extraction method: ${extracted.method}`,
+      "",
+      extractedText
+    ].join("\n"),
+    extractedText,
+    citationStatus: PENDING_ARTIFACT_STATUS,
+    metadata: {
+      documentKind,
+      filename: safeName,
+      contentType: normalizedContentType,
+      byteSize: buffer.byteLength,
+      uploadSha256,
+      extractionMethod: extracted.method,
+      extractionStatus: extracted.status,
+      pageCount: extracted.pageCount,
+      blockers: extracted.blockers ?? [],
+      localUploadPath: extracted.localUploadPath ? "[local-research-upload-store]" : null,
+      rawDocumentReturned: false,
+      rawTextReturned: false,
+      actorUserId
+    }
+  });
+  const event = await createResearchRunEvent(store, {
+    runId: runRow.id,
+    eventType: "research_document_upload_extracted",
+    status: "completed",
+    summary: `Operator research document ${safeName} was extracted into a pending-review artifact.`,
+    payload: {
+      actorUserId,
+      sourceId: sourceRow.id,
+      artifactId: artifact.id,
+      contentType: normalizedContentType,
+      byteSize: buffer.byteLength,
+      uploadSha256,
+      extractionHash: artifact.extractionHash,
+      citationStatus: artifact.citationStatus,
+      rawDocumentReturned: false,
+      rawTextReturned: false
+    }
+  });
+  const auditEvent = await audit(store, null, "research_document_uploaded", {
+    actorUserId,
+    sourceId: sourceRow.id,
+    sourceKey: sourceRow.source_key,
+    runId: runRow.id,
+    artifactId: artifact.id,
+    filenameHash: sha256(safeName),
+    contentType: normalizedContentType,
+    byteSize: buffer.byteLength,
+    uploadSha256,
+    extractionHash: artifact.extractionHash,
+    citationStatus: artifact.citationStatus,
+    rawDocumentReturned: false,
+    rawTextReturned: false,
+    trustedRetrievalReady: false
+  });
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    status: "research_document_upload_extracted",
+    document: {
+      filename: safeName,
+      contentType: normalizedContentType,
+      byteSize: buffer.byteLength,
+      uploadSha256,
+      extractionStatus: extracted.status,
+      extractionMethod: extracted.method,
+      pageCount: extracted.pageCount,
+      blockers: extracted.blockers ?? [],
+      rawDocumentReturned: false,
+      rawTextReturned: false
+    },
+    source: normalizeSource(sourceRow),
+    run: normalizeRun(runRow),
+    artifact,
+    event,
+    audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash },
+    safety: {
+      operatorOnly: true,
+      localExtractionOnly: true,
+      rawDocumentReturned: false,
+      rawTextReturned: false,
+      artifactPendingReview: true,
+      trustedRetrievalReady: false,
+      userAnswerEligibleBeforeReview: false
+    },
+    actionsTaken: ["research_document_upload_stored", "local_document_text_extracted", "pending_review_artifact_created"]
+  };
 }
 
 async function sourceByIdOrKey(store, { sourceId = null, sourceKey = null } = {}) {

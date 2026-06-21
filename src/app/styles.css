@@ -53,6 +53,7 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
 }
 
 .topbar,
@@ -666,14 +667,19 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
+  min-width: 0;
 }
 
 .review-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
+  max-width: min(100%, 860px);
 }
 
 .review-actions button {

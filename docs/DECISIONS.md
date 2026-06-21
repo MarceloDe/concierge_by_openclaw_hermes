@@ -2696,3 +2696,17 @@ Constraints:
 
 Cost of changing later:
 Moderate. The v2 path is additive and isolated, so future live enablement can replace the private executor or provider configuration without rewriting read-only observation.
+
+## 2026-06-21 - Phase 45 Research Document Upload Uses Existing Artifact Review Gate
+
+Problem:
+The final verification report still marks manual PDF upload into the operator knowledge-base pipeline as missing (`C17`, `D13`, `D14`). The project already has user-facing document uploads and research artifacts, but no operator/research KB document upload that creates reviewable artifacts.
+
+Decision:
+Implement Phase 45 as an additive operator-only research document upload endpoint, not a new parallel knowledge-base. Uploaded PDFs/text files create an approved local knowledge source, completed research run, run event, and `extracted_pending_review` artifact.
+
+Rationale:
+This reuses the existing research artifact review, trusted retrieval, embedding, graph, and citation-closure gates. It prevents uploaded PDFs from becoming trusted evidence until a human reviewer approves the artifact.
+
+Consequences:
+The dashboard can upload and inspect a research PDF/text extraction immediately, but user-facing answers and embeddings still see it only after the existing citation review gate approves it.

@@ -36,6 +36,7 @@ import {
   getResearchKpis,
   getResearchRun,
   getResearchWorkerStatus,
+  ingestResearchDocumentUpload,
   listResearchArtifacts,
   listCitationClosureEvaluations,
   listResearchRunEvents,
@@ -3234,6 +3235,31 @@ async function handleApi(req, res, url) {
           status: url.searchParams.get("status") ?? null,
           verdict: url.searchParams.get("verdict") ?? null,
           limit: Number(url.searchParams.get("limit") ?? 25)
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/documents") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await ingestResearchDocumentUpload(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          filename: body.filename ?? "research-document.pdf",
+          contentType: body.contentType ?? body.content_type ?? "application/pdf",
+          contentBase64: body.contentBase64 ?? body.content_base64,
+          title: body.title ?? null,
+          workflowKeys: Array.isArray(body.workflowKeys ?? body.workflow_keys) ? (body.workflowKeys ?? body.workflow_keys) : ["general_rag"],
+          documentKind: body.documentKind ?? body.document_kind ?? "research_knowledge_base_pdf",
+          sourceStatus: body.sourceStatus ?? body.source_status ?? "approved",
+          authorityLevel: body.authorityLevel ?? body.authority_level ?? "operator_uploaded",
+          topic: body.topic ?? ""
         })
       );
     } catch (error) {

@@ -108,7 +108,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | C14 | PASSING | Research source metadata/priority and run query/topic arguments validate and persist. |
 | C15 | PASSING | Approved schedules persist with next-run time and due-tick proof. |
 | C16 | PASSING | Pause/resume schedule lifecycle is implemented and audited. |
-| C17 | FAILING / NEEDS FIX | Manual PDF upload into the operator knowledge-base pipeline is not implemented as a research API/dashboard path. |
+| C17 | IMPLEMENTED DURING THIS RUN | Phase 45 adds operator research document upload from the dashboard into the knowledge-base pipeline as pending-review artifacts. |
 | C18 | PASSING | Trusted evidence search returns source metadata, scores, snippets, and review status. |
 | C19 | PASSING | Retrieval test/search shows chunks/snippets, scores, embedding contribution, and low-confidence states. |
 | C20 | PASSING | Phase 10P claim closure links supported claims to citations and fails unsupported claims. |
@@ -141,8 +141,8 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | D10 | PASSING | Source approve endpoint is implemented and audited. |
 | D11 | PASSING | Source reject endpoint is implemented and audited. |
 | D12 | PASSING | Source patch/update endpoint is implemented and audited. |
-| D13 | FAILING / NEEDS FIX | Research knowledge-base PDF upload endpoint is not implemented. |
-| D14 | FAILING / NEEDS FIX | Research document extraction endpoint is not implemented. |
+| D13 | IMPLEMENTED DURING THIS RUN | `POST /api/research/documents` accepts operator-only PDF/text uploads through Node and FastAPI. |
+| D14 | IMPLEMENTED DURING THIS RUN | Research document upload performs local extraction, stores hashes/safe preview, and creates a pending-review artifact. |
 | D15 | PASSING | `GET /api/research/search` searches reviewed artifacts with source metadata. |
 | D16 | PASSING | `GET /api/research/evidence` is implemented; claims-specific endpoint remains future work but evidence path passes. |
 | D17 | PASSING | `GET /api/research/graph` is implemented with metadata-only graph safety. |
@@ -160,7 +160,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | --- | --- | --- |
 | E1 | PASSING | Phase 10T adds an always-on approved-schedule daemon proof: persisted daemon state, env-gated auto-start, runtime heartbeat/tick events, hash-chain audit events, overlap guard, Node/FastAPI status and tick endpoints, and operator dashboard proof. |
 | E2 | PASSING | Deterministic fetch path stores artifacts, hashes, previews, and failure events. |
-| E3 | PASSING | User document extraction and portal OCR are implemented; research PDF pipeline remains covered separately by C17/D13/D14 gaps. |
+| E3 | PASSING | User document extraction, portal OCR, and the research knowledge-base PDF upload pipeline are implemented; analytics and broader queues remain covered separately. |
 | E4 | PASSING | PHI/payload/audit policies block or redact sensitive content before model/memory/log surfaces. |
 | E5 | FAILING / NEEDS FIX | General entity extraction with source/page/span/confidence is not fully implemented for the research evidence pipeline. |
 | E6 | PASSING | Natural keys, stable candidate ids, source uniqueness, and retry controls reduce duplicate writes. |
@@ -230,7 +230,6 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Add research knowledge-base PDF upload/extraction endpoints and dashboard path (`C17`, `D13`, `D14`).
 - Add research analytics endpoint/dashboard and budget/kill-switch enforcement (`C26`, `C27`, `D19`).
 - Expand review queues for low-confidence/downvoted/escalated/user-answer items (`C21`).
 
@@ -288,9 +287,8 @@ Priority 2:
 
 Phase 10U should address the next highest-risk remaining gaps:
 
-1. Research knowledge-base PDF upload/extraction API and dashboard path (`C17`, `D13`, `D14`).
-2. Research analytics endpoint/dashboard and budget/kill-switch hardening (`C26`, `C27`, `D19`).
-3. Expanded review queues and broader journey/entity extraction after the PDF pipeline is proven.
+1. Research analytics endpoint/dashboard and budget/kill-switch hardening (`C26`, `C27`, `D19`).
+2. Expanded review queues and broader journey/entity extraction after the PDF pipeline is proven.
 
 ## Phase 10T Research Scheduler Daemon Update
 
@@ -301,6 +299,18 @@ Code changes:
 - Added FastAPI facade proxies for both scheduler-daemon endpoints behind operator/admin RBAC.
 - Added operator dashboard controls and cards for daemon process state, cadence, due counts, last tick, overlap skips, last actions, and safety.
 - Added `src/tests/research-scheduler.test.mjs` and updated UI/facade/build contracts.
+
+## Phase 45 Research Knowledge-Base Upload Update
+
+Code changes:
+- Added operator-only research document ingestion through `POST /api/research/documents`.
+- Added local PDF/text extraction into a completed research run and `extracted_pending_review` artifact.
+- Added FastAPI proxy coverage behind operator/admin RBAC with actor binding.
+- Added operator dashboard file controls and a safety proof card for uploaded research documents.
+- Kept trusted retrieval blocked until the existing artifact review gate approves the uploaded artifact.
+
+Verification target:
+- Rows `C17`, `D13`, and `D14` are implemented by this phase when focused research, facade, build, local, and visual dashboard proof pass.
 
 Verification:
 - `node --check src/concierge/researchScheduler.mjs` passed.

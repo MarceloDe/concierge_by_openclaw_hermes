@@ -1,0 +1,29 @@
+{
+  "url": "http://127.0.0.1:4219/?phase=phase-45-research-document-upload",
+  "timestamp": "2026-06-21T19:13:51.015Z",
+  "fixturePath": "[tmp-safe-synthetic-fixture]",
+  "consoleErrorCount": 0,
+  "pageErrorCount": 0,
+  "network": [
+    {
+      "type": "request",
+      "method": "POST",
+      "url": "http://127.0.0.1:4219/api/research/documents"
+    },
+    {
+      "type": "response",
+      "status": 200,
+      "url": "http://127.0.0.1:4219/api/research/documents"
+    }
+  ],
+  "interaction": "file input set and Upload Research PDF button clicked after module-readiness trace was visible",
+  "cardIncludesUploadHeading": true,
+  "cardIncludesPendingReview": true,
+  "cardIncludesSafePreview": true,
+  "cardIncludesRawEmail": false,
+  "cardIncludesRawSsn": false,
+  "traceIncludesAuditType": true,
+  "visibleCardSnippet": "Research Knowledge-Base Upload\nStatus\nresearch_document_upload_extracted · partial · pdf_utf8_fallback\nArtifact\nresearch_artifact_190afcf9-50b0-4ab2-8931-85b37cbb9924 · extracted_pending_review · operator_uploaded_pdf_extraction\nDocument\nphase45-safe-research-upload.pdf · application/pdf · 254 bytes · pages unknown\nHashes\nupload e32731d91f1ae8e942b4d7ef20bcd184da1a3b90e75a29577684ff1f6a80e3b3 · extraction 8b93afa7144bb1eaa3ff06667229654787e996de2a5381092514f0538c028fe1\nSafety\npending review · raw document/text hidden\nActions\nresearch_document_upload_stored, local_document_text_extracted, pending_review_artifact_created\n\nSynthetic research knowledge base PDF fixture. Coverage policy: deductible applies after plan year start. Provider directory evidence: in-network primary care visits require source review. No patient identifiers are present in this visual proof fixture.\n\nRun Detail\nRun\nresearch_run_8b378cb4-6e88-4a00-857e-c54a4c64fd34\nStatus\ncompleted\nSource\nresearch_upload_phase_45_saf",
+  "consoleMessages": [],
+  "pageErrors": []
+}

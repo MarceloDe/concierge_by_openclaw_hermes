@@ -3063,3 +3063,24 @@ Gates:
 - Focused Execution V2 tests prove blocked-without-token, single-use consumed token, expiry, wrong URL/action rejection, audit events, LLM cannot bypass the gate, committed defaults off, and worker contract per-job write binding.
 - Existing takeover safety tests stay green unchanged.
 - `npm run build` and `npm run test:local` pass with no safety regressions.
+
+## Phase 45 - Research Knowledge-Base PDF Upload And Extraction
+
+Goal: close final verification rows `C17`, `D13`, and `D14` by adding an operator-only research document upload path that feeds the existing research artifact review pipeline.
+
+Build:
+
+- Add a Node research ingestion function for PDF/text uploads with local extraction, hashes, safe previews, completed run/event creation, and pending-review artifact creation.
+- Add `POST /api/research/documents` to Node.
+- Add FastAPI proxy `POST /api/research/documents` behind operator/admin RBAC and actor binding.
+- Add operator dashboard file controls and upload proof rendering.
+- Add focused Node and FastAPI tests proving pending-review behavior, raw-data safety, and RBAC.
+- Update the final verification report only for rows proven by this phase; leave analytics, budget/kill-switch, and broader review queues in the failing backlog.
+
+Gates:
+
+- Focused research tests pass.
+- FastAPI facade tests pass.
+- `npm run build` passes.
+- `npm run test:local` passes.
+- Browser proof at `/` shows the upload controls and pending-review research artifact without raw document text.
