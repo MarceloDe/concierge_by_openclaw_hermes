@@ -24,7 +24,7 @@ Build a production-grade, memory-first, multi-channel healthcare insurance conci
 - OpenClaw is a bounded proposing and solving worker inside assigned LangGraph tasks.
 - FastAPI `/api/v1` is the public connector for remote clients.
 - Node remains the internal runtime until a separate migration is explicitly approved.
-- Product memory is Graphiti/FalkorDB or another explicit runtime product-memory adapter, never Cortex.
+- Product memory is Graphiti/FalkorDB or another explicit runtime product-memory adapter, never Cortex. The committed default remains disabled/fail-soft; production-candidate Graphiti enablement uses in-boundary FalkorDB plus `GRAPHITI_LLM_PROVIDER=bedrock` and requires `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1` before provider payloads can flow.
 - Cortex is project memory for agents, planning, proof, and handoffs.
 - Every insurance factual claim must be supported by source pointers or a safe caveat.
 - External/write/browser actions require an explicit approval contract.

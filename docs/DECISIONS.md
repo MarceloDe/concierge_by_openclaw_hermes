@@ -2710,3 +2710,17 @@ This reuses the existing research artifact review, trusted retrieval, embedding,
 
 Consequences:
 The dashboard can upload and inspect a research PDF/text extraction immediately, but user-facing answers and embeddings still see it only after the existing citation review gate approves it.
+
+## 2026-06-21 - Product Memory Is Graphiti MVP-Ready, Fail-Soft, And Bedrock-Backed
+
+Problem:
+Graphiti/FalkorDB product memory was implemented and Docker-packaged, but the Python bridge was OpenAI-only, the Node adapter assumed `.venv-graphiti/bin/python`, and live enablement did not have an explicit PHI clearance flag. The project needed a HIPAA-bound Bedrock path without making Graphiti a startup dependency or changing committed defaults.
+
+Decision:
+Keep `BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled` as the committed default. Add `GRAPHITI_LLM_PROVIDER=bedrock` with Bedrock LLM and Titan embedding clients in the Graphiti bridge, make `BRAINSTY_GRAPHITI_PYTHON` configurable, add a fail-soft startup health probe, and require `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1` before any enabled Graphiti path sends provider payloads.
+
+Rationale:
+Healthcare product memory should be real and enable-able, but the safe failure mode is degraded memory, not a dead server. Bedrock keeps PHI-adjacent LLM/embedding traffic inside the AWS BAA boundary when the operator enables it. The clearance flag makes live PHI flow an explicit environment decision rather than an accidental consequence of setting the adapter to `graphiti`.
+
+Consequences:
+OpenAI remains available for local/back-compat proof. Bedrock production use requires in-boundary FalkorDB, IAM-based AWS auth, `GRAPHITI_STORE_RAW_EPISODES=0`, a fresh `GRAPHITI_GROUP_ID`, and no secrets in Git.

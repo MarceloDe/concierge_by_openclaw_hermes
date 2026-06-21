@@ -42,11 +42,15 @@ test("product memory status degrades cleanly when Graphiti is enabled but unavai
   const previousEnv = {
     BRAINSTY_DB_PATH: process.env.BRAINSTY_DB_PATH,
     BRAINSTY_PRODUCT_MEMORY_ADAPTER: process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER,
+    BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED: process.env.BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED,
+    BRAINSTY_GRAPHITI_PYTHON: process.env.BRAINSTY_GRAPHITI_PYTHON,
     FALKORDB_HOST: process.env.FALKORDB_HOST,
     FALKORDB_PORT: process.env.FALKORDB_PORT
   };
   process.env.BRAINSTY_DB_PATH = join(dir, "test.sqlite");
   process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER = "graphiti";
+  process.env.BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED = "1";
+  process.env.BRAINSTY_GRAPHITI_PYTHON = "/usr/bin/python3";
   process.env.FALKORDB_HOST = "127.0.0.1";
   process.env.FALKORDB_PORT = "1";
   const serverModule = await import(`../server/server.mjs?degraded=${Date.now()}`);
@@ -62,7 +66,7 @@ test("product memory status degrades cleanly when Graphiti is enabled but unavai
     assert.equal(status.adapter, "graphiti");
     assert.equal(status.enabled, true);
     assert.equal(status.replayQueue.available, true);
-    assert.match(status.error, /Graphiti bridge failed|Connection refused|connect/i);
+    assert.match(status.error, /Graphiti bridge failed|Graphiti dependencies are not installed|Connection refused|connect/i);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     for (const [key, value] of Object.entries(previousEnv)) {

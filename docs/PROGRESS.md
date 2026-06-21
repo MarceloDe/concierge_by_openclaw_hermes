@@ -8773,3 +8773,37 @@ Verification:
 - `npm run build` - passed.
 - `git diff --check` - passed.
 - Visual dashboard proof passed with 0 console errors and 0 page errors: `artifacts/phase45/research-document-upload-browser-proof.png` and `artifacts/phase45/research-document-upload-browser-proof.json`.
+
+## Corrective Product Memory Bedrock Phase - 2026-06-21
+
+Goal:
+- Follow the corrective product-memory directive: make Graphiti/Zep MVP-ready, fail-soft, Bedrock-backed, and HIPAA-boundary enable-able while keeping committed defaults disabled.
+
+Implemented:
+- Added `GRAPHITI_LLM_PROVIDER=bedrock` support in `tools/graphiti/graphiti_bridge.py`.
+- Added Bedrock Runtime LLM and Titan embedding clients with env-selected model IDs and standard AWS credential resolution.
+- Preserved the existing OpenAI Graphiti path for back-compat.
+- Added `tools/graphiti/requirements-graphiti.txt` and Docker venv installation of Bedrock dependencies.
+- Added `BRAINSTY_GRAPHITI_PYTHON` so runtime hosts can point at their own Graphiti venv.
+- Added `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED`; when unset and adapter is `graphiti`, status/recall/retain/replay/probe/suppress degrade without sending provider payloads.
+- Added fail-soft product-memory boot probe logging.
+- Hardened product-memory episode masking for generic email and phone identifiers before provider calls.
+- Added `docs/PRODUCT_MEMORY_RUNBOOK.md` and ADR-003.
+
+Safety:
+- `BRAINSTY_PRODUCT_MEMORY_ADAPTER=disabled` remains the committed default.
+- `GRAPHITI_STORE_RAW_EPISODES=0` remains the compose default.
+- No AWS keys, hostnames, FalkorDB credentials, or account-specific Bedrock ARNs were committed.
+- Cortex remains project memory only; product memory remains Graphiti/FalkorDB.
+
+Verification:
+- `python3 -m py_compile tools/graphiti/graphiti_bridge.py tools/graphiti/graphiti_bridge_bedrock_test.py` passed.
+- `node --check src/concierge/productMemory.mjs && node --check src/server/server.mjs && node --check src/tests/product-memory-bedrock.test.mjs && node --check src/tests/product-memory-api.test.mjs` passed.
+- `npm run test:memory:bedrock` passed with 5/5 tests.
+- `node --test src/tests/product-memory-api.test.mjs` passed with 2/2 tests.
+- `npm run test:docker:contract` passed with 45/45 tests.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed with 53 tests, 51 passed, 2 expected skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 240 total, 238 passed, 2 expected live-gated OpenClaw skips.
+- `git diff --check` passed.
+- Targeted changed-file secret scan found no AWS keys, bearer tokens, private keys, or OpenAI-style secrets.

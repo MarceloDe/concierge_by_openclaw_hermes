@@ -289,6 +289,7 @@ Hard constraints for the next implementation cycle:
 
 - Cortex is project memory only, not product memory.
 - Product memory must use Hindsight, Zen, LangMem, Mem0, Zep/Graphiti, or an explicit equivalent retain/recall adapter.
+- DB memory and LangGraph checkpointer state remain always-on operational memory. Graphiti/FalkorDB is the opt-in product-memory layer: committed default disabled, fail-soft at boot, Bedrock-capable inside the AWS HIPAA boundary, and gated by `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1` before live provider payloads.
 - LangGraph must own the healthcare workflow path.
 - `/api/chat`, `/api/langgraph/run`, and orchestrator endpoints must not remain divergent product runtimes.
 - OpenClaw remains the adaptive worker/tool/channel arm and must not choose workflows, bypass gates, retain product memory, enter credentials, submit forms, contact payers, or perform irreversible actions.

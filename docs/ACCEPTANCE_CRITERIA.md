@@ -284,6 +284,9 @@ Phase 5 product memory is acceptable when:
 
 - Product memory is implemented with a real runtime such as Zep Graphiti, not Cortex and not only a local SQLite placeholder.
 - The official Graphiti package is installed from the project-local official repo checkout or an equivalent pinned package source.
+- The committed default keeps product memory disabled and the server boot probe degrades safely instead of making Graphiti a startup precondition.
+- HIPAA-bound live enablement can select `GRAPHITI_LLM_PROVIDER=bedrock` with AWS Bedrock LLM/embedding clients and standard AWS credential resolution.
+- When `BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti` but `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED` is unset, status/recall/retain/replay/probe/suppress degrade without sending provider payloads.
 - The graph backend initializes real Graphiti schema/indexes before retain/recall.
 - LangGraph recalls product memory before healthcare workflow routing and retains safe memory after graph completion.
 - Retained memory contains safe summaries, workflow/source-pointer metadata, and database pointers, not raw portal text.
