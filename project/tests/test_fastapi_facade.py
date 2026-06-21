@@ -223,6 +223,37 @@ class FakeNodeRuntimeClient:
                 ],
                 "reviewQueue": {"pendingArtifacts": 1, "trustedRetrieval": 0}
             }
+        if path == "/api/research/entities":
+            return {
+                "ok": True,
+                "version": "test",
+                "filters": {
+                    "artifactId": (params or {}).get("artifactId"),
+                    "entityType": (params or {}).get("entityType"),
+                    "actorUserId": (params or {}).get("actorUserId")
+                },
+                "counts": {"total": 1, "byType": {"benefit_term": 1}},
+                "entities": [
+                    {
+                        "id": "research_entity_one",
+                        "artifactId": "artifact_one",
+                        "runId": "run_one",
+                        "sourceId": "source_one",
+                        "entityType": "benefit_term",
+                        "label": "Benefit term",
+                        "normalizedValue": "deductible",
+                        "valueHash": "hash_entity",
+                        "sourcePointer": {"table": "research_artifacts", "id": "artifact_one"},
+                        "pageNumber": 2,
+                        "spanStart": 24,
+                        "spanEnd": 34,
+                        "confidence": 0.78,
+                        "evidencePreview": "annual deductible applies",
+                        "metadata": {"rawArtifactTextReturned": False}
+                    }
+                ],
+                "safety": {"rawArtifactTextReturned": False, "spansAreCharacterOffsets": True, "confidenceReturned": True}
+            }
         if path == "/api/research/search" or path == "/api/research/evidence":
             return {
                 "version": "test",
@@ -656,6 +687,30 @@ class FakeNodeRuntimeClient:
                 },
                 "event": {"id": "event_artifact_review", "eventType": "research_artifact_approved"},
                 "audit": {"id": "audit_artifact_review", "eventType": "research_artifact_approved"}
+            }
+        if path == "/api/research/artifacts/artifact_one/entities/extract":
+            return {
+                "ok": True,
+                "version": "test",
+                "status": "research_entities_extracted",
+                "artifact": {"id": "artifact_one", "runId": "run_one", "sourceId": "source_one"},
+                "entityCount": 1,
+                "entities": [
+                    {
+                        "id": "research_entity_one",
+                        "artifactId": "artifact_one",
+                        "entityType": "benefit_term",
+                        "normalizedValue": "deductible",
+                        "pageNumber": 2,
+                        "spanStart": 24,
+                        "spanEnd": 34,
+                        "confidence": 0.78
+                    }
+                ],
+                "event": {"id": "event_entities", "eventType": "research_entities_extracted"},
+                "audit": {"id": "audit_entities", "eventType": "research_entities_extracted"},
+                "safety": {"rawArtifactTextReturned": False, "spansAreCharacterOffsets": True},
+                "actionsTaken": ["research_entities_extracted", "source_spans_recorded", "entity_hashes_persisted"]
             }
         if path == "/api/research/sources/propose":
             return {
@@ -2685,6 +2740,21 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(artifacts.status_code, 200)
         self.assertEqual(artifacts.json()["artifacts"][0]["citationStatus"], "extracted_pending_review")
         self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/artifacts", {"actorUserId": "operator_user"}))
+
+        entities = client.get("/api/research/entities?entityType=benefit_term", headers=headers)
+        self.assertEqual(entities.status_code, 200)
+        self.assertEqual(entities.json()["entities"][0]["entityType"], "benefit_term")
+        self.assertEqual(entities.json()["entities"][0]["pageNumber"], 2)
+        self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/entities", {"entityType": "benefit_term", "actorUserId": "operator_user"}))
+
+        extracted_entities = client.post("/api/research/artifacts/artifact_one/entities/extract", headers=headers, json={})
+        self.assertEqual(extracted_entities.status_code, 200)
+        self.assertEqual(extracted_entities.json()["status"], "research_entities_extracted")
+        self.assertEqual(extracted_entities.json()["entityCount"], 1)
+        self.assertEqual(
+            app.state.node_client.post_calls[-1],
+            ("/api/research/artifacts/artifact_one/entities/extract", {"actorUserId": "operator_user"})
+        )
 
         search = client.get("/api/research/search?q=benefits", headers=headers)
         self.assertEqual(search.status_code, 200)

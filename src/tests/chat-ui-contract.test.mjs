@@ -218,6 +218,7 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(indexHtml, /id="buildResearchGraph"/);
   assert.match(indexHtml, /id="loadCitationClosure"/);
   assert.match(indexHtml, /id="loadResearchArtifacts"/);
+  assert.match(indexHtml, /id="loadResearchEntities"/);
   assert.match(indexHtml, /id="loadResearchSources"/);
   assert.match(indexHtml, /id="loadResearchRuns"/);
   assert.match(indexHtml, /id="loadResearchSchedules"/);
@@ -252,6 +253,8 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /\/api\/research\/citation-closure/);
   assert.match(appJs, /\/api\/research\/citation-closure\/evaluate/);
   assert.match(appJs, /\/api\/research\/artifacts/);
+  assert.match(appJs, /\/api\/research\/entities/);
+  assert.match(appJs, /\/entities\/extract/);
   assert.match(appJs, /\/api\/research\/search/);
   assert.match(appJs, /\/api\/research\/sources/);
   assert.match(appJs, /\/api\/research\/runs/);
@@ -272,6 +275,7 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /approvedWorkerDispatch/);
   assert.match(appJs, /data-research-artifact-approve/);
   assert.match(appJs, /data-research-artifact-quarantine/);
+  assert.match(appJs, /data-research-entities-extract/);
   assert.match(appJs, /data-operator-proposal-approve/);
   assert.match(appJs, /data-operator-proposal-reject/);
   assert.match(appJs, /executeResearchRun/);
@@ -281,6 +285,7 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /Trusted Evidence Search/);
   assert.match(appJs, /Research Evidence Graph/);
   assert.match(appJs, /Claim Citation Closure/);
+  assert.match(appJs, /Research Entity Extraction/);
   assert.match(appJs, /Worker Status/);
   assert.match(appJs, /MockWorker/);
   assert.match(appJs, /researchConsole\.addEventListener\("click"/);
@@ -302,6 +307,8 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /loadCitationClosure/);
   assert.match(appJs, /evaluateCitationClosure/);
   assert.match(appJs, /loadResearchArtifacts/);
+  assert.match(appJs, /loadResearchEntities/);
+  assert.match(appJs, /extractResearchEntities/);
   assert.match(appJs, /searchResearchEvidence/);
   assert.match(appJs, /loadResearchSources/);
   assert.match(appJs, /loadResearchRuns/);

@@ -2366,6 +2366,7 @@ function renderResearchConsole(payload, mode = "kpis") {
   const run = payload.run ?? null;
   const events = payload.events ?? [];
   const artifacts = payload.artifacts ?? (payload.artifact ? [payload.artifact] : []);
+  const researchEntities = payload.entities ?? [];
   const searchResults = payload.results ?? [];
   const worker = payload.worker ?? (payload.modes && payload.defaultMode ? payload : null);
   const workerResult = payload.workerResult ?? null;
@@ -2403,6 +2404,44 @@ function renderResearchConsole(payload, mode = "kpis") {
           <dd>${escapeHtml((researchDocumentUpload.actionsTaken ?? []).join(", ") || "none")}</dd>
         </dl>
         <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
+      </article>
+    `);
+  }
+  if (researchEntities.length || payload.counts?.byType || payload.status === "research_entities_extracted") {
+    const counts = payload.counts ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Research Entity Extraction</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(payload.status ?? "entities_loaded")} · ${escapeHtml(payload.entityCount ?? researchEntities.length)} entities shown</dd>
+          <dt>Types</dt>
+          <dd>${escapeHtml(JSON.stringify(counts.byType ?? researchEntities.reduce((acc, entity) => ({ ...acc, [entity.entityType]: (acc[entity.entityType] ?? 0) + 1 }), {})))}</dd>
+          <dt>Artifact</dt>
+          <dd>${escapeHtml(payload.artifact?.id ?? payload.filters?.artifactId ?? "all artifacts")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(payload.safety?.rawArtifactTextReturned === false ? "raw artifact hidden · previews only" : "verify entity safety")}</dd>
+          <dt>Spans</dt>
+          <dd>${escapeHtml(payload.safety?.spansAreCharacterOffsets === false ? "not verified" : "character offsets · confidence included")}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((payload.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+        <ol class="research-artifact-list">
+          ${researchEntities
+            .slice(0, 30)
+            .map(
+              (entity) => `
+                <li>
+                  <b>${escapeHtml(entity.label ?? entity.entityType)}</b>
+                  <span>${escapeHtml(entity.normalizedValue)} · ${escapeHtml(entity.entityType)} · confidence ${escapeHtml(entity.confidence)}</span>
+                  <span>artifact ${escapeHtml(entity.artifactId)} · page ${escapeHtml(entity.pageNumber ?? "n/a")} · span ${escapeHtml(entity.spanStart)}-${escapeHtml(entity.spanEnd)}</span>
+                  <span>source ${escapeHtml(entity.sourcePointer?.table ?? "research_artifacts")}:${escapeHtml(entity.sourcePointer?.id ?? entity.artifactId)}</span>
+                  <p>${escapeHtml(entity.evidencePreview ?? "")}</p>
+                </li>
+              `
+            )
+            .join("") || "<li>No extracted entities yet. Extract from an artifact or upload a research document.</li>"}
+        </ol>
       </article>
     `);
   }
@@ -2819,6 +2858,7 @@ function renderResearchConsole(payload, mode = "kpis") {
                     <span>content ${escapeHtml(artifact.contentHash ?? "none")} · extraction ${escapeHtml(artifact.extractionHash ?? "none")}</span>
                     <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
                     <span>
+                      <button type="button" data-research-entities-extract="${escapeHtml(artifact.id)}">Extract Entities</button>
                       ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-approve="${escapeHtml(artifact.id)}">Approve Citation</button>` : ""}
                       ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-quarantine="${escapeHtml(artifact.id)}">Quarantine</button>` : ""}
                     </span>
@@ -2845,6 +2885,7 @@ function renderResearchConsole(payload, mode = "kpis") {
                   <span>run ${escapeHtml(artifact.runId ?? "none")} · content ${escapeHtml(artifact.contentHash ?? "none")}</span>
                   <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
                   <span>
+                    <button type="button" data-research-entities-extract="${escapeHtml(artifact.id)}">Extract Entities</button>
                     ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-approve="${escapeHtml(artifact.id)}">Approve Citation</button>` : ""}
                     ${artifact.citationStatus === "extracted_pending_review" ? `<button type="button" data-research-artifact-quarantine="${escapeHtml(artifact.id)}">Quarantine</button>` : ""}
                   </span>
@@ -3283,6 +3324,27 @@ async function loadResearchArtifacts() {
   const result = await api("/api/research/artifacts?citationStatus=extracted_pending_review");
   researchStatus.textContent = `${result.artifacts?.length ?? 0} pending artifacts`;
   renderResearchConsole(result, "artifacts");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchEntities() {
+  const result = await api("/api/research/entities?limit=50");
+  researchStatus.textContent = `${result.counts?.total ?? result.entities?.length ?? 0} extracted research entities`;
+  renderResearchConsole(result, "research entities");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function extractResearchEntities(artifactId) {
+  const result = await api(`/api/research/artifacts/${encodeURIComponent(artifactId)}/entities/extract`, {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email")
+    })
+  });
+  researchStatus.textContent = `${result.entityCount ?? result.entities?.length ?? 0} entities extracted · ${result.artifact?.id ?? artifactId}`;
+  renderResearchConsole(result, "research entities");
   trace.textContent = JSON.stringify(result, null, 2);
   return result;
 }
@@ -4424,6 +4486,18 @@ document.querySelector("#loadResearchArtifacts").addEventListener("click", async
   }
 });
 
+document.querySelector("#loadResearchEntities").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchEntities"), "Loading...");
+  try {
+    await loadResearchEntities();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 document.querySelector("#loadResearchSources").addEventListener("click", async () => {
   const restore = setBusy(document.querySelector("#loadResearchSources"), "Loading...");
   try {
@@ -4619,6 +4693,7 @@ researchConsole.addEventListener("click", async (event) => {
   const runToMock = event.target?.dataset?.researchRunMock;
   const runToOpenClaw = event.target?.dataset?.researchRunOpenclaw;
   const runToHermes = event.target?.dataset?.researchRunHermes;
+  const artifactToExtractEntities = event.target?.dataset?.researchEntitiesExtract;
   const artifactToApprove = event.target?.dataset?.researchArtifactApprove;
   const artifactToQuarantine = event.target?.dataset?.researchArtifactQuarantine;
   if (
@@ -4633,6 +4708,7 @@ researchConsole.addEventListener("click", async (event) => {
       runToMock ||
       runToOpenClaw ||
       runToHermes ||
+      artifactToExtractEntities ||
       artifactToApprove ||
       artifactToQuarantine
     )
@@ -4649,6 +4725,7 @@ researchConsole.addEventListener("click", async (event) => {
     else if (runToMock) await executeResearchRun(runToMock, "mock_worker");
     else if (runToOpenClaw) await executeResearchRun(runToOpenClaw, "openclaw");
     else if (runToHermes) await executeResearchRun(runToHermes, "hermes");
+    else if (artifactToExtractEntities) await extractResearchEntities(artifactToExtractEntities);
     else if (artifactToApprove) await reviewResearchArtifact(artifactToApprove, "approve");
     else if (artifactToQuarantine) await reviewResearchArtifact(artifactToQuarantine, "quarantine");
   } catch (error) {

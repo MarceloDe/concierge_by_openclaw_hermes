@@ -1,7 +1,7 @@
 # Final System Verification Report
 
 Project: `workerprototype_openclaw`
-Report phase: Phase 47 expanded review queues update to the final-system PASS / FAIL / BLOCKED matrix
+Report phase: Phase 48 research entity extraction update to the final-system PASS / FAIL / BLOCKED matrix
 Created: 2026-06-01
 Scope source: `docs/goal_final_system.md`
 
@@ -39,16 +39,17 @@ Scope source: `docs/goal_final_system.md`
 - Phase 46 focused proof passed through `npm run test:local` with 239 passing tests and 2 expected live-gated OpenClaw skips, `npm run test:live` with the live OpenAI smoke plus research/UI slices, and `npm run test:facade` with 53 tests and 2 expected skips.
 - Phase 46 researchOps proof shows the persisted kill switch blocks both run queueing and execution, emits blocked budget events, and audits `research_budget_blocked` without raw prompts or artifact text.
 - Phase 47 adds `GET /api/research/review-queues` and a dashboard Review Queues panel for pending artifacts, low-confidence/unsupported answers, downvoted feedback, escalated handoffs, and user-answer reviews.
+- Phase 48 adds persisted `research_entities`, automatic entity extraction during research artifact creation, `GET /api/research/entities`, `POST /api/research/artifacts/{artifact_id}/entities/extract`, FastAPI facade coverage, and a dashboard Research Entity Extraction panel with source pointer, page, span, confidence, and preview proof.
 - Earlier phase evidence in `docs/goal_final_system.md`, `docs/PROGRESS.md`, and `docs/ACCEPTANCE_CRITERIA.md` remains part of the verification base, but any item below marked `FAILING / NEEDS FIX` or `BLOCKED BY EXTERNAL DEPENDENCY` is not complete.
 
 ## Summary
 
 | Category | Count |
 | --- | ---: |
-| PASSING | 122 |
+| PASSING | 123 |
 | IMPLEMENTED DURING THIS RUN | 0 |
 | BLOCKED BY EXTERNAL DEPENDENCY | 2 |
-| FAILING / NEEDS FIX | 8 |
+| FAILING / NEEDS FIX | 7 |
 
 The system is not yet complete. The strongest local MVP path is real and well-instrumented, but the broad final contract still has unbuilt product surfaces and externally gated live worker proof.
 
@@ -166,7 +167,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | E2 | PASSING | Deterministic fetch path stores artifacts, hashes, previews, and failure events. |
 | E3 | PASSING | User document extraction, portal OCR, and the research knowledge-base PDF upload pipeline are implemented; analytics and broader queues remain covered separately. |
 | E4 | PASSING | PHI/payload/audit policies block or redact sensitive content before model/memory/log surfaces. |
-| E5 | FAILING / NEEDS FIX | General entity extraction with source/page/span/confidence is not fully implemented for the research evidence pipeline. |
+| E5 | PASSING | Phase 48 persists general research entities with source pointers, page number, character span offsets, confidence, safe previews, Node/FastAPI list and re-extract endpoints, automatic artifact-time extraction, and dashboard proof controls. |
 | E6 | PASSING | Natural keys, stable candidate ids, source uniqueness, and retry controls reduce duplicate writes. |
 | E7 | PASSING | Evidence/artifact/source-pointer writes are append-only with hashes and provenance metadata. |
 | E8 | PASSING | Phase 10P closes claim-level citation closure over trusted reviewed evidence. |
@@ -234,7 +235,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Broaden domain journeys for cost/comparison, prescription, procedure-prep, provider/network options, and general entity extraction (`A9`, `A11`, `A12`, `A13`, `E5`).
+- Broaden domain journeys for cost/comparison, prescription, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`).
 
 ## Code Changes Made In Phase 10Q
 

@@ -8855,3 +8855,38 @@ Verification:
 - `npm run test:local` passed with 240 passing tests and 2 expected live-gated OpenClaw skips.
 - Browser dashboard proof passed at `http://127.0.0.1:4218/?phase=phase-47-review-queues`: Review Queues rendered all five queue families, safety flags showed read-only/ref-only/raw-hidden behavior, and console error count was 0.
 - Visual artifacts: `artifacts/phase47/research-review-queues-dashboard-proof.png` and `artifacts/phase47/research-review-queues-dashboard-proof.json`.
+
+## Phase 48 Research Entity Extraction - 2026-06-21
+
+Goal:
+- Close final verification row `E5`.
+
+Implemented:
+- Added persisted `research_entities` rows with artifact/run/source binding, source pointer metadata, entity type/label, normalized value/hash, page number, character span offsets, confidence, and safe evidence preview.
+- Added deterministic research entity extraction for money amounts, percentages, procedure codes, diagnosis codes, dates, payers, benefit terms, pharmacy/formulary terms, and network/provider terms.
+- Wired automatic extraction into research artifact creation so fetched and uploaded research artifacts produce entity rows immediately.
+- Added explicit re-extraction for existing artifacts through `POST /api/research/artifacts/{artifact_id}/entities/extract`.
+- Added read API `GET /api/research/entities` through Node and FastAPI.
+- Added dashboard controls for `Research Entities` plus per-artifact `Extract Entities`, with source/page/span/confidence proof.
+- Updated the final verification report so `E5` is now `PASSING`.
+
+Safety:
+- Entity listing and extraction do not return raw artifact bodies or source-pointer payload dumps.
+- Stored entity rows keep hashes and bounded redacted previews; page/span/confidence metadata is returned for verification.
+- Explicit extraction writes audit/event proof without raw extracted text.
+
+Verification:
+- `node --check src/concierge/researchOps.mjs` passed.
+- `node --check src/server/server.mjs` passed.
+- `node --check src/app/app.js` passed.
+- `python3 -m py_compile project/api/main.py project/tests/test_fastapi_facade.py` passed.
+- `node --test src/tests/research-ops.test.mjs` passed with 14/14 tests.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 14/14 tests.
+- `node --test src/tests/final-system-verification-report.test.mjs` passed with 2/2 tests before the final report count update and will be re-run after full Phase 48 verification.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `node --test src/tests/final-system-verification-report.test.mjs` passed with 2/2 tests after the final report count update.
+- `npm run build` passed.
+- `npm run test:local` passed with 242 tests total, 240 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- Browser dashboard proof passed at `http://127.0.0.1:4218/?phase=phase-48-research-entity-extraction`: Research Entity Extraction rendered 8 real extracted entities from a non-PHI seeded artifact, including source pointer, page 2, character spans, confidence, safe evidence previews, and 0 console errors.
+- Visual artifacts: `artifacts/phase48/research-entity-extraction-dashboard-proof.png` and `artifacts/phase48/research-entity-extraction-dashboard-proof.json`.
+- Added-line and Phase 48 artifact secret scans found no AWS keys, OpenAI keys, bearer tokens, private keys, direct identifiers, or credential material.
