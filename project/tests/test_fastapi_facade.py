@@ -1251,7 +1251,9 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(hosted_score["score"], 0)
 
     def test_steel_remote_host_readiness_visible_without_hosted_remote_overclaim(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_REMOTE_PROOF_FILE": os.path.join(tempfile.gettempdir(), "missing-steel-remote-proof.json")
+        }, clear=True):
             app = create_app(inline_tasks=True)
             app.state.node_client = FakeNodeRuntimeClient()
             client = TestClient(app)
@@ -1304,7 +1306,8 @@ class FastApiFacadeTest(unittest.TestCase):
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER_LAUNCH_READINESS_READY": "1",
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED": "1",
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY": "1",
-                "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED": "1"
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED": "1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_STEEL_REMOTE_PROOF_FILE": os.path.join(tmp, "missing-steel-remote-proof.json")
             }, clear=True):
                 app = create_app(inline_tasks=True)
                 app.state.node_client = FakeNodeRuntimeClient()

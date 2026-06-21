@@ -2671,3 +2671,28 @@ Consequences:
 - Operators can sort by created time, history row count, export ref, and snapshot hash.
 - Operators can compare two export snapshots and inspect count deltas plus added/removed safe refs.
 - Future saved presets or artifact links can build on the read model without changing the append-only export ledger.
+
+## 2026-06-21 - Correct The Plan With Execution Architecture V2
+
+Context:
+After Phase 44, the user supplied `~/Downloads/codex_execution_v2_aws_writecapable_prompt.md` as a corrective directive before the next PEMS phase. The directive locks three decisions: document the real AWS/BAA Phase 30 substrate without secrets, design a separate v2 write-capable track, and keep credentials human-only with per-action human approval for every irreversible write.
+
+Options considered:
+- Continue directly to Phase 45 reviewer-history presets.
+- Bolt write behavior onto the existing read-only OpenClaw runtime.
+- Add a separate Execution V2 track behind flags and leave v1 read-only invariants unchanged.
+
+Decision:
+Pause the Phase 45 path and create `feature/execution-v2-llm-manager`. Add ADR-001 for AWS HIPAA substrate status, ADR-002 for the LLM-manager worker, `docs/EXECUTION_ARCHITECTURE_V2.md`, an additive single-use write approval token, `approved_single_write_action_only`, a policy path that allows irreversible actions only with a consumed exact-action/exact-URL token, and a flag-gated LLM-manager proposal façade.
+
+Reason:
+This fixes the audit false negative around AWS/HIPAA without leaking secrets and creates the write-capable substrate in the safest possible way: off by default, per-action, per-token, per-job, audited, and unable to bypass human credential takeover.
+
+Constraints:
+- `approved_read_only_observation_only` and existing blocked actions remain unchanged.
+- `workerMayEnterCredentials` and `workerMayContactPayer` remain hard false.
+- `workerMaySubmitForms` may be true only for a specific job with a bound write approval.
+- `BRAINSTY_WORKER_RUNTIME=deterministic` and `WEFELLA_EXECUTION_WRITE_ENABLED=0` remain committed defaults.
+
+Cost of changing later:
+Moderate. The v2 path is additive and isolated, so future live enablement can replace the private executor or provider configuration without rewriting read-only observation.

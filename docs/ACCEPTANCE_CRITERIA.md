@@ -2516,3 +2516,21 @@ Focused proof:
 - History review rows and snapshot comparison do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, write to payer portals, or provide medical advice.
 - `productionDrivingAllowed=false` remains enforced.
 - Browser/API proof for `pems_reviewer_history_review_refinement`.
+
+## Execution Architecture V2: AWS HIPAA Write-Capable LLM-Manager Worker
+
+- `docs/AWS_HIPAA_SUBSTRATE.md` documents the Phase 30 AWS EC2 + BAA + Steel substrate without secrets, hostnames, IPs, account ids, keys, tokens, or BAA-sensitive identifiers.
+- `docs/adr/ADR-001-aws-hipaa-substrate-status.md` records that the AWS/BAA substrate is accepted as production-candidate and that absence of committed AWS IaC/secrets is a deliberate control.
+- `docs/adr/ADR-002-execution-v2-llm-manager-worker.md` records the separate v2 track: LLM-manager worker, per-action human write approval, credentials human-only, build behind flags.
+- `docs/EXECUTION_ARCHITECTURE_V2.md` includes a control-replacement matrix and threat model.
+- `BRAINSTY_WORKER_RUNTIME` defaults to `deterministic`; `llm_manager` is private/runtime-only.
+- `WEFELLA_EXECUTION_WRITE_ENABLED` defaults off in committed examples.
+- `approved_single_write_action_only` is additive and does not mutate `approved_read_only_observation_only`.
+- Write approval tokens are single-use, expiring, and bound to task, session, user, workflow, exact action schema digest, and exact URL.
+- Irreversible portal actions stay blocked without a consumed matching write token.
+- The LLM-manager may propose irreversible actions but cannot bypass the write approval gate.
+- `workerMayEnterCredentials` and `workerMayContactPayer` remain hard false; `workerMaySubmitForms` can become true only per job with a bound write approval.
+- Credentials, passwords, passkeys, 2FA, OTP, captcha, and login screens remain human-only via supervised takeover.
+- Existing `src/tests/browser-takeover-safety.test.mjs` remains unchanged and green.
+- Committed browser-sandbox provider config remains contract-only; the AWS/Steel production-candidate strategy is documented without enabling live writes.
+- Full acceptance requires focused Execution V2 tests, existing safety tests, build, local suite, and secret scan with all v2/live/write gates off by default.

@@ -3035,3 +3035,31 @@ Gates:
 - Build checks fail if the Phase 44 proof, UI controls, CSS class, version contract, or connector proof key are removed.
 - API proof shows `phase44_reviewer_history_review_refinement_ready`, score `100 / 100`, two compared exports, safe deltas, and production driving disabled.
 - Dashboard visual proof shows the Phase 44 panel, search/sort controls, filtered export rows, snapshot delta rows, raw-history-not-stored safety, and no console errors.
+
+## Corrective Phase: Execution Architecture V2 LLM-Manager Worker
+
+Goal: make the future write-capable architecture explicit and test-pinned without enabling live writes or weakening the v1 read-only spine.
+
+Build:
+
+- Add non-secret AWS HIPAA substrate documentation and ADR-001 so a code-only re-audit can see the Phase 30 AWS/BAA/Steel production-candidate substrate without secrets.
+- Add ADR-002 and `docs/EXECUTION_ARCHITECTURE_V2.md` for the separate v2 track, control-replacement matrix, and threat model.
+- Add a write-approval token contract bound to task, session, user, workflow, exact action schema digest, and exact URL.
+- Extend portal action policy so irreversible actions remain blocked unless a consumed write token authorizes the exact action and URL.
+- Add `approved_single_write_action_only` as an additive runtime mode without changing `approved_read_only_observation_only`.
+- Add a flag-gated LLM-manager façade behind `BRAINSTY_WORKER_RUNTIME=llm_manager`; committed default remains `deterministic`.
+- Keep live writes disabled behind `WEFELLA_EXECUTION_WRITE_ENABLED=0` in committed config.
+- Preserve human-only credential takeover and existing browser takeover safety tests.
+
+Non-goals:
+
+- Do not enable live PHI writes.
+- Do not add AWS secrets, account ids, hostnames, IPs, keys, tokens, WireGuard material, TLS secrets, or BAA identifiers to Git.
+- Do not remove any v1 blocked action or change the existing read-only execution mode.
+- Do not let the LLM-manager type credentials, solve authentication challenges, contact payers, send messages, or bypass approval.
+
+Gates:
+
+- Focused Execution V2 tests prove blocked-without-token, single-use consumed token, expiry, wrong URL/action rejection, audit events, LLM cannot bypass the gate, committed defaults off, and worker contract per-job write binding.
+- Existing takeover safety tests stay green unchanged.
+- `npm run build` and `npm run test:local` pass with no safety regressions.

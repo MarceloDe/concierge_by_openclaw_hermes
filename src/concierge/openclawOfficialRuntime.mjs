@@ -5,9 +5,11 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { audit } from "./audit.mjs";
+import { consumeWriteActionApproval, WRITE_ACTION_EXECUTION_MODE } from "./approvalResume.mjs";
 import { createId, nowIso } from "./database.mjs";
 import { READ_ONLY_DOCUMENT_ALLOWED_ACTION, candidateIdFor } from "./documentCandidateApproval.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
+import { evaluatePortalAction } from "./policy.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,6 +53,16 @@ export function getOfficialOpenClawConfig(env = process.env) {
       "document_candidate_discovery"
     ],
     blockedActions: ["credential_entry", "payer_contact", "form_submission", "medical_advice", "external_message"]
+  };
+}
+
+export function getExecutionV2WriteConfig(env = process.env) {
+  return {
+    version: "2026-06-21.execution-v2-write-config.v1",
+    workerRuntime: env.BRAINSTY_WORKER_RUNTIME === "llm_manager" ? "llm_manager" : "deterministic",
+    writeEnabled: env.WEFELLA_EXECUTION_WRITE_ENABLED === "1",
+    killSwitchEngaged: env.BRAINSTY_EXECUTION_KILL_SWITCH === "1",
+    executionMode: WRITE_ACTION_EXECUTION_MODE
   };
 }
 
@@ -1526,5 +1538,144 @@ export async function runOfficialOpenClawReadOnlyObservation({
         inputCount: item.page.inputs.length
       }))
     }
+  };
+}
+
+export async function runOfficialOpenClawApprovedWriteAction({
+  store,
+  session,
+  taskId,
+  userId,
+  workflow,
+  approvalToken,
+  actionSchema,
+  targetUrl = actionSchema?.targetUrl ?? actionSchema?.url ?? null,
+  config = getOfficialOpenClawConfig(),
+  executionV2 = getExecutionV2WriteConfig(),
+  executeApprovedAction = null
+}) {
+  const startedAt = nowIso();
+  const actionsTaken = [];
+  const blocked = async (status, reason, extra = {}) => {
+    await audit(store, session.id, "official_openclaw_single_write_action_blocked", {
+      status,
+      reason,
+      taskId: taskId ?? null,
+      userId: userId ?? null,
+      workflow: workflow ?? null,
+      targetUrl,
+      executionMode: WRITE_ACTION_EXECUTION_MODE,
+      workerRuntime: executionV2.workerRuntime,
+      writeEnabled: executionV2.writeEnabled,
+      killSwitchEngaged: executionV2.killSwitchEngaged,
+      actionsTaken,
+      ...extra
+    });
+    return {
+      ok: false,
+      connected: false,
+      status,
+      reason,
+      executionMode: WRITE_ACTION_EXECUTION_MODE,
+      actionsTaken,
+      officialOpenClaw: { config, executionV2 },
+      ...extra
+    };
+  };
+
+  await audit(store, session.id, "official_openclaw_single_write_action_attempted", {
+    taskId: taskId ?? null,
+    userId: userId ?? null,
+    workflow: workflow ?? null,
+    targetUrl,
+    executionMode: WRITE_ACTION_EXECUTION_MODE,
+    workerRuntime: executionV2.workerRuntime,
+    writeEnabled: executionV2.writeEnabled,
+    killSwitchEngaged: executionV2.killSwitchEngaged,
+    actionsTaken: []
+  });
+
+  if (executionV2.killSwitchEngaged) {
+    return blocked("execution_v2_kill_switch_engaged", "Execution V2 write path is blocked by the hard kill switch.");
+  }
+  if (!executionV2.writeEnabled) {
+    return blocked(
+      "execution_v2_write_gate_disabled",
+      "WEFELLA_EXECUTION_WRITE_ENABLED is not enabled; committed defaults never execute irreversible portal writes."
+    );
+  }
+  const consumed = await consumeWriteActionApproval(store, {
+    approvalToken,
+    taskId,
+    sessionId: session.id,
+    userId,
+    workflow,
+    actionSchema,
+    targetUrl
+  });
+  if (!consumed.ok) {
+    return blocked(consumed.status, consumed.reason ?? "Write action approval was not valid.", {
+      approvalStatus: consumed.status,
+      approvalGateId: consumed.approvalGateId ?? null
+    });
+  }
+  actionsTaken.push("approved_single_write_action_token_consumed");
+  const policy = evaluatePortalAction({
+    action: consumed.actionSchema?.actionType ?? actionSchema?.actionType ?? "",
+    targetUrl,
+    actionSchema,
+    approvalToken: consumed
+  });
+  if (!policy.allowed) {
+    return blocked("portal_action_policy_denied", policy.reason, {
+      approvalGateId: consumed.approvalGateId,
+      actionSchemaDigest: consumed.actionSchemaDigest,
+      policy
+    });
+  }
+  actionsTaken.push("approved_single_write_action_policy_passed");
+  await audit(store, session.id, "official_openclaw_single_write_action_authorized", {
+    taskId,
+    userId,
+    workflow,
+    approvalGateId: consumed.approvalGateId,
+    actionSchemaDigest: consumed.actionSchemaDigest,
+    targetUrl: consumed.targetUrl,
+    executionMode: WRITE_ACTION_EXECUTION_MODE,
+    actionsTaken
+  });
+  if (typeof executeApprovedAction !== "function") {
+    return blocked(
+      "execution_v2_no_private_executor",
+      "A private approved-action executor is required; no committed code path performs live portal writes.",
+      {
+        approvalGateId: consumed.approvalGateId,
+        actionSchemaDigest: consumed.actionSchemaDigest,
+        authorizedAt: startedAt
+      }
+    );
+  }
+  const result = await executeApprovedAction({ actionSchema: consumed.actionSchema, approval: consumed, config });
+  actionsTaken.push("approved_single_write_action_executor_returned");
+  await audit(store, session.id, "official_openclaw_single_write_action_completed", {
+    taskId,
+    userId,
+    workflow,
+    approvalGateId: consumed.approvalGateId,
+    actionSchemaDigest: consumed.actionSchemaDigest,
+    targetUrl: consumed.targetUrl,
+    executionMode: WRITE_ACTION_EXECUTION_MODE,
+    executorStatus: result?.status ?? "unknown",
+    actionsTaken
+  });
+  return {
+    ok: result?.ok === true,
+    connected: result?.ok === true,
+    status: result?.status ?? "approved_single_write_action_executor_returned",
+    executionMode: WRITE_ACTION_EXECUTION_MODE,
+    approval: consumed,
+    actionsTaken,
+    officialOpenClaw: { config, executionV2 },
+    result
   };
 }

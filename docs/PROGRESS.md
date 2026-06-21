@@ -8696,3 +8696,51 @@ Artifacts:
 - `artifacts/phase44/phase44-api-proof-extract.json`
 - `artifacts/phase44/phase44-dashboard-dom-proof.json`
 - `artifacts/phase44/phase44-dashboard-history-review-refinement.png`
+
+## Corrective Phase: Execution Architecture V2 LLM-Manager Worker
+
+Timestamp: 2026-06-21T16:20:00Z.
+
+Goal:
+
+- Correct the post-Phase-44 plan before Phase 45 by documenting the real AWS/BAA substrate and adding an off-by-default v2 write-capable LLM-manager substrate with per-action human approval.
+
+Implemented:
+
+- Added `docs/AWS_HIPAA_SUBSTRATE.md`.
+- Added `docs/adr/ADR-001-aws-hipaa-substrate-status.md`.
+- Added `docs/adr/ADR-002-execution-v2-llm-manager-worker.md`.
+- Added `docs/EXECUTION_ARCHITECTURE_V2.md`.
+- Added write approval schema normalization, digesting, exact URL/action binding, single-use consumption, expiry checks, and audit events.
+- Extended `evaluatePortalAction()` so irreversible actions remain blocked unless a consumed write token matches the exact action and URL.
+- Added `runOfficialOpenClawApprovedWriteAction()` with `executionMode=approved_single_write_action_only`, off by default behind `WEFELLA_EXECUTION_WRITE_ENABLED`.
+- Added `src/concierge/llmManagerWorker.mjs` behind `BRAINSTY_WORKER_RUNTIME=llm_manager`, with deterministic default and kill switch.
+- Extended the OpenClaw worker contract so `workerMaySubmitForms` can be true only per job with a bound write approval; credentials and payer contact remain hard false.
+- Added FastAPI/provider status field `executionV2WriteGate`, blocked by default.
+- Updated committed provider examples so `BRAINSTY_WORKER_RUNTIME=deterministic` and `WEFELLA_EXECUTION_WRITE_ENABLED=0`.
+
+Safety:
+
+- Live PHI writes are not enabled.
+- No credentials, passwords, passkeys, OTP, 2FA, captcha, or login screen handling is authorized for the agent.
+- No payer contact or external messaging is authorized.
+- Read-only mode and existing blocked actions are additive-preserved.
+- AWS hostnames, IPs, account identifiers, keys, tokens, WireGuard material, TLS secrets, and BAA identifiers remain out of Git.
+
+Verification so far:
+
+- `node --check src/concierge/approvalResume.mjs && node --check src/concierge/policy.mjs && node --check src/concierge/openclawWorkerContract.mjs && node --check src/concierge/openclawOfficialRuntime.mjs && node --check src/concierge/llmManagerWorker.mjs && node --check src/tests/execution-v2-write-approval.test.mjs` passed.
+- `node --test src/tests/execution-v2-write-approval.test.mjs src/tests/approval-resume.test.mjs src/tests/policy.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/browser-takeover-safety.test.mjs` passed with 26/26 tests.
+- `npm run test:execution:v2` passed with 11/11 tests.
+- `npm run build` passed.
+- `npm run test:local` passed with 234 total tests, 232 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- `npm run test:facade` passed with 53 tests, 51 passed, 0 failed, and 2 expected skips.
+- `npm run test:docker:contract` passed with 45/45 tests.
+- `python3 -m py_compile project/api/browser_sandbox.py project/tests/test_fastapi_facade.py` passed.
+- `git diff --check` passed.
+- Targeted secret scan over changed files found no AWS keys, bearer tokens, private keys, or OpenAI-style secrets.
+
+Remaining before PR:
+
+- Open the worker PR for `feature/execution-v2-llm-manager`.
+- Update Cortex after the project PR state is ready.
