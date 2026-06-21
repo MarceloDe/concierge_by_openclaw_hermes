@@ -3,6 +3,7 @@ export const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
 export const AI2UI_BLOCK_TYPES = Object.freeze({
   ANSWER_MARKDOWN: "answer_markdown",
   WORKFLOW_STATUS: "workflow_status",
+  COST_COMPARISON: "cost_comparison",
   APPROVAL_GATE: "approval_gate",
   WORKER_STATUS: "worker_status",
   SOURCE_CITATIONS: "source_citations",
@@ -84,6 +85,133 @@ function sourcePointersFromState(state = {}) {
     extractionHash: pointer.extractionHash ?? pointer.sha256 ?? null,
     evidenceFieldCount: Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields.length : 0
   }));
+}
+
+function sourcePointerRef(pointer = {}) {
+  return [pointer.table ?? pointer.kind ?? "source", pointer.id ?? pointer.rowId ?? "unknown"].filter(Boolean).join("/");
+}
+
+function costComparisonRequested(state = {}) {
+  const text = `${state.user_input ?? ""} ${state.structured_intent?.intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  return /\b(cost|costs|estimate|comparison|compare|cheaper|lower[- ]cost|cash price|allowed amount|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop|owe|pay)\b/.test(text);
+}
+
+function costText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function firstCostValue(text) {
+  const match = costText(text).match(/\$\s?\d[\d,]*(?:\.\d{2})?|\b\d{1,3}%\b|\b\d+\s?percent\b/i);
+  return match?.[0] ?? null;
+}
+
+function costConfidence(pointer = {}, field = {}) {
+  return field.confidence ?? pointer.confidence ?? pointer.citation?.confidence ?? "source_backed";
+}
+
+function pointerEvidenceTexts(pointer = {}) {
+  const fields = Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields : [];
+  return [
+    pointer.summary,
+    pointer.displayLabel,
+    pointer.balanceType,
+    pointer.shareAmount,
+    pointer.totalAmount,
+    pointer.spentAmount,
+    pointer.remainingAmount,
+    ...fields.map((field) => `${field.label ?? "field"} ${field.value ?? ""}`)
+  ].map(costText).filter(Boolean);
+}
+
+function buildCostRowsFromPointer(pointer = {}) {
+  const ref = sourcePointerRef(pointer);
+  const rows = [];
+  if (pointer.table === "coverage_balances" && (pointer.remainingAmount !== undefined || pointer.totalAmount !== undefined || pointer.spentAmount !== undefined)) {
+    rows.push({
+      optionLabel: pointer.summary?.split(":")[0] ?? pointer.balanceType ?? "Coverage balance",
+      costSignal: [
+        pointer.totalAmount !== undefined ? `total ${pointer.totalAmount}` : null,
+        pointer.spentAmount !== undefined ? `spent ${pointer.spentAmount}` : null,
+        pointer.remainingAmount !== undefined ? `remaining ${pointer.remainingAmount}` : null
+      ].filter(Boolean).join("; "),
+      assumption: "Accumulator values are displayed exactly as stored from the cited portal/source pointer.",
+      evidenceSummary: pointer.summary ?? "Coverage balance source pointer.",
+      sourcePointerIds: [ref],
+      confidence: "source_backed",
+      tradeoff: "Use this as a plan accumulator signal, not a provider price quote."
+    });
+  }
+  if (pointer.table === "claim_items" && pointer.shareAmount !== undefined && pointer.shareAmount !== null) {
+    rows.push({
+      optionLabel: pointer.description ?? "Claim or EOB item",
+      costSignal: `patient share ${pointer.shareAmount}`,
+      assumption: "Claim share is historical evidence and may not predict a future service price.",
+      evidenceSummary: pointer.summary ?? "Claim source pointer.",
+      sourcePointerIds: [ref],
+      confidence: "source_backed",
+      tradeoff: "Useful for comparing prior responsibility, not for guaranteeing future cost."
+    });
+  }
+  const fields = Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields : [];
+  for (const field of fields) {
+    const text = costText(`${field.label ?? ""} ${field.value ?? ""}`);
+    if (!/\b(cost|estimate|price|allowed amount|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop|patient responsibility|cash price|pay|owe)\b|\$\s?\d|\b\d{1,3}%\b/i.test(text)) continue;
+    rows.push({
+      optionLabel: costText(field.label) || pointer.displayLabel || pointer.summary?.slice(0, 72) || "Source-backed cost signal",
+      costSignal: firstCostValue(text) ?? costText(field.value ?? text).slice(0, 96),
+      assumption: "This row quotes only the cited evidence. It is not a new price estimate.",
+      evidenceSummary: costText(field.value ?? text).slice(0, 220),
+      sourcePointerIds: [ref],
+      confidence: costConfidence(pointer, field),
+      tradeoff: "Compare with current plan terms, provider network status, and claim context before acting."
+    });
+  }
+  if (!rows.length) {
+    const evidence = pointerEvidenceTexts(pointer).find((text) => /\b(cost|estimate|price|allowed amount|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop|patient responsibility|cash price|pay|owe)\b|\$\s?\d|\b\d{1,3}%\b/i.test(text));
+    if (evidence) {
+      rows.push({
+        optionLabel: pointer.displayLabel ?? pointer.summary?.slice(0, 72) ?? "Source-backed cost signal",
+        costSignal: firstCostValue(evidence) ?? "cost term found",
+        assumption: "Evidence contains a cost-related signal but not enough structured data for an exact estimate.",
+        evidenceSummary: evidence.slice(0, 220),
+        sourcePointerIds: [ref],
+        confidence: pointer.citation?.confidence ?? pointer.confidence ?? "source_backed",
+        tradeoff: "Use as a comparison clue; request more evidence before choosing an option."
+      });
+    }
+  }
+  return rows;
+}
+
+function buildCostComparisonPayload(state = {}) {
+  const requested = costComparisonRequested(state);
+  const rows = (state.source_pointers ?? [])
+    .flatMap(buildCostRowsFromPointer)
+    .filter((row) => row.sourcePointerIds.length > 0)
+    .slice(0, 6);
+  if (!requested && !rows.length) return null;
+  const rowSourcePointerRefs = [...new Set(rows.flatMap((row) => row.sourcePointerIds))];
+  return {
+    status: rows.length ? (rows.length > 1 ? "source_backed_comparison_ready" : "single_source_backed_cost_signal") : "blocked_missing_source_pointers",
+    requested,
+    rows,
+    rowCount: rows.length,
+    sourcePointerIds: rowSourcePointerRefs,
+    assumptions: rows.length
+      ? [
+          "Rows show only cited cost signals already present in source pointers.",
+          "Exact future prices are not guaranteed without current provider, service, network, claim, and plan evidence."
+        ]
+      : [
+          "A cost comparison needs a cited plan document, claim/EOB, portal accumulator, provider estimate, or trusted reviewed research source.",
+          "The system will not fabricate exact prices without source pointers."
+        ],
+    safety: {
+      noFabricatedExactPrices: true,
+      everyRowHasSourcePointer: rows.every((row) => row.sourcePointerIds.length > 0),
+      externalActionsTaken: false
+    }
+  };
 }
 
 function approvalPayload(state = {}) {
@@ -180,6 +308,7 @@ function nextStepsForState(state = {}) {
 export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   const productMemory = options.productMemory ?? {};
   const handoff = state.human_handoff?.handoff ?? null;
+  const costComparison = buildCostComparisonPayload(state);
   const blocks = [
     {
       id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
@@ -192,8 +321,19 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       },
       renderHints: { priority: "primary" }
     },
+    ...(costComparison
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.COST_COMPARISON, 1),
+            type: AI2UI_BLOCK_TYPES.COST_COMPARISON,
+            title: "Cost Comparison",
+            payload: costComparison,
+            renderHints: { severity: costComparison.rows.length ? "info" : "warning" }
+          }
+        ]
+      : []),
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.WORKFLOW_STATUS, 1),
+      id: blockId(state, AI2UI_BLOCK_TYPES.WORKFLOW_STATUS, 2),
       type: AI2UI_BLOCK_TYPES.WORKFLOW_STATUS,
       title: "Workflow",
       payload: {
@@ -206,20 +346,20 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       }
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.APPROVAL_GATE, 2),
+      id: blockId(state, AI2UI_BLOCK_TYPES.APPROVAL_GATE, 3),
       type: AI2UI_BLOCK_TYPES.APPROVAL_GATE,
       title: "Approval Gate",
       payload: approvalPayload(state),
       renderHints: { severity: approvalPayload(state).status === "pending_approval" ? "warning" : "neutral" }
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.WORKER_STATUS, 3),
+      id: blockId(state, AI2UI_BLOCK_TYPES.WORKER_STATUS, 4),
       type: AI2UI_BLOCK_TYPES.WORKER_STATUS,
       title: "Worker",
       payload: workerPayload(state)
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.SOURCE_CITATIONS, 4),
+      id: blockId(state, AI2UI_BLOCK_TYPES.SOURCE_CITATIONS, 5),
       type: AI2UI_BLOCK_TYPES.SOURCE_CITATIONS,
       title: "Citations",
       payload: {
@@ -229,13 +369,13 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       }
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.MEMORY_STATUS, 5),
+      id: blockId(state, AI2UI_BLOCK_TYPES.MEMORY_STATUS, 6),
       type: AI2UI_BLOCK_TYPES.MEMORY_STATUS,
       title: "Product Memory",
       payload: memoryPayload(state, productMemory)
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.SAFETY_NOTICE, 6),
+      id: blockId(state, AI2UI_BLOCK_TYPES.SAFETY_NOTICE, 7),
       type: AI2UI_BLOCK_TYPES.SAFETY_NOTICE,
       title: "Safety Boundary",
       payload: {
@@ -255,7 +395,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       renderHints: { severity: state.policy_result?.urgentEscalationRequired ? "critical" : "info" }
     },
     {
-      id: blockId(state, AI2UI_BLOCK_TYPES.NEXT_STEPS, 7),
+      id: blockId(state, AI2UI_BLOCK_TYPES.NEXT_STEPS, 8),
       type: AI2UI_BLOCK_TYPES.NEXT_STEPS,
       title: "Next Steps",
       payload: {
@@ -265,7 +405,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   ];
   if (handoff) {
     blocks.splice(5, 0, {
-      id: blockId(state, AI2UI_BLOCK_TYPES.HUMAN_HANDOFF, 8),
+      id: blockId(state, AI2UI_BLOCK_TYPES.HUMAN_HANDOFF, 9),
       type: AI2UI_BLOCK_TYPES.HUMAN_HANDOFF,
       title: "Human Handoff",
       payload: {

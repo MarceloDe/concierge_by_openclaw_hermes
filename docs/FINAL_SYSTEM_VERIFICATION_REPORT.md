@@ -40,16 +40,17 @@ Scope source: `docs/goal_final_system.md`
 - Phase 46 researchOps proof shows the persisted kill switch blocks both run queueing and execution, emits blocked budget events, and audits `research_budget_blocked` without raw prompts or artifact text.
 - Phase 47 adds `GET /api/research/review-queues` and a dashboard Review Queues panel for pending artifacts, low-confidence/unsupported answers, downvoted feedback, escalated handoffs, and user-answer reviews.
 - Phase 48 adds persisted `research_entities`, automatic entity extraction during research artifact creation, `GET /api/research/entities`, `POST /api/research/artifacts/{artifact_id}/entities/extract`, FastAPI facade coverage, and a dashboard Research Entity Extraction panel with source pointer, page, span, confidence, and preview proof.
+- Phase 49 adds source-pointer-grounded cost comparison AI2UI blocks for `/mvp`, including sourced rows, assumptions, no-fabricated-exact-price safety flags, and fail-closed missing-evidence rendering.
 - Earlier phase evidence in `docs/goal_final_system.md`, `docs/PROGRESS.md`, and `docs/ACCEPTANCE_CRITERIA.md` remains part of the verification base, but any item below marked `FAILING / NEEDS FIX` or `BLOCKED BY EXTERNAL DEPENDENCY` is not complete.
 
 ## Summary
 
 | Category | Count |
 | --- | ---: |
-| PASSING | 123 |
+| PASSING | 124 |
 | IMPLEMENTED DURING THIS RUN | 0 |
 | BLOCKED BY EXTERNAL DEPENDENCY | 2 |
-| FAILING / NEEDS FIX | 7 |
+| FAILING / NEEDS FIX | 6 |
 
 The system is not yet complete. The strongest local MVP path is real and well-instrumented, but the broad final contract still has unbuilt product surfaces and externally gated live worker proof.
 
@@ -65,7 +66,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | A6 | PASSING | Phase 10S adds `/mvp` Chat / Split / Guided / Bento mode controls. Mode selection is stored in localStorage and re-renders the same latest session/run state without calling reset or starting a new workflow. |
 | A7 | PASSING | Phase 10S adds the backend `brainstyworkers.ai2ui.blocks.v1` typed block contract, returns blocks from LangGraph/API responses, renders typed answer/workflow/approval/worker/citation/memory/handoff/safety/next-step cards, and tests unknown-type fallback. |
 | A8 | PASSING | Benefits/deductible/coinsurance answers use portal, upload, or trusted research source pointers. |
-| A9 | FAILING / NEEDS FIX | Cost/comparison questions and comparison UI are not proven beyond limited benefits/cost signal extraction. |
+| A9 | PASSING | Phase 49 adds the `cost_comparison` AI2UI block, renders it in `/mvp` Chat/Split/Guided/Bento modes, builds only source-pointer-backed cost rows, shows assumptions/tradeoffs, and fails closed without fabricated exact prices when evidence is missing. |
 | A10 | PASSING | Claims/EOB-style questions are supported through structured extraction, claims rows, and next-step checklist-style responses. |
 | A11 | FAILING / NEEDS FIX | Pharmacy/formulary signals are extracted, but prescription-question answering is not a completed user journey. |
 | A12 | FAILING / NEEDS FIX | Procedure-prep and administrative checklist behavior is not proven as a dedicated user flow. |
@@ -235,7 +236,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Broaden domain journeys for cost/comparison, prescription, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`).
+- Broaden remaining domain journeys for prescription, procedure-prep, and provider/network options (`A11`, `A12`, `A13`).
 
 ## Code Changes Made In Phase 10Q
 
@@ -289,7 +290,7 @@ Priority 1:
 The next phase should address the next highest-risk remaining gaps:
 
 1. General entity extraction with source/page/span/confidence for the research evidence pipeline (`E5`).
-2. Broader journeys for cost/comparison, prescriptions, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`).
+2. Broader journeys for prescriptions, procedure-prep, and provider/network options (`A11`, `A12`, `A13`).
 
 ## Phase 46 Research Analytics And Budget Kill-Switch Update
 

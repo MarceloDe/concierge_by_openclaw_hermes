@@ -8890,3 +8890,30 @@ Verification:
 - Browser dashboard proof passed at `http://127.0.0.1:4218/?phase=phase-48-research-entity-extraction`: Research Entity Extraction rendered 8 real extracted entities from a non-PHI seeded artifact, including source pointer, page 2, character spans, confidence, safe evidence previews, and 0 console errors.
 - Visual artifacts: `artifacts/phase48/research-entity-extraction-dashboard-proof.png` and `artifacts/phase48/research-entity-extraction-dashboard-proof.json`.
 - Added-line and Phase 48 artifact secret scans found no AWS keys, OpenAI keys, bearer tokens, private keys, direct identifiers, or credential material.
+
+## Phase 49 Cost Comparison Journey - 2026-06-21
+
+Goal:
+- Close final verification row `A9`.
+
+Implemented:
+- Added a source-pointer-grounded `cost_comparison` AI2UI block to the `brainstyworkers.ai2ui.blocks.v1` contract.
+- The block builds comparison rows only from stored source pointers, coverage balances, claim share rows, uploaded-document fields, or trusted reviewed research snippets that contain cost/comparison signals.
+- The block carries explicit assumptions, tradeoffs, source pointer ids, and safety flags proving no fabricated exact prices and no external actions.
+- Missing-evidence cost/comparison prompts fail closed with `blocked_missing_source_pointers` and no comparison rows.
+- `/mvp` now renders the block in Chat, Split, Guided, and Bento modes with a compact comparison grid.
+- Updated the final verification report so `A9` is now `PASSING`.
+
+Safety:
+- Every comparison row must include at least one source pointer id.
+- The UI labels the rows as cited cost signals, not guaranteed future prices.
+- The missing-evidence state tells the user to provide cited plan, claim/EOB, portal accumulator, provider estimate, or reviewed research evidence instead of inventing exact prices.
+
+Verification:
+- `node --check src/concierge/ai2uiBlocks.mjs && node --check src/app/mvp.js && node --check src/server/build-check.mjs` passed.
+- `node --test src/tests/ai2ui-blocks.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/langgraph-runner.test.mjs src/tests/final-system-verification-report.test.mjs` passed with 33/33 tests.
+- `npm run build` passed.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:local` passed with 244 tests total, 242 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- Browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-49-cost-comparison-journey`: after seeding non-PHI reviewed research artifacts through the real research pipeline, deterministic local chat rendered 9 typed blocks including `Cost Comparison`, 2 source-backed comparison rows, source pointer count 2, `captured_trusted_research_evidence`, no busy state, and 0 console errors.
+- Visual artifacts: `artifacts/phase49/cost-comparison-mvp-proof.png` and `artifacts/phase49/cost-comparison-mvp-proof.json`.
