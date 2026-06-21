@@ -1,0 +1,22 @@
+{
+  "hasDownvotedFeedbackLabel": true,
+  "hasEscalatedHandoffsLabel": true,
+  "hasLowConfidenceLabel": true,
+  "hasPendingArtifactsLabel": true,
+  "hasRefOnlySafety": true,
+  "hasReviewQueuesCard": true,
+  "hasUserAnswerReviewsLabel": true,
+  "researchStatus": "6 artifacts · 2 low confidence · 1 downvotes",
+  "title": "Brainstyworkers AI Concierge",
+  "traceSafety": {
+    "rawAnswerTextReturned": false,
+    "rawArtifactTextReturned": false,
+    "rawFeedbackCommentReturned": false,
+    "rawHandoffReasonReturned": false,
+    "readOnly": true,
+    "reviewQueuesAreRefOnly": true,
+    "sourcePointerPayloadsReturned": false
+  },
+  "url": "http://127.0.0.1:4218/?phase=phase-47-review-queues",
+  "consoleErrors": []
+}

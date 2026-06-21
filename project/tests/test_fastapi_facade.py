@@ -98,6 +98,19 @@ class FakeNodeRuntimeClient:
                 "usage": {"queuedRuns": 1, "estimatedCostCents": 3, "blockedEvents": 0},
                 "safety": {"failClosed": True, "policyPersisted": True, "killSwitchPersisted": True}
             }
+        if path == "/api/research/review-queues":
+            return {
+                "version": "test",
+                "counts": {
+                    "pendingArtifacts": 1,
+                    "lowConfidenceAnswers": 1,
+                    "downvotedFeedback": 1,
+                    "escalatedHandoffs": 1,
+                    "userAnswerReviews": 1
+                },
+                "queues": {"pendingArtifacts": [], "lowConfidenceAnswers": [], "downvotedFeedback": [], "escalatedHandoffs": [], "userAnswerReviews": []},
+                "safety": {"readOnly": True, "reviewQueuesAreRefOnly": True, "rawFeedbackCommentReturned": False}
+            }
         if path == "/api/research/worker-status":
             return {
                 "version": "test",
@@ -2506,6 +2519,14 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertEqual(budget.status_code, 200)
         self.assertTrue(budget.json()["safety"]["policyPersisted"])
         self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/budget", {"actorUserId": "operator_user"}))
+
+        review_queues = client.get("/api/research/review-queues?limit=7", headers=headers)
+        self.assertEqual(review_queues.status_code, 200)
+        self.assertTrue(review_queues.json()["safety"]["reviewQueuesAreRefOnly"])
+        self.assertEqual(
+            app.state.node_client.get_calls[-1],
+            ("/api/research/review-queues", {"limit": "7", "actorUserId": "operator_user"})
+        )
 
         hostile_budget = client.post(
             "/api/research/budget",

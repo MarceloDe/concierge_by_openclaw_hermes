@@ -17,6 +17,7 @@ import {
   getResearchAnalytics,
   getResearchBudgetStatus,
   getResearchRun,
+  getResearchReviewQueues,
   getResearchWorkerStatus,
   ingestResearchDocumentUpload,
   listCitationClosureEvaluations,
@@ -257,6 +258,133 @@ test("research analytics endpoint reports safe budget state and kill switch bloc
   assert.match(auditText, /research_budget_policy_updated/);
   assert.match(auditText, /research_budget_blocked/);
   assert.doesNotMatch(auditText, /Operator pause for phase 46 proof/);
+});
+
+test("expanded research review queues aggregate pending artifacts, low-confidence answers, downvotes, and escalations safely", async () => {
+  const store = await createStore();
+  const actorUserId = "operator_research_review_queue";
+  const proposed = await proposeResearchSource(store, {
+    actorUserId,
+    url: "https://example.invalid/research/review-queue-source",
+    title: "Review Queue Source"
+  });
+  await reviewResearchSource(store, {
+    sourceId: proposed.source.id,
+    actorUserId,
+    decision: "approved",
+    reason: "Approved for review queue proof."
+  });
+  const run = await startManualResearchRun(store, {
+    actorUserId,
+    sourceId: proposed.source.id,
+    topic: "Review queue proof"
+  });
+  const now = new Date().toISOString();
+  await store.insert("research_artifacts", {
+    id: "research_artifact_review_queue_pending",
+    run_id: run.run.id,
+    source_id: proposed.source.id,
+    artifact_type: "operator_uploaded_text",
+    source_url: "https://example.invalid/research/review-queue-source",
+    title: "Pending Review Queue Artifact",
+    content_hash: "pending-content-hash",
+    extraction_hash: "pending-extraction-hash",
+    safe_text_preview: "Sanitized pending artifact preview for deductible review.",
+    citation_status: "extracted_pending_review",
+    metadata_json: JSON.stringify({ rawTextReturned: false }),
+    created_at: now
+  });
+  await store.insert("research_artifacts", {
+    id: "research_artifact_review_queue_trusted",
+    run_id: run.run.id,
+    source_id: proposed.source.id,
+    artifact_type: "deterministic_fetch",
+    source_url: "https://example.invalid/research/review-queue-source",
+    title: "Trusted Deductible Evidence",
+    content_hash: "trusted-content-hash",
+    extraction_hash: "trusted-extraction-hash",
+    safe_text_preview: "The deductible applies to covered services.",
+    citation_status: "trusted_retrieval_approved",
+    metadata_json: JSON.stringify({ rawTextReturned: false }),
+    created_at: now
+  });
+  await evaluateCitationClosure(store, {
+    actorUserId,
+    question: "Does the deductible apply?",
+    answer: "The annual deductible applies before coinsurance starts for covered services.",
+    minSupportScore: 10
+  });
+  await store.insert("users", {
+    id: "review_queue_user",
+    name: "Review Queue User",
+    email: "review-queue@example.invalid",
+    created_at: now
+  });
+  await store.insert("sessions", {
+    id: "review_queue_session",
+    user_id: "review_queue_user",
+    channel: "web",
+    langgraph_thread_id: "review_queue_thread",
+    title: "Review queue session",
+    current_step: "answer_review",
+    last_intent: null,
+    active_workflow_key: "document_or_trace_review",
+    journey_stage: "evidence_review",
+    last_context_packet_id: null,
+    state_version: 1,
+    metadata_json: "{}",
+    status: "active",
+    last_active_at: now,
+    expires_at: null,
+    closed_at: null,
+    created_at: now
+  });
+  await store.insert("feedback_items", {
+    id: "feedback_review_queue_downvote",
+    user_id: "review_queue_user",
+    session_id: "review_queue_session",
+    message_id: null,
+    task_id: null,
+    answer_hash: "answer-hash-for-review",
+    rating: "not_useful",
+    comment: "Sanitized user concern about unsupported answer.",
+    source_pointer_count: 1,
+    metadata_json: JSON.stringify({ rawCommentStored: false }),
+    status: "recorded",
+    created_at: now
+  });
+  await store.insert("human_handoff_items", {
+    id: "handoff_review_queue_open",
+    user_id: "review_queue_user",
+    session_id: "review_queue_session",
+    task_id: null,
+    message_id: null,
+    handoff_type: "coverage_review",
+    priority: "urgent",
+    status: "open",
+    summary: "Operator review requested for unsupported coverage answer.",
+    reason: "Potentially unsupported answer needs human review.",
+    response_guidance: "Review source pointers before responding.",
+    metadata_json: JSON.stringify({ rawUserInputStored: false }),
+    audit_event_id: null,
+    created_at: now,
+    updated_at: now
+  });
+
+  const queues = await getResearchReviewQueues(store, { actorUserId, limit: 10 });
+  assert.equal(queues.ok, true);
+  assert.equal(queues.safety.readOnly, true);
+  assert.equal(queues.safety.reviewQueuesAreRefOnly, true);
+  assert.equal(queues.counts.pendingArtifacts, 1);
+  assert.equal(queues.counts.lowConfidenceAnswers, 1);
+  assert.equal(queues.counts.downvotedFeedback, 1);
+  assert.equal(queues.counts.escalatedHandoffs, 1);
+  assert.equal(queues.counts.userAnswerReviews, 1);
+  assert.equal(queues.queues.pendingArtifacts[0].safeTextPreview, "Sanitized pending artifact preview for deductible review.");
+  assert.equal(queues.queues.downvotedFeedback[0].commentPreview, "Sanitized user concern about unsupported answer.");
+  assert.ok(queues.queues.downvotedFeedback[0].commentHash);
+  assert.ok(queues.queues.escalatedHandoffs[0].reasonHash);
+  assert.equal(queues.queues.escalatedHandoffs[0].reason, undefined);
 });
 
 test("operator research execution fetches approved source, stores artifact, and avoids raw identifiers in audit/events", async () => {

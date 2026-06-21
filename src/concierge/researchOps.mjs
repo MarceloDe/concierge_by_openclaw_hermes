@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const RESEARCH_OPS_VERSION = "2026-06-21.phase46-research-analytics-budget.v1";
+export const RESEARCH_OPS_VERSION = "2026-06-21.phase47-review-queues.v1";
 
 const ACTIVE_SOURCE_STATUSES = new Set(["active_registry", "approved", "active", "enabled"]);
 const SOURCE_STATUSES = new Set(["pending_review", "active_registry", "approved", "rejected", "disabled"]);
@@ -854,6 +854,50 @@ function normalizeClaimEvaluation(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function normalizeReviewFeedback(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    sessionId: row.session_id,
+    messageId: row.message_id ?? null,
+    taskId: row.task_id ?? null,
+    answerHash: row.answer_hash ?? null,
+    rating: row.rating,
+    commentHash: row.comment ? sha256(row.comment) : null,
+    commentPreview: safePreview(row.comment ?? "", 220),
+    sourcePointerCount: Number(row.source_pointer_count ?? 0),
+    status: row.status,
+    metadata: parseJson(row.metadata_json, {}),
+    createdAt: row.created_at
+  };
+}
+
+function normalizeReviewHandoff(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    sessionId: row.session_id,
+    taskId: row.task_id ?? null,
+    messageId: row.message_id ?? null,
+    handoffType: row.handoff_type,
+    priority: row.priority,
+    status: row.status,
+    summary: safePreview(row.summary ?? "", 260),
+    reasonHash: row.reason ? sha256(row.reason) : null,
+    responseGuidanceHash: row.response_guidance ? sha256(row.response_guidance) : null,
+    metadata: parseJson(row.metadata_json, {}),
+    auditEventId: row.audit_event_id ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function reviewQueueSample(rows, normalize) {
+  return rows.map(normalize).filter(Boolean);
 }
 
 function urlSafetyParts(value) {
@@ -2501,6 +2545,105 @@ export async function getResearchAnalytics(store) {
       sourcePointerPayloadsReturned: false,
       policyPersisted: true,
       killSwitchEnforced: true
+    }
+  };
+}
+
+export async function getResearchReviewQueues(store, { actorUserId = null, limit = 25 } = {}) {
+  const bounded = boundedLimit(limit, 25, 100);
+  const [
+    pendingArtifactRows,
+    lowConfidenceRows,
+    unsupportedRows,
+    downvotedRows,
+    escalatedRows,
+    pendingArtifactCount,
+    lowConfidenceCount,
+    unsupportedCount,
+    downvotedCount,
+    escalatedCount
+  ] = await Promise.all([
+    store.all(`SELECT * FROM research_artifacts WHERE citation_status = ${sql(PENDING_ARTIFACT_STATUS)} ORDER BY created_at DESC LIMIT ${bounded};`),
+    store.all("SELECT * FROM research_claim_evaluations WHERE low_confidence_count > 0 ORDER BY created_at DESC LIMIT " + bounded + ";"),
+    store.all("SELECT * FROM research_claim_evaluations WHERE unsupported_count > 0 ORDER BY created_at DESC LIMIT " + bounded + ";"),
+    store.all("SELECT * FROM feedback_items WHERE rating IN ('not_useful', 'needs_follow_up', 'unsafe_or_wrong') ORDER BY created_at DESC LIMIT " + bounded + ";"),
+    store.all("SELECT * FROM human_handoff_items WHERE status IN ('open', 'pending', 'queued') ORDER BY created_at DESC LIMIT " + bounded + ";"),
+    store.get(`SELECT COUNT(*) AS count FROM research_artifacts WHERE citation_status = ${sql(PENDING_ARTIFACT_STATUS)};`),
+    store.get("SELECT COUNT(*) AS count FROM research_claim_evaluations WHERE low_confidence_count > 0;"),
+    store.get("SELECT COUNT(*) AS count FROM research_claim_evaluations WHERE unsupported_count > 0;"),
+    store.get("SELECT COUNT(*) AS count FROM feedback_items WHERE rating IN ('not_useful', 'needs_follow_up', 'unsafe_or_wrong');"),
+    store.get("SELECT COUNT(*) AS count FROM human_handoff_items WHERE status IN ('open', 'pending', 'queued');")
+  ]);
+  const latestAudit = await store.get("SELECT event_type, created_at FROM audit_events ORDER BY created_at DESC LIMIT 1;");
+  const pendingArtifacts = reviewQueueSample(pendingArtifactRows, normalizeArtifact);
+  const lowConfidenceAnswers = reviewQueueSample(lowConfidenceRows, normalizeClaimEvaluation);
+  const unsupportedAnswers = reviewQueueSample(unsupportedRows, normalizeClaimEvaluation);
+  const downvotedFeedback = reviewQueueSample(downvotedRows, normalizeReviewFeedback);
+  const escalatedHandoffs = reviewQueueSample(escalatedRows, normalizeReviewHandoff);
+  const userAnswerReviews = [
+    ...lowConfidenceAnswers.map((item) => ({
+      id: item.id,
+      queueType: "low_confidence_answer",
+      status: item.status,
+      verdict: item.verdict,
+      answerHash: item.answerHash,
+      answerPreview: item.answerPreview,
+      claimCount: item.claimCount,
+      lowConfidenceCount: item.lowConfidenceCount,
+      unsupportedCount: item.unsupportedCount,
+      auditEventId: item.auditEventId,
+      createdAt: item.createdAt
+    })),
+    ...unsupportedAnswers.map((item) => ({
+      id: item.id,
+      queueType: "unsupported_answer",
+      status: item.status,
+      verdict: item.verdict,
+      answerHash: item.answerHash,
+      answerPreview: item.answerPreview,
+      claimCount: item.claimCount,
+      lowConfidenceCount: item.lowConfidenceCount,
+      unsupportedCount: item.unsupportedCount,
+      auditEventId: item.auditEventId,
+      createdAt: item.createdAt
+    }))
+  ]
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    .slice(0, bounded);
+
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    generatedAt: nowIso(),
+    actorUserId,
+    filters: { limit: bounded },
+    queues: {
+      pendingArtifacts,
+      lowConfidenceAnswers,
+      downvotedFeedback,
+      escalatedHandoffs,
+      userAnswerReviews
+    },
+    counts: {
+      pendingArtifacts: Number(pendingArtifactCount?.count ?? 0),
+      lowConfidenceAnswers: Number(lowConfidenceCount?.count ?? 0),
+      unsupportedAnswers: Number(unsupportedCount?.count ?? 0),
+      downvotedFeedback: Number(downvotedCount?.count ?? 0),
+      escalatedHandoffs: Number(escalatedCount?.count ?? 0),
+      userAnswerReviews: Number(lowConfidenceCount?.count ?? 0) + Number(unsupportedCount?.count ?? 0)
+    },
+    audit: {
+      latestEventType: latestAudit?.event_type ?? null,
+      latestEventAt: latestAudit?.created_at ?? null
+    },
+    safety: {
+      readOnly: true,
+      rawArtifactTextReturned: false,
+      rawAnswerTextReturned: false,
+      rawFeedbackCommentReturned: false,
+      rawHandoffReasonReturned: false,
+      sourcePointerPayloadsReturned: false,
+      reviewQueuesAreRefOnly: true
     }
   };
 }

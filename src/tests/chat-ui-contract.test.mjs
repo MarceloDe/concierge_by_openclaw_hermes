@@ -239,6 +239,7 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /\/api\/research\/kpis/);
   assert.match(appJs, /\/api\/research\/analytics/);
   assert.match(appJs, /\/api\/research\/budget/);
+  assert.match(appJs, /\/api\/research\/review-queues/);
   assert.match(appJs, /\/api\/handoffs/);
   assert.match(appJs, /loadHumanHandoffs/);
   assert.match(appJs, /Human Handoff/);
@@ -287,11 +288,14 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /loadResearchKpis/);
   assert.match(appJs, /loadResearchAnalytics/);
   assert.match(appJs, /loadResearchBudget/);
+  assert.match(appJs, /loadResearchReviewQueues/);
   assert.match(appJs, /saveResearchBudget/);
   assert.match(appJs, /loadResearchWorkerStatus/);
   assert.match(appJs, /loadResearchEmbeddingStatus/);
   assert.match(appJs, /chooseResearchEmbeddingRoute/);
   assert.match(appJs, /Research Budget And Kill Switch/);
+  assert.match(appJs, /Expanded Review Queues/);
+  assert.match(indexHtml, /id="loadResearchReviewQueues"/);
   assert.match(appJs, /reindexResearchEmbeddings/);
   assert.match(appJs, /loadResearchGraph/);
   assert.match(appJs, /buildResearchGraph/);
