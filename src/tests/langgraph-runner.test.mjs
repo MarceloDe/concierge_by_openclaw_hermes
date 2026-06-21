@@ -36,7 +36,7 @@ async function createResearchFixtureArtifact(store, { actorUserId, url, title, h
     actorUserId,
     url,
     title,
-    workflowKeys: ["general_rag", "eligibility_benefits_navigation"],
+    workflowKeys: ["general_rag", "eligibility_benefits_navigation", "pharmacy_formulary"],
     reason: "LangGraph trusted research evidence fixture."
   });
   await reviewResearchSource(store, {
@@ -392,6 +392,67 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
     const auditText = JSON.stringify(auditRows);
     assert.match(auditText, /trusted_research_evidence_retrieved/);
     assert.doesNotMatch(auditText, /pii@example\.com/);
+  } finally {
+    if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+    else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;
+  }
+});
+
+test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", async () => {
+  const store = await createStore();
+  const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-rx-artifacts-"));
+  const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+  process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
+
+  try {
+    const { user, session } = await enrollDefaultMember(store);
+    const artifact = await createResearchFixtureArtifact(store, {
+      actorUserId: "operator_langgraph_rx_research",
+      url: "https://fixture.brainstyworkers.local/reviewed-formulary",
+      title: "Reviewed Formulary Research",
+      approveArtifact: true,
+      html: `
+          <html>
+            <head><title>Reviewed Formulary Research</title></head>
+            <body>
+              <h1>Reviewed formulary evidence</h1>
+              <p>Ozempic is listed on the plan formulary as covered tier 3 evidence.</p>
+              <p>The reviewed prescription coverage snippet says quantity limit and mail order signals apply.</p>
+              <p>Fixture email rx-pii@example.com must stay out of audit rows.</p>
+            </body>
+          </html>
+        `
+    });
+
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Is Ozempic on my plan formulary and what drug tier is it?",
+      rawMessage: { source: "phase50_pharmacy_formulary_test", useLiveModel: false, executeEvidenceObservation: false }
+    });
+
+    assert.equal(result.state.structured_intent.primary_intent, "pharmacy_formulary");
+    assert.equal(result.state.workflow, "eligibility_benefits_navigation");
+    assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
+    assert.equal(result.state.workflow_outcome, "trusted_research_answered");
+    assert.equal(result.state.source_pointers.length, 1);
+    assert.equal(result.state.source_pointers[0].table, "research_artifacts");
+    assert.equal(result.state.source_pointers[0].id, artifact.id);
+    assert.match(result.state.final_response, /operator-reviewed research evidence/);
+    assert.match(result.state.final_response, /Ozempic is listed on the plan formulary/);
+    const formularyBlock = result.state.ai2ui_blocks.find((block) => block.type === "pharmacy_formulary");
+    assert.ok(formularyBlock);
+    assert.equal(formularyBlock.payload.status, "source_backed_pharmacy_answer_ready");
+    assert.equal(formularyBlock.payload.safety.noMedicationAdvice, true);
+    assert.equal(formularyBlock.payload.safety.noClinicalSubstitutionAdvice, true);
+    assert.ok(formularyBlock.payload.rows.length >= 1);
+    assert.ok(formularyBlock.payload.rows.every((row) => row.sourcePointerIds.includes(`research_artifacts/${artifact.id}`)));
+
+    const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
+    const auditText = JSON.stringify(auditRows);
+    assert.match(auditText, /trusted_research_evidence_retrieved/);
+    assert.doesNotMatch(auditText, /rx-pii@example\.com/);
   } finally {
     if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
     else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;

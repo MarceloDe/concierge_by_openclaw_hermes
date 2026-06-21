@@ -8917,3 +8917,30 @@ Verification:
 - `npm run test:local` passed with 244 tests total, 242 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
 - Browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-49-cost-comparison-journey`: after seeding non-PHI reviewed research artifacts through the real research pipeline, deterministic local chat rendered 9 typed blocks including `Cost Comparison`, 2 source-backed comparison rows, source pointer count 2, `captured_trusted_research_evidence`, no busy state, and 0 console errors.
 - Visual artifacts: `artifacts/phase49/cost-comparison-mvp-proof.png` and `artifacts/phase49/cost-comparison-mvp-proof.json`.
+
+## Phase 50 Pharmacy Formulary Journey - 2026-06-21
+
+Goal:
+- Close final verification row `A11`.
+
+Implemented:
+- Added a source-pointer-grounded `pharmacy_formulary` AI2UI block to the `brainstyworkers.ai2ui.blocks.v1` contract.
+- The block builds rows only from stored source pointers whose evidence carries pharmacy/formulary signals such as covered/non-formulary status, drug tier, prior authorization, quantity limit, step therapy, specialty pharmacy, or mail-order evidence.
+- Missing-evidence prescription/formulary prompts fail closed with `blocked_missing_source_pointers` and no formulary rows.
+- `/mvp` now renders the block in Chat, Split, Guided, and Bento modes with a compact pharmacy/formulary grid.
+- Updated the final verification report so `A11` is now `PASSING`.
+
+Safety:
+- Every pharmacy/formulary row must include at least one source pointer id.
+- The UI labels the card as evidence navigation, not medication advice.
+- The block explicitly forbids clinical substitution advice and external actions.
+- Missing evidence asks for cited formulary/drug-list, plan pharmacy-benefit, trusted reviewed research, approved portal, or uploaded document evidence instead of inventing coverage facts.
+
+Verification:
+- `node --check src/concierge/ai2uiBlocks.mjs && node --check src/app/mvp.js && node --check src/server/build-check.mjs` passed.
+- `node --test src/tests/ai2ui-blocks.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/langgraph-runner.test.mjs src/tests/final-system-verification-report.test.mjs` passed with 36/36 tests.
+- `npm run build` passed.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:local` passed with 247 tests total, 245 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-50-pharmacy-formulary-journey`: after seeding a non-PHI reviewed formulary artifact through the real research pipeline, deterministic local chat rendered the `Pharmacy Formulary` AI2UI block with 1 source-backed Ozempic row, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
+- Visual artifacts: `artifacts/phase50/pharmacy-formulary-mvp-proof.png` and `artifacts/phase50/pharmacy-formulary-mvp-proof.json`.

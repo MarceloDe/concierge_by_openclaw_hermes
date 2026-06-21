@@ -834,7 +834,8 @@ textarea {
   gap: 8px;
 }
 
-.cost-comparison-row {
+.cost-comparison-row,
+.pharmacy-formulary-row {
   background: #fff;
   border: 1px solid #d7e0e6;
   border-radius: 6px;
@@ -847,21 +848,33 @@ textarea {
 .cost-comparison-row strong,
 .cost-comparison-row b,
 .cost-comparison-row span,
-.cost-comparison-row small {
+.cost-comparison-row small,
+.pharmacy-formulary-row strong,
+.pharmacy-formulary-row b,
+.pharmacy-formulary-row span,
+.pharmacy-formulary-row small {
   overflow-wrap: anywhere;
 }
 
-.cost-comparison-row b {
+.cost-comparison-row b,
+.pharmacy-formulary-row b {
   color: #123b32;
   font-size: 13px;
   text-align: right;
 }
 
 .cost-comparison-row span,
-.cost-comparison-row small {
+.cost-comparison-row small,
+.pharmacy-formulary-row span,
+.pharmacy-formulary-row small {
   color: #5d6b73;
   font-size: 12px;
   grid-column: 1 / -1;
+}
+
+.pharmacy-formulary-grid {
+  display: grid;
+  gap: 8px;
 }
 
 .ai2ui-checklist {
