@@ -27,6 +27,11 @@ const generatePemsLiveDraftButton = document.querySelector("#generatePemsLiveDra
 const pemsDraftStatusFilter = document.querySelector("#pemsDraftStatusFilter");
 const pemsEvaluatorModeFilter = document.querySelector("#pemsEvaluatorModeFilter");
 const pemsLiveOnlyFilter = document.querySelector("#pemsLiveOnlyFilter");
+const pemsHistoryFollowupFilter = document.querySelector("#pemsHistoryFollowupFilter");
+const pemsHistoryExportRefFilter = document.querySelector("#pemsHistoryExportRefFilter");
+const pemsHistorySnapshotHashFilter = document.querySelector("#pemsHistorySnapshotHashFilter");
+const pemsHistorySortBy = document.querySelector("#pemsHistorySortBy");
+const pemsHistorySortDirection = document.querySelector("#pemsHistorySortDirection");
 const pemsReviewRationale = document.querySelector("#pemsReviewRationale");
 const pemsClaimRevisionText = document.querySelector("#pemsClaimRevisionText");
 const recordPemsClaimRevisionButton = document.querySelector("#recordPemsClaimRevision");
@@ -1174,6 +1179,56 @@ function renderPemsReviewerHistoryExport(historyProof = {}) {
   `;
 }
 
+function renderPemsReviewerHistoryReview(historyReview = {}) {
+  const rows = Array.isArray(historyReview.rows) ? historyReview.rows : [];
+  const comparison = historyReview.comparison ?? {};
+  const delta = comparison.delta ?? {};
+  const added = comparison.changedRefs?.added ?? [];
+  const removed = comparison.changedRefs?.removed ?? [];
+  if (!rows.length) return `<p class="status-text">No history export rows match the current review filters.</p>`;
+  return `
+    <dl>
+      <dt>Status</dt>
+      <dd>${escapeHtml(historyReview.status ?? "phase44_reviewer_history_review_refinement_waiting")}</dd>
+      <dt>Score</dt>
+      <dd>${escapeHtml(historyReview.score ?? 98)} / ${escapeHtml(historyReview.target ?? 100)}</dd>
+      <dt>Filtered exports</dt>
+      <dd>${escapeHtml(historyReview.filteredExportCount ?? rows.length)} / ${escapeHtml(historyReview.reviewerHistoryExportReviewCount ?? rows.length)}</dd>
+      <dt>Search keys</dt>
+      <dd>${escapeHtml((historyReview.searchableBy ?? []).join(", ") || "candidate, draft, follow-up, export ref, snapshot hash")}</dd>
+      <dt>Snapshot comparison</dt>
+      <dd>${escapeHtml(comparison.status ?? "waiting")} · ${escapeHtml(comparison.ok ? "ready" : "needs second export")}</dd>
+      <dt>Raw history/source</dt>
+      <dd>not stored</dd>
+      <dt>Production authority</dt>
+      <dd>${escapeHtml(historyReview.productionDrivingAllowed ? "enabled" : "disabled")}</dd>
+    </dl>
+    <div class="pems-history-review" role="table" aria-label="PEMS reviewer history export search and sort">
+      <div role="row"><span>Created</span><span>Export ref</span><span>Snapshot</span><span>Rows</span><span>Follow-ups</span></div>
+      ${rows
+        .map(
+          (row) => `
+            <div role="row">
+              <span>${escapeHtml(row.createdAt ?? "n/a")}</span>
+              <span>${escapeHtml(row.exportRef ?? "none")}</span>
+              <span>${escapeHtml(row.historySnapshotHash ?? "none")}</span>
+              <span>${escapeHtml(row.counts?.historyRowCount ?? 0)}</span>
+              <span>${escapeHtml((row.followupStatuses ?? []).join(", ") || "none")}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="pems-history-review compact" role="table" aria-label="PEMS reviewer history export snapshot comparison">
+      <div role="row"><span>Delta</span><span>Value</span><span>Refs</span></div>
+      <div role="row"><span>History rows</span><span>${escapeHtml(delta.historyRowCount ?? 0)}</span><span>${escapeHtml(added.length)} added · ${escapeHtml(removed.length)} removed</span></div>
+      <div role="row"><span>Claim revisions</span><span>${escapeHtml(delta.claimRevisionCount ?? 0)}</span><span>${escapeHtml(comparison.comparison?.historySnapshotHash ?? "no comparison")}</span></div>
+      <div role="row"><span>Reviews</span><span>${escapeHtml(delta.promotionReviewCount ?? 0)}</span><span>${escapeHtml(comparison.baseline?.historySnapshotHash ?? "no baseline")}</span></div>
+      <div role="row"><span>Follow-ups</span><span>${escapeHtml(delta.reviewerFollowUpCount ?? 0)}</span><span>safe refs only</span></div>
+    </div>
+  `;
+}
+
 function currentPemsWorkbenchQuery() {
   const params = new URLSearchParams();
   const draftStatus = pemsDraftStatusFilter?.value ?? "all";
@@ -1181,6 +1236,16 @@ function currentPemsWorkbenchQuery() {
   if (draftStatus && draftStatus !== "all") params.set("draftStatus", draftStatus);
   if (evaluatorMode && evaluatorMode !== "all") params.set("evaluatorMode", evaluatorMode);
   if (pemsLiveOnlyFilter?.checked) params.set("liveOnly", "true");
+  const historyFollowup = pemsHistoryFollowupFilter?.value ?? "all";
+  const historyExportRef = pemsHistoryExportRefFilter?.value?.trim() ?? "";
+  const historySnapshotHash = pemsHistorySnapshotHashFilter?.value?.trim() ?? "";
+  const historySortBy = pemsHistorySortBy?.value ?? "created_at";
+  const historySortDirection = pemsHistorySortDirection?.value ?? "desc";
+  if (historyFollowup && historyFollowup !== "all") params.set("followupStatus", historyFollowup);
+  if (historyExportRef) params.set("exportRef", historyExportRef);
+  if (historySnapshotHash) params.set("snapshotHash", historySnapshotHash);
+  if (historySortBy && historySortBy !== "created_at") params.set("sortBy", historySortBy);
+  if (historySortDirection && historySortDirection !== "desc") params.set("sortDirection", historySortDirection);
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -1262,6 +1327,16 @@ function renderPemsWorkbench(payload) {
     latestReviewerHistoryExport: null,
     productionDrivingAllowed: false
   };
+  const reviewerHistoryReview = payload.reviewerHistoryReview ?? {
+    status: "phase44_reviewer_history_review_refinement_waiting",
+    score: 98,
+    target: 100,
+    reviewerHistoryExportReviewCount: 0,
+    filteredExportCount: 0,
+    rows: [],
+    comparison: {},
+    productionDrivingAllowed: false
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1270,17 +1345,21 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${reviewerHistoryExport.status ?? reviewerFollowUp.status ?? "phase43_reviewer_history_audit_export_waiting"} · ${reviewerHistoryExport.score ?? reviewerFollowUp.score ?? 97} / ${reviewerHistoryExport.target ?? reviewerFollowUp.target ?? 99}`;
+    pemsWorkbenchStatus.textContent = `${reviewerHistoryReview.status ?? reviewerHistoryExport.status ?? "phase44_reviewer_history_review_refinement_waiting"} · ${reviewerHistoryReview.score ?? reviewerHistoryExport.score ?? 98} / ${reviewerHistoryReview.target ?? reviewerHistoryExport.target ?? 100}`;
   }
   setPemsReviewActionsEnabled(available, payload);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 43 Reviewer History Audit Exports</h3>
+      <h3>Phase 44 Reviewer History Review Refinement</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(reviewerHistoryExport.status ?? "phase43_reviewer_history_audit_export_waiting")}</dd>
+        <dd>${escapeHtml(reviewerHistoryReview.status ?? "phase44_reviewer_history_review_refinement_waiting")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(reviewerHistoryExport.score ?? 97)} / ${escapeHtml(reviewerHistoryExport.target ?? 99)}</dd>
+        <dd>${escapeHtml(reviewerHistoryReview.score ?? 98)} / ${escapeHtml(reviewerHistoryReview.target ?? 100)}</dd>
+        <dt>Filtered history exports</dt>
+        <dd>${escapeHtml(reviewerHistoryReview.filteredExportCount ?? 0)} visible · ${escapeHtml(reviewerHistoryReview.reviewerHistoryExportReviewCount ?? 0)} total</dd>
+        <dt>Snapshot comparison</dt>
+        <dd>${escapeHtml(reviewerHistoryReview.comparison?.status ?? "phase44_history_export_snapshot_comparison_waiting")}</dd>
         <dt>History exports</dt>
         <dd>${escapeHtml(reviewerHistoryExport.reviewerHistoryExportCount ?? 0)} total · ${escapeHtml(reviewerHistoryExport.historyRowCount ?? 0)} latest rows</dd>
         <dt>Follow-up records</dt>
@@ -1324,6 +1403,10 @@ function renderPemsWorkbench(payload) {
         <dd>${escapeHtml(liveGate.appliedFilters?.evaluatorMode ?? payload.appliedFilters?.evaluatorMode ?? "all")}</dd>
         <dt>Live only</dt>
         <dd>${escapeHtml((liveGate.appliedFilters?.liveOnly ?? payload.appliedFilters?.liveOnly) ? "yes" : "no")}</dd>
+        <dt>History follow-up</dt>
+        <dd>${escapeHtml(reviewerHistoryReview.appliedFilters?.followupStatus ?? "all")}</dd>
+        <dt>History sort</dt>
+        <dd>${escapeHtml(reviewerHistoryReview.appliedFilters?.sortBy ?? "created_at")} · ${escapeHtml(reviewerHistoryReview.appliedFilters?.sortDirection ?? "desc")}</dd>
       </dl>
       ${renderPemsDraftQueue(payload.draftQueue ?? [])}
     </article>
@@ -1393,6 +1476,10 @@ function renderPemsWorkbench(payload) {
     <article class="connector-card wide">
       <h3>Reviewer History Audit Export</h3>
       ${renderPemsReviewerHistoryExport(reviewerHistoryExport)}
+    </article>
+    <article class="connector-card wide">
+      <h3>Reviewer History Search And Snapshot Diff</h3>
+      ${renderPemsReviewerHistoryReview(reviewerHistoryReview)}
     </article>
     <article class="connector-card wide">
       <h3>Deterministic Vs Advisory Comparison</h3>
@@ -4709,7 +4796,18 @@ recordPemsHistoryExportButton?.addEventListener("click", async () => {
   }
 });
 
-for (const control of [pemsDraftStatusFilter, pemsEvaluatorModeFilter, pemsLiveOnlyFilter].filter(Boolean)) {
+for (const control of [pemsDraftStatusFilter, pemsEvaluatorModeFilter, pemsLiveOnlyFilter, pemsHistoryFollowupFilter, pemsHistorySortBy, pemsHistorySortDirection].filter(Boolean)) {
+  control.addEventListener("change", async () => {
+    try {
+      await loadPemsWorkbench();
+    } catch (error) {
+      renderPemsWorkbenchError(error);
+      trace.textContent = error.stack ?? error.message;
+    }
+  });
+}
+
+for (const control of [pemsHistoryExportRefFilter, pemsHistorySnapshotHashFilter].filter(Boolean)) {
   control.addEventListener("change", async () => {
     try {
       await loadPemsWorkbench();

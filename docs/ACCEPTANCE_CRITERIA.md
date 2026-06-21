@@ -2501,3 +2501,18 @@ Focused proof:
 - Follow-up records do not create evidence or production authority.
 - Raw revision text, raw review text, raw rationale text, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
 - `productionDrivingAllowed=false` remains enforced.
+
+## Phase 44: PEMS Reviewer History Review Refinement
+
+- `PEMS_REVIEWER_HISTORY_REVIEW_VERSION` is defined.
+- Workbench API accepts history review filters for candidate id, advisory draft id, follow-up status, export ref, snapshot hash, sort field, and sort direction.
+- Workbench API returns `reviewerHistoryReview`.
+- Connector proof exposes `pems_reviewer_history_review_refinement`.
+- Dashboard renders history follow-up, export-ref, snapshot-hash, sort-field, and sort-direction controls.
+- Dashboard renders `Reviewer History Search And Snapshot Diff`.
+- At least two safe export rows can be compared by snapshot hash over time.
+- Snapshot comparison returns count deltas and added/removed safe refs only.
+- Raw history, raw revision text, raw review text, raw follow-up text, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, and PHI are not stored in history review rows or comparison output.
+- History review rows and snapshot comparison do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, write to payer portals, or provide medical advice.
+- `productionDrivingAllowed=false` remains enforced.
+- Browser/API proof for `pems_reviewer_history_review_refinement`.

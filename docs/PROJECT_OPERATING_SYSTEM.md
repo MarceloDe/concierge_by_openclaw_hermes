@@ -1,6 +1,6 @@
 # Workerprototype OpenClaw Project Operating System
 
-Status: Phase 43 canonical guide.
+Status: Phase 44 canonical guide.
 
 This document is the repo mirror of the Cortex long-term project objective. It governs future development after Phase 31. Cortex remains the canonical source; this file is the local executable mirror that agents must read before planning or coding.
 
@@ -76,7 +76,7 @@ For real multi-agent runs, each role must use its own Cortex branch and author i
 
 ## Active Intelligence Phase
 
-Phase 43 turns reviewer follow-up records into longitudinal audit exports on top of the Phase 42 follow-up ledger:
+Phase 44 refines reviewer history audit exports into an operator-side history review surface on top of the Phase 43 export ledger:
 
 - append-only shadow-run ledger;
 - aggregate PEMS candidate maturity;
@@ -115,22 +115,26 @@ Phase 43 turns reviewer follow-up records into longitudinal audit exports on top
 - export refs and hashes across candidate, advisory draft, revisions, reviews, and follow-ups;
 - filterable history snapshots that store IDs, counts, statuses, and refs only;
 - dashboard UI for longitudinal audit export refs;
+- operator-side search/sort across history export windows by candidate, advisory draft, follow-up status, export ref, snapshot hash, created time, and history-row count;
+- snapshot comparison between two reviewer-history exports over time;
+- visible diff counts and added/removed safe refs for export snapshots;
 - explicit proof that raw history, revision text, review text, source text, prompts, completions, OCR, and frames are not stored in exports;
 - existing `case_state_shadow` graph node remains the pre-answer shadow checkpoint;
 - dashboard proof for `continuous_intelligence_shadow_persistence`, `pems_supervised_promotion_gate`, `pems_reviewer_evaluator_workbench`, `pems_reviewer_ui`, `pems_reviewer_comparison_provenance`, `pems_live_evaluator_generation_filtering`, `pems_live_claim_citation_closure`, and `pems_reviewer_claim_revisions`;
 - dashboard proof for `pems_reviewer_follow_up_workflows`;
 - dashboard proof for `pems_reviewer_history_audit_exports`;
+- dashboard proof for `pems_reviewer_history_review_refinement`;
 - production decisioning still disabled.
 
-Phase 43 does not let live evaluator drafts, claim labels, suggested edits, reviewer revision records, reviewer follow-up records, reviewer history exports, reviewer filters, comparison rows, or provenance refs drive production recommendations. The UI is an operator surface for explicit review rows, advisory follow-up workflow binding, and ref-only longitudinal audit exports. It renders advisory draft previews, claim hashes/previews, source-pointer IDs, consistency trace refs, comparison rows, evidence chips, provenance refs, filter counts, draft queues, before/after revision previews, revision-to-review links, and history export refs/hashes without raw notes, raw traces, raw prompts, raw claims, raw sources, raw completions, raw review text, raw follow-up text, raw OCR, or raw frames, and every action keeps `productionDrivingAllowed=false`.
+Phase 44 does not let live evaluator drafts, claim labels, suggested edits, reviewer revision records, reviewer follow-up records, reviewer history exports, history-review filters, snapshot comparison rows, or provenance refs drive production recommendations. The UI is an operator surface for explicit review rows, advisory follow-up workflow binding, ref-only longitudinal audit exports, and safe export review. It renders advisory draft previews, claim hashes/previews, source-pointer IDs, consistency trace refs, comparison rows, evidence chips, provenance refs, filter counts, draft queues, before/after revision previews, revision-to-review links, history export refs/hashes, export search rows, and snapshot deltas without raw notes, raw traces, raw prompts, raw claims, raw sources, raw completions, raw review text, raw follow-up text, raw OCR, or raw frames, and every action keeps `productionDrivingAllowed=false`.
 
 ## Recommended Next Phases
 
-Phase 44 should make the history export surface easier to review across longer periods while preserving human authority:
+Phase 45 should continue the reviewer-history program only after Phase 44 is merged into both repos. Candidate directions:
 
-- add operator-side search/sort by candidate, draft, follow-up status, and export ref;
-- add visual comparison between export snapshots over time;
+- add saved operator review presets for recurrent history windows;
+- add dashboard artifact links for exported history review proofs;
 - keep deterministic validators, citation checks, safety gates, and human approvals authoritative;
 - no automatic production recommendations.
 
-Phase 44 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.
+Phase 45 must still keep healthcare authority in LangGraph and keep OpenClaw bounded by assigned tasks and explicit approvals.

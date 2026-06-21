@@ -920,16 +920,19 @@ button:disabled {
 
 .pems-revision-diff,
 .pems-followup-chain,
-.pems-history-export {
+.pems-history-export,
+.pems-history-review {
   border: 1px solid #d9e4dd;
   border-radius: 8px;
   display: grid;
   overflow: hidden;
+  margin-top: 10px;
 }
 
 .pems-revision-diff > div,
 .pems-followup-chain > div,
-.pems-history-export > div {
+.pems-history-export > div,
+.pems-history-review > div {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   border-top: 1px solid #d9e4dd;
@@ -939,22 +942,33 @@ button:disabled {
   grid-template-columns: 140px minmax(0, 1fr) 150px;
 }
 
+.pems-history-review > div {
+  grid-template-columns: 160px minmax(0, 1.5fr) minmax(0, 1.2fr) 90px minmax(0, 1fr);
+}
+
+.pems-history-review.compact > div {
+  grid-template-columns: 150px 110px minmax(0, 1fr);
+}
+
 .pems-revision-diff > div:first-child,
 .pems-followup-chain > div:first-child,
-.pems-history-export > div:first-child {
+.pems-history-export > div:first-child,
+.pems-history-review > div:first-child {
   border-top: 0;
 }
 
 .pems-revision-diff span,
 .pems-followup-chain span,
-.pems-history-export span {
+.pems-history-export span,
+.pems-history-review span {
   padding: 8px;
   overflow-wrap: anywhere;
 }
 
 .pems-revision-diff span:first-child,
 .pems-followup-chain span:first-child,
-.pems-history-export > div:first-child span {
+.pems-history-export > div:first-child span,
+.pems-history-review > div:first-child span {
   background: #eef6f2;
   color: #123b32;
   font-weight: 700;

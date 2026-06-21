@@ -80,6 +80,7 @@ import {
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerFollowUpProof,
   buildPemsReviewerHistoryExportProof,
+  buildPemsReviewerHistoryReviewProof,
   buildPemsReviewerWorkbenchReadinessProof,
   createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
@@ -1093,6 +1094,10 @@ function buildPemsReviewerHistoryAuditExportProof(status) {
   return buildPemsReviewerHistoryExportProof(status);
 }
 
+function buildPemsReviewerHistoryReviewRefinementProof(status) {
+  return buildPemsReviewerHistoryReviewProof(status);
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1112,6 +1117,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsClaimRevision = buildPemsClaimRevisionProof(pemsReviewerWorkbenchStatus);
   const pemsReviewerFollowUp = buildPemsReviewerFollowUpWorkflowProof(pemsReviewerWorkbenchStatus);
   const pemsReviewerHistoryExport = buildPemsReviewerHistoryAuditExportProof(pemsReviewerWorkbenchStatus);
+  const pemsReviewerHistoryReview = buildPemsReviewerHistoryReviewRefinementProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1206,6 +1212,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_reviewer_history_audit_exports",
         status: pemsReviewerHistoryExport.status,
         target: "Phase 43 exports longitudinal reviewer history refs and hashes across drafts, revisions, reviews, and follow-ups without storing raw history or enabling production recommendations."
+      },
+      {
+        key: "pems_reviewer_history_review_refinement",
+        status: pemsReviewerHistoryReview.status,
+        target: "Phase 44 lets operators search, sort, and compare reviewer history export snapshots across longer windows without creating evidence or production recommendations."
       },
       {
         key: "docker_connector_deployment",
@@ -1830,6 +1841,22 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsReviewerHistoryExport.productionDrivingAllowed,
         safety: pemsReviewerHistoryExport.safety
       },
+      {
+        key: "pems_reviewer_history_review_refinement",
+        status: pemsReviewerHistoryReview.status,
+        ok: pemsReviewerHistoryReview.ok,
+        mode: pemsReviewerHistoryReview.mode,
+        score: pemsReviewerHistoryReview.score,
+        target: pemsReviewerHistoryReview.target,
+        reviewerHistoryExportReviewCount: pemsReviewerHistoryReview.reviewerHistoryExportReviewCount,
+        filteredExportCount: pemsReviewerHistoryReview.filteredExportCount,
+        searchableBy: pemsReviewerHistoryReview.searchableBy,
+        sortableBy: pemsReviewerHistoryReview.sortableBy,
+        appliedFilters: pemsReviewerHistoryReview.appliedFilters,
+        comparison: pemsReviewerHistoryReview.comparison,
+        productionDrivingAllowed: pemsReviewerHistoryReview.productionDrivingAllowed,
+        safety: pemsReviewerHistoryReview.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -2183,7 +2210,12 @@ async function handleApi(req, res, url) {
       draftStatus: url.searchParams.get("draftStatus"),
       evaluatorMode: url.searchParams.get("evaluatorMode"),
       candidateId: url.searchParams.get("candidateId"),
-      liveOnly: url.searchParams.get("liveOnly")
+      liveOnly: url.searchParams.get("liveOnly"),
+      followupStatus: url.searchParams.get("followupStatus"),
+      exportRef: url.searchParams.get("exportRef"),
+      snapshotHash: url.searchParams.get("snapshotHash"),
+      sortBy: url.searchParams.get("sortBy"),
+      sortDirection: url.searchParams.get("sortDirection")
     });
     sendJson(res, 200, {
       ...buildPemsReviewerWorkbenchReadinessProof(status),
@@ -2193,7 +2225,8 @@ async function handleApi(req, res, url) {
       liveClaimCitationClosure: buildPemsClaimCitationClosureProof(status),
       reviewerClaimRevisions: buildPemsClaimRevisionProof(status),
       reviewerFollowUps: buildPemsReviewerFollowUpWorkflowProof(status),
-      reviewerHistoryExports: buildPemsReviewerHistoryAuditExportProof(status)
+      reviewerHistoryExports: buildPemsReviewerHistoryAuditExportProof(status),
+      reviewerHistoryReview: buildPemsReviewerHistoryReviewRefinementProof(status)
     });
     return;
   }

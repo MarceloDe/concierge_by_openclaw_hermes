@@ -3006,3 +3006,32 @@ Gates:
 - Build checks fail if the Phase 43 table, proof, API route, UI strings, CSS, or version contract are removed.
 - API proof shows `phase43_reviewer_history_audit_export_ready`, score `99 / 99`, export ref/hash/snapshot hash present, and production driving disabled.
 - Dashboard visual proof shows the Phase 43 panel, export ref, snapshot hash, row counts, and raw-history-not-stored safety.
+
+## Phase 44: PEMS Reviewer History Review Refinement
+
+Goal: make longitudinal reviewer history exports reviewable across longer operator windows without adding production procedural authority.
+
+Build:
+
+- Add `PEMS_REVIEWER_HISTORY_REVIEW_VERSION`.
+- Add a safe read model for reviewer history exports with filter normalization for candidate id, advisory draft id, follow-up status, export ref, snapshot hash, sort field, and sort direction.
+- Add bound-parameter list queries for export rows and deterministic post-filtering over safe snapshot refs.
+- Add snapshot comparison between two export rows, returning count deltas plus added/removed safe refs only.
+- Expose `reviewerHistoryReview` through `/api/continuous-intelligence/pems/workbench`.
+- Expose `pems_reviewer_history_review_refinement` through connector proof.
+- Render dashboard controls and tables for history search/sort and snapshot diff.
+
+Non-goals:
+
+- Do not mutate Phase 43 export rows.
+- Do not store raw history, raw revision text, raw review text, raw follow-up text, source text, prompts, completions, OCR, frames, credentials, secrets, or PHI.
+- Do not make history review rows or snapshot deltas production-driving.
+- Do not create evidence, bypass human review, dispatch OpenClaw, contact payers, send external messages, or write to payer portals.
+
+Gates:
+
+- Focused PEMS reviewer-workbench tests prove filter/sort by export ref, snapshot hash, follow-up status, and row count.
+- Tests prove snapshot comparison returns safe deltas and safe changed refs only.
+- Build checks fail if the Phase 44 proof, UI controls, CSS class, version contract, or connector proof key are removed.
+- API proof shows `phase44_reviewer_history_review_refinement_ready`, score `100 / 100`, two compared exports, safe deltas, and production driving disabled.
+- Dashboard visual proof shows the Phase 44 panel, search/sort controls, filtered export rows, snapshot delta rows, raw-history-not-stored safety, and no console errors.

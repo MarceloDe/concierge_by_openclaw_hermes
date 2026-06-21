@@ -14,6 +14,7 @@ export const PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION = "2026-06-20.phase40-live
 export const PEMS_REVIEWER_CLAIM_REVISION_VERSION = "2026-06-20.phase41-reviewer-claim-revision-records.v1";
 export const PEMS_REVIEWER_FOLLOW_UP_VERSION = "2026-06-20.phase42-reviewer-follow-up-workflows.v1";
 export const PEMS_REVIEWER_HISTORY_EXPORT_VERSION = "2026-06-20.phase43-reviewer-history-audit-exports.v1";
+export const PEMS_REVIEWER_HISTORY_REVIEW_VERSION = "2026-06-21.phase44-reviewer-history-review-refinement.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -1352,6 +1353,30 @@ function normalizeHistoryExportFilters(filters = {}) {
   };
 }
 
+function normalizeHistoryReviewFilters(filters = {}) {
+  const sortBy = normalizeWorkbenchFilter(filters.sortBy, ["created_at", "history_row_count", "export_ref", "snapshot_hash"]) ?? "created_at";
+  const sortDirection = normalizeWorkbenchFilter(filters.sortDirection, ["asc", "desc"]) ?? "desc";
+  const rawLimit = rowNumber(filters.limit ?? 25);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : 25;
+  return {
+    candidateId: String(filters.candidateId ?? "").trim() || null,
+    advisoryDraftId: String(filters.advisoryDraftId ?? "").trim() || null,
+    followupStatus: normalizeWorkbenchFilter(filters.followupStatus, ["open", "resolved", "blocked"]) ?? "all",
+    exportRef: String(filters.exportRef ?? "").trim() || null,
+    snapshotHash: String(filters.snapshotHash ?? "").trim() || null,
+    sortBy,
+    sortDirection,
+    limit
+  };
+}
+
+function historyReviewOrderBy(normalized = {}) {
+  const direction = normalized.sortDirection === "asc" ? "ASC" : "DESC";
+  if (normalized.sortBy === "export_ref") return `export_ref ${direction}, created_at DESC`;
+  if (normalized.sortBy === "snapshot_hash") return `history_snapshot_hash ${direction}, created_at DESC`;
+  return `created_at ${direction}`;
+}
+
 function filteredPemsHistoryWhere(filters = {}) {
   const normalized = normalizeHistoryExportFilters(filters);
   const clauses = [];
@@ -1384,6 +1409,62 @@ function safeHistoryRow(type, row = {}) {
     createdAt: row.createdAt ?? row.created_at ?? null,
     updatedAt: row.updatedAt ?? row.updated_at ?? null
   };
+}
+
+function historyPreviewCounts(row) {
+  return row?.historySnapshotPreview?.counts ?? {};
+}
+
+function historyPreviewRefs(row) {
+  if (Array.isArray(row?.latestRefs)) return row.latestRefs;
+  return Array.isArray(row?.historySnapshotPreview?.latestRefs) ? row.historySnapshotPreview.latestRefs : [];
+}
+
+function historyReviewRow(row) {
+  if (!row) return null;
+  const counts = historyPreviewCounts(row);
+  const refs = historyPreviewRefs(row);
+  return {
+    id: row.id,
+    candidateId: row.candidateId,
+    advisoryDraftId: row.advisoryDraftId,
+    exportRef: row.exportRef,
+    exportHash: row.exportHash,
+    historySnapshotHash: row.historySnapshotHash,
+    followupStatuses: [...new Set(refs.map((ref) => ref.followupStatus).filter(Boolean))],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    counts: {
+      draftCount: rowNumber(counts.draftCount),
+      claimRevisionCount: rowNumber(counts.claimRevisionCount),
+      promotionReviewCount: rowNumber(counts.promotionReviewCount),
+      reviewerFollowUpCount: rowNumber(counts.reviewerFollowUpCount),
+      resolvedFollowUpCount: rowNumber(counts.resolvedFollowUpCount),
+      openFollowUpCount: rowNumber(counts.openFollowUpCount),
+      blockedFollowUpCount: rowNumber(counts.blockedFollowUpCount),
+      historyRowCount: rowNumber(counts.historyRowCount)
+    },
+    latestRefs: refs.slice(0, 12),
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      exportCreatesEvidence: false,
+      exportBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function refKey(ref = {}) {
+  return `${ref.type ?? "history"}:${ref.id ?? "unknown"}`;
 }
 
 export async function buildPemsReviewerHistorySnapshot(store, filters = {}) {
@@ -1591,6 +1672,145 @@ export async function recordPemsReviewerHistoryExport(
     advisoryOnly: true,
     productionDrivingAllowed: false,
     safety: snapshot.safety
+  };
+}
+
+export async function listPemsReviewerHistoryExports(store, filters = {}) {
+  if (!store) throw new Error("A store is required to list PEMS reviewer history exports.");
+  const normalized = normalizeHistoryReviewFilters(filters);
+  const clauses = [];
+  const params = [];
+  if (normalized.candidateId) {
+    clauses.push("candidate_id = ?");
+    params.push(normalized.candidateId);
+  }
+  if (normalized.advisoryDraftId) {
+    clauses.push("advisory_draft_id = ?");
+    params.push(normalized.advisoryDraftId);
+  }
+  if (normalized.exportRef) {
+    clauses.push("export_ref = ?");
+    params.push(normalized.exportRef);
+  }
+  if (normalized.snapshotHash) {
+    clauses.push("history_snapshot_hash = ?");
+    params.push(normalized.snapshotHash);
+  }
+  params.push(normalized.limit);
+  const rows = await store.all(
+    `SELECT id, candidate_id, advisory_draft_id, actor_user_id, export_reason_hash,
+            export_reason_preview, filters_json, export_ref, export_hash,
+            history_snapshot_hash, history_snapshot_preview_json, metadata_json,
+            created_at, updated_at
+       FROM pems_candidate_review_history_exports
+      ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
+      ORDER BY ${historyReviewOrderBy(normalized)}
+      LIMIT ?;`,
+    params
+  );
+  let reviewRows = rows.map(formatPemsReviewerHistoryExportRow).map(historyReviewRow).filter(Boolean);
+  if (normalized.followupStatus !== "all") {
+    reviewRows = reviewRows.filter((row) => row.followupStatuses.includes(normalized.followupStatus));
+  }
+  if (normalized.sortBy === "history_row_count") {
+    reviewRows.sort((a, b) => {
+      const delta = rowNumber(a.counts.historyRowCount) - rowNumber(b.counts.historyRowCount);
+      return normalized.sortDirection === "asc" ? delta : -delta;
+    });
+  }
+  return {
+    version: PEMS_REVIEWER_HISTORY_REVIEW_VERSION,
+    status: reviewRows.length ? "phase44_history_review_exports_listed" : "phase44_history_review_waiting_for_exports",
+    ok: true,
+    appliedFilters: normalized,
+    filterOptions: {
+      followupStatuses: ["all", "open", "resolved", "blocked"],
+      sortBy: ["created_at", "history_row_count", "export_ref", "snapshot_hash"],
+      sortDirection: ["desc", "asc"]
+    },
+    exportCount: reviewRows.length,
+    rows: reviewRows,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      searchCreatesEvidence: false,
+      searchBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+async function getPemsReviewerHistoryExportById(store, id) {
+  if (!id) return null;
+  const row = await store.get(
+    `SELECT id, candidate_id, advisory_draft_id, actor_user_id, export_reason_hash,
+            export_reason_preview, filters_json, export_ref, export_hash,
+            history_snapshot_hash, history_snapshot_preview_json, metadata_json,
+            created_at, updated_at
+       FROM pems_candidate_review_history_exports
+      WHERE id = ?
+      LIMIT 1;`,
+    [id]
+  );
+  return formatPemsReviewerHistoryExportRow(row);
+}
+
+export async function comparePemsReviewerHistoryExports(store, options = {}) {
+  if (!store) throw new Error("A store is required to compare PEMS reviewer history exports.");
+  let baseline = await getPemsReviewerHistoryExportById(store, options.baselineExportId);
+  let comparison = await getPemsReviewerHistoryExportById(store, options.comparisonExportId);
+  if (!baseline || !comparison) {
+    const latest = await listPemsReviewerHistoryExports(store, { ...options, sortBy: "created_at", sortDirection: "desc", limit: 2 });
+    comparison = comparison ?? latest.rows[0] ?? null;
+    baseline = baseline ?? latest.rows[1] ?? null;
+  } else {
+    baseline = historyReviewRow(baseline);
+    comparison = historyReviewRow(comparison);
+  }
+  const baselineRefs = historyPreviewRefs(baseline);
+  const comparisonRefs = historyPreviewRefs(comparison);
+  const baselineRefSet = new Set(baselineRefs.map(refKey));
+  const comparisonRefSet = new Set(comparisonRefs.map(refKey));
+  const addedRefs = comparisonRefs.filter((ref) => !baselineRefSet.has(refKey(ref))).map((ref) => safeHistoryRow(ref.type ?? "history", ref));
+  const removedRefs = baselineRefs.filter((ref) => !comparisonRefSet.has(refKey(ref))).map((ref) => safeHistoryRow(ref.type ?? "history", ref));
+  const baselineCounts = baseline?.counts ?? {};
+  const comparisonCounts = comparison?.counts ?? {};
+  return {
+    version: PEMS_REVIEWER_HISTORY_REVIEW_VERSION,
+    status: baseline && comparison ? "phase44_history_export_snapshot_comparison_ready" : "phase44_history_export_snapshot_comparison_waiting",
+    ok: Boolean(baseline && comparison),
+    baseline,
+    comparison,
+    delta: {
+      historyRowCount: rowNumber(comparisonCounts.historyRowCount) - rowNumber(baselineCounts.historyRowCount),
+      draftCount: rowNumber(comparisonCounts.draftCount) - rowNumber(baselineCounts.draftCount),
+      claimRevisionCount: rowNumber(comparisonCounts.claimRevisionCount) - rowNumber(baselineCounts.claimRevisionCount),
+      promotionReviewCount: rowNumber(comparisonCounts.promotionReviewCount) - rowNumber(baselineCounts.promotionReviewCount),
+      reviewerFollowUpCount: rowNumber(comparisonCounts.reviewerFollowUpCount) - rowNumber(baselineCounts.reviewerFollowUpCount),
+      resolvedFollowUpCount: rowNumber(comparisonCounts.resolvedFollowUpCount) - rowNumber(baselineCounts.resolvedFollowUpCount),
+      openFollowUpCount: rowNumber(comparisonCounts.openFollowUpCount) - rowNumber(baselineCounts.openFollowUpCount),
+      blockedFollowUpCount: rowNumber(comparisonCounts.blockedFollowUpCount) - rowNumber(baselineCounts.blockedFollowUpCount)
+    },
+    changedRefs: {
+      added: addedRefs,
+      removed: removedRefs
+    },
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      comparisonCreatesEvidence: false,
+      comparisonBypassesHumanReview: false,
+      automaticProductionRecommendation: false,
+      productionDrivingAllowed: false
+    }
   };
 }
 
@@ -2413,6 +2633,8 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
   const closureVetoDraftCount = formattedDraftQueue.filter(
     (draft) => (draft?.claimCitationClosure?.unsupportedCount ?? 0) > 0 || (draft?.claimCitationClosure?.lowConfidenceCount ?? 0) > 0
   ).length;
+  const reviewerHistoryExportReview = await listPemsReviewerHistoryExports(store, filters);
+  const reviewerHistoryExportComparison = await comparePemsReviewerHistoryExports(store, filters);
   const status =
     draftCountValue > 0
       ? "phase36_reviewer_evaluator_workbench_active"
@@ -2447,6 +2669,7 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     reviewDecisionBoundFollowUpCount: rowNumber(followUpCounts?.reviewDecisionBoundFollowUpCount),
     reviewerHistoryExportCount: rowNumber(historyExportCounts?.reviewerHistoryExportCount),
     safeHistoryExportCount: rowNumber(historyExportCounts?.safeHistoryExportCount),
+    reviewerHistoryExportReviewCount: reviewerHistoryExportReview.exportCount,
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
@@ -2456,6 +2679,8 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
       evaluatorModes: ["all", "deterministic_validator_advisory", "llm_assisted_advisory", "nestr_consistency_trace"],
       liveOnly: [false, true]
     },
+    reviewerHistoryExportReview,
+    reviewerHistoryExportComparison,
     draftQueue: formattedDraftQueue,
     latestDraft: formattedLatestDraft,
     latestClaimCitationClosure,
@@ -2768,6 +2993,67 @@ export function buildPemsReviewerHistoryExportProof(status = {}) {
       rawFrameStored: false,
       exportCreatesEvidence: false,
       exportBypassesHumanReview: false,
+      automaticProductionRecommendation: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsReviewerHistoryReviewProof(status = {}) {
+  const review = status.reviewerHistoryExportReview ?? {};
+  const comparison = status.reviewerHistoryExportComparison ?? {};
+  const rows = Array.isArray(review.rows) ? review.rows : [];
+  const hasSearchableRows = rows.length >= 2;
+  const hasFilters =
+    Boolean(review.appliedFilters) &&
+    Array.isArray(review.filterOptions?.followupStatuses) &&
+    Array.isArray(review.filterOptions?.sortBy);
+  const comparisonReady = comparison.ok === true && Boolean(comparison.baseline?.historySnapshotHash && comparison.comparison?.historySnapshotHash);
+  const safeReview =
+    review.safety?.rawHistoryStored === false &&
+    review.safety?.rawRevisionStored === false &&
+    review.safety?.rawReviewStored === false &&
+    review.safety?.rawSourceStored === false &&
+    review.safety?.searchCreatesEvidence === false &&
+    review.safety?.searchBypassesHumanReview === false &&
+    comparison.safety?.comparisonCreatesEvidence === false &&
+    comparison.safety?.comparisonBypassesHumanReview === false &&
+    comparison.safety?.automaticProductionRecommendation === false &&
+    comparison.safety?.productionDrivingAllowed === false;
+  const ready = hasSearchableRows && hasFilters && comparisonReady && safeReview;
+  return {
+    version: PEMS_REVIEWER_HISTORY_REVIEW_VERSION,
+    status: ready
+      ? "phase44_reviewer_history_review_refinement_ready"
+      : rows.length
+        ? "phase44_reviewer_history_review_refinement_needs_second_export"
+        : "phase44_reviewer_history_review_refinement_waiting",
+    ok: ready,
+    mode: "operator_history_export_search_sort_and_snapshot_comparison",
+    score: ready ? 100 : rows.length ? 99 : 98,
+    target: 100,
+    reviewerHistoryExportReviewCount: review.exportCount ?? rows.length,
+    filteredExportCount: rows.length,
+    searchableBy: ["candidateId", "advisoryDraftId", "followupStatus", "exportRef", "snapshotHash"],
+    sortableBy: review.filterOptions?.sortBy ?? ["created_at", "history_row_count", "export_ref", "snapshot_hash"],
+    appliedFilters: review.appliedFilters ?? {},
+    rows,
+    comparison,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      searchCreatesEvidence: false,
+      searchBypassesHumanReview: false,
+      comparisonCreatesEvidence: false,
+      comparisonBypassesHumanReview: false,
       automaticProductionRecommendation: false,
       productionDrivingAllowed: false
     }

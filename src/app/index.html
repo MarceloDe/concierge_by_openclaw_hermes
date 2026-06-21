@@ -42,7 +42,7 @@
         <section class="review-panel pems-workbench-panel">
           <div class="review-header">
             <div>
-              <p class="eyebrow">Phase 43</p>
+              <p class="eyebrow">Phase 44</p>
               <h2>PEMS Reviewer Workbench</h2>
             </div>
             <div class="review-actions">
@@ -73,6 +73,39 @@
             <label class="inline-check">
               <input id="pemsLiveOnlyFilter" type="checkbox" />
               Live egress only
+            </label>
+            <label>
+              History follow-up
+              <select id="pemsHistoryFollowupFilter">
+                <option value="all">All</option>
+                <option value="open">Open</option>
+                <option value="resolved">Resolved</option>
+                <option value="blocked">Blocked</option>
+              </select>
+            </label>
+            <label>
+              Export ref
+              <input id="pemsHistoryExportRefFilter" placeholder="pems_review_history_export_..." />
+            </label>
+            <label>
+              Snapshot hash
+              <input id="pemsHistorySnapshotHashFilter" placeholder="sha256 snapshot hash" />
+            </label>
+            <label>
+              Sort history
+              <select id="pemsHistorySortBy">
+                <option value="created_at">Created</option>
+                <option value="history_row_count">Rows</option>
+                <option value="export_ref">Export ref</option>
+                <option value="snapshot_hash">Snapshot hash</option>
+              </select>
+            </label>
+            <label>
+              Direction
+              <select id="pemsHistorySortDirection">
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
             </label>
           </div>
           <div id="pemsWorkbench" class="pems-workbench-grid">
