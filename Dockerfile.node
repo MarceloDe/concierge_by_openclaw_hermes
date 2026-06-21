@@ -39,9 +39,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY vendor/getzep-graphiti ./vendor/getzep-graphiti
+COPY tools/graphiti/requirements-graphiti.txt ./tools/graphiti/requirements-graphiti.txt
 RUN python3 -m venv .venv-graphiti \
     && .venv-graphiti/bin/python -m pip install --upgrade pip setuptools wheel \
     && .venv-graphiti/bin/pip install --no-cache-dir -e "vendor/getzep-graphiti[falkordb]" \
+    && .venv-graphiti/bin/pip install --no-cache-dir -r tools/graphiti/requirements-graphiti.txt \
     && .venv-graphiti/bin/python -c "import graphiti_core; import falkordb; from graphiti_core.driver.falkordb_driver import FalkorDriver"
 
 RUN mkdir -p /app/data && chown -R node:node /app/data

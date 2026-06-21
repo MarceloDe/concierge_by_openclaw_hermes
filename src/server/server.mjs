@@ -66,6 +66,7 @@ import {
   getProductMemoryStatus,
   getProductMemoryReplayQueueSummary,
   listProductMemoryReplayQueue,
+  probeProductMemoryAtBoot,
   probeProductMemory,
   replayQueuedProductMemoryRetains,
   suppressProductMemoryEpisode
@@ -154,6 +155,7 @@ const MIME = {
 const store = await createDatabaseStore(process.env).initialize();
 const researchSchedulerDaemon = createResearchSchedulerDaemon(store);
 await researchSchedulerDaemon.start();
+await probeProductMemoryAtBoot({ store });
 
 function sendJson(res, status, payload) {
   res.writeHead(status, { "content-type": MIME[".json"] });

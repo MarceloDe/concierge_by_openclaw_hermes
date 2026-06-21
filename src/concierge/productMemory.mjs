@@ -9,7 +9,7 @@ import { loadLocalEnvOnce } from "./secrets.mjs";
 export const PRODUCT_MEMORY_CONTRACT_VERSION = "2026-05-27.graphiti-product-memory.v1";
 export const PRODUCT_MEMORY_REPLAY_QUEUE_VERSION = "2026-06-15.product-memory-replay-queue.v1";
 const BRIDGE_PATH = resolve("tools/graphiti/graphiti_bridge.py");
-const PYTHON_PATH = resolve(".venv-graphiti/bin/python");
+const DEFAULT_PYTHON_PATH = ".venv-graphiti/bin/python";
 
 function parseJson(value, fallback = {}) {
   try {
@@ -23,24 +23,73 @@ function productMemoryEnabled() {
   return (process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER ?? "disabled").toLowerCase() === "graphiti";
 }
 
+function productMemoryPhiCleared() {
+  return process.env.BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED === "1";
+}
+
+function configuredPythonPath() {
+  const configured = process.env.BRAINSTY_GRAPHITI_PYTHON;
+  if (configured && !configured.includes("/")) return configured;
+  return resolve(configured || DEFAULT_PYTHON_PATH);
+}
+
 export function getProductMemoryConfig() {
+  const llmProvider = process.env.GRAPHITI_LLM_PROVIDER ?? "openai";
   return {
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
     adapter: process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER ?? "disabled",
     enabled: productMemoryEnabled(),
     provider: "zep_graphiti",
     bridgePath: BRIDGE_PATH,
-    pythonPath: PYTHON_PATH,
+    pythonPath: configuredPythonPath(),
+    phiCleared: productMemoryPhiCleared(),
     backend: process.env.GRAPHITI_BACKEND ?? process.env.GRAPHITI_DRIVER ?? "falkordb",
     groupId: process.env.GRAPHITI_GROUP_ID ?? "brainstyworkers_local",
     falkor: {
       host: process.env.FALKORDB_HOST ?? "localhost",
       port: process.env.FALKORDB_PORT ?? "6380"
     },
+    llmProvider,
     llmModel: process.env.GRAPHITI_LLM_MODEL ?? "gpt-4.1-mini",
+    smallModel: process.env.GRAPHITI_SMALL_MODEL ?? "gpt-4.1-nano",
     embeddingModel: process.env.GRAPHITI_EMBEDDING_MODEL ?? "text-embedding-3-small",
+    bedrock: {
+      region: process.env.GRAPHITI_BEDROCK_REGION ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1",
+      llmModelId: process.env.GRAPHITI_BEDROCK_LLM_MODEL_ID ?? "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      smallModelId: process.env.GRAPHITI_BEDROCK_SMALL_MODEL_ID ?? "anthropic.claude-3-5-haiku-20241022-v1:0",
+      embeddingModelId: process.env.GRAPHITI_BEDROCK_EMBED_MODEL_ID ?? "amazon.titan-embed-text-v2:0",
+      embeddingDim: Number(process.env.GRAPHITI_BEDROCK_EMBED_DIM ?? 1024)
+    },
     rawEpisodeStorage: process.env.GRAPHITI_STORE_RAW_EPISODES === "1"
   };
+}
+
+function phiClearanceRequiredResult(action, config, extra = {}) {
+  return {
+    ok: false,
+    action,
+    contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
+    adapter: "graphiti",
+    enabled: true,
+    provider: "zep_graphiti",
+    status: "degraded",
+    reason: "phi_clearance_required",
+    retained: false,
+    facts: [],
+    error:
+      "Graphiti product memory is enabled but BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED is not set. No product-memory payload was sent.",
+    message:
+      "Set BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1 only after Bedrock/FalkorDB are confirmed inside the HIPAA boundary.",
+    config,
+    ...extra
+  };
+}
+
+function maskProductMemoryText(value, stateForMasking) {
+  return maskDirectIdentifiers(value, stateForMasking)
+    .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[redacted-email]")
+    .replace(/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g, "[redacted-phone]")
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[DB_POINTER:sensitive_identifiers:ssn:not_stored]");
 }
 
 async function callGraphitiBridge(payload, { timeoutMs = 120000, observability = null } = {}) {
@@ -63,10 +112,17 @@ async function callGraphitiBridge(payload, { timeoutMs = 120000, observability =
         ...process.env,
         GRAPHITI_BACKEND: config.backend,
         GRAPHITI_GROUP_ID: config.groupId,
+        GRAPHITI_LLM_PROVIDER: config.llmProvider,
         FALKORDB_HOST: config.falkor.host,
         FALKORDB_PORT: config.falkor.port,
         GRAPHITI_LLM_MODEL: config.llmModel,
-        GRAPHITI_EMBEDDING_MODEL: config.embeddingModel
+        GRAPHITI_SMALL_MODEL: config.smallModel,
+        GRAPHITI_EMBEDDING_MODEL: config.embeddingModel,
+        GRAPHITI_BEDROCK_REGION: config.bedrock.region,
+        GRAPHITI_BEDROCK_LLM_MODEL_ID: config.bedrock.llmModelId,
+        GRAPHITI_BEDROCK_SMALL_MODEL_ID: config.bedrock.smallModelId,
+        GRAPHITI_BEDROCK_EMBED_MODEL_ID: config.bedrock.embeddingModelId,
+        GRAPHITI_BEDROCK_EMBED_DIM: String(config.bedrock.embeddingDim)
       },
       stdio: ["pipe", "pipe", "pipe"]
     });
@@ -259,6 +315,13 @@ export async function replayQueuedProductMemoryRetains(store, { limit = 5, user 
       message: "Set BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti to replay queued product memory retains."
     };
   }
+  if (!config.phiCleared) {
+    return {
+      ...phiClearanceRequiredResult("replay", config, { replayed: 0, failed: 0, attempted: 0 }),
+      config: undefined,
+      replayQueue: await getProductMemoryReplayQueueSummary(store)
+    };
+  }
   const now = nowIso();
   const safeLimit = Math.max(1, Math.min(25, Number(limit) || 5));
   const rows = await store.all(`
@@ -361,7 +424,7 @@ export async function replayQueuedProductMemoryRetains(store, { limit = 5, user 
   };
 }
 
-export async function getProductMemoryStatus({ requireEnabled = false, store = null, sessionId = null, user = null } = {}) {
+export async function getProductMemoryStatus({ requireEnabled = false, store = null, sessionId = null, user = null, timeoutMs = 60000 } = {}) {
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   const replayQueue = await getProductMemoryReplayQueueSummary(store);
@@ -369,11 +432,14 @@ export async function getProductMemoryStatus({ requireEnabled = false, store = n
     if (requireEnabled) throw new Error("Product memory is disabled. Set BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti.");
     return { ...disabledResult("status"), config, replayQueue };
   }
+  if (!config.phiCleared) {
+    return phiClearanceRequiredResult("status", config, { replayQueue });
+  }
   try {
     const status = await callGraphitiBridge(
       { action: "status", groupId: config.groupId },
       {
-        timeoutMs: 60000,
+        timeoutMs,
         observability: store
           ? {
               store,
@@ -407,6 +473,13 @@ export async function recallProductMemoryForRequest({ store = null, user, sessio
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   if (!config.enabled) return { ...disabledResult("recall"), config };
+  if (!config.phiCleared) {
+    return {
+      ...phiClearanceRequiredResult("recall", config),
+      userId: user?.id ?? null,
+      sessionId: session?.id ?? null
+    };
+  }
   const stateForMasking = { context_packet: contextPacket };
   const query = [
     maskDirectIdentifiers(userInput, stateForMasking),
@@ -453,14 +526,19 @@ export async function recallProductMemoryForRequest({ store = null, user, sessio
 }
 
 export function buildSafeProductMemoryEpisode({ user, session, state, localMemoryItems = [] }) {
-  const stateForMasking = { context_packet: state.context_packet };
+  const stateForMasking = {
+    context_packet: {
+      ...(state.context_packet ?? {}),
+      user: state.context_packet?.user ?? user ?? {}
+    }
+  };
   const sourcePointers = (state.source_pointers ?? []).map((pointer) => ({
     kind: pointer.kind ?? null,
     table: pointer.table ?? null,
     id: pointer.id ?? null,
-    displayLabel: maskDirectIdentifiers(pointer.displayLabel ?? "", stateForMasking) || null,
+    displayLabel: maskProductMemoryText(pointer.displayLabel ?? "", stateForMasking) || null,
     sourceUrl: pointer.sourceUrl ?? null,
-    summary: maskDirectIdentifiers(pointer.summary ?? "", stateForMasking),
+    summary: maskProductMemoryText(pointer.summary ?? "", stateForMasking),
     domHash: pointer.domHash ?? null,
     extractionHash: pointer.extractionHash ?? null,
     evidenceFields: sanitizeEvidenceFields(pointer.evidenceFields ?? [], stateForMasking),
@@ -483,7 +561,7 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
         : "BrainstyMember answer has no healthcare evidence source pointer yet."
     ].join(" "),
     sourcePointers,
-    summary: maskDirectIdentifiers(state.memory_summary ?? state.final_response ?? "", stateForMasking),
+    summary: maskProductMemoryText(state.memory_summary ?? state.final_response ?? "", stateForMasking),
     localMemoryItemPointers: localMemoryItems.map((item) => ({
       table: "memory_items",
       id: item.id,
@@ -518,7 +596,7 @@ function sanitizeEvidenceFieldValue(field, stateForMasking) {
     const match = value.match(/([A-Z0-9]{4})$/i);
     return match ? `last4:${match[1]}` : "[DB_POINTER:insurance_identifiers:member_or_subscriber_id]";
   }
-  return maskDirectIdentifiers(value, stateForMasking);
+  return maskProductMemoryText(value, stateForMasking);
 }
 
 function sanitizeCitation(citation, stateForMasking) {
@@ -526,13 +604,13 @@ function sanitizeCitation(citation, stateForMasking) {
   return {
     sourceKind: citation.sourceKind ?? null,
     uploadId: citation.uploadId ?? null,
-    filename: maskDirectIdentifiers(citation.filename ?? "", stateForMasking) || null,
+    filename: maskProductMemoryText(citation.filename ?? "", stateForMasking) || null,
     extractionStatus: citation.extractionStatus ?? null,
     extractionMethod: citation.extractionMethod ?? null,
     confidence: citation.confidence ?? null,
     sourceSpans: (citation.sourceSpans ?? []).slice(0, 5).map((span) => ({
       spanId: span.spanId ?? span.span_id ?? null,
-      snippet: maskDirectIdentifiers(span.snippet ?? "", stateForMasking),
+      snippet: maskProductMemoryText(span.snippet ?? "", stateForMasking),
       confidence: span.confidence ?? citation.confidence ?? "unknown"
     }))
   };
@@ -572,6 +650,30 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   if (!config.enabled || !state?.should_remember) return { ...disabledResult("retain"), config };
+  if (!config.phiCleared) {
+    const result = phiClearanceRequiredResult("retain", config, {
+      repairPlan: {
+        status: "phi_clearance_required",
+        retryable: false,
+        timeout: false,
+        attemptedRetry: false,
+        repaired: false,
+        nextAction:
+          "Confirm AWS BAA/Bedrock and in-boundary FalkorDB, then set BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1 in the operator environment."
+      }
+    });
+    if (store && session?.id) {
+      await audit(store, session.id, "product_memory_retain_blocked_phi_clearance", {
+        provider: "zep_graphiti",
+        contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
+        reason: "phi_clearance_required",
+        payloadSent: false,
+        rawPortalTextStored: false,
+        cortexProductMemory: false
+      });
+    }
+    return result;
+  }
   const episodeBody = buildSafeProductMemoryEpisode({ user, session, state, localMemoryItems });
   const retainPayload = {
     action: "retain",
@@ -721,6 +823,7 @@ export async function suppressProductMemoryEpisode(store, { sessionId, episodeUu
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
   if (!config.enabled) return { ...disabledResult("suppress"), config };
+  if (!config.phiCleared) return phiClearanceRequiredResult("suppress", config);
   const result = await callGraphitiBridge({
     action: "suppress",
     groupId: config.groupId,
@@ -745,6 +848,16 @@ export async function suppressProductMemoryEpisode(store, { sessionId, episodeUu
 
 export async function probeProductMemory({ store = null, user, session, query = "eligibility benefits deductible source pointer" }) {
   const status = await getProductMemoryStatus({ requireEnabled: true, store, sessionId: session?.id ?? null, user });
+  if (status.ok === false) {
+    return {
+      status,
+      retained: { ok: false, action: "retain", status: status.status, reason: status.reason, retained: false },
+      recalled: { ok: false, action: "recall", status: status.status, reason: status.reason, facts: [] },
+      contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
+      rawPortalTextStored: false,
+      cortexProductMemory: false
+    };
+  }
   const safeEpisode = {
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
     memoryKind: "safe_probe_summary",
@@ -801,4 +914,37 @@ export async function probeProductMemory({ store = null, user, session, query = 
     rawPortalTextStored: false,
     cortexProductMemory: false
   };
+}
+
+export async function probeProductMemoryAtBoot({
+  store = null,
+  logger = console,
+  timeoutMs = Number(process.env.BRAINSTY_PRODUCT_MEMORY_BOOT_PROBE_TIMEOUT_MS ?? 5000)
+} = {}) {
+  try {
+    const status = await getProductMemoryStatus({ store, timeoutMs });
+    const summary = {
+      adapter: status.adapter,
+      enabled: Boolean(status.enabled),
+      status: status.status ?? (status.schemaReady ? "schema_ready" : status.ok === false ? "degraded" : "ready"),
+      reason: status.reason ?? null,
+      llmProvider: status.config?.llmProvider ?? null,
+      backend: status.config?.backend ?? status.backend ?? null,
+      schemaReady: Boolean(status.schemaReady),
+      failSoft: true
+    };
+    logger.info?.(`[product-memory] boot probe ${JSON.stringify(summary)}`);
+    return status;
+  } catch (error) {
+    logger.warn?.(`[product-memory] boot probe degraded: ${error.message}`);
+    return {
+      ok: false,
+      action: "status",
+      adapter: process.env.BRAINSTY_PRODUCT_MEMORY_ADAPTER ?? "disabled",
+      enabled: productMemoryEnabled(),
+      status: "degraded",
+      error: error.message,
+      failSoft: true
+    };
+  }
 }
