@@ -15,6 +15,7 @@ import {
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerFollowUpProof,
   buildPemsReviewerHistoryExportProof,
+  buildPemsReviewerHistoryReviewProof,
   buildPemsReviewerWorkbenchReadinessProof,
   PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
   PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
@@ -22,6 +23,7 @@ import {
   PEMS_REVIEWER_COMPARISON_VERSION,
   PEMS_REVIEWER_FOLLOW_UP_VERSION,
   PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+  PEMS_REVIEWER_HISTORY_REVIEW_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
   PEMS_PROMOTION_GATE_VERSION
 } from "../concierge/continuousIntelligence.mjs";
@@ -472,6 +474,69 @@ if (
   throw new Error("Phase 43 PEMS reviewer history audit export proof contract is incomplete.");
 }
 
+const pemsReviewerHistoryReviewProof = buildPemsReviewerHistoryReviewProof({
+  reviewerHistoryExportReview: {
+    exportCount: 2,
+    appliedFilters: { followupStatus: "resolved", sortBy: "history_row_count", sortDirection: "desc" },
+    filterOptions: {
+      followupStatuses: ["all", "open", "resolved", "blocked"],
+      sortBy: ["created_at", "history_row_count", "export_ref", "snapshot_hash"],
+      sortDirection: ["desc", "asc"]
+    },
+    rows: [
+      {
+        id: "history_export_2",
+        exportRef: "pems_review_history_export_new",
+        historySnapshotHash: "snapshot_hash_new",
+        counts: { historyRowCount: 5, claimRevisionCount: 2, promotionReviewCount: 1, reviewerFollowUpCount: 1 },
+        latestRefs: [{ type: "review_followup", id: "followup_2", followupStatus: "resolved" }],
+        safety: { rawHistoryStored: false, rawSourceStored: false },
+        productionDrivingAllowed: false
+      },
+      {
+        id: "history_export_1",
+        exportRef: "pems_review_history_export_old",
+        historySnapshotHash: "snapshot_hash_old",
+        counts: { historyRowCount: 4, claimRevisionCount: 1, promotionReviewCount: 1, reviewerFollowUpCount: 1 },
+        latestRefs: [{ type: "review_followup", id: "followup_1", followupStatus: "resolved" }],
+        safety: { rawHistoryStored: false, rawSourceStored: false },
+        productionDrivingAllowed: false
+      }
+    ],
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      searchCreatesEvidence: false,
+      searchBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  },
+  reviewerHistoryExportComparison: {
+    ok: true,
+    baseline: { id: "history_export_1", historySnapshotHash: "snapshot_hash_old" },
+    comparison: { id: "history_export_2", historySnapshotHash: "snapshot_hash_new" },
+    safety: {
+      comparisonCreatesEvidence: false,
+      comparisonBypassesHumanReview: false,
+      automaticProductionRecommendation: false,
+      productionDrivingAllowed: false
+    }
+  }
+});
+if (
+  pemsReviewerHistoryReviewProof.version !== PEMS_REVIEWER_HISTORY_REVIEW_VERSION ||
+  pemsReviewerHistoryReviewProof.status !== "phase44_reviewer_history_review_refinement_ready" ||
+  pemsReviewerHistoryReviewProof.score !== 100 ||
+  pemsReviewerHistoryReviewProof.filteredExportCount !== 2 ||
+  pemsReviewerHistoryReviewProof.safety.searchCreatesEvidence !== false ||
+  pemsReviewerHistoryReviewProof.safety.comparisonCreatesEvidence !== false ||
+  pemsReviewerHistoryReviewProof.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 44 PEMS reviewer history review refinement proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
@@ -482,13 +547,18 @@ for (const requiredFragment of [
   "pemsDraftStatusFilter",
   "pemsEvaluatorModeFilter",
   "pemsLiveOnlyFilter",
+  "pemsHistoryFollowupFilter",
+  "pemsHistoryExportRefFilter",
+  "pemsHistorySnapshotHashFilter",
+  "pemsHistorySortBy",
+  "pemsHistorySortDirection",
   "recordPemsClaimRevision",
   "pemsClaimRevisionText",
   "recordPemsFollowUp",
   "pemsFollowUpRationale",
   "recordPemsHistoryExport",
   "pemsHistoryExportReason",
-  "Phase 43"
+  "Phase 44"
 ]) {
   if (!appHtml.includes(requiredFragment)) {
     throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
@@ -523,8 +593,12 @@ for (const requiredFragment of [
   "/api/continuous-intelligence/pems/follow-ups",
   "/api/continuous-intelligence/pems/history-exports",
   "Reviewer Follow-Up Workflow",
-  "Phase 43 Reviewer History Audit Exports",
+  "Reviewer History Audit Export",
+  "Reviewer History Search And Snapshot Diff",
   "reviewerHistoryExports",
+  "reviewerHistoryReview",
+  "renderPemsReviewerHistoryReview",
+  "phase44_reviewer_history_review_refinement",
   "pemsClaimClosureVetoed",
   "Claim citation closure requires reviewer edits before approval"
 ]) {
@@ -532,7 +606,7 @@ for (const requiredFragment of [
     throw new Error(`Phase 42 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-revision-diff", "pems-followup-chain", "pems-history-export", "pems-evidence-chips"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-revision-diff", "pems-followup-chain", "pems-history-export", "pems-history-review", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
     throw new Error(`Phase 42 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
@@ -759,4 +833,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

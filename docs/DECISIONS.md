@@ -2648,3 +2648,26 @@ Consequences:
 - The dashboard can show which revision resolved which advisory veto and which explicit review decision followed it.
 - Follow-up records can be open, resolved, or blocked without changing healthcare routing or payer actions.
 - Raw review text, raw revision text, raw rationale text, and raw source text remain excluded from reviewer surfaces.
+
+## Phase 44: Add A Safe History Review Read Model Over Export Rows
+
+Decision: Phase 44 adds search/sort and snapshot comparison as a read model over `pems_candidate_review_history_exports` instead of adding a second history ledger or mutating Phase 43 export rows.
+
+Rationale:
+
+- Phase 43 exports are already the durable audit objects. Phase 44 should help operators review those objects across longer windows, not create a competing source of truth.
+- Filterable export refs and snapshot hashes are enough to find and compare history windows while keeping raw review/source/LLM/OCR/frame content out of storage.
+- Snapshot deltas are useful operator context, but they must remain safe refs/counts only and cannot become evidence or production recommendations.
+
+Constraints:
+
+- `productionDrivingAllowed=false` remains enforced.
+- History review rows and comparison output do not create evidence or bypass human review.
+- LangGraph remains healthcare authority and OpenClaw remains bounded by assigned tasks and approvals.
+
+Consequences:
+
+- Operators can filter by candidate, draft, follow-up status, export ref, and snapshot hash.
+- Operators can sort by created time, history row count, export ref, and snapshot hash.
+- Operators can compare two export snapshots and inspect count deltas plus added/removed safe refs.
+- Future saved presets or artifact links can build on the read model without changing the append-only export ledger.

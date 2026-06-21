@@ -1,0 +1,36 @@
+{
+  "controls": [
+    {
+      "id": "pemsHistoryFollowupFilter",
+      "present": true
+    },
+    {
+      "id": "pemsHistoryExportRefFilter",
+      "present": true
+    },
+    {
+      "id": "pemsHistorySnapshotHashFilter",
+      "present": true
+    },
+    {
+      "id": "pemsHistorySortBy",
+      "present": true
+    },
+    {
+      "id": "pemsHistorySortDirection",
+      "present": true
+    }
+  ],
+  "hasComparisonReady": true,
+  "hasHistoryReviewPanel": true,
+  "hasPhase44Heading": true,
+  "hasProductionDisabled": true,
+  "hasRawHistoryNotStored": true,
+  "hasScore100": true,
+  "historyReviewText": "Reviewer History Search And Snapshot Diff\nStatus\nphase44_reviewer_history_review_refinement_ready\nScore\n100 / 100\nFiltered exports\n3 / 3\nSearch keys\ncandidateId, advisoryDraftId, followupStatus, exportRef, snapshotHash\nSnapshot comparison\nphase44_history_export_snapshot_comparison_ready · ready\nRaw history/source\nnot stored\nProduction authority\ndisabled\nCreated\nExport ref\nSnapshot\nRows\nFollow-ups\n2026-06-21T15:44:00.000Z\npems_review_history_export_b9cd889362910d8c\n7280e37043b81f8b444734b0d24e744f6878786795e5a879a34ddea8b5ab098c\n5\nresolved\n2026-06-21T15:42:00.000Z\npems_review_history_export_5da63924c8846828\n9ebb4f509307b745625be106aad71443ce20c8c87ade21b33eaeb31cf8cf86bb\n4\nresolved\n2026-06-21T03:38:58.455Z\npems_review_history_export_5321613909c85fe5\ndc81aa228c81e1f4f1c70fb04a4a13203e1b2ee48422a0f757a00f0ecd160282\n4\nresolved\nDelta\nValue\nRefs\nHistory rows\n1\n1 added · 0 removed\nClaim revisions\n0\n7280e37043b81f8b444734b0d24e744f6878786795e5a879a34ddea8b5ab098c\nReviews\n0\n9ebb4f509307b745625be106aad71443ce20c8c87ade21b33eaeb31cf8cf86bb\nFollow-ups\n1\nsafe refs only",
+  "status": "phase44_reviewer_history_review_refinement_ready · 100 / 100",
+  "title": "Brainstyworkers AI Concierge",
+  "url": "http://127.0.0.1:4218/?phase=phase-44-history-review-refinement",
+  "consoleErrorCount": 0,
+  "consoleErrors": []
+}

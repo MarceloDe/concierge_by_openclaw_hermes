@@ -8653,3 +8653,46 @@ Artifacts:
 - `artifacts/phase42/phase42-playwright-visual-proof.json`
 - `artifacts/phase42/phase42-dashboard-followup-proof.png`
 - `artifacts/phase42/phase42-dashboard-followup-panel.png`
+
+## Phase 44 PEMS Reviewer History Review Refinement
+
+Timestamp: 2026-06-21T15:38:55Z.
+
+Goal:
+
+- Make longitudinal reviewer history exports searchable, sortable, and comparable across operator review windows without enabling production procedural decisioning.
+
+Implemented:
+
+- Added `PEMS_REVIEWER_HISTORY_REVIEW_VERSION`.
+- Added safe history-review filter normalization for candidate id, advisory draft id, follow-up status, export ref, snapshot hash, sort field, and sort direction.
+- Added `listPemsReviewerHistoryExports()` over the Phase 43 export ledger using bound SQL parameters and safe post-filtering over snapshot refs.
+- Added `comparePemsReviewerHistoryExports()` to compare two export snapshots by safe counts and added/removed safe refs only.
+- Workbench API returns `reviewerHistoryReview`.
+- Connector proof exposes `pems_reviewer_history_review_refinement`.
+- Dashboard renders Phase 44 history follow-up, export-ref, snapshot-hash, sort-field, and sort-direction controls.
+- Dashboard renders `Reviewer History Search And Snapshot Diff`.
+
+Safety:
+
+- History review rows and snapshot deltas store/export refs, hashes, counts, statuses, IDs, and safe row refs only.
+- Raw history text, raw revision text, raw review text, raw follow-up text, raw source text, prompts, completions, OCR, frames, credentials, secrets, and PHI are not stored.
+- History review rows do not create evidence, bypass human review, dispatch OpenClaw, contact payers, send external messages, write to payer portals, or drive healthcare answers.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification:
+
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 21/21 tests.
+- `npm run build` passed and names the Phase 44 reviewer history review refinement contract.
+- `npm run test:local` passed with 229 total tests, 227 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- API proof extract showed `phase44_reviewer_history_review_refinement_ready`, score `100 / 100`, comparison ready, safe rows, and `productionDrivingAllowed=false`.
+- Browser DOM proof showed the Phase 44 panel, `100 / 100`, search controls, snapshot comparison ready, raw history/source not stored, production authority disabled, and 0 console errors.
+
+Artifacts:
+
+- `artifacts/phase44/phase44-seed-summary.json`
+- `artifacts/phase44/phase44-api-proof-summary.json`
+- `artifacts/phase44/phase44-api-proof-extract.json`
+- `artifacts/phase44/phase44-dashboard-dom-proof.json`
+- `artifacts/phase44/phase44-dashboard-history-review-refinement.png`

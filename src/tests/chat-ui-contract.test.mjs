@@ -351,7 +351,7 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
   assert.match(projectOperatingSystem, /Planner/);
   assert.match(projectOperatingSystem, /Verifier/);
   assert.match(projectOperatingSystem, /Cortex Scribe/);
-  assert.match(projectOperatingSystem, /Phase 43 turns reviewer follow-up records into longitudinal audit exports/);
+  assert.match(projectOperatingSystem, /Phase 44 refines reviewer history audit exports into an operator-side history review surface/);
 
   assert.match(phaseScoreboard, /canonical_operating_system/);
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
@@ -371,13 +371,13 @@ test("Phase 32 canonical operating system is documented and visible in dashboard
 });
 
 test("Phase 33 continuous intelligence shadow scaffold is documented and visible in dashboard proof", () => {
-  assert.match(projectOperatingSystem, /Phase 43 turns reviewer follow-up records into longitudinal audit exports/);
+  assert.match(projectOperatingSystem, /Phase 44 refines reviewer history audit exports into an operator-side history review surface/);
   assert.match(projectOperatingSystem, /append-only shadow-run ledger/);
   assert.match(projectOperatingSystem, /case_state_shadow/);
   assert.match(projectOperatingSystem, /production decisioning still disabled/);
 
   assert.match(phaseScoreboard, /continuous_procedural_memory/);
-  assert.match(phaseScoreboard, /Phase 43 reviewer history audit exports/);
+  assert.match(phaseScoreboard, /Phase 44 reviewer history review refinement/);
   assert.match(phaseScoreboard, /brainstyworkers\.case_state\.v1/);
   assert.match(phaseScoreboard, /brainstyworkers\.pems\.v1/);
   assert.match(phaseScoreboard, /continuous_intelligence_shadow_runs/);
@@ -445,15 +445,20 @@ test("Phase 33 continuous intelligence shadow scaffold is documented and visible
   assert.match(serverMjs, /pemsReviewerComparisonRefOnly/);
 });
 
-test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and follow-ups", () => {
+test("Phase 44 PEMS reviewer UI exposes searchable history exports and snapshot comparison", () => {
   assert.match(indexHtml, /PEMS Reviewer Workbench/);
-  assert.match(indexHtml, /Phase 43/);
+  assert.match(indexHtml, /Phase 44/);
   assert.match(indexHtml, /id="pemsWorkbench"/);
   assert.match(indexHtml, /id="loadPemsWorkbench"/);
   assert.match(indexHtml, /id="generatePemsLiveDraft"/);
   assert.match(indexHtml, /id="pemsDraftStatusFilter"/);
   assert.match(indexHtml, /id="pemsEvaluatorModeFilter"/);
   assert.match(indexHtml, /id="pemsLiveOnlyFilter"/);
+  assert.match(indexHtml, /id="pemsHistoryFollowupFilter"/);
+  assert.match(indexHtml, /id="pemsHistoryExportRefFilter"/);
+  assert.match(indexHtml, /id="pemsHistorySnapshotHashFilter"/);
+  assert.match(indexHtml, /id="pemsHistorySortBy"/);
+  assert.match(indexHtml, /id="pemsHistorySortDirection"/);
   assert.match(indexHtml, /id="pemsReviewRationale"/);
   assert.match(indexHtml, /id="pemsClaimRevisionText"/);
   assert.match(indexHtml, /id="recordPemsClaimRevision"/);
@@ -480,13 +485,15 @@ test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and
   assert.match(appJs, /\/api\/continuous-intelligence\/pems\/follow-ups/);
   assert.match(appJs, /\/api\/continuous-intelligence\/pems\/history-exports/);
   assert.match(appJs, /\/api\/continuous-intelligence\/pems\/reviews/);
-  assert.match(appJs, /Phase 43 Reviewer History Audit Exports/);
+  assert.match(appJs, /Phase 44 Reviewer History Review Refinement/);
   assert.match(appJs, /Reviewer History Audit Export/);
+  assert.match(appJs, /Reviewer History Search And Snapshot Diff/);
   assert.match(appJs, /Claim Citation Closure/);
   assert.match(appJs, /renderPemsClaimCitationClosure/);
   assert.match(appJs, /renderPemsClaimRevision/);
   assert.match(appJs, /renderPemsReviewerFollowUp/);
   assert.match(appJs, /renderPemsReviewerHistoryExport/);
+  assert.match(appJs, /renderPemsReviewerHistoryReview/);
   assert.match(appJs, /pemsClaimClosureVetoed/);
   assert.match(appJs, /pemsClaimRevisionResolved/);
   assert.match(appJs, /firstEditablePemsClaim/);
@@ -495,6 +502,7 @@ test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and
   assert.match(appJs, /reviewerClaimRevisions/);
   assert.match(appJs, /reviewerFollowUps/);
   assert.match(appJs, /reviewerHistoryExports/);
+  assert.match(appJs, /reviewerHistoryReview/);
   assert.match(appJs, /Underlying UI gate/);
   assert.match(appJs, /Phase 39 gate/);
   assert.match(appJs, /Comparison gate/);
@@ -519,12 +527,14 @@ test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and
   assert.match(serverMjs, /reviewerClaimRevisions: buildPemsClaimRevisionProof/);
   assert.match(serverMjs, /reviewerFollowUps: buildPemsReviewerFollowUpWorkflowProof/);
   assert.match(serverMjs, /reviewerHistoryExports: buildPemsReviewerHistoryAuditExportProof/);
+  assert.match(serverMjs, /reviewerHistoryReview: buildPemsReviewerHistoryReviewRefinementProof/);
   assert.match(continuousIntelligence, /phase38_reviewer_comparison_provenance_ready/);
   assert.match(continuousIntelligence, /phase39_live_evaluator_filtering_ready/);
   assert.match(continuousIntelligence, /phase40_claim_citation_closure_veto_visible/);
   assert.match(continuousIntelligence, /phase41_reviewer_claim_revision_ready/);
   assert.match(continuousIntelligence, /phase42_reviewer_follow_up_workflow_ready/);
   assert.match(continuousIntelligence, /phase43_reviewer_history_audit_export_ready/);
+  assert.match(continuousIntelligence, /phase44_reviewer_history_review_refinement_ready/);
   assert.match(continuousIntelligence, /mockedLlmOutputCountsAsProof: false/);
   assert.match(serverMjs, /pems_reviewer_comparison_provenance/);
   assert.match(serverMjs, /pems_live_evaluator_generation_filtering/);
@@ -532,6 +542,7 @@ test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and
   assert.match(serverMjs, /pems_reviewer_claim_revisions/);
   assert.match(serverMjs, /pems_reviewer_follow_up_workflows/);
   assert.match(serverMjs, /pems_reviewer_history_audit_exports/);
+  assert.match(serverMjs, /pems_reviewer_history_review_refinement/);
 
   assert.match(appCss, /pems-workbench-grid/);
   assert.match(appCss, /pems-filter-bar/);
@@ -541,6 +552,7 @@ test("Phase 43 PEMS reviewer UI exposes history exports over claim revisions and
   assert.match(appCss, /pems-revision-diff/);
   assert.match(appCss, /pems-followup-chain/);
   assert.match(appCss, /pems-history-export/);
+  assert.match(appCss, /pems-history-review/);
   assert.match(appCss, /pems-evidence-chips/);
   assert.match(appCss, /pems-review-form/);
   assert.match(appCss, /pems-review-actions/);
