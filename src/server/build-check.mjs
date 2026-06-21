@@ -175,7 +175,8 @@ for (const requiredFragment of [
   "research_budget_blocked",
   "research_entities",
   "pharmacy_formulary",
-  "Phase 50 pharmacy formulary journey"
+  "procedure_checklist",
+  "Phase 51 procedure prep checklist journey"
 ]) {
   if (!finalVerificationReport.includes(requiredFragment)) {
     throw new Error(`Final system verification report is missing required fragment: ${requiredFragment}`);
@@ -797,6 +798,17 @@ const ai2uiBlocks = buildAi2UiBlocksFromState({
       totalAmount: 2000,
       spentAmount: 500,
       remainingAmount: 1500
+    },
+    {
+      table: "research_artifacts",
+      id: "procedure_build_check",
+      displayLabel: "Reviewed procedure prep evidence",
+      evidenceFields: [
+        {
+          label: "Procedure checklist",
+          value: "Before the procedure, confirm prior authorization, bring photo ID and insurance card, and arrange a driver."
+        }
+      ]
     }
   ],
   evidence_observation: { status: "waiting_for_approval", actionsTaken: [] },
@@ -806,6 +818,7 @@ const unknownAi2ui = normalizeAi2UiBlocks([{ type: "future_block", payload: { ok
 if (
   !ai2uiBlocks.some((block) => block.type === "answer_markdown") ||
   !ai2uiBlocks.some((block) => block.type === "cost_comparison" && block.payload?.safety?.noFabricatedExactPrices === true) ||
+  !ai2uiBlocks.some((block) => block.type === "procedure_checklist" && block.payload?.safety?.administrativeSupportOnly === true) ||
   unknownAi2ui[0]?.type !== "unknown"
 ) {
   throw new Error("AI2UI block contract or unknown-block fallback is incomplete.");

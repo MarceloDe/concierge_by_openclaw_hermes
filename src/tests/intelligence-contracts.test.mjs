@@ -23,6 +23,7 @@ test("structured intent reasoning covers non-keyword healthcare journey families
     ["They said no. What do I need to send to fight it?", "denial_appeal"],
     ["Will my plan help with physical therapy or am I still paying everything myself?", "benefits_eligibility"],
     ["Is this medication on my plan or do I need a different one?", "pharmacy_formulary"],
+    ["Can you make an administrative checklist before my imaging appointment?", "procedure_admin_checklist"],
     ["Is this provider in network?", "provider_network"],
     ["What would this covered service cost at a lower-cost facility?", "cost_estimate"],
     ["I uploaded this SBC; what matters for an MRI?", "document_review"],

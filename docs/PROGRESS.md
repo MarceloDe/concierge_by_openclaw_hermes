@@ -8944,3 +8944,32 @@ Verification:
 - `npm run test:local` passed with 247 tests total, 245 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-50-pharmacy-formulary-journey`: after seeding a non-PHI reviewed formulary artifact through the real research pipeline, deterministic local chat rendered the `Pharmacy Formulary` AI2UI block with 1 source-backed Ozempic row, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
 - Visual artifacts: `artifacts/phase50/pharmacy-formulary-mvp-proof.png` and `artifacts/phase50/pharmacy-formulary-mvp-proof.json`.
+
+## Phase 51 Procedure Prep Checklist Journey - 2026-06-21
+
+Goal:
+- Close final verification row `A12`.
+
+Implemented:
+- Added a source-pointer-grounded `procedure_checklist` AI2UI block to the `brainstyworkers.ai2ui.blocks.v1` contract.
+- The block builds checklist rows only from stored source pointers whose evidence carries procedure/admin-prep signals such as authorization, referral, order, document/ID, arrival/check-in/registration, transportation/support, cost/benefit confirmation, or clinical-instruction pointers.
+- Missing-evidence procedure/admin-checklist prompts fail closed with `blocked_missing_source_pointers` and no checklist rows.
+- `/mvp` now renders the block in Chat, Split, Guided, and Bento modes with a compact procedure checklist grid.
+- Added `procedure_admin_checklist` as a structured journey intent that maps through the safe existing eligibility/trusted-research workflow spine.
+- Updated the final verification report so `A12` is now `PASSING`.
+
+Safety:
+- Every procedure checklist row must include at least one source pointer id.
+- The UI labels the card as administrative preparation support, not medical advice.
+- Clinical prep, fasting, medication, or testing signals are shown only as cited instruction pointers and tell the user to confirm clinical questions with the care team.
+- The block explicitly forbids clinical-instruction creation and external actions.
+- Missing evidence asks for cited procedure/facility instructions, authorization/referral evidence, an uploaded pre-procedure document, or approved portal/reviewed research source pointers instead of inventing preparation steps.
+
+Verification:
+- `node --check src/concierge/ai2uiBlocks.mjs && node --check src/app/mvp.js && node --check src/server/build-check.mjs` passed.
+- `node --test src/tests/ai2ui-blocks.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/langgraph-runner.test.mjs src/tests/final-system-verification-report.test.mjs` passed with 41/41 tests.
+- `npm run build` passed.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:local` passed with 250 tests total, 248 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-51-procedure-prep-checklist-journey`: after seeding a non-PHI reviewed procedure-prep artifact through the real research pipeline, deterministic local chat rendered the `Procedure Checklist` AI2UI block with 2 source-backed rows, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
+- Visual artifacts: `artifacts/phase51/procedure-checklist-mvp-proof.png` and `artifacts/phase51/procedure-checklist-mvp-proof.json`.

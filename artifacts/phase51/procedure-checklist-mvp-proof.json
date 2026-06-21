@@ -1,0 +1,68 @@
+{
+  "phase": "phase-51-procedure-prep-checklist-journey",
+  "method": "bundled-playwright-fallback-after-in-app-browser-verification",
+  "modeProof": [
+    {
+      "label": "Chat",
+      "mode": "chat",
+      "procedureCards": 1,
+      "rows": 2,
+      "blockCount": 5
+    },
+    {
+      "label": "Split",
+      "mode": "split",
+      "procedureCards": 1,
+      "rows": 2,
+      "blockCount": 10
+    },
+    {
+      "label": "Guided",
+      "mode": "guided",
+      "procedureCards": 1,
+      "rows": 2,
+      "blockCount": 9
+    },
+    {
+      "label": "Bento",
+      "mode": "bento",
+      "procedureCards": 1,
+      "rows": 2,
+      "blockCount": 10
+    }
+  ],
+  "proof": {
+    "url": "http://127.0.0.1:4218/mvp?phase=phase-51-procedure-prep-checklist-journey",
+    "title": "Brainstyworkers Concierge MVP",
+    "activeMode": "bento",
+    "procedureCardCount": 1,
+    "procedureRowCount": 2,
+    "procedureCardText": "Procedure Checklist\n\nsource_backed_procedure_checklist_ready · 2 source-backed item(s)\n\nConfirm whether prior authorization or precertification is documented.\ninsurance_authorization\nauthorization_signal, referral_signal, document_signal, arrival_or_registration_signal, transportation_signal · timing: before the procedure\nresearch_artifacts/research_artifact_781bdbac-b6ef-4b6c-9778-4a51436b03e9\nConfirm whether prior authorization or precertification is documented.\ninsurance_authorization\nauthorization_signal, referral_signal, document_signal, arrival_or_registration_signal, transportation_signal, clinical_instruction_pointer_signal · timing: before the procedure\nresearch_artifacts/research_artifact_781bdbac-b6ef-4b6c-9778-4a51436b03e9\nThis card is administrative preparation support, not medical advice.\nFollow clinical prep or medication instructions only from the cited clinician/facility source and confirm questions with the care team.",
+    "sourceCitationText": "Citations\n\n1 stored source pointer(s) · captured_trusted_research_evidence\n\nPhase 51 Procedure Prep Evidence\nresearch_artifacts/research_artifact_781bdbac-b6ef-4b6c-9778-4a51436b03e9\nda8b130ba16c2f0a0ea63e75447341a4f5f7efdc04288089d22b6cf75b0dd3a9",
+    "sequenceText": [
+      "Auth\nsigned in",
+      "GPT / Intent\neligibility_benefits_navigation",
+      "Skill\ninsurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser",
+      "Approval\napproved_consumed",
+      "OpenClaw\ncaptured_trusted_research_evidence",
+      "Evidence\n1 pointers",
+      "Memory\ndegraded",
+      "Answer\nready"
+    ],
+    "trustedResearchCaptured": true,
+    "sendDisabled": false,
+    "rawSensitiveFixturePresent": false
+  },
+  "consoleErrors": [],
+  "consoleErrorCount": 0,
+  "assertions": {
+    "procedureCardVisible": true,
+    "sourceBackedRowsVisible": true,
+    "allModesPreserveProcedureCard": true,
+    "sourcePointerVisible": true,
+    "trustedResearchCaptured": true,
+    "noBusyState": true,
+    "noConsoleErrors": true,
+    "noRawSensitiveFixture": true
+  }
+}
