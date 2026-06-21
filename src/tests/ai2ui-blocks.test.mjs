@@ -164,6 +164,65 @@ test("AI2UI pharmacy formulary fails closed when a prescription ask has no sourc
   assert.ok(formulary.payload.missingEvidence.includes("cited formulary or drug-list evidence"));
 });
 
+test("AI2UI builder returns source-backed procedure checklist rows for procedure prep questions", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_procedure",
+    workflow: "eligibility_benefits_navigation",
+    structured_intent: { reasoning: { primary_intent: "procedure_admin_checklist" } },
+    user_input: "Can you make a procedure prep checklist for my colonoscopy appointment?",
+    final_response: "A sourced procedure preparation answer.",
+    source_pointers: [
+      {
+        table: "research_artifacts",
+        id: "artifact_proc_1",
+        displayLabel: "Reviewed procedure preparation evidence",
+        evidenceFields: [
+          {
+            label: "Colonoscopy administrative checklist",
+            value: "Before the procedure, confirm prior authorization, bring photo ID and insurance card, arrive 30 minutes early, and arrange a driver. Follow facility prep instructions for fasting.",
+            confidence: "high"
+          }
+        ],
+        citation: { confidence: "high" }
+      }
+    ],
+    evidence_observation: { status: "captured_trusted_research_evidence", actionsTaken: ["trusted_research_evidence_search"] }
+  });
+
+  const checklist = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PROCEDURE_CHECKLIST);
+  assert.ok(checklist);
+  assert.equal(checklist.payload.status, "source_backed_procedure_checklist_ready");
+  assert.equal(checklist.payload.safety.administrativeSupportOnly, true);
+  assert.equal(checklist.payload.safety.noMedicalAdvice, true);
+  assert.equal(checklist.payload.safety.noClinicalInstructionCreation, true);
+  assert.equal(checklist.payload.safety.everyRowHasSourcePointer, true);
+  assert.ok(checklist.payload.rows.length >= 1);
+  assert.ok(checklist.payload.rows.some((row) => row.signals.includes("authorization_signal")));
+  assert.ok(checklist.payload.rows.some((row) => row.signals.includes("document_signal")));
+  assert.ok(checklist.payload.rows.some((row) => row.signals.includes("transportation_signal")));
+  assert.ok(checklist.payload.rows.every((row) => row.sourcePointerIds.includes("research_artifacts/artifact_proc_1")));
+});
+
+test("AI2UI procedure checklist fails closed when a procedure prep ask has no source pointers", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_procedure_missing",
+    workflow: "eligibility_benefits_navigation",
+    structured_intent: { reasoning: { primary_intent: "procedure_admin_checklist" } },
+    user_input: "What should I do before my procedure appointment?",
+    final_response: "I cannot create a checklist without evidence.",
+    source_pointers: [],
+    evidence_observation: { status: "blocked_no_trusted_research_evidence", actionsTaken: [] }
+  });
+
+  const checklist = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PROCEDURE_CHECKLIST);
+  assert.ok(checklist);
+  assert.equal(checklist.payload.status, "blocked_missing_source_pointers");
+  assert.equal(checklist.payload.rowCount, 0);
+  assert.deepEqual(checklist.payload.rows, []);
+  assert.equal(checklist.payload.safety.noMedicalAdvice, true);
+  assert.ok(checklist.payload.missingEvidence.includes("cited procedure or facility instruction"));
+});
+
 test("AI2UI normalizer converts unknown block types into safe fallback cards", () => {
   const blocks = normalizeAi2UiBlocks([
     {

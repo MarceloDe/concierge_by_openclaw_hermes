@@ -30,6 +30,9 @@ function missingEvidence(candidateEvidence = [], contextPacket = null) {
 
 function inferAdditionalJourney(message) {
   const text = String(message ?? "").toLowerCase();
+  if (/\b(procedure prep|procedure checklist|prep checklist|administrative checklist|pre[- ]op|preop|surgery prep|colonoscopy prep|appointment prep|before (?:my|the) (?:procedure|surgery|appointment)|bring.*(?:id|insurance card)|referral|order|pre[- ]register|registration|arrival time|driver|transportation|facility instructions|procedure instructions)\b/.test(text)) {
+    return JOURNEY_KEYS.PROCEDURE_ADMIN_CHECKLIST;
+  }
   if (/\b(approval|authorization|precert|precertification)\b/.test(text) && /\b(scan|mri|ct|procedure|surgery|therapy|schedule|scheduling)\b/.test(text)) {
     return JOURNEY_KEYS.PRIOR_AUTHORIZATION;
   }

@@ -1,7 +1,7 @@
 # Final System Verification Report
 
 Project: `workerprototype_openclaw`
-Report phase: Phase 50 pharmacy formulary journey update to the final-system PASS / FAIL / BLOCKED matrix
+Report phase: Phase 51 procedure prep checklist journey update to the final-system PASS / FAIL / BLOCKED matrix
 Created: 2026-06-01
 Scope source: `docs/goal_final_system.md`
 
@@ -42,16 +42,17 @@ Scope source: `docs/goal_final_system.md`
 - Phase 48 adds persisted `research_entities`, automatic entity extraction during research artifact creation, `GET /api/research/entities`, `POST /api/research/artifacts/{artifact_id}/entities/extract`, FastAPI facade coverage, and a dashboard Research Entity Extraction panel with source pointer, page, span, confidence, and preview proof.
 - Phase 49 adds source-pointer-grounded cost comparison AI2UI blocks for `/mvp`, including sourced rows, assumptions, no-fabricated-exact-price safety flags, and fail-closed missing-evidence rendering.
 - Phase 50 pharmacy formulary journey adds source-pointer-grounded `pharmacy_formulary` AI2UI blocks for `/mvp`, including formulary status, drug tier, prior authorization, quantity-limit, specialty, and mail-order signals when cited evidence exists, plus fail-closed missing-evidence behavior and no-medication-advice safety flags.
+- Phase 51 procedure prep checklist journey adds source-pointer-grounded `procedure_checklist` AI2UI blocks for `/mvp`, including authorization/referral, document/ID, arrival/registration, transportation/support, cost/benefit, and clinical-instruction-pointer signals when cited evidence exists, plus fail-closed missing-evidence behavior and no-medical-advice safety flags.
 - Earlier phase evidence in `docs/goal_final_system.md`, `docs/PROGRESS.md`, and `docs/ACCEPTANCE_CRITERIA.md` remains part of the verification base, but any item below marked `FAILING / NEEDS FIX` or `BLOCKED BY EXTERNAL DEPENDENCY` is not complete.
 
 ## Summary
 
 | Category | Count |
 | --- | ---: |
-| PASSING | 125 |
+| PASSING | 126 |
 | IMPLEMENTED DURING THIS RUN | 0 |
 | BLOCKED BY EXTERNAL DEPENDENCY | 2 |
-| FAILING / NEEDS FIX | 5 |
+| FAILING / NEEDS FIX | 4 |
 
 The system is not yet complete. The strongest local MVP path is real and well-instrumented, but the broad final contract still has unbuilt product surfaces and externally gated live worker proof.
 
@@ -70,7 +71,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | A9 | PASSING | Phase 49 adds the `cost_comparison` AI2UI block, renders it in `/mvp` Chat/Split/Guided/Bento modes, builds only source-pointer-backed cost rows, shows assumptions/tradeoffs, and fails closed without fabricated exact prices when evidence is missing. |
 | A10 | PASSING | Claims/EOB-style questions are supported through structured extraction, claims rows, and next-step checklist-style responses. |
 | A11 | PASSING | Phase 50 adds the `pharmacy_formulary` AI2UI block, renders it in `/mvp` Chat/Split/Guided/Bento modes, answers prescription/formulary questions from trusted research, uploads, or portal/document source pointers, and fails closed without cited formulary/drug-list evidence. |
-| A12 | FAILING / NEEDS FIX | Procedure-prep and administrative checklist behavior is not proven as a dedicated user flow. |
+| A12 | PASSING | Phase 51 adds the `procedure_checklist` AI2UI block, renders it in `/mvp` Chat/Split/Guided/Bento modes, answers procedure-prep/admin checklist questions from trusted research, uploads, or portal/document source pointers, and fails closed without cited procedure, facility, authorization, referral, document, arrival, or support evidence. |
 | A13 | FAILING / NEEDS FIX | Network/provider signals are extracted, but provider/facility option cards and verified in-network status handling are not complete. |
 | A14 | PASSING | Authenticated upload endpoint and `/mvp` upload controls are implemented and tested. |
 | A15 | PASSING | Text/PDF/image extraction path, confidence, blockers, snippets, and source pointers are implemented and tested. |
@@ -237,7 +238,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Broaden remaining domain journeys for prescription, procedure-prep, and provider/network options (`A11`, `A12`, `A13`).
+- Broaden remaining domain journey support for provider/network option cards and verified in-network status handling (`A13`).
 
 ## Code Changes Made In Phase 10Q
 
@@ -291,7 +292,7 @@ Priority 1:
 The next phase should address the next highest-risk remaining gaps:
 
 1. General entity extraction with source/page/span/confidence for the research evidence pipeline (`E5`).
-2. Broader journeys for prescriptions, procedure-prep, and provider/network options (`A11`, `A12`, `A13`).
+2. Broader provider/network option cards and verified in-network status handling (`A13`).
 
 ## Phase 46 Research Analytics And Budget Kill-Switch Update
 

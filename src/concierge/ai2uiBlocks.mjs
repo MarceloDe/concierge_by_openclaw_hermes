@@ -5,6 +5,7 @@ export const AI2UI_BLOCK_TYPES = Object.freeze({
   WORKFLOW_STATUS: "workflow_status",
   COST_COMPARISON: "cost_comparison",
   PHARMACY_FORMULARY: "pharmacy_formulary",
+  PROCEDURE_CHECKLIST: "procedure_checklist",
   APPROVAL_GATE: "approval_gate",
   WORKER_STATUS: "worker_status",
   SOURCE_CITATIONS: "source_citations",
@@ -100,6 +101,11 @@ function costComparisonRequested(state = {}) {
 function pharmacyFormularyRequested(state = {}) {
   const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.structured_intent?.intent ?? ""} ${state.structured_intent?.reasoning?.primary_intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
   return /\b(pharmacy|formulary|prescription|medication|medicine|drug list|drug tier|tier\s+\d|rx\b|prior auth(?:orization)? for.*(?:drug|medicine|medication)|mail[- ]order|specialty drug|quantity limit|step therapy)\b/.test(text);
+}
+
+function procedureChecklistRequested(state = {}) {
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.structured_intent?.intent ?? ""} ${state.structured_intent?.reasoning?.primary_intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  return /\b(procedure prep|procedure checklist|prep checklist|administrative checklist|pre[- ]op|preop|surgery prep|colonoscopy prep|appointment prep|before (?:my|the) (?:procedure|surgery|appointment)|bring.*(?:id|insurance card)|referral|order|pre[- ]register|registration|arrival time|arrive|driver|transportation|facility instructions|procedure instructions)\b/.test(text);
 }
 
 function costText(value) {
@@ -332,6 +338,122 @@ function buildPharmacyFormularyPayload(state = {}) {
   };
 }
 
+function procedureEvidenceText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function procedureCategoryFromText(text) {
+  const lower = procedureEvidenceText(text).toLowerCase();
+  if (/\b(prior auth|prior authorization|precert|precertification|authorization|referral|order)\b/.test(lower)) return "insurance_authorization";
+  if (/\b(id card|insurance card|photo id|document|paperwork|forms?|consent)\b/.test(lower)) return "documents_and_id";
+  if (/\b(arrive|arrival|check[- ]?in|register|pre[- ]register|appointment time|schedule|location|facility)\b/.test(lower)) return "scheduling_and_arrival";
+  if (/\b(cost|estimate|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop)\b/.test(lower)) return "cost_or_benefit_confirmation";
+  if (/\b(driver|transportation|ride|escort|responsible adult)\b/.test(lower)) return "transportation_or_support";
+  if (/\b(fast|fasting|prep instructions?|medicine|medication|clinical|diet|lab|testing)\b/.test(lower)) return "clinical_instruction_pointer";
+  return "administrative_preparation";
+}
+
+function procedureTaskFromText(text) {
+  const lower = procedureEvidenceText(text).toLowerCase();
+  if (/\b(prior auth|prior authorization|precert|precertification|authorization)\b/.test(lower)) return "Confirm whether prior authorization or precertification is documented.";
+  if (/\breferral\b/.test(lower)) return "Confirm the referral requirement and source.";
+  if (/\border\b/.test(lower)) return "Confirm the provider order or procedure order is available.";
+  if (/\b(id card|insurance card|photo id)\b/.test(lower)) return "Bring the cited ID or insurance card materials.";
+  if (/\b(pre[- ]register|registration|check[- ]?in)\b/.test(lower)) return "Complete or review the cited registration/check-in step.";
+  if (/\b(arrive|arrival|appointment time|location|facility)\b/.test(lower)) return "Review the cited arrival time, location, or facility instruction.";
+  if (/\b(cost|estimate|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop)\b/.test(lower)) return "Review the cited cost or benefit confirmation.";
+  if (/\b(driver|transportation|ride|escort|responsible adult)\b/.test(lower)) return "Confirm the cited transportation or support requirement.";
+  if (/\b(fast|fasting|prep instructions?|medicine|medication|clinical|diet|lab|testing)\b/.test(lower)) return "Follow only the cited clinician/facility instruction and confirm clinical questions with the care team.";
+  return procedureEvidenceText(text).slice(0, 140) || "Review the cited procedure preparation evidence.";
+}
+
+function procedureTimingFromText(text) {
+  const cleaned = procedureEvidenceText(text);
+  const match = cleaned.match(/\b(?:\d+\s*(?:day|days|hour|hours|hr|hrs)|day before|night before|morning of|before arrival|before the appointment|before the procedure|at least \d+\s*(?:day|days|hour|hours))\b/i);
+  return match?.[0] ?? null;
+}
+
+function procedureRowSignals(text) {
+  const lower = procedureEvidenceText(text).toLowerCase();
+  return [
+    /\b(prior auth|prior authorization|precert|precertification|authorization)\b/.test(lower) ? "authorization_signal" : null,
+    /\breferral\b/.test(lower) ? "referral_signal" : null,
+    /\border\b/.test(lower) ? "order_signal" : null,
+    /\b(id card|insurance card|photo id|document|paperwork|forms?|consent)\b/.test(lower) ? "document_signal" : null,
+    /\b(arrive|arrival|check[- ]?in|register|pre[- ]register|appointment time|location|facility)\b/.test(lower) ? "arrival_or_registration_signal" : null,
+    /\b(driver|transportation|ride|escort|responsible adult)\b/.test(lower) ? "transportation_signal" : null,
+    /\b(cost|estimate|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop)\b/.test(lower) ? "cost_or_benefit_signal" : null,
+    /\b(fast|fasting|prep instructions?|medicine|medication|clinical|diet|lab|testing)\b/.test(lower) ? "clinical_instruction_pointer_signal" : null
+  ].filter(Boolean);
+}
+
+function buildProcedureRowsFromPointer(pointer = {}) {
+  const ref = sourcePointerRef(pointer);
+  const fields = Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields : [];
+  const texts = [
+    { label: "Source summary", value: pointer.summary, confidence: pointer.confidence ?? pointer.citation?.confidence },
+    { label: "Source label", value: pointer.displayLabel, confidence: pointer.confidence ?? pointer.citation?.confidence },
+    ...fields.map((field) => ({
+      label: field.label ?? "Evidence field",
+      value: field.value ?? field.text ?? field.summary ?? "",
+      confidence: field.confidence ?? pointer.confidence ?? pointer.citation?.confidence
+    }))
+  ];
+  return texts
+    .map((item) => {
+      const text = procedureEvidenceText(`${item.label ?? ""} ${item.value ?? ""}`);
+      const signals = procedureRowSignals(text);
+      if (!signals.length) return null;
+      return {
+        taskLabel: procedureTaskFromText(text),
+        category: procedureCategoryFromText(text),
+        timing: procedureTimingFromText(text),
+        signals,
+        evidenceSummary: procedureEvidenceText(item.value ?? text).slice(0, 260),
+        sourcePointerIds: [ref],
+        confidence: item.confidence ?? pointer.confidence ?? pointer.citation?.confidence ?? "source_backed",
+        userAction:
+          procedureCategoryFromText(text) === "clinical_instruction_pointer"
+            ? "Confirm clinical or medication questions with the care team; the agent is only pointing to cited instructions."
+            : "Use the cited source pointer to prepare questions or documents before the appointment."
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function buildProcedureChecklistPayload(state = {}) {
+  const requested = procedureChecklistRequested(state);
+  const rows = (state.source_pointers ?? [])
+    .flatMap(buildProcedureRowsFromPointer)
+    .filter((row) => row.sourcePointerIds.length > 0)
+    .slice(0, 8);
+  if (!requested && !rows.length) return null;
+  const sourcePointerIds = [...new Set(rows.flatMap((row) => row.sourcePointerIds))];
+  return {
+    status: rows.length ? "source_backed_procedure_checklist_ready" : "blocked_missing_source_pointers",
+    requested,
+    rows,
+    rowCount: rows.length,
+    sourcePointerIds,
+    missingEvidence: rows.length
+      ? []
+      : [
+          "cited procedure or facility instruction",
+          "plan authorization/referral evidence",
+          "uploaded pre-procedure document",
+          "approved read-only portal or reviewed research source pointer"
+        ],
+    safety: {
+      administrativeSupportOnly: true,
+      noMedicalAdvice: true,
+      noClinicalInstructionCreation: true,
+      everyRowHasSourcePointer: rows.every((row) => row.sourcePointerIds.length > 0),
+      externalActionsTaken: false
+    }
+  };
+}
+
 function approvalPayload(state = {}) {
   const proposal = state.openclaw_skill_proposal ?? {};
   const evidence = state.evidence_observation ?? {};
@@ -428,6 +550,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   const handoff = state.human_handoff?.handoff ?? null;
   const costComparison = buildCostComparisonPayload(state);
   const pharmacyFormulary = buildPharmacyFormularyPayload(state);
+  const procedureChecklist = buildProcedureChecklistPayload(state);
   const blocks = [
     {
       id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
@@ -459,6 +582,17 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
             title: "Pharmacy Formulary",
             payload: pharmacyFormulary,
             renderHints: { severity: pharmacyFormulary.rows.length ? "info" : "warning" }
+          }
+        ]
+      : []),
+    ...(procedureChecklist
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.PROCEDURE_CHECKLIST, 1),
+            type: AI2UI_BLOCK_TYPES.PROCEDURE_CHECKLIST,
+            title: "Procedure Checklist",
+            payload: procedureChecklist,
+            renderHints: { severity: procedureChecklist.rows.length ? "info" : "warning" }
           }
         ]
       : []),

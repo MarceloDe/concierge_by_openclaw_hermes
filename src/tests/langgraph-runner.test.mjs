@@ -36,7 +36,7 @@ async function createResearchFixtureArtifact(store, { actorUserId, url, title, h
     actorUserId,
     url,
     title,
-    workflowKeys: ["general_rag", "eligibility_benefits_navigation", "pharmacy_formulary"],
+    workflowKeys: ["general_rag", "eligibility_benefits_navigation", "pharmacy_formulary", "procedure_admin_checklist"],
     reason: "LangGraph trusted research evidence fixture."
   });
   await reviewResearchSource(store, {
@@ -453,6 +453,69 @@ test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", a
     const auditText = JSON.stringify(auditRows);
     assert.match(auditText, /trusted_research_evidence_retrieved/);
     assert.doesNotMatch(auditText, /rx-pii@example\.com/);
+  } finally {
+    if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+    else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;
+  }
+});
+
+test("LangGraph answers procedure prep questions with sourced AI2UI checklist rows", async () => {
+  const store = await createStore();
+  const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-procedure-artifacts-"));
+  const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+  process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
+
+  try {
+    const { user, session } = await enrollDefaultMember(store);
+    const artifact = await createResearchFixtureArtifact(store, {
+      actorUserId: "operator_langgraph_procedure_research",
+      url: "https://fixture.brainstyworkers.local/reviewed-procedure-prep",
+      title: "Reviewed Procedure Preparation Research",
+      approveArtifact: true,
+      html: `
+          <html>
+            <head><title>Reviewed Procedure Preparation Research</title></head>
+            <body>
+              <h1>Reviewed procedure preparation evidence</h1>
+              <p>For the imaging appointment, confirm prior authorization and referral requirements before the procedure.</p>
+              <p>Bring photo ID and insurance card, arrive 30 minutes early, and arrange a driver or responsible adult.</p>
+              <p>Follow the facility prep instructions for fasting and medication questions; confirm clinical questions with the care team.</p>
+              <p>Fixture email procedure-pii@example.com must stay out of audit rows.</p>
+            </body>
+          </html>
+        `
+    });
+
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Can you make an administrative checklist before my imaging appointment?",
+      rawMessage: { source: "phase51_procedure_checklist_test", useLiveModel: false, executeEvidenceObservation: false }
+    });
+
+    assert.equal(result.state.structured_intent.primary_intent, "procedure_admin_checklist");
+    assert.equal(result.state.workflow, "eligibility_benefits_navigation");
+    assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
+    assert.equal(result.state.workflow_outcome, "trusted_research_answered");
+    assert.equal(result.state.source_pointers.length, 1);
+    assert.equal(result.state.source_pointers[0].table, "research_artifacts");
+    assert.equal(result.state.source_pointers[0].id, artifact.id);
+    assert.match(result.state.final_response, /operator-reviewed research evidence/);
+    assert.match(result.state.final_response, /confirm prior authorization/);
+    const checklistBlock = result.state.ai2ui_blocks.find((block) => block.type === "procedure_checklist");
+    assert.ok(checklistBlock);
+    assert.equal(checklistBlock.payload.status, "source_backed_procedure_checklist_ready");
+    assert.equal(checklistBlock.payload.safety.administrativeSupportOnly, true);
+    assert.equal(checklistBlock.payload.safety.noMedicalAdvice, true);
+    assert.equal(checklistBlock.payload.safety.noClinicalInstructionCreation, true);
+    assert.ok(checklistBlock.payload.rows.length >= 1);
+    assert.ok(checklistBlock.payload.rows.every((row) => row.sourcePointerIds.includes(`research_artifacts/${artifact.id}`)));
+
+    const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
+    const auditText = JSON.stringify(auditRows);
+    assert.match(auditText, /trusted_research_evidence_retrieved/);
+    assert.doesNotMatch(auditText, /procedure-pii@example\.com/);
   } finally {
     if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
     else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;

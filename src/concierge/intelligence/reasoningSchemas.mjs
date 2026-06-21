@@ -7,6 +7,7 @@ export const JOURNEY_KEYS = Object.freeze({
   DENIAL_APPEAL: "denial_appeal",
   PROVIDER_NETWORK: "provider_network",
   PHARMACY_FORMULARY: "pharmacy_formulary",
+  PROCEDURE_ADMIN_CHECKLIST: "procedure_admin_checklist",
   DOCUMENT_REVIEW: "document_review",
   COST_ESTIMATE: "cost_estimate",
   URGENT_HANDOFF: "urgent_handoff",
@@ -44,6 +45,7 @@ export const JOURNEY_TO_WORKFLOW = Object.freeze({
   [JOURNEY_KEYS.DENIAL_APPEAL]: "denial_appeal_preparation",
   [JOURNEY_KEYS.PROVIDER_NETWORK]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.PHARMACY_FORMULARY]: "eligibility_benefits_navigation",
+  [JOURNEY_KEYS.PROCEDURE_ADMIN_CHECKLIST]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.DOCUMENT_REVIEW]: "document_or_trace_review",
   [JOURNEY_KEYS.COST_ESTIMATE]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.URGENT_HANDOFF]: "human_approval_escalation",
@@ -57,6 +59,7 @@ export const JOURNEY_EVIDENCE = Object.freeze({
   [JOURNEY_KEYS.DENIAL_APPEAL]: ["denial_reason_or_eob", "claim_record", "payer_policy_pointer"],
   [JOURNEY_KEYS.PROVIDER_NETWORK]: ["provider_or_facility", "network_directory_or_plan_terms", "member_plan_context"],
   [JOURNEY_KEYS.PHARMACY_FORMULARY]: ["medication_name", "formulary_or_pharmacy_benefit", "member_plan_context"],
+  [JOURNEY_KEYS.PROCEDURE_ADMIN_CHECKLIST]: ["procedure_or_appointment", "facility_or_plan_instruction", "authorization_referral_or_document_pointer"],
   [JOURNEY_KEYS.DOCUMENT_REVIEW]: ["uploaded_document_or_portal_document", "source_spans_or_document_pointer"],
   [JOURNEY_KEYS.COST_ESTIMATE]: ["service_or_item", "benefit_terms", "accumulator_or_claim_history_if_available"],
   [JOURNEY_KEYS.URGENT_HANDOFF]: ["human_handoff_record", "urgent_safe_response", "audit_event"],
@@ -66,4 +69,3 @@ export const JOURNEY_EVIDENCE = Object.freeze({
 export function evidenceForJourney(journey) {
   return JOURNEY_EVIDENCE[journey] ?? [];
 }
-
