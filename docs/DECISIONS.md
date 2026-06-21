@@ -2624,6 +2624,22 @@ Consequences:
 
 Decision: Phase 42 adds `pems_candidate_review_followups` instead of mutating evaluator drafts, claim revisions, or promotion review rows.
 
+## Phase 43: Export Reviewer History As Refs And Hashes
+
+Decision: Phase 43 adds `pems_candidate_review_history_exports` instead of exporting raw reviewer text or mutating existing reviewer records.
+
+Rationale:
+
+- The operator needs longitudinal history across advisory drafts, claim revisions, explicit reviews, and follow-up workflow records.
+- Audit export rows should be durable and filterable, but they must not become a new evidence source or production decision path.
+- Export refs, hashes, counts, filters, and safe row refs are enough to verify what was exported while keeping raw review/source/LLM/OCR/frame content out of storage.
+
+Constraints:
+
+- `productionDrivingAllowed=false` remains enforced.
+- Exports do not create evidence or bypass human review.
+- LangGraph remains healthcare authority and OpenClaw remains bounded by assigned tasks and approvals.
+
 Rationale: A follow-up workflow binding is a lifecycle event that says which claim revision was followed by which explicit review decision. It is not the revision itself and not the review decision itself. A dedicated append-only ledger keeps the chain auditable without making revisions or advisory drafts production-driving.
 
 Consequences:

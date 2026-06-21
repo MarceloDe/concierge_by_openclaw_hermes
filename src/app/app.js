@@ -32,6 +32,8 @@ const pemsClaimRevisionText = document.querySelector("#pemsClaimRevisionText");
 const recordPemsClaimRevisionButton = document.querySelector("#recordPemsClaimRevision");
 const pemsFollowUpRationale = document.querySelector("#pemsFollowUpRationale");
 const recordPemsFollowUpButton = document.querySelector("#recordPemsFollowUp");
+const pemsHistoryExportReason = document.querySelector("#pemsHistoryExportReason");
+const recordPemsHistoryExportButton = document.querySelector("#recordPemsHistoryExport");
 const pemsReviewActionButtons = [...document.querySelectorAll("[data-pems-review-action]")];
 const researchStatus = document.querySelector("#researchStatus");
 const researchConsole = document.querySelector("#researchConsole");
@@ -1010,6 +1012,9 @@ function setPemsReviewActionsEnabled(enabled, payload = latestPemsWorkbench) {
   if (recordPemsFollowUpButton) {
     recordPemsFollowUpButton.disabled = !enabled || !payload?.reviewerClaimRevisions?.latestClaimRevision?.id || !payload?.reviewerFollowUps?.latestPromotionReview?.id;
   }
+  if (recordPemsHistoryExportButton) {
+    recordPemsHistoryExportButton.disabled = !enabled || !payload?.reviewerFollowUps?.latestReviewerFollowUp?.id;
+  }
 }
 
 function pemsDecisionLabel(decision) {
@@ -1132,6 +1137,43 @@ function renderPemsReviewerFollowUp(followUpProof = {}) {
   `;
 }
 
+function renderPemsReviewerHistoryExport(historyProof = {}) {
+  const exportRow = historyProof.latestReviewerHistoryExport;
+  if (!exportRow) return `<p class="status-text">No reviewer history audit export exists yet.</p>`;
+  const counts = exportRow.historySnapshotPreview?.counts ?? {};
+  const refs = exportRow.historySnapshotPreview?.latestRefs ?? [];
+  return `
+    <dl>
+      <dt>Status</dt>
+      <dd>${escapeHtml(historyProof.status ?? "phase43_reviewer_history_audit_export_waiting")}</dd>
+      <dt>Export ref</dt>
+      <dd>${escapeHtml(exportRow.exportRef ?? "none")}</dd>
+      <dt>Snapshot hash</dt>
+      <dd>${escapeHtml(exportRow.historySnapshotHash ?? "none")}</dd>
+      <dt>History rows</dt>
+      <dd>${escapeHtml(counts.historyRowCount ?? historyProof.historyRowCount ?? 0)} rows · ${escapeHtml(counts.claimRevisionCount ?? 0)} revisions · ${escapeHtml(counts.promotionReviewCount ?? 0)} reviews · ${escapeHtml(counts.reviewerFollowUpCount ?? 0)} follow-ups</dd>
+      <dt>Raw history/source</dt>
+      <dd>not stored</dd>
+      <dt>Production authority</dt>
+      <dd>${escapeHtml(historyProof.productionDrivingAllowed ? "enabled" : "disabled")}</dd>
+    </dl>
+    <div class="pems-history-export" role="table" aria-label="PEMS reviewer history audit export refs">
+      <div role="row"><span>Type</span><span>Ref</span><span>Status</span></div>
+      ${refs
+        .map(
+          (row) => `
+            <div role="row">
+              <span>${escapeHtml(row.type ?? "history")}</span>
+              <span>${escapeHtml(row.id ?? "none")}</span>
+              <span>${escapeHtml(row.status ?? row.decision ?? row.followupStatus ?? "recorded")}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function currentPemsWorkbenchQuery() {
   const params = new URLSearchParams();
   const draftStatus = pemsDraftStatusFilter?.value ?? "all";
@@ -1212,6 +1254,14 @@ function renderPemsWorkbench(payload) {
     latestReviewerFollowUp: null,
     productionDrivingAllowed: false
   };
+  const reviewerHistoryExport = payload.reviewerHistoryExports ?? {
+    status: "phase43_reviewer_history_audit_export_waiting",
+    score: 97,
+    target: 99,
+    reviewerHistoryExportCount: 0,
+    latestReviewerHistoryExport: null,
+    productionDrivingAllowed: false
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1220,17 +1270,19 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${reviewerFollowUp.status ?? claimRevision.status ?? "phase42_reviewer_follow_up_workflow_waiting"} · ${reviewerFollowUp.score ?? claimRevision.score ?? 96} / ${reviewerFollowUp.target ?? claimRevision.target ?? 98}`;
+    pemsWorkbenchStatus.textContent = `${reviewerHistoryExport.status ?? reviewerFollowUp.status ?? "phase43_reviewer_history_audit_export_waiting"} · ${reviewerHistoryExport.score ?? reviewerFollowUp.score ?? 97} / ${reviewerHistoryExport.target ?? reviewerFollowUp.target ?? 99}`;
   }
   setPemsReviewActionsEnabled(available, payload);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 42 Reviewer Follow-Up Workflows</h3>
+      <h3>Phase 43 Reviewer History Audit Exports</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(reviewerFollowUp.status ?? "phase42_reviewer_follow_up_workflow_waiting")}</dd>
+        <dd>${escapeHtml(reviewerHistoryExport.status ?? "phase43_reviewer_history_audit_export_waiting")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(reviewerFollowUp.score ?? 96)} / ${escapeHtml(reviewerFollowUp.target ?? 98)}</dd>
+        <dd>${escapeHtml(reviewerHistoryExport.score ?? 97)} / ${escapeHtml(reviewerHistoryExport.target ?? 99)}</dd>
+        <dt>History exports</dt>
+        <dd>${escapeHtml(reviewerHistoryExport.reviewerHistoryExportCount ?? 0)} total · ${escapeHtml(reviewerHistoryExport.historyRowCount ?? 0)} latest rows</dd>
         <dt>Follow-up records</dt>
         <dd>${escapeHtml(reviewerFollowUp.reviewerFollowUpCount ?? 0)} total · ${escapeHtml(reviewerFollowUp.reviewerFollowUpResolvedCount ?? 0)} resolved</dd>
         <dt>Revision records</dt>
@@ -1337,6 +1389,10 @@ function renderPemsWorkbench(payload) {
     <article class="connector-card wide">
       <h3>Reviewer Follow-Up Workflow</h3>
       ${renderPemsReviewerFollowUp(reviewerFollowUp)}
+    </article>
+    <article class="connector-card wide">
+      <h3>Reviewer History Audit Export</h3>
+      ${renderPemsReviewerHistoryExport(reviewerHistoryExport)}
     </article>
     <article class="connector-card wide">
       <h3>Deterministic Vs Advisory Comparison</h3>
@@ -1522,6 +1578,43 @@ async function submitPemsReviewerFollowUp() {
   });
   const refreshed = await loadPemsWorkbench();
   trace.textContent = JSON.stringify({ reviewerFollowUp: result, workbench: refreshed }, null, 2);
+  return result;
+}
+
+async function submitPemsReviewerHistoryExport() {
+  const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
+  if (!latestPemsDraftAvailable(current)) throw new Error("No advisory draft is available for reviewer history export.");
+  const result = await api("/api/continuous-intelligence/pems/history-exports", {
+    method: "POST",
+    body: JSON.stringify({
+      candidateId: current.latestCandidate.candidateId,
+      advisoryDraftId: current.latestDraft.id,
+      actorUserId: "operator_ui",
+      exportReason: pemsHistoryExportReason?.value?.trim() || "Export reviewer history refs for longitudinal audit.",
+      filters: {
+        candidateId: current.latestCandidate.candidateId,
+        advisoryDraftId: current.latestDraft.id,
+        followupStatus: "all",
+        reviewDecision: "all"
+      },
+      metadata: {
+        phase: 43,
+        reviewerUiAction: "record_reviewer_history_export",
+        latestFollowUpId: current.reviewerFollowUps?.latestReviewerFollowUp?.id ?? null,
+        advisoryOnly: true,
+        rawHistoryStored: false,
+        rawRevisionStored: false,
+        rawReviewStored: false,
+        rawSourceStored: false,
+        exportCreatesEvidence: false,
+        exportBypassesHumanReview: false,
+        productionDrivingAllowed: false
+      }
+    }),
+    timeoutMs: 15000
+  });
+  const refreshed = await loadPemsWorkbench();
+  trace.textContent = JSON.stringify({ reviewerHistoryExport: result, workbench: refreshed }, null, 2);
   return result;
 }
 
@@ -4595,6 +4688,19 @@ recordPemsFollowUpButton?.addEventListener("click", async () => {
   try {
     const result = await submitPemsReviewerFollowUp();
     if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "reviewer follow-up recorded"} · workbench refreshed`;
+  } catch (error) {
+    renderPemsWorkbenchError(error);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+recordPemsHistoryExportButton?.addEventListener("click", async () => {
+  const restore = setBusy(recordPemsHistoryExportButton, "Recording...");
+  try {
+    const result = await submitPemsReviewerHistoryExport();
+    if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "reviewer history export recorded"} · workbench refreshed`;
   } catch (error) {
     renderPemsWorkbenchError(error);
     trace.textContent = error.stack ?? error.message;

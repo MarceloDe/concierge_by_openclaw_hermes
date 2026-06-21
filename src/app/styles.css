@@ -919,7 +919,8 @@ button:disabled {
 }
 
 .pems-revision-diff,
-.pems-followup-chain {
+.pems-followup-chain,
+.pems-history-export {
   border: 1px solid #d9e4dd;
   border-radius: 8px;
   display: grid;
@@ -927,25 +928,33 @@ button:disabled {
 }
 
 .pems-revision-diff > div,
-.pems-followup-chain > div {
+.pems-followup-chain > div,
+.pems-history-export > div {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   border-top: 1px solid #d9e4dd;
 }
 
+.pems-history-export > div {
+  grid-template-columns: 140px minmax(0, 1fr) 150px;
+}
+
 .pems-revision-diff > div:first-child,
-.pems-followup-chain > div:first-child {
+.pems-followup-chain > div:first-child,
+.pems-history-export > div:first-child {
   border-top: 0;
 }
 
 .pems-revision-diff span,
-.pems-followup-chain span {
+.pems-followup-chain span,
+.pems-history-export span {
   padding: 8px;
   overflow-wrap: anywhere;
 }
 
 .pems-revision-diff span:first-child,
-.pems-followup-chain span:first-child {
+.pems-followup-chain span:first-child,
+.pems-history-export > div:first-child span {
   background: #eef6f2;
   color: #123b32;
   font-weight: 700;

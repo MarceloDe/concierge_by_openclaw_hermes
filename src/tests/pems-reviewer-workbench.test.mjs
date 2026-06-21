@@ -13,13 +13,16 @@ import {
   buildPemsReviewerClaimRevisionProof,
   buildPemsReviewerComparisonProvenance,
   buildPemsReviewerFollowUpProof,
+  buildPemsReviewerHistoryExportProof,
   buildPemsReviewerWorkbenchReadinessProof,
+  buildPemsReviewerHistorySnapshot,
   createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
   getPemsReviewerWorkbenchStatus,
   persistContinuousIntelligenceShadowRun,
   recordPemsClaimRevision,
   recordPemsReviewerFollowUp,
+  recordPemsReviewerHistoryExport,
   recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
 
@@ -523,5 +526,151 @@ test("Phase 42 reviewer follow-ups bind revised claims to explicit review decisi
   assert.equal(proof.revisionResolvedVeto, true);
   assert.equal(proof.safety.followUpCreatesEvidence, false);
   assert.equal(proof.safety.followUpBypassesHumanReview, false);
+  assert.equal(proof.productionDrivingAllowed, false);
+});
+
+test("Phase 43 reviewer history exports persist audit refs without raw history", async () => {
+  const store = await createStore();
+  const { candidateId } = await createMatureCandidate(store);
+
+  await createLiveGatedPemsEvaluatorDraft(
+    store,
+    {
+      candidateId,
+      actorUserId: "phase43_test",
+      sourcePointerIds: ["artifact_phase43"],
+      modelConfig: { configured: true, model: "gpt-5-mini", baseURL: "https://api.openai.com/v1" }
+    },
+    {
+      llmInvoker: async () =>
+        JSON.stringify({
+          advisoryNote: "The reviewer must revise unsupported advisory text and preserve the audit history.",
+          suggestedReviewType: "human_review",
+          suggestedDecision: "approved",
+          citationClosure: ["artifact_phase43"],
+          claimCitationClosure: [
+            {
+              claim: "The cited source pointer supports manual review.",
+              status: "supported",
+              sourcePointerIds: ["artifact_phase43"],
+              confidence: 0.94
+            },
+            {
+              claim: "Production approval can happen automatically.",
+              status: "unsupported",
+              sourcePointerIds: [],
+              confidence: 0.1,
+              suggestedEdit: "Revise to say production approval remains disabled."
+            }
+          ]
+        })
+    }
+  );
+
+  const before = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "needs_reviewer_attention"
+  });
+  const unsupportedClaim = before.latestClaimCitationClosure.claims.find((claim) => claim.status === "unsupported");
+  assert.ok(unsupportedClaim);
+
+  const revision = await recordPemsClaimRevision(store, {
+    candidateId,
+    advisoryDraftId: before.latestDraft.id,
+    claimId: unsupportedClaim.id,
+    actorUserId: "human_reviewer",
+    revisedClaim: "The cited source pointer does not support production approval; production driving remains disabled.",
+    sourcePointerIds: ["artifact_phase43"],
+    metadata: { reviewerUiAction: "record_claim_revision" }
+  });
+  const review = await recordPemsPromotionReview(store, {
+    candidateId,
+    actorUserId: "human_reviewer",
+    reviewType: "human_review",
+    decision: "approved",
+    advisoryDraftId: before.latestDraft.id,
+    rationale: "Approved advisory material after deterministic revision reclosure.",
+    metadata: {
+      phase: 43,
+      claimRevisionId: revision.revision.id,
+      advisoryOnly: true,
+      rawRationaleStored: false,
+      productionDrivingAllowed: false
+    }
+  });
+  await recordPemsReviewerFollowUp(store, {
+    candidateId,
+    advisoryDraftId: before.latestDraft.id,
+    claimRevisionId: revision.revision.id,
+    promotionReviewId: review.review.id,
+    actorUserId: "human_reviewer",
+    rationale: "Closed advisory follow-up after revision and explicit review.",
+    metadata: { reviewerUiAction: "record_reviewer_follow_up" }
+  });
+
+  const snapshot = await buildPemsReviewerHistorySnapshot(store, {
+    candidateId,
+    advisoryDraftId: before.latestDraft.id
+  });
+  assert.equal(snapshot.version, "2026-06-20.phase43-reviewer-history-audit-exports.v1");
+  assert.equal(snapshot.counts.claimRevisionCount, 1);
+  assert.equal(snapshot.counts.promotionReviewCount, 1);
+  assert.equal(snapshot.counts.reviewerFollowUpCount, 1);
+  assert.equal(snapshot.safety.rawHistoryStored, false);
+  assert.equal(snapshot.safety.exportCreatesEvidence, false);
+  assert.equal(snapshot.productionDrivingAllowed, false);
+
+  const recorded = await recordPemsReviewerHistoryExport(store, {
+    candidateId,
+    advisoryDraftId: before.latestDraft.id,
+    actorUserId: "human_reviewer",
+    exportReason: "Export reviewer history refs for audit. Do not store raw notes, PHI, prompts, completions, OCR, or source text.",
+    filters: { candidateId, advisoryDraftId: before.latestDraft.id, followupStatus: "all", reviewDecision: "all" },
+    metadata: { reviewerUiAction: "record_reviewer_history_export" }
+  });
+
+  assert.equal(recorded.version, "2026-06-20.phase43-reviewer-history-audit-exports.v1");
+  assert.equal(recorded.status, "phase43_reviewer_history_audit_export_recorded");
+  assert.ok(recorded.export.exportRef.startsWith("pems_review_history_export_"));
+  assert.ok(recorded.export.exportHash);
+  assert.ok(recorded.export.historySnapshotHash);
+  assert.equal(recorded.export.historySnapshotPreview.counts.claimRevisionCount, 1);
+  assert.equal(recorded.export.historySnapshotPreview.counts.promotionReviewCount, 1);
+  assert.equal(recorded.export.historySnapshotPreview.counts.reviewerFollowUpCount, 1);
+  assert.equal(recorded.export.safety.rawHistoryStored, false);
+  assert.equal(recorded.export.safety.rawRevisionStored, false);
+  assert.equal(recorded.export.safety.rawReviewStored, false);
+  assert.equal(recorded.export.safety.rawSourceStored, false);
+  assert.equal(recorded.export.safety.exportCreatesEvidence, false);
+  assert.equal(recorded.export.safety.exportBypassesHumanReview, false);
+  assert.equal(recorded.productionDrivingAllowed, false);
+
+  const rows = await store.list("pems_candidate_review_history_exports", { candidate_id: candidateId });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].metadata_json.includes("rawHistoryStored"), true);
+  assert.equal(rows[0].metadata_json.includes("rawSourceStored"), true);
+  assert.equal(rows[0].metadata_json.includes("patient@example.com"), false);
+  assert.equal(rows[0].history_snapshot_preview_json.includes("Production approval can happen automatically"), false);
+
+  const after = await getPemsReviewerWorkbenchStatus(store, {
+    evaluatorMode: "llm_assisted_advisory",
+    draftStatus: "needs_reviewer_attention"
+  });
+  assert.equal(after.reviewerHistoryExportCount, 1);
+  assert.equal(after.safeHistoryExportCount, 1);
+  assert.equal(after.latestReviewerHistoryExport.exportRef, recorded.export.exportRef);
+
+  const proof = buildPemsReviewerHistoryExportProof(after);
+  assert.equal(proof.status, "phase43_reviewer_history_audit_export_ready");
+  assert.equal(proof.score, 99);
+  assert.equal(proof.target, 99);
+  assert.equal(proof.hasExportRef, true);
+  assert.equal(proof.hasExportHash, true);
+  assert.equal(proof.hasSnapshotHash, true);
+  assert.equal(proof.claimRevisionCount, 1);
+  assert.equal(proof.promotionReviewCount, 1);
+  assert.equal(proof.reviewerFollowUpCount, 1);
+  assert.equal(proof.safety.exportCreatesEvidence, false);
+  assert.equal(proof.safety.exportBypassesHumanReview, false);
   assert.equal(proof.productionDrivingAllowed, false);
 });
