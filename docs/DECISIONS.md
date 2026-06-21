@@ -2724,3 +2724,17 @@ Healthcare product memory should be real and enable-able, but the safe failure m
 
 Consequences:
 OpenAI remains available for local/back-compat proof. Bedrock production use requires in-boundary FalkorDB, IAM-based AWS auth, `GRAPHITI_STORE_RAW_EPISODES=0`, a fresh `GRAPHITI_GROUP_ID`, and no secrets in Git.
+
+## 2026-06-21 - Phase 46 Research Analytics And Budget Kill Switch
+
+Problem:
+The final verification report still marked dedicated research analytics (`C26`, `D19`) and budget/kill-switch persistence/enforcement (`C27`) as missing. KPIs existed, but there was no separate read-only analytics endpoint and no persisted control that could fail closed before research work was queued or executed.
+
+Decision:
+Implement Phase 46 as an additive operator-only control plane: a read-only analytics endpoint/dashboard card plus persisted `research_budget_policies` and `research_budget_events`. Enforce the policy before manual/scheduled run queueing and before run execution.
+
+Rationale:
+Research operations can grow into costly or unsafe loops if budget state only lives in UI memory or docs. Persisting policy and blocked/accepted events creates audit proof, keeps the dashboard honest, and lets future schedulers/workers share the same gate.
+
+Consequences:
+Operators can see analytics, daily usage, blocked attempts, and kill-switch state from `/`. The kill switch and limits block queue/execution paths fail-closed and audit `research_budget_blocked`. Broader review queues and user-facing journey breadth remain separate future phases.

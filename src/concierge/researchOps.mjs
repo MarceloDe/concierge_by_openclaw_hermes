@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const RESEARCH_OPS_VERSION = "2026-06-21.phase45-research-document-upload.v1";
+export const RESEARCH_OPS_VERSION = "2026-06-21.phase46-research-analytics-budget.v1";
 
 const ACTIVE_SOURCE_STATUSES = new Set(["active_registry", "approved", "active", "enabled"]);
 const SOURCE_STATUSES = new Set(["pending_review", "active_registry", "approved", "rejected", "disabled"]);
@@ -28,6 +28,9 @@ const EMBEDDING_ROUTE_PROVIDERS = new Set(["local_tfidf", "openai"]);
 const EMBEDDING_ROUTE_STATUSES = new Set(["active", "disabled"]);
 const DEFAULT_LOCAL_EMBEDDING_DIMENSIONS = Number(process.env.BRAINSTY_RESEARCH_EMBEDDING_DIMENSIONS ?? 64);
 const DEFAULT_OPENAI_EMBEDDING_DIMENSIONS = Number(process.env.BRAINSTY_RESEARCH_OPENAI_EMBEDDING_DIMENSIONS ?? 1536);
+const RESEARCH_BUDGET_POLICY_KEY = "default";
+const DEFAULT_RESEARCH_DAILY_RUN_LIMIT = Number(process.env.BRAINSTY_RESEARCH_DAILY_RUN_LIMIT ?? 25);
+const DEFAULT_RESEARCH_DAILY_COST_LIMIT_CENTS = Number(process.env.BRAINSTY_RESEARCH_DAILY_COST_LIMIT_CENTS ?? 1000);
 const EMBEDDING_INDEX_STATUS_ACTIVE = "active";
 const TEXTUAL_CONTENT_TYPES = [
   "text/",
@@ -628,6 +631,186 @@ function normalizeSchedule(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function normalizeBudgetPolicy(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    policyKey: row.policy_key,
+    actorUserId: row.actor_user_id ?? null,
+    enabled: Boolean(Number(row.enabled ?? 1)),
+    dailyRunLimit: Number(row.daily_run_limit ?? DEFAULT_RESEARCH_DAILY_RUN_LIMIT),
+    dailyCostLimitCents: Number(row.daily_cost_limit_cents ?? DEFAULT_RESEARCH_DAILY_COST_LIMIT_CENTS),
+    killSwitchEnabled: Boolean(Number(row.kill_switch_enabled ?? 0)),
+    killSwitchReason: row.kill_switch_reason ?? "",
+    enforcementMode: row.enforcement_mode ?? "fail_closed",
+    metadata: parseJson(row.metadata_json, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function normalizeBudgetEvent(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    policyKey: row.policy_key,
+    actorUserId: row.actor_user_id ?? null,
+    runId: row.run_id ?? null,
+    eventType: row.event_type,
+    estimatedCostCents: Number(row.estimated_cost_cents ?? 0),
+    status: row.status,
+    reason: row.reason ?? "",
+    metadata: parseJson(row.metadata_json, {}),
+    createdAt: row.created_at
+  };
+}
+
+function startOfUtcDayIso(now = nowIso()) {
+  const date = new Date(now);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
+}
+
+function estimateResearchCostCents({ workerMode = null, operation = "run_queued" } = {}) {
+  if (operation === "run_queued") return 1;
+  if (workerMode === "mock_worker") return 0;
+  if (workerMode === "openclaw" || workerMode === "hermes") return 50;
+  return 2;
+}
+
+async function ensureResearchBudgetPolicy(store) {
+  const existing = await store.findOne("research_budget_policies", { policy_key: RESEARCH_BUDGET_POLICY_KEY });
+  if (existing) return normalizeBudgetPolicy(existing);
+  const time = nowIso();
+  const row = {
+    id: createId("research_budget_policy"),
+    policy_key: RESEARCH_BUDGET_POLICY_KEY,
+    actor_user_id: "system_default",
+    enabled: 1,
+    daily_run_limit: Number.isFinite(DEFAULT_RESEARCH_DAILY_RUN_LIMIT) ? DEFAULT_RESEARCH_DAILY_RUN_LIMIT : 25,
+    daily_cost_limit_cents: Number.isFinite(DEFAULT_RESEARCH_DAILY_COST_LIMIT_CENTS) ? DEFAULT_RESEARCH_DAILY_COST_LIMIT_CENTS : 1000,
+    kill_switch_enabled: 0,
+    kill_switch_reason: "",
+    enforcement_mode: "fail_closed",
+    metadata_json: json({
+      source: "system_default",
+      purpose: "operator_research_budget_and_kill_switch",
+      version: RESEARCH_OPS_VERSION
+    }),
+    created_at: time,
+    updated_at: time
+  };
+  await store.insert("research_budget_policies", row);
+  return normalizeBudgetPolicy(row);
+}
+
+async function getResearchBudgetUsage(store, { now = nowIso() } = {}) {
+  const start = startOfUtcDayIso(now);
+  const [acceptedRunEvents, acceptedCost, blockedEvents, latestEvent] = await Promise.all([
+    store.get(
+      `SELECT COUNT(*) AS count
+       FROM research_budget_events
+       WHERE policy_key = ${sql(RESEARCH_BUDGET_POLICY_KEY)}
+         AND status = 'accepted'
+         AND event_type = 'run_queued'
+         AND created_at >= ${sql(start)};`
+    ),
+    store.get(
+      `SELECT COALESCE(SUM(estimated_cost_cents), 0) AS cents
+       FROM research_budget_events
+       WHERE policy_key = ${sql(RESEARCH_BUDGET_POLICY_KEY)}
+         AND status = 'accepted'
+         AND created_at >= ${sql(start)};`
+    ),
+    store.get(
+      `SELECT COUNT(*) AS count
+       FROM research_budget_events
+       WHERE policy_key = ${sql(RESEARCH_BUDGET_POLICY_KEY)}
+         AND status = 'blocked'
+         AND created_at >= ${sql(start)};`
+    ),
+    store.get(
+      `SELECT * FROM research_budget_events
+       WHERE policy_key = ${sql(RESEARCH_BUDGET_POLICY_KEY)}
+       ORDER BY created_at DESC
+       LIMIT 1;`
+    )
+  ]);
+  return {
+    window: {
+      key: "utc_day",
+      startsAt: start,
+      observedAt: now
+    },
+    queuedRuns: Number(acceptedRunEvents?.count ?? 0),
+    estimatedCostCents: Number(acceptedCost?.cents ?? 0),
+    blockedEvents: Number(blockedEvents?.count ?? 0),
+    latestEvent: normalizeBudgetEvent(latestEvent)
+  };
+}
+
+async function recordResearchBudgetEvent(
+  store,
+  { actorUserId = null, runId = null, eventType, estimatedCostCents = 0, status = "accepted", reason = "", metadata = {} } = {}
+) {
+  const row = {
+    id: createId("research_budget_event"),
+    policy_key: RESEARCH_BUDGET_POLICY_KEY,
+    actor_user_id: actorUserId,
+    run_id: runId,
+    event_type: eventType,
+    estimated_cost_cents: Math.max(0, Math.floor(Number(estimatedCostCents) || 0)),
+    status,
+    reason: safePreview(reason, 300),
+    metadata_json: json({
+      ...metadata,
+      rawPromptReturned: false,
+      rawArtifactTextReturned: false,
+      version: RESEARCH_OPS_VERSION
+    }),
+    created_at: nowIso()
+  };
+  await store.insert("research_budget_events", row);
+  return normalizeBudgetEvent(row);
+}
+
+async function assertResearchBudgetAllows(store, { actorUserId = null, runId = null, eventType, estimatedCostCents = 0, metadata = {} } = {}) {
+  const policy = await ensureResearchBudgetPolicy(store);
+  const usage = await getResearchBudgetUsage(store);
+  let reason = "";
+  if (!policy.enabled) reason = "research_budget_policy_disabled";
+  else if (policy.killSwitchEnabled) reason = "research_budget_kill_switch_enabled";
+  else if (eventType === "run_queued" && usage.queuedRuns >= policy.dailyRunLimit) reason = "research_daily_run_limit_exceeded";
+  else if (usage.estimatedCostCents + estimatedCostCents > policy.dailyCostLimitCents) reason = "research_daily_cost_limit_exceeded";
+  if (!reason) return { policy, usage };
+
+  const blocked = await recordResearchBudgetEvent(store, {
+    actorUserId,
+    runId,
+    eventType,
+    estimatedCostCents,
+    status: "blocked",
+    reason,
+    metadata
+  });
+  const auditEvent = await audit(store, null, "research_budget_blocked", {
+    actorUserId,
+    runId,
+    eventType,
+    estimatedCostCents,
+    reason,
+    policyKey: policy.policyKey,
+    killSwitchEnabled: policy.killSwitchEnabled,
+    dailyRunLimit: policy.dailyRunLimit,
+    dailyCostLimitCents: policy.dailyCostLimitCents,
+    usageQueuedRuns: usage.queuedRuns,
+    usageEstimatedCostCents: usage.estimatedCostCents
+  });
+  const error = new ResearchOpsError(`Research budget blocked operation: ${reason}.`, 409);
+  error.budget = { policy, usage, blocked, audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash } };
+  throw error;
 }
 
 function normalizeGraphBuild(row) {
@@ -2182,6 +2365,146 @@ export async function getResearchKpis(store) {
   };
 }
 
+export async function getResearchBudgetStatus(store) {
+  const policy = await ensureResearchBudgetPolicy(store);
+  const usage = await getResearchBudgetUsage(store);
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    policy,
+    usage,
+    state: policy.enabled && !policy.killSwitchEnabled ? "enforcing" : "blocked",
+    safety: {
+      failClosed: policy.enforcementMode === "fail_closed",
+      policyPersisted: true,
+      killSwitchPersisted: true,
+      rawPromptReturned: false,
+      rawArtifactTextReturned: false
+    }
+  };
+}
+
+export async function updateResearchBudgetPolicy(
+  store,
+  { actorUserId = null, enabled = null, dailyRunLimit = null, dailyCostLimitCents = null, killSwitchEnabled = null, killSwitchReason = "", metadata = {} } = {}
+) {
+  const existing = await ensureResearchBudgetPolicy(store);
+  const parsedRunLimit = dailyRunLimit === null || dailyRunLimit === undefined ? existing.dailyRunLimit : Number(dailyRunLimit);
+  const parsedCostLimit = dailyCostLimitCents === null || dailyCostLimitCents === undefined ? existing.dailyCostLimitCents : Number(dailyCostLimitCents);
+  if (!Number.isInteger(parsedRunLimit) || parsedRunLimit < 0 || parsedRunLimit > 10000) {
+    throw new ResearchOpsError("Research daily run limit must be an integer between 0 and 10000.", 400);
+  }
+  if (!Number.isInteger(parsedCostLimit) || parsedCostLimit < 0 || parsedCostLimit > 100000000) {
+    throw new ResearchOpsError("Research daily cost limit must be an integer between 0 and 100000000 cents.", 400);
+  }
+  const time = nowIso();
+  await store.update(
+    "research_budget_policies",
+    {
+      actor_user_id: actorUserId,
+      enabled: enabled === null || enabled === undefined ? (existing.enabled ? 1 : 0) : (enabled ? 1 : 0),
+      daily_run_limit: parsedRunLimit,
+      daily_cost_limit_cents: parsedCostLimit,
+      kill_switch_enabled: killSwitchEnabled === null || killSwitchEnabled === undefined ? (existing.killSwitchEnabled ? 1 : 0) : (killSwitchEnabled ? 1 : 0),
+      kill_switch_reason: safePreview(killSwitchReason || existing.killSwitchReason || "", 300),
+      enforcement_mode: "fail_closed",
+      metadata_json: json({
+        ...existing.metadata,
+        ...metadata,
+        updatedVia: "operator_research_api",
+        version: RESEARCH_OPS_VERSION
+      }),
+      updated_at: time
+    },
+    { policy_key: RESEARCH_BUDGET_POLICY_KEY }
+  );
+  const policy = await ensureResearchBudgetPolicy(store);
+  const event = await recordResearchBudgetEvent(store, {
+    actorUserId,
+    eventType: "policy_updated",
+    estimatedCostCents: 0,
+    status: "accepted",
+    reason: policy.killSwitchEnabled ? "kill_switch_enabled" : "policy_updated",
+    metadata: {
+      enabled: policy.enabled,
+      dailyRunLimit: policy.dailyRunLimit,
+      dailyCostLimitCents: policy.dailyCostLimitCents,
+      killSwitchEnabled: policy.killSwitchEnabled
+    }
+  });
+  const usage = await getResearchBudgetUsage(store);
+  const auditEvent = await audit(store, null, "research_budget_policy_updated", {
+    actorUserId,
+    policyKey: policy.policyKey,
+    enabled: policy.enabled,
+    dailyRunLimit: policy.dailyRunLimit,
+    dailyCostLimitCents: policy.dailyCostLimitCents,
+    killSwitchEnabled: policy.killSwitchEnabled,
+    killSwitchReasonHash: policy.killSwitchReason ? sha256(policy.killSwitchReason) : null
+  });
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    policy,
+    usage,
+    event,
+    audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash },
+    safety: {
+      failClosed: true,
+      policyPersisted: true,
+      rawReasonReturned: false
+    }
+  };
+}
+
+async function countBy(store, table, column) {
+  const rows = await store.all(`SELECT ${column} AS key, COUNT(*) AS count FROM ${table} GROUP BY ${column} ORDER BY count DESC;`);
+  return Object.fromEntries(rows.map((row) => [row.key ?? "none", Number(row.count ?? 0)]));
+}
+
+export async function getResearchAnalytics(store) {
+  const [kpis, budget, worker, recentRuns, recentBudgetEvents, runStatusCounts, artifactStatusCounts, sourceStatusCounts, scheduleStatusCounts] = await Promise.all([
+    getResearchKpis(store),
+    getResearchBudgetStatus(store),
+    Promise.resolve(getResearchWorkerStatus()),
+    store.all("SELECT * FROM research_runs ORDER BY created_at DESC LIMIT 8;"),
+    store.all("SELECT * FROM research_budget_events ORDER BY created_at DESC LIMIT 8;"),
+    countBy(store, "research_runs", "status"),
+    countBy(store, "research_artifacts", "citation_status"),
+    countBy(store, "knowledge_sources", "status"),
+    countBy(store, "research_schedules", "status")
+  ]);
+  const latestAudit = await store.get("SELECT event_type, created_at FROM audit_events ORDER BY created_at DESC LIMIT 1;");
+  return {
+    ok: true,
+    version: RESEARCH_OPS_VERSION,
+    generatedAt: nowIso(),
+    kpis,
+    budget,
+    worker,
+    distributions: {
+      runStatuses: runStatusCounts,
+      artifactCitationStatuses: artifactStatusCounts,
+      sourceStatuses: sourceStatusCounts,
+      scheduleStatuses: scheduleStatusCounts
+    },
+    recentRuns: recentRuns.map(normalizeRun),
+    recentBudgetEvents: recentBudgetEvents.map(normalizeBudgetEvent),
+    audit: {
+      latestEventType: latestAudit?.event_type ?? null,
+      latestEventAt: latestAudit?.created_at ?? null
+    },
+    safety: {
+      readOnly: true,
+      rawArtifactTextReturned: false,
+      rawRunPayloadsReturned: false,
+      sourcePointerPayloadsReturned: false,
+      policyPersisted: true,
+      killSwitchEnforced: true
+    }
+  };
+}
+
 export async function listResearchSources(store, { status = null, limit = 50 } = {}) {
   const where = status ? ` WHERE status = ${sql(status)}` : "";
   const rows = await store.all(
@@ -2513,67 +2836,97 @@ export async function runDueResearchSchedules(
       });
       continue;
     }
-    const run = await startManualResearchRun(store, {
-      actorUserId,
-      sourceId: source.id,
-      topic: schedule.topic || source.title,
-      workflowKey: schedule.workflowKey,
-      query: {
-        ...schedule.query,
-        scheduledAutomation: true,
-        scheduleId: schedule.id,
-        scheduleKey: schedule.scheduleKey
-      },
-      metadata: {
+    try {
+      const run = await startManualResearchRun(store, {
+        actorUserId,
+        sourceId: source.id,
+        topic: schedule.topic || source.title,
+        workflowKey: schedule.workflowKey,
+        query: {
+          ...schedule.query,
+          scheduledAutomation: true,
+          scheduleId: schedule.id,
+          scheduleKey: schedule.scheduleKey
+        },
+        metadata: {
+          scheduleId: schedule.id,
+          scheduleKey: schedule.scheduleKey,
+          scheduledRun: true,
+          workerMode: workerMode ?? schedule.workerMode,
+          version: RESEARCH_OPS_VERSION
+        },
+        runType: "scheduled_research_run"
+      });
+      let executed = null;
+      if (execute) {
+        executed = await executeResearchRun(store, {
+          runId: run.run.id,
+          actorUserId,
+          workerMode: workerMode ?? schedule.workerMode,
+          approvedWorkerDispatch
+        });
+      }
+      const time = nowIso();
+      const terminalStatus = executed?.run?.status ?? run.run.status;
+      await store.update(
+        "research_schedules",
+        {
+          last_run_at: time,
+          last_run_id: run.run.id,
+          last_status: terminalStatus,
+          run_count: schedule.runCount + 1,
+          next_run_at: addHoursIso(now, schedule.intervalHours),
+          updated_at: time
+        },
+        { id: schedule.id }
+      );
+      const auditEvent = await audit(store, null, "research_schedule_tick_run_created", {
         scheduleId: schedule.id,
         scheduleKey: schedule.scheduleKey,
-        scheduledRun: true,
-        workerMode: workerMode ?? schedule.workerMode,
-        version: RESEARCH_OPS_VERSION
-      },
-      runType: "scheduled_research_run"
-    });
-    let executed = null;
-    if (execute) {
-      executed = await executeResearchRun(store, {
-        runId: run.run.id,
         actorUserId,
+        runId: run.run.id,
+        sourceId: source.id,
+        sourceKey: source.source_key,
+        execute: Boolean(execute),
         workerMode: workerMode ?? schedule.workerMode,
-        approvedWorkerDispatch
+        nextRunAt: addHoursIso(now, schedule.intervalHours)
+      });
+      processed.push({
+        schedule: normalizeSchedule(await store.findOne("research_schedules", { id: schedule.id })),
+        run: executed?.run ?? run.run,
+        source: normalizeSource(source),
+        executed,
+        audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash }
+      });
+    } catch (error) {
+      if (!(error instanceof ResearchOpsError)) throw error;
+      const time = nowIso();
+      await store.update(
+        "research_schedules",
+        {
+          last_run_at: time,
+          last_status: "blocked_budget_or_execution",
+          next_run_at: addHoursIso(now, schedule.intervalHours),
+          updated_at: time
+        },
+        { id: schedule.id }
+      );
+      const auditEvent = await audit(store, null, "research_schedule_blocked", {
+        scheduleId: schedule.id,
+        actorUserId,
+        reason: error.message,
+        reasonHash: sha256(error.message),
+        sourceId: source.id,
+        sourceKey: source.source_key,
+        budgetBlocked: Boolean(error.budget)
+      });
+      blocked.push({
+        schedule: normalizeSchedule(await store.findOne("research_schedules", { id: schedule.id })),
+        reason: error.budget ? "budget_or_kill_switch_blocked" : "execution_blocked",
+        error: safePreview(error.message, 300),
+        audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash }
       });
     }
-    const time = nowIso();
-    const terminalStatus = executed?.run?.status ?? run.run.status;
-    await store.update(
-      "research_schedules",
-      {
-        last_run_at: time,
-        last_run_id: run.run.id,
-        last_status: terminalStatus,
-        run_count: schedule.runCount + 1,
-        next_run_at: addHoursIso(now, schedule.intervalHours),
-        updated_at: time
-      },
-      { id: schedule.id }
-    );
-    const auditEvent = await audit(store, null, "research_schedule_tick_run_created", {
-      scheduleId: schedule.id,
-      scheduleKey: schedule.scheduleKey,
-      actorUserId,
-      runId: run.run.id,
-      sourceId: source.id,
-      sourceKey: source.source_key,
-      execute: Boolean(execute),
-      workerMode: workerMode ?? schedule.workerMode,
-      nextRunAt: addHoursIso(now, schedule.intervalHours)
-    });
-    processed.push({
-      schedule: normalizeSchedule(await store.findOne("research_schedules", { id: schedule.id })),
-      run: executed?.run ?? run.run,
-      source: normalizeSource(source),
-      executed,
-      audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash }
-    });
   }
   return {
     ok: true,
@@ -3045,6 +3398,18 @@ export async function startManualResearchRun(
   if (!ACTIVE_SOURCE_STATUSES.has(source.status)) {
     throw new ResearchOpsError("Research runs can only start from approved or active sources.", 409);
   }
+  const estimatedCostCents = estimateResearchCostCents({ operation: "run_queued", workerMode: metadata.workerMode ?? query.workerMode ?? null });
+  await assertResearchBudgetAllows(store, {
+    actorUserId,
+    eventType: "run_queued",
+    estimatedCostCents,
+    metadata: {
+      runType,
+      workflowKey,
+      sourceId: source.id,
+      sourceKey: source.source_key
+    }
+  });
   const time = nowIso();
   const run = {
     id: createId("research_run"),
@@ -3065,6 +3430,20 @@ export async function startManualResearchRun(
     updated_at: time
   };
   await store.insert("research_runs", run);
+  const budgetEvent = await recordResearchBudgetEvent(store, {
+    actorUserId,
+    runId: run.id,
+    eventType: "run_queued",
+    estimatedCostCents,
+    status: "accepted",
+    reason: "research_run_queued",
+    metadata: {
+      runType,
+      workflowKey,
+      sourceId: source.id,
+      sourceKey: source.source_key
+    }
+  });
   const event = await createResearchRunEvent(store, {
     runId: run.id,
     eventType: "research_run_queued",
@@ -3085,6 +3464,11 @@ export async function startManualResearchRun(
     version: RESEARCH_OPS_VERSION,
     run: normalizeRun(run),
     source: normalizeSource(source),
+    budget: {
+      event: budgetEvent,
+      estimatedCostCents,
+      policy: (await getResearchBudgetStatus(store)).policy
+    },
     event,
     audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash }
   };
@@ -3344,6 +3728,31 @@ export async function executeResearchRun(
   if (!ACTIVE_SOURCE_STATUSES.has(source.status)) {
     throw new ResearchOpsError("Research execution requires an approved or active source.", 409);
   }
+  const estimatedCostCents = estimateResearchCostCents({ operation: "run_executed", workerMode: selectedMode });
+  await assertResearchBudgetAllows(store, {
+    actorUserId,
+    runId,
+    eventType: "run_executed",
+    estimatedCostCents,
+    metadata: {
+      workerMode: selectedMode,
+      sourceId: source.id,
+      sourceKey: source.source_key
+    }
+  });
+  const budgetEvent = await recordResearchBudgetEvent(store, {
+    actorUserId,
+    runId,
+    eventType: "run_executed",
+    estimatedCostCents,
+    status: "accepted",
+    reason: "research_run_execution_started",
+    metadata: {
+      workerMode: selectedMode,
+      sourceId: source.id,
+      sourceKey: source.source_key
+    }
+  });
   const startedAt = nowIso();
   await store.update(
     "research_runs",
@@ -3444,6 +3853,11 @@ export async function executeResearchRun(
       workerResult: execution.workerResult ?? null,
       taskEnvelope: execution.taskEnvelope ?? null,
       worker: getResearchWorkerStatus(),
+      budget: {
+        event: budgetEvent,
+        estimatedCostCents,
+        policy: (await getResearchBudgetStatus(store)).policy
+      },
       audit: { id: auditEvent.id, eventType: auditEvent.event_type, eventHash: auditEvent.event_hash }
     };
   } catch (error) {

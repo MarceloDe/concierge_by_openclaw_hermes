@@ -81,6 +81,23 @@ class FakeNodeRuntimeClient:
                 "reviewQueue": {"feedbackItems": 0},
                 "audit": {"totalEvents": 3}
             }
+        if path == "/api/research/analytics":
+            return {
+                "version": "test",
+                "kpis": {"runs": {"total": 1}},
+                "budget": {
+                    "policy": {"policyKey": "default", "enabled": True, "dailyRunLimit": 25, "killSwitchEnabled": False},
+                    "usage": {"queuedRuns": 1, "estimatedCostCents": 3}
+                },
+                "safety": {"readOnly": True, "killSwitchEnforced": True, "rawArtifactTextReturned": False}
+            }
+        if path == "/api/research/budget":
+            return {
+                "version": "test",
+                "policy": {"policyKey": "default", "enabled": True, "dailyRunLimit": 25, "dailyCostLimitCents": 1000, "killSwitchEnabled": False},
+                "usage": {"queuedRuns": 1, "estimatedCostCents": 3, "blockedEvents": 0},
+                "safety": {"failClosed": True, "policyPersisted": True, "killSwitchPersisted": True}
+            }
         if path == "/api/research/worker-status":
             return {
                 "version": "test",
@@ -425,6 +442,21 @@ class FakeNodeRuntimeClient:
                     "topic": body.get("topic")
                 },
                 "event": {"id": "event_one", "eventType": "research_run_queued", "status": "queued"}
+            }
+        if path == "/api/research/budget":
+            return {
+                "ok": True,
+                "policy": {
+                    "policyKey": "default",
+                    "actorUserId": body.get("actorUserId"),
+                    "enabled": body.get("enabled", True),
+                    "dailyRunLimit": body.get("dailyRunLimit", 25),
+                    "dailyCostLimitCents": body.get("dailyCostLimitCents", 1000),
+                    "killSwitchEnabled": body.get("killSwitchEnabled", False)
+                },
+                "usage": {"queuedRuns": 1, "estimatedCostCents": 3},
+                "audit": {"eventType": "research_budget_policy_updated"},
+                "safety": {"failClosed": True, "policyPersisted": True}
             }
         if path == "/api/research/documents":
             return {
@@ -2463,6 +2495,39 @@ class FastApiFacadeTest(unittest.TestCase):
         admin_kpis = client.get("/api/research/kpis", headers=self.admin_headers())
         self.assertEqual(admin_kpis.status_code, 200)
         self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/kpis", {"actorUserId": "admin_user"}))
+
+        analytics = client.get("/api/research/analytics", headers=headers)
+        self.assertEqual(analytics.status_code, 200)
+        self.assertTrue(analytics.json()["safety"]["readOnly"])
+        self.assertTrue(analytics.json()["safety"]["killSwitchEnforced"])
+        self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/analytics", {"actorUserId": "operator_user"}))
+
+        budget = client.get("/api/research/budget", headers=headers)
+        self.assertEqual(budget.status_code, 200)
+        self.assertTrue(budget.json()["safety"]["policyPersisted"])
+        self.assertEqual(app.state.node_client.get_calls[-1], ("/api/research/budget", {"actorUserId": "operator_user"}))
+
+        hostile_budget = client.post(
+            "/api/research/budget",
+            headers=headers,
+            json={"actorUserId": "other_user", "dailyRunLimit": 12, "dailyCostLimitCents": 500, "killSwitchEnabled": False}
+        )
+        self.assertEqual(hostile_budget.status_code, 403)
+
+        updated_budget = client.post(
+            "/api/research/budget",
+            headers=headers,
+            json={"dailyRunLimit": 12, "dailyCostLimitCents": 500, "killSwitchEnabled": False}
+        )
+        self.assertEqual(updated_budget.status_code, 200)
+        self.assertEqual(updated_budget.json()["policy"]["actorUserId"], "operator_user")
+        self.assertEqual(
+            app.state.node_client.post_calls[-1],
+            (
+                "/api/research/budget",
+                {"dailyRunLimit": 12, "dailyCostLimitCents": 500, "killSwitchEnabled": False, "actorUserId": "operator_user"}
+            )
+        )
 
         worker_status = client.get("/api/research/worker-status", headers=headers)
         self.assertEqual(worker_status.status_code, 200)

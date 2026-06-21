@@ -1,7 +1,7 @@
 # Final System Verification Report
 
 Project: `workerprototype_openclaw`
-Report phase: Phase 10T research scheduler daemon update to the final-system PASS / FAIL / BLOCKED matrix
+Report phase: Phase 46 research analytics and budget kill-switch update to the final-system PASS / FAIL / BLOCKED matrix
 Created: 2026-06-01
 Scope source: `docs/goal_final_system.md`
 
@@ -35,16 +35,19 @@ Scope source: `docs/goal_final_system.md`
 - Phase 10T build/facade/local gates passed: `npm run build`, `npm run test:facade` with 32 tests and 2 expected live-gated skips, and `npm run test:local` with 163 tests total, 161 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Phase 10T browser proof passed on `/`: scheduler daemon status showed `process running`, daemon tick queued `research_run_adc6aa4a-ce74-45ca-bc51-a2a750404bdf`, approved-schedule-only safety was visible, and console error count was 0. Screenshot: `artifacts/phase10t-research-scheduler-daemon-browser-proof.png`.
 - Phase 10T graceful shutdown proof passed: scheduler-enabled Node server handled `SIGINT`, stopped the daemon, exited with code 0, and left no listener on port 4173.
+- Phase 46 adds `GET /api/research/analytics`, persisted `research_budget_policies` / `research_budget_events`, Node/FastAPI budget endpoints, and dashboard budget/kill-switch controls.
+- Phase 46 focused proof passed through `npm run test:local` with 239 passing tests and 2 expected live-gated OpenClaw skips, `npm run test:live` with the live OpenAI smoke plus research/UI slices, and `npm run test:facade` with 53 tests and 2 expected skips.
+- Phase 46 researchOps proof shows the persisted kill switch blocks both run queueing and execution, emits blocked budget events, and audits `research_budget_blocked` without raw prompts or artifact text.
 - Earlier phase evidence in `docs/goal_final_system.md`, `docs/PROGRESS.md`, and `docs/ACCEPTANCE_CRITERIA.md` remains part of the verification base, but any item below marked `FAILING / NEEDS FIX` or `BLOCKED BY EXTERNAL DEPENDENCY` is not complete.
 
 ## Summary
 
 | Category | Count |
 | --- | ---: |
-| PASSING | 118 |
+| PASSING | 121 |
 | IMPLEMENTED DURING THIS RUN | 0 |
 | BLOCKED BY EXTERNAL DEPENDENCY | 2 |
-| FAILING / NEEDS FIX | 12 |
+| FAILING / NEEDS FIX | 9 |
 
 The system is not yet complete. The strongest local MVP path is real and well-instrumented, but the broad final contract still has unbuilt product surfaces and externally gated live worker proof.
 
@@ -108,7 +111,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | C14 | PASSING | Research source metadata/priority and run query/topic arguments validate and persist. |
 | C15 | PASSING | Approved schedules persist with next-run time and due-tick proof. |
 | C16 | PASSING | Pause/resume schedule lifecycle is implemented and audited. |
-| C17 | IMPLEMENTED DURING THIS RUN | Phase 45 adds operator research document upload from the dashboard into the knowledge-base pipeline as pending-review artifacts. |
+| C17 | PASSING | Phase 45 adds operator research document upload from the dashboard into the knowledge-base pipeline as pending-review artifacts. |
 | C18 | PASSING | Trusted evidence search returns source metadata, scores, snippets, and review status. |
 | C19 | PASSING | Retrieval test/search shows chunks/snippets, scores, embedding contribution, and low-confidence states. |
 | C20 | PASSING | Phase 10P claim closure links supported claims to citations and fails unsupported claims. |
@@ -117,8 +120,8 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | C23 | PASSING | Operator write requests become structured proposals with risk/effect and no mutation. |
 | C24 | PASSING | Proposal approval executes exactly once; rejection causes no mutation; lifecycle is audited. |
 | C25 | PASSING | Tool registry endpoint/UI exists with tool schemas and approval requirements. |
-| C26 | FAILING / NEEDS FIX | Dedicated read-only analytics endpoint/dashboard is not implemented beyond KPIs. |
-| C27 | FAILING / NEEDS FIX | Budget and kill-switch persistence/enforcement are not implemented. |
+| C26 | PASSING | Phase 46 adds read-only `GET /api/research/analytics`, dashboard analytics rendering, and safe distributions/recent-run summaries without raw artifact text or source-pointer payload dumps. |
+| C27 | PASSING | Phase 46 adds persisted research budget policy/events, operator dashboard controls, and fail-closed enforcement for run queueing and execution when limits or kill switch block work. |
 | C28 | PASSING | Embedding route selection persists and is visible. |
 | C29 | PASSING | Reindex jobs complete/fail safely and preserve prior indexes on failure. |
 | C30 | PASSING | Worker status reports deterministic/mock/OpenClaw/Hermes modes and feature gates. |
@@ -141,13 +144,13 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | D10 | PASSING | Source approve endpoint is implemented and audited. |
 | D11 | PASSING | Source reject endpoint is implemented and audited. |
 | D12 | PASSING | Source patch/update endpoint is implemented and audited. |
-| D13 | IMPLEMENTED DURING THIS RUN | `POST /api/research/documents` accepts operator-only PDF/text uploads through Node and FastAPI. |
-| D14 | IMPLEMENTED DURING THIS RUN | Research document upload performs local extraction, stores hashes/safe preview, and creates a pending-review artifact. |
+| D13 | PASSING | `POST /api/research/documents` accepts operator-only PDF/text uploads through Node and FastAPI. |
+| D14 | PASSING | Research document upload performs local extraction, stores hashes/safe preview, and creates a pending-review artifact. |
 | D15 | PASSING | `GET /api/research/search` searches reviewed artifacts with source metadata. |
 | D16 | PASSING | `GET /api/research/evidence` is implemented; claims-specific endpoint remains future work but evidence path passes. |
 | D17 | PASSING | `GET /api/research/graph` is implemented with metadata-only graph safety. |
 | D18 | PASSING | `POST /api/research/graph/build` persists graph build/audit proof. |
-| D19 | FAILING / NEEDS FIX | `GET /api/research/analytics` is not implemented. |
+| D19 | PASSING | `GET /api/research/analytics` is implemented behind operator/admin RBAC with FastAPI actor binding and read-only safety flags. |
 | D20 | PASSING | `POST /api/operator/assistant` handles read-only results and proposal creation. |
 | D21 | PASSING | Proposal approve endpoint validates and executes once. |
 | D22 | PASSING | Proposal reject endpoint prevents mutation and audits. |
@@ -230,7 +233,6 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Add research analytics endpoint/dashboard and budget/kill-switch enforcement (`C26`, `C27`, `D19`).
 - Expand review queues for low-confidence/downvoted/escalated/user-answer items (`C21`).
 
 Priority 2:
@@ -285,10 +287,24 @@ Priority 2:
 
 ## Next Recommended Phase
 
-Phase 10U should address the next highest-risk remaining gaps:
+The next phase should address the next highest-risk remaining gaps:
 
-1. Research analytics endpoint/dashboard and budget/kill-switch hardening (`C26`, `C27`, `D19`).
-2. Expanded review queues and broader journey/entity extraction after the PDF pipeline is proven.
+1. Expanded review queues for low-confidence/downvoted/escalated/user-answer items (`C21`).
+2. Broader journey/entity extraction for cost/comparison, prescriptions, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`, `E5`).
+
+## Phase 46 Research Analytics And Budget Kill-Switch Update
+
+Code changes:
+- Added `research_budget_policies` and `research_budget_events` to the schema.
+- Added `getResearchAnalytics`, `getResearchBudgetStatus`, and `updateResearchBudgetPolicy`.
+- Enforced the persisted budget/kill switch before manual/scheduled research run queueing and before run execution.
+- Added Node routes and FastAPI operator/admin proxies for `GET /api/research/analytics`, `GET /api/research/budget`, and `POST /api/research/budget`.
+- Added dashboard Analytics/Budget buttons plus daily-run, daily-cost, kill-switch, and reason controls.
+
+Tests added or updated:
+- Updated `src/tests/research-ops.test.mjs` to prove analytics safety and persisted kill-switch enforcement for queue and execution paths.
+- Updated `src/tests/chat-ui-contract.test.mjs` to pin the new dashboard controls and endpoints.
+- Updated `project/tests/test_fastapi_facade.py` to prove operator/admin RBAC and actor binding for analytics and budget routes.
 
 ## Phase 10T Research Scheduler Daemon Update
 

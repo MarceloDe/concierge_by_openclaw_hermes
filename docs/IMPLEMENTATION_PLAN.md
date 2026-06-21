@@ -3085,3 +3085,30 @@ Gates:
 - `npm run build` passes.
 - `npm run test:local` passes.
 - Browser proof at `/` shows the upload controls and pending-review research artifact without raw document text.
+
+## Phase 46 - Research Analytics And Budget Kill-Switch Controls
+
+Goal: close final verification rows `C26`, `C27`, and `D19` with a dedicated read-only analytics surface and persisted fail-closed research budget controls.
+
+Build:
+
+- Add persisted budget policy and budget event tables.
+- Add read-only research analytics aggregation over safe counts, distributions, recent run metadata, worker status, and budget state.
+- Add Node endpoints `GET /api/research/analytics`, `GET /api/research/budget`, and `POST /api/research/budget`.
+- Add FastAPI proxies behind operator/admin RBAC with actor binding.
+- Enforce budget policy before manual run queueing, scheduled run queueing, and run execution.
+- Add operator dashboard Analytics/Budget controls and proof cards.
+- Update final verification report rows `C26`, `C27`, and `D19` only after focused tests pass.
+
+Non-goals:
+
+- Do not expand user-facing healthcare journeys in this phase.
+- Do not create new evidence or bypass artifact review from analytics.
+- Do not allow budget controls to expose raw prompts, raw artifact text, source-pointer payload dumps, credentials, secrets, or PHI.
+
+Gates:
+
+- `src/tests/research-ops.test.mjs` proves read-only analytics safety and kill-switch blocking for queue/execution.
+- `project/tests/test_fastapi_facade.py` proves RBAC and actor binding.
+- `src/tests/chat-ui-contract.test.mjs` pins the dashboard controls and endpoints.
+- `npm run build`, `npm run test:local`, and visual dashboard proof pass.

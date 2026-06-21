@@ -14,6 +14,8 @@ import {
   getResearchEmbeddingStatus,
   getResearchGraph,
   getResearchKpis,
+  getResearchAnalytics,
+  getResearchBudgetStatus,
   getResearchRun,
   getResearchWorkerStatus,
   ingestResearchDocumentUpload,
@@ -34,6 +36,7 @@ import {
   runDueResearchSchedules,
   searchResearchEvidence,
   startManualResearchRun,
+  updateResearchBudgetPolicy,
   updateResearchSource
 } from "../concierge/researchOps.mjs";
 
@@ -189,6 +192,71 @@ test("operator research rejects invalid source URLs and disallows runs from reje
     () => startManualResearchRun(store, { sourceId: proposed.source.id }),
     (error) => error instanceof ResearchOpsError && error.statusCode === 409
   );
+});
+
+test("research analytics endpoint reports safe budget state and kill switch blocks queue and execution", async () => {
+  const store = await createStore();
+  const actorUserId = "operator_research_budget";
+  const proposed = await proposeResearchSource(store, {
+    actorUserId,
+    url: "https://example.invalid/research/budget-source",
+    title: "Budget Source"
+  });
+  await reviewResearchSource(store, {
+    sourceId: proposed.source.id,
+    actorUserId,
+    decision: "approved",
+    reason: "Approved for budget proof."
+  });
+
+  const initialBudget = await getResearchBudgetStatus(store);
+  assert.equal(initialBudget.policy.enabled, true);
+  assert.equal(initialBudget.policy.killSwitchEnabled, false);
+  assert.equal(initialBudget.safety.policyPersisted, true);
+
+  const run = await startManualResearchRun(store, {
+    actorUserId,
+    sourceId: proposed.source.id,
+    topic: "Budget acceptance proof"
+  });
+  assert.equal(run.run.status, "queued");
+  assert.equal(run.budget.event.eventType, "run_queued");
+
+  const analytics = await getResearchAnalytics(store);
+  assert.equal(analytics.ok, true);
+  assert.equal(analytics.safety.readOnly, true);
+  assert.equal(analytics.safety.rawArtifactTextReturned, false);
+  assert.equal(analytics.budget.usage.queuedRuns, 1);
+  assert.equal(analytics.distributions.runStatuses.queued, 1);
+
+  const killed = await updateResearchBudgetPolicy(store, {
+    actorUserId,
+    dailyRunLimit: 10,
+    dailyCostLimitCents: 100,
+    killSwitchEnabled: true,
+    killSwitchReason: "Operator pause for phase 46 proof."
+  });
+  assert.equal(killed.policy.killSwitchEnabled, true);
+  assert.equal(killed.audit.eventType, "research_budget_policy_updated");
+
+  await assert.rejects(
+    () => startManualResearchRun(store, { actorUserId, sourceId: proposed.source.id, topic: "Should be blocked" }),
+    (error) => error instanceof ResearchOpsError && error.statusCode === 409 && error.budget?.blocked?.status === "blocked"
+  );
+  await assert.rejects(
+    () => executeResearchRun(store, { runId: run.run.id, actorUserId, workerMode: "mock_worker" }),
+    (error) => error instanceof ResearchOpsError && error.statusCode === 409 && error.budget?.blocked?.reason === "research_budget_kill_switch_enabled"
+  );
+
+  const blockedBudget = await getResearchBudgetStatus(store);
+  assert.equal(blockedBudget.state, "blocked");
+  assert.ok(blockedBudget.usage.blockedEvents >= 2);
+
+  const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
+  const auditText = JSON.stringify(auditRows);
+  assert.match(auditText, /research_budget_policy_updated/);
+  assert.match(auditText, /research_budget_blocked/);
+  assert.doesNotMatch(auditText, /Operator pause for phase 46 proof/);
 });
 
 test("operator research execution fetches approved source, stores artifact, and avoids raw identifiers in audit/events", async () => {

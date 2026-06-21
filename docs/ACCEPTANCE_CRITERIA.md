@@ -2549,3 +2549,16 @@ Focused proof:
 - API/dashboard responses expose hashes, extraction method, byte size, safe preview, citation status, and safety flags, but not raw document bytes or raw extracted text dumps.
 - Audit rows contain hashes and IDs only, not raw email, SSN, PHI, raw PDF bytes, or raw document text.
 - `/` exposes a regular operator control to upload a research PDF/text document and immediately shows the pending-review artifact proof.
+
+## Phase 46: Research Analytics And Budget Kill-Switch Controls
+
+- Node exposes `GET /api/research/analytics`, `GET /api/research/budget`, and `POST /api/research/budget`.
+- FastAPI proxies all three endpoints behind operator/admin RBAC and binds `actorUserId` from the JWT subject.
+- Analytics returns safe counts, distributions, recent run metadata, worker status, and budget state.
+- Analytics does not return raw artifact text, raw run payloads, source-pointer payload dumps, credentials, secrets, or PHI.
+- Research budget policy is persisted in `research_budget_policies`.
+- Research budget accepted/blocked attempts are persisted in `research_budget_events`.
+- The kill switch and daily limits fail closed before manual research queueing, scheduled research queueing, and run execution.
+- Blocked attempts create budget events and hash-chained audit proof.
+- `/` exposes analytics and budget controls, including daily run limit, daily cost limit, kill switch, and reason fields.
+- The final verification report moves `C26`, `C27`, and `D19` to `PASSING`.

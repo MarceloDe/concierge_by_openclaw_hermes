@@ -160,13 +160,16 @@ const appJs = await readFile(resolve("src/app/app.js"), "utf8");
 const appCss = await readFile(resolve("src/app/styles.css"), "utf8");
 for (const requiredFragment of [
   "Phase 10S AI2UI modes update",
-  "Phase 10T research scheduler daemon update",
+  "Phase 46 research analytics and budget kill-switch update",
   "FAILING / NEEDS FIX",
   "BLOCKED BY EXTERNAL DEPENDENCY",
   "Chat/Split/Guided/Bento",
   "typed AI2UI block contract",
   "research knowledge-base PDF upload",
-  "always-on approved-schedule daemon"
+  "always-on approved-schedule daemon",
+  "GET /api/research/analytics",
+  "research_budget_policies",
+  "research_budget_blocked"
 ]) {
   if (!finalVerificationReport.includes(requiredFragment)) {
     throw new Error(`Final system verification report is missing required fragment: ${requiredFragment}`);

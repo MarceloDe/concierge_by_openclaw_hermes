@@ -544,6 +544,21 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         await enforce_rate_limit(app, request_context, principal=principal, scope="research")
         return await app.state.node_client.get_json("/api/research/kpis", params={"actorUserId": principal.user_id})
 
+    @app.get("/api/research/analytics")
+    async def research_analytics(request_context: Request, principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="research")
+        return await app.state.node_client.get_json("/api/research/analytics", params={"actorUserId": principal.user_id})
+
+    @app.get("/api/research/budget")
+    async def research_budget(request_context: Request, principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="research")
+        return await app.state.node_client.get_json("/api/research/budget", params={"actorUserId": principal.user_id})
+
+    @app.post("/api/research/budget")
+    async def update_research_budget(request_context: Request, body: dict[str, Any] = Body(...), principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="research")
+        return await app.state.node_client.post_json("/api/research/budget", body_for_actor(body, principal))
+
     @app.get("/api/research/worker-status")
     async def research_worker_status(request_context: Request, principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="research")
