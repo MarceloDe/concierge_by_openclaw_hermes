@@ -35,6 +35,8 @@ export const TABLES = [
   "research_claim_evaluations",
   "research_schedules",
   "research_scheduler_daemon_state",
+  "research_budget_policies",
+  "research_budget_events",
   "continuous_intelligence_shadow_runs",
   "pems_candidate_maturity",
   "pems_candidate_promotion_reviews",
@@ -662,6 +664,35 @@ CREATE TABLE IF NOT EXISTS research_scheduler_daemon_state (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (last_tick_event_id) REFERENCES runtime_events(id)
+);
+
+CREATE TABLE IF NOT EXISTS research_budget_policies (
+  id TEXT PRIMARY KEY,
+  policy_key TEXT NOT NULL UNIQUE,
+  actor_user_id TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  daily_run_limit INTEGER NOT NULL DEFAULT 25,
+  daily_cost_limit_cents INTEGER NOT NULL DEFAULT 1000,
+  kill_switch_enabled INTEGER NOT NULL DEFAULT 0,
+  kill_switch_reason TEXT NOT NULL DEFAULT '',
+  enforcement_mode TEXT NOT NULL DEFAULT 'fail_closed',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_budget_events (
+  id TEXT PRIMARY KEY,
+  policy_key TEXT NOT NULL,
+  actor_user_id TEXT,
+  run_id TEXT,
+  event_type TEXT NOT NULL,
+  estimated_cost_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES research_runs(id)
 );
 
 CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs (

@@ -218,6 +218,8 @@
               <span id="researchStatus">Not loaded</span>
               <span id="operatorAssistantStatus">Assistant idle</span>
               <button id="loadResearchKpis" type="button">Load KPIs</button>
+              <button id="loadResearchAnalytics" type="button">Analytics</button>
+              <button id="loadResearchBudget" type="button">Budget</button>
               <button id="loadHandoffs" type="button">Human Handoffs</button>
               <button id="loadResearchWorker" type="button">Worker Status</button>
               <button id="loadResearchEmbeddings" type="button">Embedding Status</button>
@@ -288,11 +290,31 @@
               <input id="researchEmbeddingDimensions" type="number" value="64" min="8" max="4096" />
             </label>
             <label>
+              Daily research runs
+              <input id="researchBudgetDailyRuns" type="number" value="25" min="0" max="10000" />
+            </label>
+            <label>
+              Daily budget cents
+              <input id="researchBudgetDailyCostCents" type="number" value="1000" min="0" max="100000000" />
+            </label>
+            <label>
+              Kill switch
+              <select id="researchBudgetKillSwitch">
+                <option value="false">Off</option>
+                <option value="true">On</option>
+              </select>
+            </label>
+            <label>
+              Kill-switch reason
+              <input id="researchBudgetKillSwitchReason" value="" />
+            </label>
+            <label>
               Audit prefix
               <input id="auditEventPrefix" value="research" />
             </label>
             <button id="proposeResearchSource" type="button">Propose Source</button>
             <button id="chooseResearchEmbeddingRoute" type="button">Choose Route</button>
+            <button id="saveResearchBudget" type="button">Save Budget</button>
             <button id="searchResearchEvidence" type="button">Search Evidence</button>
             <button id="evaluateCitationClosure" type="button">Judge Citations</button>
           </div>

@@ -31,6 +31,8 @@ import {
   chooseResearchEmbeddingRoute,
   evaluateCitationClosure,
   executeResearchRun,
+  getResearchAnalytics,
+  getResearchBudgetStatus,
   getResearchEmbeddingStatus,
   getResearchGraph,
   getResearchKpis,
@@ -51,6 +53,7 @@ import {
   runDueResearchSchedules,
   searchResearchEvidence,
   startManualResearchRun,
+  updateResearchBudgetPolicy,
   updateResearchSource
 } from "../concierge/researchOps.mjs";
 import { createResearchSchedulerDaemon } from "../concierge/researchScheduler.mjs";
@@ -3182,6 +3185,46 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/research/kpis") {
     sendJson(res, 200, await getResearchKpis(store));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/analytics") {
+    try {
+      sendJson(res, 200, await getResearchAnalytics(store));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/budget") {
+    try {
+      sendJson(res, 200, await getResearchBudgetStatus(store));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/research/budget") {
+    const body = await readJson(req);
+    try {
+      sendJson(
+        res,
+        200,
+        await updateResearchBudgetPolicy(store, {
+          actorUserId: body.actorUserId ?? body.userId ?? null,
+          enabled: body.enabled,
+          dailyRunLimit: body.dailyRunLimit ?? body.daily_run_limit,
+          dailyCostLimitCents: body.dailyCostLimitCents ?? body.daily_cost_limit_cents,
+          killSwitchEnabled: body.killSwitchEnabled ?? body.kill_switch_enabled,
+          killSwitchReason: body.killSwitchReason ?? body.kill_switch_reason ?? "",
+          metadata: body.metadata ?? {}
+        })
+      );
+    } catch (error) {
+      sendApiError(res, error);
+    }
     return;
   }
 

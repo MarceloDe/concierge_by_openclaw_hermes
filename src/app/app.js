@@ -2369,6 +2369,8 @@ function renderResearchConsole(payload, mode = "kpis") {
   const searchResults = payload.results ?? [];
   const worker = payload.worker ?? (payload.modes && payload.defaultMode ? payload : null);
   const workerResult = payload.workerResult ?? null;
+  const budgetPayload = payload.budget ?? (payload.policy && payload.usage ? payload : null);
+  const analyticsPayload = payload.distributions ? payload : null;
   const embeddingStatus = payload.route && (payload.counts || payload.job || payload.latestJob) ? payload : null;
   const graphPayload = payload.graph?.nodes && payload.graph?.edges ? payload : null;
   const researchDocumentUpload = payload.document && payload.artifact ? payload : null;
@@ -2400,6 +2402,49 @@ function renderResearchConsole(payload, mode = "kpis") {
           <dd>${escapeHtml((researchDocumentUpload.actionsTaken ?? []).join(", ") || "none")}</dd>
         </dl>
         <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
+      </article>
+    `);
+  }
+  if (analyticsPayload) {
+    const distributions = analyticsPayload.distributions ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Research Analytics</h3>
+        <dl>
+          <dt>Generated</dt>
+          <dd>${escapeHtml(analyticsPayload.generatedAt ?? "unknown")}</dd>
+          <dt>Run statuses</dt>
+          <dd>${escapeHtml(JSON.stringify(distributions.runStatuses ?? {}))}</dd>
+          <dt>Artifact statuses</dt>
+          <dd>${escapeHtml(JSON.stringify(distributions.artifactCitationStatuses ?? {}))}</dd>
+          <dt>Source statuses</dt>
+          <dd>${escapeHtml(JSON.stringify(distributions.sourceStatuses ?? {}))}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(analyticsPayload.safety?.readOnly ? "read-only analytics · raw payloads hidden" : "verify analytics safety")}</dd>
+        </dl>
+      </article>
+    `);
+  }
+  if (budgetPayload) {
+    const policy = budgetPayload.policy ?? {};
+    const usage = budgetPayload.usage ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Research Budget And Kill Switch</h3>
+        <dl>
+          <dt>State</dt>
+          <dd>${escapeHtml(`${budgetPayload.state ?? "enforcing"} · enabled ${policy.enabled !== false} · kill switch ${policy.killSwitchEnabled ? "on" : "off"}`)}</dd>
+          <dt>Daily runs</dt>
+          <dd>${escapeHtml(`${usage.queuedRuns ?? 0} / ${policy.dailyRunLimit ?? 0}`)}</dd>
+          <dt>Daily estimated cost</dt>
+          <dd>${escapeHtml(`${usage.estimatedCostCents ?? 0} / ${policy.dailyCostLimitCents ?? 0} cents`)}</dd>
+          <dt>Blocked attempts</dt>
+          <dd>${escapeHtml(usage.blockedEvents ?? 0)}</dd>
+          <dt>Latest event</dt>
+          <dd>${escapeHtml(usage.latestEvent ? `${usage.latestEvent.eventType} · ${usage.latestEvent.status} · ${usage.latestEvent.reason ?? ""}` : "none")}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(budgetPayload.safety?.failClosed ? "fail-closed · persisted policy" : "verify budget safety")}</dd>
+        </dl>
       </article>
     `);
   }
@@ -2962,6 +3007,49 @@ async function loadResearchKpis() {
   const result = await api("/api/research/kpis");
   researchStatus.textContent = `${result.sources?.approved ?? 0} approved sources · ${result.runs?.total ?? 0} runs`;
   renderResearchConsole(result, "kpis");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchAnalytics() {
+  const result = await api("/api/research/analytics");
+  const budget = result.budget ?? {};
+  const usage = budget.usage ?? {};
+  researchStatus.textContent = `${result.kpis?.runs?.total ?? 0} runs · budget ${usage.queuedRuns ?? 0}/${budget.policy?.dailyRunLimit ?? 0}`;
+  renderResearchConsole(result, "analytics");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchBudget() {
+  const result = await api("/api/research/budget");
+  const policy = result.policy ?? {};
+  const usage = result.usage ?? {};
+  document.querySelector("#researchBudgetDailyRuns").value = String(policy.dailyRunLimit ?? 25);
+  document.querySelector("#researchBudgetDailyCostCents").value = String(policy.dailyCostLimitCents ?? 1000);
+  document.querySelector("#researchBudgetKillSwitch").value = policy.killSwitchEnabled ? "true" : "false";
+  document.querySelector("#researchBudgetKillSwitchReason").value = policy.killSwitchReason ?? "";
+  researchStatus.textContent = `Budget ${usage.queuedRuns ?? 0}/${policy.dailyRunLimit ?? 0} runs · kill switch ${policy.killSwitchEnabled ? "on" : "off"}`;
+  renderResearchConsole(result, "budget");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function saveResearchBudget() {
+  const result = await api("/api/research/budget", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      enabled: true,
+      dailyRunLimit: Number(value("researchBudgetDailyRuns") || 0),
+      dailyCostLimitCents: Number(value("researchBudgetDailyCostCents") || 0),
+      killSwitchEnabled: value("researchBudgetKillSwitch") === "true",
+      killSwitchReason: value("researchBudgetKillSwitchReason") || ""
+    })
+  });
+  const policy = result.policy ?? {};
+  researchStatus.textContent = `Budget saved · ${policy.dailyRunLimit ?? 0} runs · kill switch ${policy.killSwitchEnabled ? "on" : "off"}`;
+  renderResearchConsole(result, "budget");
   trace.textContent = JSON.stringify(result, null, 2);
   return result;
 }
@@ -4112,6 +4200,30 @@ document.querySelector("#loadResearchKpis").addEventListener("click", async () =
   }
 });
 
+document.querySelector("#loadResearchAnalytics").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchAnalytics"), "Loading...");
+  try {
+    await loadResearchAnalytics();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchBudget").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchBudget"), "Loading...");
+  try {
+    await loadResearchBudget();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
 loadHandoffsButton.addEventListener("click", async () => {
   const restore = setBusy(loadHandoffsButton, "Loading...");
   try {
@@ -4152,6 +4264,18 @@ document.querySelector("#chooseResearchEmbeddingRoute").addEventListener("click"
   const restore = setBusy(document.querySelector("#chooseResearchEmbeddingRoute"), "Saving...");
   try {
     await chooseResearchEmbeddingRoute();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#saveResearchBudget").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#saveResearchBudget"), "Saving...");
+  try {
+    await saveResearchBudget();
   } catch (error) {
     researchStatus.textContent = error.message;
     trace.textContent = error.stack ?? error.message;

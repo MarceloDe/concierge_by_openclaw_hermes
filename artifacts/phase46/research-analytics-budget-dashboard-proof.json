@@ -1,0 +1,12 @@
+{
+  "url": "http://127.0.0.1:4218/?phase=phase-46-research-analytics-budget",
+  "title": "Brainstyworkers AI Concierge",
+  "refreshedState": {
+    "consoleText": "\n      \n        Research Budget And Kill Switch\n        \n          State\n          enforcing · enabled true · kill switch off\n          Daily runs\n          0 / 25\n          Daily estimated cost\n          0 / 1000 cents\n          Blocked attempts\n          0\n          Latest event\n          policy_updated · accepted · policy_updated\n          Safety\n          fail-closed · persisted policy\n        \n      \n    ",
+    "hasBudgetCard": true,
+    "status": "Budget saved · 25 runs · kill switch off",
+    "traceHasLatestEvent": true,
+    "traceHasPolicyUpdated": true
+  },
+  "screenshot": "/Users/mfelix/projects/workerprototype_openclaw/artifacts/phase46/research-analytics-budget-dashboard-proof.png"
+}

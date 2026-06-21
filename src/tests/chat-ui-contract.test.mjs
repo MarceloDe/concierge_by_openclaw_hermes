@@ -202,8 +202,14 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(indexHtml, /id="researchAnswerToJudge"/);
   assert.match(indexHtml, /id="researchEmbeddingProvider"/);
   assert.match(indexHtml, /id="researchEmbeddingDimensions"/);
+  assert.match(indexHtml, /id="researchBudgetDailyRuns"/);
+  assert.match(indexHtml, /id="researchBudgetDailyCostCents"/);
+  assert.match(indexHtml, /id="researchBudgetKillSwitch"/);
+  assert.match(indexHtml, /id="researchBudgetKillSwitchReason"/);
   assert.match(indexHtml, /id="auditEventPrefix"/);
   assert.match(indexHtml, /id="loadResearchKpis"/);
+  assert.match(indexHtml, /id="loadResearchAnalytics"/);
+  assert.match(indexHtml, /id="loadResearchBudget"/);
   assert.match(indexHtml, /id="loadHandoffs"/);
   assert.match(indexHtml, /id="loadResearchWorker"/);
   assert.match(indexHtml, /id="loadResearchEmbeddings"/);
@@ -222,6 +228,7 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(indexHtml, /id="startResearchRun"/);
   assert.match(indexHtml, /id="proposeResearchSource"/);
   assert.match(indexHtml, /id="chooseResearchEmbeddingRoute"/);
+  assert.match(indexHtml, /id="saveResearchBudget"/);
   assert.match(indexHtml, /id="searchResearchEvidence"/);
   assert.match(indexHtml, /id="evaluateCitationClosure"/);
   assert.match(indexHtml, /id="loadOperatorTools"/);
@@ -230,6 +237,8 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /renderResearchConsole/);
   assert.match(appJs, /renderOperatorAssistantConsole/);
   assert.match(appJs, /\/api\/research\/kpis/);
+  assert.match(appJs, /\/api\/research\/analytics/);
+  assert.match(appJs, /\/api\/research\/budget/);
   assert.match(appJs, /\/api\/handoffs/);
   assert.match(appJs, /loadHumanHandoffs/);
   assert.match(appJs, /Human Handoff/);
@@ -276,9 +285,13 @@ test("operator proof dashboard exposes Phase 10T research grounding, citation cl
   assert.match(appJs, /researchConsole\.addEventListener\("click"/);
   assert.match(appJs, /operatorAssistantConsole\.addEventListener\("click"/);
   assert.match(appJs, /loadResearchKpis/);
+  assert.match(appJs, /loadResearchAnalytics/);
+  assert.match(appJs, /loadResearchBudget/);
+  assert.match(appJs, /saveResearchBudget/);
   assert.match(appJs, /loadResearchWorkerStatus/);
   assert.match(appJs, /loadResearchEmbeddingStatus/);
   assert.match(appJs, /chooseResearchEmbeddingRoute/);
+  assert.match(appJs, /Research Budget And Kill Switch/);
   assert.match(appJs, /reindexResearchEmbeddings/);
   assert.match(appJs, /loadResearchGraph/);
   assert.match(appJs, /buildResearchGraph/);

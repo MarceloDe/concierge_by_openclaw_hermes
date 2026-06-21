@@ -8807,3 +8807,26 @@ Verification:
 - `npm run test:local` passed with 240 total, 238 passed, 2 expected live-gated OpenClaw skips.
 - `git diff --check` passed.
 - Targeted changed-file secret scan found no AWS keys, bearer tokens, private keys, or OpenAI-style secrets.
+
+## Phase 46 Research Analytics And Budget Kill-Switch Controls - 2026-06-21
+
+Goal:
+- Close final verification rows `C26`, `C27`, and `D19`.
+
+Implemented:
+- Added `research_budget_policies` and `research_budget_events`.
+- Added safe research analytics aggregation through `GET /api/research/analytics`.
+- Added budget status/update endpoints through Node and FastAPI.
+- Enforced the persisted budget policy before manual research run queueing, scheduled run queueing, and run execution.
+- Added `/` dashboard Analytics/Budget buttons, persisted daily limit fields, kill-switch selector, and proof cards.
+- Updated the final verification report so `C26`, `C27`, and `D19` are now `PASSING`.
+
+Safety:
+- Analytics is read-only and returns counts/distributions/recent metadata only.
+- Budget controls persist policy and event proof but do not return raw prompts, raw artifact text, source-pointer payload dumps, credentials, secrets, or PHI.
+- Kill-switch and limit blocks fail closed with `research_budget_blocked` audit proof.
+
+Verification:
+- `npm run test:local` passed with 239 passing tests and 2 expected live-gated OpenClaw skips.
+- `npm run test:live` passed with the live OpenAI smoke plus research/UI slices.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
