@@ -2619,3 +2619,16 @@ Consequences:
 - Deterministic reclosure can pass the revision while production decisioning remains disabled.
 - Future phases can link revision records to explicit review decisions without rewriting draft or review schemas.
 - Raw claims and raw source text remain excluded from reviewer surfaces.
+
+## Phase 42: Bind Reviewer Follow-Ups In A Dedicated Ledger
+
+Decision: Phase 42 adds `pems_candidate_review_followups` instead of mutating evaluator drafts, claim revisions, or promotion review rows.
+
+Rationale: A follow-up workflow binding is a lifecycle event that says which claim revision was followed by which explicit review decision. It is not the revision itself and not the review decision itself. A dedicated append-only ledger keeps the chain auditable without making revisions or advisory drafts production-driving.
+
+Consequences:
+
+- A reviewer can record a follow-up only by linking an existing claim revision and an existing promotion review.
+- The dashboard can show which revision resolved which advisory veto and which explicit review decision followed it.
+- Follow-up records can be open, resolved, or blocked without changing healthcare routing or payer actions.
+- Raw review text, raw revision text, raw rationale text, and raw source text remain excluded from reviewer surfaces.

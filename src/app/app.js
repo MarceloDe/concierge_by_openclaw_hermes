@@ -30,6 +30,8 @@ const pemsLiveOnlyFilter = document.querySelector("#pemsLiveOnlyFilter");
 const pemsReviewRationale = document.querySelector("#pemsReviewRationale");
 const pemsClaimRevisionText = document.querySelector("#pemsClaimRevisionText");
 const recordPemsClaimRevisionButton = document.querySelector("#recordPemsClaimRevision");
+const pemsFollowUpRationale = document.querySelector("#pemsFollowUpRationale");
+const recordPemsFollowUpButton = document.querySelector("#recordPemsFollowUp");
 const pemsReviewActionButtons = [...document.querySelectorAll("[data-pems-review-action]")];
 const researchStatus = document.querySelector("#researchStatus");
 const researchConsole = document.querySelector("#researchConsole");
@@ -980,9 +982,15 @@ function latestPemsDraftAvailable(payload = latestPemsWorkbench) {
   return Boolean(payload?.latestDraft?.id && payload?.latestCandidate?.candidateId);
 }
 
+function pemsClaimRevisionResolved(payload = latestPemsWorkbench) {
+  const revisionProof = payload?.reviewerClaimRevisions;
+  return Boolean(revisionProof?.latestClaimRevision?.id && revisionProof?.deterministicReclosurePassed);
+}
+
 function pemsClaimClosureVetoed(payload = latestPemsWorkbench) {
   const closure = payload?.liveClaimCitationClosure ?? payload?.latestClaimCitationClosure ?? payload?.latestDraft?.claimCitationClosure;
-  return Boolean(closure?.reviewerEditRequired || (closure?.unsupportedCount ?? 0) > 0 || (closure?.lowConfidenceCount ?? 0) > 0);
+  const vetoed = Boolean(closure?.reviewerEditRequired || (closure?.unsupportedCount ?? 0) > 0 || (closure?.lowConfidenceCount ?? 0) > 0);
+  return vetoed && !pemsClaimRevisionResolved(payload);
 }
 
 function firstEditablePemsClaim(payload = latestPemsWorkbench) {
@@ -998,6 +1006,9 @@ function setPemsReviewActionsEnabled(enabled, payload = latestPemsWorkbench) {
   }
   if (recordPemsClaimRevisionButton) {
     recordPemsClaimRevisionButton.disabled = !enabled || !firstEditablePemsClaim(payload);
+  }
+  if (recordPemsFollowUpButton) {
+    recordPemsFollowUpButton.disabled = !enabled || !payload?.reviewerClaimRevisions?.latestClaimRevision?.id || !payload?.reviewerFollowUps?.latestPromotionReview?.id;
   }
 }
 
@@ -1093,6 +1104,34 @@ function renderPemsClaimRevision(revisionProof = {}) {
   `;
 }
 
+function renderPemsReviewerFollowUp(followUpProof = {}) {
+  const followUp = followUpProof.latestReviewerFollowUp;
+  if (!followUp) return `<p class="status-text">No reviewer follow-up workflow binding exists yet.</p>`;
+  return `
+    <dl>
+      <dt>Status</dt>
+      <dd>${escapeHtml(followUpProof.status ?? followUp.followupStatus ?? "unknown")}</dd>
+      <dt>Follow-ups</dt>
+      <dd>${escapeHtml(followUpProof.reviewerFollowUpCount ?? 0)} total · ${escapeHtml(followUpProof.reviewerFollowUpResolvedCount ?? 0)} resolved · ${escapeHtml(followUpProof.reviewerFollowUpOpenCount ?? 0)} open</dd>
+      <dt>Revision binding</dt>
+      <dd>${escapeHtml(followUp.claimRevisionId ?? "none")}</dd>
+      <dt>Review binding</dt>
+      <dd>${escapeHtml(followUp.promotionReviewId ?? "none")}</dd>
+      <dt>Workflow</dt>
+      <dd>${escapeHtml(followUp.workflowStatus ?? "unknown")} · ${escapeHtml(followUp.revisionOutcome ?? "unknown")}</dd>
+      <dt>Action required</dt>
+      <dd>${escapeHtml(followUp.actionRequired ?? "none")}</dd>
+      <dt>Raw revision/review</dt>
+      <dd>not stored</dd>
+    </dl>
+    <div class="pems-followup-chain" role="table" aria-label="PEMS reviewer follow-up chain">
+      <div role="row"><span>Claim revision</span><span>${escapeHtml(followUp.claimRevisionId ?? "none")}</span></div>
+      <div role="row"><span>Review decision</span><span>${escapeHtml(followUpProof.latestPromotionReview?.decision ?? "not linked")}</span></div>
+      <div role="row"><span>Outcome</span><span>${escapeHtml(followUpProof.revisionResolvedVeto ? "revision resolved advisory veto" : "follow-up still needs attention")}</span></div>
+    </div>
+  `;
+}
+
 function currentPemsWorkbenchQuery() {
   const params = new URLSearchParams();
   const draftStatus = pemsDraftStatusFilter?.value ?? "all";
@@ -1165,6 +1204,14 @@ function renderPemsWorkbench(payload) {
     latestClaimRevision: null,
     productionDrivingAllowed: false
   };
+  const reviewerFollowUp = payload.reviewerFollowUps ?? {
+    status: "phase42_reviewer_follow_up_workflow_waiting",
+    score: 96,
+    target: 98,
+    reviewerFollowUpCount: 0,
+    latestReviewerFollowUp: null,
+    productionDrivingAllowed: false
+  };
   const reviewerUi = payload.reviewerUi ?? {
     status: "phase37_pems_reviewer_ui_ready",
     score: 88,
@@ -1173,19 +1220,23 @@ function renderPemsWorkbench(payload) {
   };
   const available = latestPemsDraftAvailable(payload);
   if (pemsWorkbenchStatus) {
-    pemsWorkbenchStatus.textContent = `${claimRevision.status ?? claimClosure.status ?? "phase41_reviewer_claim_revision_waiting"} · ${claimRevision.score ?? claimClosure.score ?? 94} / ${claimRevision.target ?? claimClosure.target ?? 96}`;
+    pemsWorkbenchStatus.textContent = `${reviewerFollowUp.status ?? claimRevision.status ?? "phase42_reviewer_follow_up_workflow_waiting"} · ${reviewerFollowUp.score ?? claimRevision.score ?? 96} / ${reviewerFollowUp.target ?? claimRevision.target ?? 98}`;
   }
   setPemsReviewActionsEnabled(available, payload);
   pemsWorkbench.innerHTML = `
     <article class="connector-card wide pems-workbench-summary">
-      <h3>Phase 41 Reviewer Claim Revisions</h3>
+      <h3>Phase 42 Reviewer Follow-Up Workflows</h3>
       <dl>
         <dt>Status</dt>
-        <dd>${escapeHtml(claimRevision.status ?? "phase41_reviewer_claim_revision_waiting")}</dd>
+        <dd>${escapeHtml(reviewerFollowUp.status ?? "phase42_reviewer_follow_up_workflow_waiting")}</dd>
         <dt>Score</dt>
-        <dd>${escapeHtml(claimRevision.score ?? 94)} / ${escapeHtml(claimRevision.target ?? 96)}</dd>
+        <dd>${escapeHtml(reviewerFollowUp.score ?? 96)} / ${escapeHtml(reviewerFollowUp.target ?? 98)}</dd>
+        <dt>Follow-up records</dt>
+        <dd>${escapeHtml(reviewerFollowUp.reviewerFollowUpCount ?? 0)} total · ${escapeHtml(reviewerFollowUp.reviewerFollowUpResolvedCount ?? 0)} resolved</dd>
         <dt>Revision records</dt>
         <dd>${escapeHtml(claimRevision.claimRevisionCount ?? 0)} total · ${escapeHtml(claimRevision.claimRevisionReclosedCount ?? 0)} reclosed</dd>
+        <dt>Revision-to-review binding</dt>
+        <dd>${escapeHtml(reviewerFollowUp.bindsRevision && reviewerFollowUp.bindsReviewDecision ? "linked" : "waiting")}</dd>
         <dt>Phase 40 gate</dt>
         <dd>${escapeHtml(claimClosure.status ?? "phase40_claim_citation_closure_waiting_for_claims")} · ${escapeHtml(claimClosure.score ?? 90)} / ${escapeHtml(claimClosure.target ?? 94)}</dd>
         <dt>Claim labels</dt>
@@ -1284,6 +1335,10 @@ function renderPemsWorkbench(payload) {
       ${renderPemsClaimRevision(claimRevision)}
     </article>
     <article class="connector-card wide">
+      <h3>Reviewer Follow-Up Workflow</h3>
+      ${renderPemsReviewerFollowUp(reviewerFollowUp)}
+    </article>
+    <article class="connector-card wide">
       <h3>Deterministic Vs Advisory Comparison</h3>
       ${renderPemsComparisonRows(comparison.comparisonRows)}
     </article>
@@ -1380,8 +1435,9 @@ async function submitPemsWorkbenchReview(action) {
       decision: decision.decision,
       rationale,
       metadata: {
-        phase: 40,
+        phase: 42,
         reviewerUiAction: action,
+        claimRevisionId: current.reviewerClaimRevisions?.latestClaimRevision?.id ?? null,
         claimCitationClosureVerdict: current.liveClaimCitationClosure?.verdict ?? current.latestClaimCitationClosure?.verdict ?? null,
         reviewerEditRequired: pemsClaimClosureVetoed(current),
         advisoryOnly: true,
@@ -1429,6 +1485,43 @@ async function submitPemsClaimRevision() {
   });
   const refreshed = await loadPemsWorkbench();
   trace.textContent = JSON.stringify({ claimRevision: result, workbench: refreshed }, null, 2);
+  return result;
+}
+
+async function submitPemsReviewerFollowUp() {
+  const current = latestPemsWorkbench ?? (await loadPemsWorkbench());
+  if (!latestPemsDraftAvailable(current)) throw new Error("No advisory draft is available for reviewer follow-up.");
+  const revision = current.reviewerClaimRevisions?.latestClaimRevision;
+  if (!revision?.id) throw new Error("Record a reviewer claim revision before binding a follow-up workflow.");
+  const review = current.reviewerFollowUps?.latestPromotionReview;
+  if (!review?.id) throw new Error("Record an explicit reviewer decision before binding a follow-up workflow.");
+  const result = await api("/api/continuous-intelligence/pems/follow-ups", {
+    method: "POST",
+    body: JSON.stringify({
+      candidateId: current.latestCandidate.candidateId,
+      advisoryDraftId: current.latestDraft.id,
+      claimRevisionId: revision.id,
+      promotionReviewId: review.id,
+      actorUserId: "operator_ui",
+      followupType: "revision_decision_binding",
+      rationale: pemsFollowUpRationale?.value?.trim() || "Bound reviewer claim revision to explicit review decision.",
+      actionRequired: "Advisory follow-up workflow closed only after reviewer decision and deterministic reclosure.",
+      metadata: {
+        phase: 42,
+        reviewerUiAction: "record_reviewer_follow_up",
+        advisoryOnly: true,
+        rawRationaleStored: false,
+        rawRevisionStored: false,
+        rawReviewStored: false,
+        followUpCreatesEvidence: false,
+        followUpBypassesHumanReview: false,
+        productionDrivingAllowed: false
+      }
+    }),
+    timeoutMs: 15000
+  });
+  const refreshed = await loadPemsWorkbench();
+  trace.textContent = JSON.stringify({ reviewerFollowUp: result, workbench: refreshed }, null, 2);
   return result;
 }
 
@@ -4489,6 +4582,19 @@ recordPemsClaimRevisionButton?.addEventListener("click", async () => {
   try {
     const result = await submitPemsClaimRevision();
     if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "claim revision recorded"} · workbench refreshed`;
+  } catch (error) {
+    renderPemsWorkbenchError(error);
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+recordPemsFollowUpButton?.addEventListener("click", async () => {
+  const restore = setBusy(recordPemsFollowUpButton, "Recording...");
+  try {
+    const result = await submitPemsReviewerFollowUp();
+    if (pemsWorkbenchStatus) pemsWorkbenchStatus.textContent = `${result.status ?? "reviewer follow-up recorded"} · workbench refreshed`;
   } catch (error) {
     renderPemsWorkbenchError(error);
     trace.textContent = error.stack ?? error.message;

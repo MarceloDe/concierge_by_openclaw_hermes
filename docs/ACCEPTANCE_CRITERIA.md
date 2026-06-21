@@ -2476,3 +2476,16 @@ Focused proof:
 - Revision records do not create evidence or production authority.
 - Raw original claims, raw suggested edits, raw revised claims, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
 - `productionDrivingAllowed=false` remains enforced.
+
+## Phase 42: PEMS Reviewer Follow-Up Workflow Binding
+
+- `PEMS_REVIEWER_FOLLOW_UP_VERSION` is defined.
+- `pems_candidate_review_followups` exists.
+- Reviewer follow-ups bind candidate id, advisory draft id, claim revision id, promotion review id, actor id, workflow status, revision outcome, action required, and rationale hash/preview.
+- A resolved follow-up requires a deterministic reclosure-passed revision and a later explicit review decision.
+- Workbench API returns `reviewerFollowUps`.
+- Connector proof exposes `pems_reviewer_follow_up_workflows`.
+- Dashboard renders `Reviewer Follow-Up Workflow` with revision binding, review binding, workflow state, and action required.
+- Follow-up records do not create evidence or production authority.
+- Raw revision text, raw review text, raw rationale text, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
+- `productionDrivingAllowed=false` remains enforced.

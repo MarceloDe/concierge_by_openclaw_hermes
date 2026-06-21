@@ -1,0 +1,16 @@
+{
+  "workbenchStatus": "phase42_reviewer_follow_up_workflow_ready",
+  "workbenchScore": 98,
+  "workbenchTarget": 98,
+  "reviewerFollowUpCount": 1,
+  "reviewerFollowUpResolvedCount": 1,
+  "bindsRevision": true,
+  "bindsReviewDecision": true,
+  "revisionResolvedVeto": true,
+  "connectorStatus": "phase42_reviewer_follow_up_workflow_ready",
+  "continuousScore": 98,
+  "continuousTarget": 98,
+  "rawFollowUpStored": false,
+  "followUpCreatesEvidence": false,
+  "productionDrivingAllowed": false
+}
