@@ -1,6 +1,6 @@
 # Phase Scoreboard
 
-Status: Phase 41 canonical scoreboard.
+Status: Phase 42 canonical scoreboard.
 
 This file is the local score mirror for the goal-tied development loop. The operator dashboard must expose this discipline through proof scores, and Cortex must hold the durable semantic/procedural version.
 
@@ -13,7 +13,7 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | llm_intelligence_maturity | 60 | Implemented but incomplete | Structured intent and sourced composition exist; continuous procedural memory and broader live trace proof remain next-phase work. |
 | openclaw_bounded_worker | 85 | Implemented | Registry, executor, proposal, and approval boundaries exist; broader channel skills remain future work. |
 | remote_steel_ops | 100 | Implemented in Phase 31 | Remote-host readiness and ops drills are distinct from SaaS browser-provider readiness. |
-| continuous_procedural_memory | 96 | Phase 41 reviewer claim revisions | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, `pems_candidate_claim_revisions`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, reviewer filters, claim-level citation closure labels, and reviewer claim revision records now exist; evaluator drafts, claim labels, suggested edits, revision records, and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, unsupported/low-confidence claims visibly veto approval until revised or blocked, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
+| continuous_procedural_memory | 98 | Phase 42 reviewer follow-up workflows | Typed `CaseState`, G0-G8 gates, PEMS, append-only shadow runs, aggregate candidate maturity, `pems_candidate_promotion_reviews`, `pems_candidate_evaluator_drafts`, `pems_candidate_claim_revisions`, `pems_candidate_review_followups`, an operator reviewer UI, deterministic-vs-advisory comparison rows, source-pointer chips, evaluator provenance refs, live-gated evaluator draft creation, reviewer filters, claim-level citation closure labels, reviewer claim revision records, and revision-to-review follow-up bindings now exist; evaluator drafts, claim labels, suggested edits, revision records, follow-up records, and UI controls are advisory/ref-only, mocked LLM output never counts as live proof, unsupported/low-confidence claims visibly veto approval until revised or blocked, explicit reviewer/validator/citation/safety gates remain authoritative, and production decisioning remains disabled. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
 
@@ -136,3 +136,18 @@ This file is the local score mirror for the goal-tied development loop. The oper
 - Revision records do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, or write to payer portals.
 - Score `continuous_procedural_memory` reaches only the Phase 41 revision-record target while `productionDrivingAllowed=false`.
 - Tests and visual proof show the revision panel works for a regular operator.
+
+## Phase 42 Acceptance Checklist
+
+- `pems_candidate_review_followups` exists as an append-only reviewer follow-up ledger.
+- `PEMS_REVIEWER_FOLLOW_UP_VERSION` is defined.
+- Reviewer follow-ups bind candidate id, advisory draft id, claim revision id, and promotion review id.
+- Follow-up workflow states distinguish open, resolved, and blocked advisory work.
+- A resolved follow-up requires a deterministic reclosure-passed revision and a later explicit review decision.
+- Raw review text, raw revision text, raw rationale text, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.
+- Workbench API returns `reviewerFollowUps`.
+- Connector proof exposes `pems_reviewer_follow_up_workflows`.
+- Dashboard renders a reviewer follow-up workflow panel with revision binding, review binding, workflow state, action required, and advisory-only safety.
+- Follow-up records do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, or write to payer portals.
+- Score `continuous_procedural_memory` reaches only the Phase 42 follow-up target while `productionDrivingAllowed=false`.
+- Tests and visual proof show the follow-up panel works for a regular operator.

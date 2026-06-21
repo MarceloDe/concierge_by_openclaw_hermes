@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "screenshot": "artifacts/phase42/phase42-dashboard-followup-proof.png",
+  "panelScreenshot": "artifacts/phase42/phase42-dashboard-followup-panel.png",
+  "url": "http://127.0.0.1:4218/?phase=phase-42-reviewer-follow-up-workflows",
+  "status": "phase42_reviewer_follow_up_workflow_ready · 98 / 98",
+  "hasPhase42": true,
+  "hasFollowUpPanel": true,
+  "hasReady": true,
+  "hasRevisionBinding": true,
+  "hasReviewBinding": true,
+  "hasResolvedOutcome": true,
+  "hasProductionDisabled": true,
+  "hasRawNotStored": true,
+  "approveDisabled": false,
+  "followUpDisabled": false,
+  "consoleMessages": []
+}

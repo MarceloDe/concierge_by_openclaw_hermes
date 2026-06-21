@@ -918,29 +918,34 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.pems-revision-diff {
+.pems-revision-diff,
+.pems-followup-chain {
   border: 1px solid #d9e4dd;
   border-radius: 8px;
   display: grid;
   overflow: hidden;
 }
 
-.pems-revision-diff > div {
+.pems-revision-diff > div,
+.pems-followup-chain > div {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   border-top: 1px solid #d9e4dd;
 }
 
-.pems-revision-diff > div:first-child {
+.pems-revision-diff > div:first-child,
+.pems-followup-chain > div:first-child {
   border-top: 0;
 }
 
-.pems-revision-diff span {
+.pems-revision-diff span,
+.pems-followup-chain span {
   padding: 8px;
   overflow-wrap: anywhere;
 }
 
-.pems-revision-diff span:first-child {
+.pems-revision-diff span:first-child,
+.pems-followup-chain span:first-child {
   background: #eef6f2;
   color: #123b32;
   font-weight: 700;
@@ -949,7 +954,7 @@ button:disabled {
 .pems-review-form {
   border-top: 1px solid #dbe4dd;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
   align-items: end;
   padding-top: 12px;

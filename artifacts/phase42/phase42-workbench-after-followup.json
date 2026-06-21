@@ -1,0 +1,1115 @@
+{
+  "version": "2026-06-18.phase36-pems-reviewer-evaluator-workbench.v1",
+  "status": "phase36_reviewer_evaluator_workbench_active",
+  "ok": true,
+  "mode": "supervised_advisory_workbench_only",
+  "score": 85,
+  "target": 85,
+  "candidateCount": 1,
+  "supervisedAdvisoryCandidateCount": 0,
+  "draftCount": 5,
+  "llmAssistedDraftCount": 5,
+  "consistencyTraceDraftCount": 1,
+  "readyDraftCount": 3,
+  "blockedDraftCount": 0,
+  "filteredDraftCount": 2,
+  "liveGeneratedDraftCount": 4,
+  "liveProofDraftCount": 3,
+  "mockedDraftCount": 1,
+  "reviewCount": 2,
+  "advisoryLinkedReviewCount": 2,
+  "productionDrivingAllowed": false,
+  "latestDraft": {
+    "id": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+    "candidateId": "pems_40d7cea4abb98732",
+    "actorUserId": "phase42_api_seed",
+    "draftType": "evaluator_draft_note",
+    "evaluatorMode": "llm_assisted_advisory",
+    "status": "needs_reviewer_attention",
+    "deterministicValidatorStatus": "pass",
+    "suggestedReviewType": "citation_evaluation",
+    "suggestedDecision": "blocked",
+    "advisoryNoteHash": "a3a88586f34fad2aaccc461727bf3fb9a574d1fc176c835d8786d790eb82d084",
+    "advisoryNotePreview": "Phase 42 reviewer must revise unsupported automatic enrollment text before explicit review.",
+    "consistencyTraceRef": "pems_consistency_trace_55f195fa37aeb78e",
+    "consistencyTraceHash": "aae961d712893ab5f39a8b9c3850c7ac58af90c68a2fb33b269231a9f36566d4",
+    "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"artifact_phase42\"],\"citationClosure\":[\"artifact_phase",
+    "metadata": {
+      "phase": 39,
+      "liveEvaluatorGeneration": true,
+      "sourcePointerIds": [
+        "artifact_phase42"
+      ],
+      "citationClosure": [
+        "artifact_phase42"
+      ],
+      "claimCitationClosure": [
+        {
+          "id": "pems_claim_b283bc5be8506328",
+          "claimHash": "acd88a39073c40046a2b6fb689f2cbc62e2c54d3fedfee4b206df8aedc25daa4",
+          "claimPreview": "The cited source pointer supports manual reviewer follow-up.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "artifact_phase42"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.93,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        },
+        {
+          "id": "pems_claim_3fe15d7ae57a7b22",
+          "claimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+          "claimPreview": "Automatic enrollment is guaranteed.",
+          "status": "unsupported",
+          "sourcePointerIds": [],
+          "sourcePointerCount": 0,
+          "confidence": 0.1,
+          "explanationPreview": "",
+          "suggestedEditPreview": "Revise to say automatic enrollment is not supported by the cited source pointer.",
+          "requiresReviewerEdit": true,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "claimCitationClosureSummary": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_vetoed",
+        "verdict": "unsupported_claims_found",
+        "claimCount": 2,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 1,
+        "reviewerEditRequired": true,
+        "unsupportedClaimHashes": [
+          "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc"
+        ],
+        "productionDrivingAllowed": false
+      },
+      "claimLevelCitationClosure": true,
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:946ae680fb6924fe",
+      "egressObserved": true,
+      "liveLlmEvaluatorUsed": true,
+      "mockedLlmOutput": true,
+      "outboundPayloadHash": "946ae680fb6924fec9889a7b17e20b3515da52cc0f4273608706d7a5d1ef2bf9",
+      "completionHash": "1a7944c8538a8c04de70b1ddceb45acc77b0c0ae5ae090584cb4df76d5da3adb",
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawClaimStored": false,
+      "rawSourceStored": false,
+      "productionDrivingAllowed": false,
+      "advisoryOnly": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "deterministicValidatorAuthority": true,
+      "humanReviewerAuthority": true
+    },
+    "createdAt": "2026-06-21T01:41:08.536Z",
+    "updatedAt": "2026-06-21T01:41:08.536Z",
+    "claimCitationClosure": {
+      "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+      "status": "phase40_claim_citation_closure_vetoed",
+      "verdict": "unsupported_claims_found",
+      "claimCount": 2,
+      "supportedCount": 1,
+      "lowConfidenceCount": 0,
+      "unsupportedCount": 1,
+      "reviewerEditRequired": true,
+      "unsupportedClaimHashes": [
+        "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc"
+      ],
+      "productionDrivingAllowed": false,
+      "claims": [
+        {
+          "id": "pems_claim_b283bc5be8506328",
+          "claimHash": "acd88a39073c40046a2b6fb689f2cbc62e2c54d3fedfee4b206df8aedc25daa4",
+          "claimPreview": "The cited source pointer supports manual reviewer follow-up.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "artifact_phase42"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.93,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        },
+        {
+          "id": "pems_claim_3fe15d7ae57a7b22",
+          "claimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+          "claimPreview": "Automatic enrollment is guaranteed.",
+          "status": "unsupported",
+          "sourcePointerIds": [],
+          "sourcePointerCount": 0,
+          "confidence": 0.1,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": true,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "allowedSourcePointerIds": [
+        "artifact_phase42"
+      ],
+      "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+      "candidateId": "pems_40d7cea4abb98732",
+      "sourcePointerBounded": true,
+      "liveEvaluatorDraft": false,
+      "safety": {
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "reviewerEditRequiredForUnsupported": true,
+        "productionDrivingAllowed": false
+      }
+    }
+  },
+  "draftQueue": [
+    {
+      "id": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "phase42_api_seed",
+      "draftType": "evaluator_draft_note",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "needs_reviewer_attention",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "citation_evaluation",
+      "suggestedDecision": "blocked",
+      "advisoryNoteHash": "a3a88586f34fad2aaccc461727bf3fb9a574d1fc176c835d8786d790eb82d084",
+      "advisoryNotePreview": "Phase 42 reviewer must revise unsupported automatic enrollment text before explicit review.",
+      "consistencyTraceRef": "pems_consistency_trace_55f195fa37aeb78e",
+      "consistencyTraceHash": "aae961d712893ab5f39a8b9c3850c7ac58af90c68a2fb33b269231a9f36566d4",
+      "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"artifact_phase42\"],\"citationClosure\":[\"artifact_phase",
+      "metadata": {
+        "phase": 39,
+        "liveEvaluatorGeneration": true,
+        "sourcePointerIds": [
+          "artifact_phase42"
+        ],
+        "citationClosure": [
+          "artifact_phase42"
+        ],
+        "claimCitationClosure": [
+          {
+            "id": "pems_claim_b283bc5be8506328",
+            "claimHash": "acd88a39073c40046a2b6fb689f2cbc62e2c54d3fedfee4b206df8aedc25daa4",
+            "claimPreview": "The cited source pointer supports manual reviewer follow-up.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "artifact_phase42"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.93,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_3fe15d7ae57a7b22",
+            "claimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+            "claimPreview": "Automatic enrollment is guaranteed.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "",
+            "suggestedEditPreview": "Revise to say automatic enrollment is not supported by the cited source pointer.",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "claimCitationClosureSummary": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_vetoed",
+          "verdict": "unsupported_claims_found",
+          "claimCount": 2,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 1,
+          "reviewerEditRequired": true,
+          "unsupportedClaimHashes": [
+            "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc"
+          ],
+          "productionDrivingAllowed": false
+        },
+        "claimLevelCitationClosure": true,
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:946ae680fb6924fe",
+        "egressObserved": true,
+        "liveLlmEvaluatorUsed": true,
+        "mockedLlmOutput": true,
+        "outboundPayloadHash": "946ae680fb6924fec9889a7b17e20b3515da52cc0f4273608706d7a5d1ef2bf9",
+        "completionHash": "1a7944c8538a8c04de70b1ddceb45acc77b0c0ae5ae090584cb4df76d5da3adb",
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true
+      },
+      "createdAt": "2026-06-21T01:41:08.536Z",
+      "updatedAt": "2026-06-21T01:41:08.536Z",
+      "claimCitationClosure": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_vetoed",
+        "verdict": "unsupported_claims_found",
+        "claimCount": 2,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 1,
+        "reviewerEditRequired": true,
+        "unsupportedClaimHashes": [
+          "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc"
+        ],
+        "productionDrivingAllowed": false,
+        "claims": [
+          {
+            "id": "pems_claim_b283bc5be8506328",
+            "claimHash": "acd88a39073c40046a2b6fb689f2cbc62e2c54d3fedfee4b206df8aedc25daa4",
+            "claimPreview": "The cited source pointer supports manual reviewer follow-up.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "artifact_phase42"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.93,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_3fe15d7ae57a7b22",
+            "claimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+            "claimPreview": "Automatic enrollment is guaranteed.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "allowedSourcePointerIds": [
+          "artifact_phase42"
+        ],
+        "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+        "candidateId": "pems_40d7cea4abb98732",
+        "sourcePointerBounded": true,
+        "liveEvaluatorDraft": false,
+        "safety": {
+          "rawClaimStored": false,
+          "rawSourceStored": false,
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "reviewerEditRequiredForUnsupported": true,
+          "productionDrivingAllowed": false
+        }
+      }
+    },
+    {
+      "id": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "operator_ui_phase40_live_evaluator",
+      "draftType": "evaluator_draft_note",
+      "evaluatorMode": "llm_assisted_advisory",
+      "status": "needs_reviewer_attention",
+      "deterministicValidatorStatus": "pass",
+      "suggestedReviewType": "citation_evaluation",
+      "suggestedDecision": "blocked",
+      "advisoryNoteHash": "3b47ee634d1f9c71a549ff2ebcefa5d276161de0245e4c2d3ec0a7fafa7c419c",
+      "advisoryNotePreview": "One claim is supported by the provided source pointer; a second claim lacks supporting evidence and requires verification before acceptance.",
+      "consistencyTraceRef": "pems_consistency_trace_66462db3ca78f57b",
+      "consistencyTraceHash": "1fdfd868a22cd2731f26e3c677e2765249d9c4cef5188ba8dd2b88d90f139cc1",
+      "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"phase36_public_example\"],\"citationClosure\":[\"phase36_",
+      "metadata": {
+        "phase": 39,
+        "liveEvaluatorGeneration": true,
+        "sourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "citationClosure": [
+          "phase36_public_example"
+        ],
+        "claimCitationClosure": [
+          {
+            "id": "pems_claim_a3fb5a6b68ac016e",
+            "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+            "claimPreview": "The document describes the eligibility criteria for the program.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "phase36_public_example"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.9,
+            "explanationPreview": "The cited source pointer contains relevant statements consistent with a description of eligibility criteria.",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_d994ea836ea5c17c",
+            "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+            "claimPreview": "Users are automatically enrolled without consent when signing up.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "No evidence in the available source pointer supports a claim of automatic enrollment without consent.",
+            "suggestedEditPreview": "Remove this assertion or replace it with a verifiable statement and add a supporting source pointer.",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "claimCitationClosureSummary": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_vetoed",
+          "verdict": "unsupported_claims_found",
+          "claimCount": 2,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 1,
+          "reviewerEditRequired": true,
+          "unsupportedClaimHashes": [
+            "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+          ],
+          "productionDrivingAllowed": false
+        },
+        "claimLevelCitationClosure": true,
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:bf5673aa292864b8",
+        "egressObserved": true,
+        "liveLlmEvaluatorUsed": true,
+        "mockedLlmOutput": false,
+        "outboundPayloadHash": "bf5673aa292864b8b4ec79539d1569d33a0b3508267176498a3bd124378e5f09",
+        "completionHash": "edb0d5d25816d3dbf5e5db0b1ebdd704fce275e6888d89624d813404b092330f",
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryOnly": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true
+      },
+      "createdAt": "2026-06-20T14:06:56.173Z",
+      "updatedAt": "2026-06-20T14:06:56.173Z",
+      "claimCitationClosure": {
+        "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+        "status": "phase40_claim_citation_closure_vetoed",
+        "verdict": "unsupported_claims_found",
+        "claimCount": 2,
+        "supportedCount": 1,
+        "lowConfidenceCount": 0,
+        "unsupportedCount": 1,
+        "reviewerEditRequired": true,
+        "unsupportedClaimHashes": [
+          "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f"
+        ],
+        "productionDrivingAllowed": false,
+        "claims": [
+          {
+            "id": "pems_claim_a3fb5a6b68ac016e",
+            "claimHash": "da7f2c4698690142124e90e924ed0fdbc2e2ed2b4c74d68bdc24584c3573f89a",
+            "claimPreview": "The document describes the eligibility criteria for the program.",
+            "status": "supported",
+            "sourcePointerIds": [
+              "phase36_public_example"
+            ],
+            "sourcePointerCount": 1,
+            "confidence": 0.9,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": false,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          },
+          {
+            "id": "pems_claim_d994ea836ea5c17c",
+            "claimHash": "7106d6abd6f524504c3dff054af3c4424a9fca3f2cb9294e8fa2cbacff045c0f",
+            "claimPreview": "Users are automatically enrolled without consent when signing up.",
+            "status": "unsupported",
+            "sourcePointerIds": [],
+            "sourcePointerCount": 0,
+            "confidence": 0.1,
+            "explanationPreview": "",
+            "suggestedEditPreview": "",
+            "requiresReviewerEdit": true,
+            "rawClaimStored": false,
+            "rawSourceStored": false
+          }
+        ],
+        "allowedSourcePointerIds": [
+          "phase36_public_example"
+        ],
+        "advisoryDraftId": "pems_eval_draft_aa5b6325-f079-4638-8bb9-187c0429c9b7",
+        "candidateId": "pems_40d7cea4abb98732",
+        "sourcePointerBounded": true,
+        "liveEvaluatorDraft": true,
+        "safety": {
+          "rawClaimStored": false,
+          "rawSourceStored": false,
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "reviewerEditRequiredForUnsupported": true,
+          "productionDrivingAllowed": false
+        }
+      }
+    }
+  ],
+  "appliedFilters": {
+    "draftStatus": "needs_reviewer_attention",
+    "evaluatorMode": "llm_assisted_advisory",
+    "candidateId": null,
+    "liveOnly": false
+  },
+  "filterOptions": {
+    "draftStatuses": [
+      "all",
+      "draft_ready_for_human_review",
+      "needs_reviewer_attention",
+      "blocked_by_validator"
+    ],
+    "evaluatorModes": [
+      "all",
+      "deterministic_validator_advisory",
+      "llm_assisted_advisory",
+      "nestr_consistency_trace"
+    ],
+    "liveOnly": [
+      false,
+      true
+    ]
+  },
+  "latestCandidate": {
+    "candidateId": "pems_40d7cea4abb98732",
+    "workflow": "eligibility_benefits_navigation",
+    "selectedSkillKey": "insurance_portal_browser",
+    "shadowRunCount": 20,
+    "latestScore": 100,
+    "supervisedAdvisoryAllowed": false,
+    "promotionStatus": "shadow_review_required",
+    "productionDrivingAllowed": false,
+    "updatedAt": "2026-06-21T01:41:08.539Z"
+  },
+  "latestGate": {
+    "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+    "status": "shadow_review_required",
+    "ok": false,
+    "supervisedAdvisoryAllowed": false,
+    "productionDrivingAllowed": false,
+    "candidateId": "pems_40d7cea4abb98732",
+    "counts": {
+      "humanApprovals": 1,
+      "humanRejections": 0,
+      "validatorPasses": 1,
+      "validatorFailures": 0,
+      "citationPasses": 0,
+      "citationFailures": 0,
+      "citationEvidenceRefCount": 0,
+      "safetyIncidentCount": 0,
+      "reviewCount": 2
+    },
+    "requirements": [
+      {
+        "key": "maturity_score",
+        "ok": true,
+        "actual": 100,
+        "target": 85
+      },
+      {
+        "key": "shadow_runs",
+        "ok": true,
+        "actual": 20,
+        "target": 10
+      },
+      {
+        "key": "human_reviewer_approvals",
+        "ok": false,
+        "actual": 1,
+        "target": 2
+      },
+      {
+        "key": "validator_evaluation_passes",
+        "ok": true,
+        "actual": 1,
+        "target": 1
+      },
+      {
+        "key": "citation_evaluation_passes",
+        "ok": false,
+        "actual": 0,
+        "target": 1
+      },
+      {
+        "key": "citation_evidence_refs",
+        "ok": true,
+        "actual": 20,
+        "target": 1
+      },
+      {
+        "key": "safety_incidents",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      },
+      {
+        "key": "production_driving_disabled",
+        "ok": true,
+        "actual": 0,
+        "target": 0
+      }
+    ],
+    "safety": {
+      "rawRationaleStored": false,
+      "rawSourceStored": false,
+      "supervisedAdvisoryOnly": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "safety": {
+    "advisoryDraftsOnly": true,
+    "deterministicValidatorAuthority": true,
+    "humanReviewerAuthority": true,
+    "rawAdvisoryNoteStored": false,
+    "rawConsistencyTraceStored": false,
+    "rawPromptStored": false,
+    "rawCompletionStored": false,
+    "rawSourceStored": false,
+    "productionDrivingAllowed": false
+  },
+  "reviewerUi": {
+    "status": "phase37_pems_reviewer_ui_ready",
+    "ok": true,
+    "mode": "ref_only_operator_review_ui",
+    "score": 88,
+    "target": 88,
+    "route": "/",
+    "apiRoutes": [
+      "/api/continuous-intelligence/pems/workbench",
+      "/api/continuous-intelligence/pems/reviews"
+    ],
+    "actions": [
+      "approved",
+      "rejected",
+      "blocked"
+    ],
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "refOnlyAdvisoryMaterial": true,
+      "explicitReviewWriteRequired": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerComparison": {
+    "version": "2026-06-19.phase38-pems-reviewer-comparison-provenance.v1",
+    "status": "phase38_reviewer_comparison_provenance_ready",
+    "ok": true,
+    "mode": "deterministic_vs_advisory_ref_only",
+    "score": 90,
+    "target": 90,
+    "candidateId": "pems_40d7cea4abb98732",
+    "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+    "comparisonRows": [
+      {
+        "key": "validator_decision",
+        "label": "Validator decision",
+        "deterministicLabel": "deterministic validator",
+        "deterministicValue": "pass",
+        "advisoryLabel": "advisory suggestion",
+        "advisoryValue": "blocked",
+        "agreement": false
+      },
+      {
+        "key": "promotion_gate",
+        "label": "Promotion gate",
+        "deterministicLabel": "gate status",
+        "deterministicValue": "shadow_review_required",
+        "advisoryLabel": "draft status",
+        "advisoryValue": "needs_reviewer_attention",
+        "agreement": true
+      },
+      {
+        "key": "citation_refs",
+        "label": "Cited evidence refs",
+        "deterministicLabel": "gate evidence refs",
+        "deterministicValue": 20,
+        "advisoryLabel": "advisory source refs",
+        "advisoryValue": 1,
+        "agreement": true
+      },
+      {
+        "key": "production_boundary",
+        "label": "Production boundary",
+        "deterministicLabel": "deterministic policy",
+        "deterministicValue": "disabled",
+        "advisoryLabel": "advisory policy",
+        "advisoryValue": "disabled",
+        "agreement": true
+      }
+    ],
+    "evidenceChips": [
+      {
+        "id": "artifact_phase42",
+        "kind": "source_pointer_ref",
+        "rawSourceStored": false
+      }
+    ],
+    "evaluatorProvenance": {
+      "evaluatorMode": "llm_assisted_advisory",
+      "evaluatorModelRef": "openai:gpt-5-mini",
+      "modelProviderRef": "openai",
+      "egressTraceRef": "outbound_payload:946ae680fb6924fe",
+      "liveGated": true,
+      "liveLlmEvaluation": true,
+      "egressObserved": true,
+      "liveProofClaimed": false,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false
+    },
+    "safety": {
+      "refOnlyComparison": true,
+      "rawAdvisoryNoteStored": false,
+      "rawConsistencyTraceStored": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "liveEvaluatorFiltering": {
+    "version": "2026-06-20.phase39-live-evaluator-generation-filtering.v1",
+    "status": "phase39_live_evaluator_filtering_ready",
+    "ok": true,
+    "mode": "live_gated_advisory_generation_and_filtering",
+    "score": 92,
+    "target": 92,
+    "openAiConfigured": true,
+    "draftCount": 5,
+    "filteredDraftCount": 2,
+    "liveGeneratedDraftCount": 4,
+    "liveProofDraftCount": 3,
+    "mockedDraftCount": 1,
+    "appliedFilters": {
+      "draftStatus": "needs_reviewer_attention",
+      "evaluatorMode": "llm_assisted_advisory",
+      "candidateId": null,
+      "liveOnly": false
+    },
+    "filterOptions": {
+      "draftStatuses": [
+        "all",
+        "draft_ready_for_human_review",
+        "needs_reviewer_attention",
+        "blocked_by_validator"
+      ],
+      "evaluatorModes": [
+        "all",
+        "deterministic_validator_advisory",
+        "llm_assisted_advisory",
+        "nestr_consistency_trace"
+      ],
+      "liveOnly": [
+        false,
+        true
+      ]
+    },
+    "liveProofClaimed": true,
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "liveRequiresObservedEgress": true,
+      "mockedLlmOutputCountsAsProof": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "rawSourceStored": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "liveClaimCitationClosure": {
+    "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+    "status": "phase40_claim_citation_closure_veto_visible",
+    "ok": true,
+    "mode": "live_evaluator_claim_citation_closure",
+    "score": 94,
+    "target": 94,
+    "claimCount": 2,
+    "supportedCount": 1,
+    "unsupportedCount": 1,
+    "lowConfidenceCount": 0,
+    "reviewerEditRequired": true,
+    "sourcePointerBounded": true,
+    "liveEvaluatorDraft": true,
+    "claimClosureDraftCount": 2,
+    "claimClosureVetoDraftCount": 2,
+    "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+    "candidateId": "pems_40d7cea4abb98732",
+    "allowedSourcePointerIds": [
+      "artifact_phase42"
+    ],
+    "verdict": "unsupported_claims_found",
+    "claims": [
+      {
+        "id": "pems_claim_b283bc5be8506328",
+        "claimHash": "acd88a39073c40046a2b6fb689f2cbc62e2c54d3fedfee4b206df8aedc25daa4",
+        "claimPreview": "The cited source pointer supports manual reviewer follow-up.",
+        "status": "supported",
+        "sourcePointerIds": [
+          "artifact_phase42"
+        ],
+        "sourcePointerCount": 1,
+        "confidence": 0.93,
+        "explanationPreview": "",
+        "suggestedEditPreview": "",
+        "requiresReviewerEdit": false,
+        "rawClaimStored": false,
+        "rawSourceStored": false
+      },
+      {
+        "id": "pems_claim_3fe15d7ae57a7b22",
+        "claimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+        "claimPreview": "Automatic enrollment is guaranteed.",
+        "status": "unsupported",
+        "sourcePointerIds": [],
+        "sourcePointerCount": 0,
+        "confidence": 0.1,
+        "explanationPreview": "",
+        "suggestedEditPreview": "",
+        "requiresReviewerEdit": true,
+        "rawClaimStored": false,
+        "rawSourceStored": false
+      }
+    ],
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawClaimStored": false,
+      "rawSourceStored": false,
+      "rawPromptStored": false,
+      "rawCompletionStored": false,
+      "claimLabelsCreateEvidence": false,
+      "unsupportedClaimsVetoApproval": true,
+      "reviewerEditRequiredForUnsupported": true,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerClaimRevisions": {
+    "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+    "status": "phase41_reviewer_claim_revision_ready",
+    "ok": true,
+    "mode": "reviewer_claim_revision_records",
+    "score": 96,
+    "target": 96,
+    "claimRevisionCount": 3,
+    "claimRevisionReclosedCount": 3,
+    "claimRevisionAttentionCount": 0,
+    "deterministicReclosurePassed": true,
+    "sourcePointerBounded": true,
+    "preservesOriginalAndRevisedHashes": true,
+    "latestClaimRevision": {
+      "id": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+      "candidateId": "pems_40d7cea4abb98732",
+      "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+      "claimId": "pems_claim_3fe15d7ae57a7b22",
+      "actorUserId": "phase42_api_seed",
+      "revisionStatus": "revision_reclosure_passed",
+      "originalClaimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+      "originalClaimPreview": "Automatic enrollment is guaranteed.",
+      "suggestedEditHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "suggestedEditPreview": "",
+      "revisedClaimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+      "revisedClaimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+      "sourcePointerIds": [
+        "artifact_phase42"
+      ],
+      "deterministicReclosure": {
+        "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+        "status": "phase41_revision_reclosure_passed",
+        "claimCitationClosure": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_passed",
+          "verdict": "all_claims_supported",
+          "claimCount": 1,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 0,
+          "reviewerEditRequired": false,
+          "unsupportedClaimHashes": [],
+          "productionDrivingAllowed": false,
+          "claims": [
+            {
+              "id": "pems_claim_3ed5e9d2c01569a3",
+              "claimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+              "claimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+              "status": "supported",
+              "sourcePointerIds": [
+                "artifact_phase42"
+              ],
+              "sourcePointerCount": 1,
+              "confidence": 0.9,
+              "explanationPreview": "Reviewer revision cites allowed source pointers.",
+              "suggestedEditPreview": "",
+              "requiresReviewerEdit": false,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            }
+          ],
+          "sourcePointerBounded": true
+        },
+        "reviewerEditRequired": false,
+        "sourcePointerBounded": true,
+        "productionDrivingAllowed": false
+      },
+      "metadata": {
+        "phase": 41,
+        "artifactSeed": true,
+        "advisoryOnly": true,
+        "sourcePointerBounded": true,
+        "deterministicReclosurePassed": true,
+        "originalStatus": "unsupported",
+        "rawOriginalClaimStored": false,
+        "rawSuggestedEditStored": false,
+        "rawRevisedClaimStored": false,
+        "rawSourceStored": false,
+        "revisionCreatesEvidence": false,
+        "productionDrivingAllowed": false
+      },
+      "createdAt": "2026-06-21T01:41:08.538Z",
+      "updatedAt": "2026-06-21T01:41:08.538Z",
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawOriginalClaimStored": false,
+        "rawSuggestedEditStored": false,
+        "rawRevisedClaimStored": false,
+        "rawSourceStored": false,
+        "revisionCreatesEvidence": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawOriginalClaimStored": false,
+      "rawSuggestedEditStored": false,
+      "rawRevisedClaimStored": false,
+      "rawSourceStored": false,
+      "revisionCreatesEvidence": false,
+      "revisionBypassesHumanReview": false,
+      "productionDrivingAllowed": false
+    }
+  },
+  "reviewerFollowUps": {
+    "version": "2026-06-20.phase42-reviewer-follow-up-workflows.v1",
+    "status": "phase42_reviewer_follow_up_workflow_ready",
+    "ok": true,
+    "mode": "reviewer_decision_history_and_follow_up_binding",
+    "score": 98,
+    "target": 98,
+    "reviewerFollowUpCount": 1,
+    "reviewerFollowUpResolvedCount": 1,
+    "reviewerFollowUpOpenCount": 0,
+    "reviewerFollowUpBlockedCount": 0,
+    "revisionBoundFollowUpCount": 1,
+    "reviewDecisionBoundFollowUpCount": 1,
+    "bindsRevision": true,
+    "bindsReviewDecision": true,
+    "revisionResolvedVeto": true,
+    "latestReviewerFollowUp": {
+      "id": "pems_review_followup_5dc67778-c91c-49e4-b93c-f000b92379ae",
+      "candidateId": "pems_40d7cea4abb98732",
+      "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+      "claimRevisionId": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+      "promotionReviewId": "pems_review_2a9dae00-b6e3-4279-8c8a-bd0caf80118a",
+      "actorUserId": "phase42_api_proof",
+      "followupType": "revision_decision_binding",
+      "followupStatus": "resolved",
+      "workflowStatus": "advisory_closed",
+      "revisionOutcome": "revision_reclosure_passed",
+      "actionRequired": "No advisory follow-up remains open after revision and human decision.",
+      "rationaleHash": "feb679f463153d0183904bd9f9a744ab105bad4d1ca0e3593589dc200bc3e916",
+      "rationalePreview": "Bound the deterministic reclosure-passed claim revision to an explicit human review decision.",
+      "metadata": {
+        "phase": 42,
+        "proofArtifact": true,
+        "advisoryOnly": true,
+        "rawRationaleStored": false,
+        "rawRevisionStored": false,
+        "rawReviewStored": false,
+        "productionDrivingAllowed": false,
+        "claimRevisionId": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+        "promotionReviewId": "pems_review_2a9dae00-b6e3-4279-8c8a-bd0caf80118a",
+        "reviewDecision": "approved",
+        "reviewType": "human_review",
+        "revisionOutcome": "revision_reclosure_passed",
+        "revisionResolvedVeto": true,
+        "followUpCreatesEvidence": false,
+        "followUpBypassesHumanReview": false
+      },
+      "createdAt": "2026-06-21T01:47:51.920Z",
+      "updatedAt": "2026-06-21T01:47:51.920Z",
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawRationaleStored": false,
+        "rawRevisionStored": false,
+        "rawReviewStored": false,
+        "followUpCreatesEvidence": false,
+        "followUpBypassesHumanReview": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    "latestPromotionReview": {
+      "id": "pems_review_2a9dae00-b6e3-4279-8c8a-bd0caf80118a",
+      "candidateId": "pems_40d7cea4abb98732",
+      "actorUserId": "phase42_api_seed",
+      "reviewType": "human_review",
+      "decision": "approved",
+      "evidenceRefCount": 0,
+      "validatorPassCount": 0,
+      "safetyIncidentCount": 0,
+      "rationaleHash": "cc494e59c5f92564002a26639e051de1e03bfa82605efee8c39a8f94ceeff5da",
+      "rationalePreview": "Approved advisory material after deterministic reclosure and explicit human review.",
+      "metadata": {
+        "phase": 42,
+        "claimRevisionId": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+        "advisoryOnly": true,
+        "rawRationaleStored": false,
+        "productionDrivingAllowed": false,
+        "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+        "advisoryMaterialRef": "pems_advisory_material_4c9e88d83698f48e"
+      },
+      "createdAt": "2026-06-21T01:41:08.539Z",
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawRationaleStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    "latestClaimRevision": {
+      "id": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+      "candidateId": "pems_40d7cea4abb98732",
+      "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+      "claimId": "pems_claim_3fe15d7ae57a7b22",
+      "actorUserId": "phase42_api_seed",
+      "revisionStatus": "revision_reclosure_passed",
+      "originalClaimHash": "5527abdf610a749008aa17bb8991a7bdef6e0ecc800110af8de4336dfb85d8bc",
+      "originalClaimPreview": "Automatic enrollment is guaranteed.",
+      "suggestedEditHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "suggestedEditPreview": "",
+      "revisedClaimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+      "revisedClaimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+      "sourcePointerIds": [
+        "artifact_phase42"
+      ],
+      "deterministicReclosure": {
+        "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+        "status": "phase41_revision_reclosure_passed",
+        "claimCitationClosure": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_passed",
+          "verdict": "all_claims_supported",
+          "claimCount": 1,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 0,
+          "reviewerEditRequired": false,
+          "unsupportedClaimHashes": [],
+          "productionDrivingAllowed": false,
+          "claims": [
+            {
+              "id": "pems_claim_3ed5e9d2c01569a3",
+              "claimHash": "e3b9dbd351eef0d787ab2376649886649a80cac21826c3bd7e35455e498124f5",
+              "claimPreview": "The cited source pointer does not support automatic enrollment without consent.",
+              "status": "supported",
+              "sourcePointerIds": [
+                "artifact_phase42"
+              ],
+              "sourcePointerCount": 1,
+              "confidence": 0.9,
+              "explanationPreview": "Reviewer revision cites allowed source pointers.",
+              "suggestedEditPreview": "",
+              "requiresReviewerEdit": false,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            }
+          ],
+          "sourcePointerBounded": true
+        },
+        "reviewerEditRequired": false,
+        "sourcePointerBounded": true,
+        "productionDrivingAllowed": false
+      },
+      "metadata": {
+        "phase": 41,
+        "artifactSeed": true,
+        "advisoryOnly": true,
+        "sourcePointerBounded": true,
+        "deterministicReclosurePassed": true,
+        "originalStatus": "unsupported",
+        "rawOriginalClaimStored": false,
+        "rawSuggestedEditStored": false,
+        "rawRevisedClaimStored": false,
+        "rawSourceStored": false,
+        "revisionCreatesEvidence": false,
+        "productionDrivingAllowed": false
+      },
+      "createdAt": "2026-06-21T01:41:08.538Z",
+      "updatedAt": "2026-06-21T01:41:08.538Z",
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawOriginalClaimStored": false,
+        "rawSuggestedEditStored": false,
+        "rawRevisedClaimStored": false,
+        "rawSourceStored": false,
+        "revisionCreatesEvidence": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    "advisoryOnly": true,
+    "productionDrivingAllowed": false,
+    "safety": {
+      "rawRationaleStored": false,
+      "rawRevisionStored": false,
+      "rawReviewStored": false,
+      "followUpCreatesEvidence": false,
+      "followUpBypassesHumanReview": false,
+      "automaticProductionRecommendation": false,
+      "productionDrivingAllowed": false
+    }
+  }
+}

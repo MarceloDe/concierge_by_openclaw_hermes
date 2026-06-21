@@ -8569,3 +8569,48 @@ Artifacts:
 - `artifacts/phase41/phase41-playwright-visual-proof.json`
 - `artifacts/phase41/phase41-dashboard-reviewer-claim-revision-proof.png`
 - `artifacts/phase41/phase41-dashboard-reviewer-claim-revision-panel.png`
+
+## Phase 42 PEMS Reviewer Follow-Up Workflow Binding
+
+Status: Implemented and visually verified locally on branch `phase-42-reviewer-follow-up-workflows`.
+
+What changed:
+
+- Added `PEMS_REVIEWER_FOLLOW_UP_VERSION`.
+- Added `pems_candidate_review_followups` as an append-only reviewer follow-up ledger.
+- Added safe reviewer follow-up recording for candidate id, advisory draft id, claim revision id, promotion review id, workflow status, revision outcome, action required, safe rationale preview/hash, and advisory-only metadata.
+- Added `POST /api/continuous-intelligence/pems/follow-ups`.
+- Workbench API returns `reviewerFollowUps`.
+- Connector proof exposes `pems_reviewer_follow_up_workflows`.
+- Dashboard renders `Reviewer Follow-Up Workflow` with revision binding, review binding, workflow state, action required, and advisory-only safety.
+
+Safety:
+
+- Follow-up records do not create evidence.
+- Follow-up records do not bypass human review.
+- Follow-up records do not drive production recommendations, healthcare answers, workflow routing, approval outcomes, browser actions, OpenClaw dispatch, payer contact, external messages, or payer writes.
+- Raw revision text, raw review text, raw rationale text, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, and PHI remain excluded.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification:
+
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 19/19 tests.
+- `npm run build` passed and names the Phase 42 reviewer follow-up workflow contract.
+- `npm run test:local` passed with 227 total tests, 225 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- API proof showed `phase42_reviewer_follow_up_workflow_ready`, score `98 / 98`, revision binding true, review decision binding true, revision resolved veto true, raw follow-up storage false, follow-up creates no evidence, and `productionDrivingAllowed=false`.
+- Browser visual proof showed Phase 42 visible, follow-up panel visible, revision-to-review binding visible, explicit review decision visible, resolved advisory veto visible, raw revision/review not stored, approval enabled only after deterministic reclosure, and no console errors.
+
+Artifacts:
+
+- `artifacts/phase42/phase42-seed-before-followup.json`
+- `artifacts/phase42/phase42-workbench-before-followup.json`
+- `artifacts/phase42/phase42-followup-request.json`
+- `artifacts/phase42/phase42-followup-response.json`
+- `artifacts/phase42/phase42-workbench-after-followup.json`
+- `artifacts/phase42/phase42-connector-proof.json`
+- `artifacts/phase42/phase42-api-proof-summary.json`
+- `artifacts/phase42/phase42-dashboard-dom-proof.json`
+- `artifacts/phase42/phase42-playwright-visual-proof.json`
+- `artifacts/phase42/phase42-dashboard-followup-proof.png`
+- `artifacts/phase42/phase42-dashboard-followup-panel.png`

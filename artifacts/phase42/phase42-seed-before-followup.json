@@ -1,0 +1,10 @@
+{
+  "candidateId": "pems_40d7cea4abb98732",
+  "advisoryDraftId": "pems_eval_draft_af57f09e-68eb-4736-9897-d35e5b58bf22",
+  "claimRevisionId": "pems_claim_revision_3dac94e6-dc66-4045-9246-dee61d42faf4",
+  "promotionReviewId": "pems_review_2a9dae00-b6e3-4279-8c8a-bd0caf80118a",
+  "draftStatus": "phase39_live_evaluator_mocked_output_not_proof",
+  "revisionStatus": "revision_reclosure_passed",
+  "reviewDecision": "approved",
+  "productionDrivingAllowed": false
+}

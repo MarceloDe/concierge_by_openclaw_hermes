@@ -2954,3 +2954,33 @@ Acceptance:
 - Build checks fail if the Phase 41 proof, API route, UI strings, CSS diff table, or schema table are removed.
 - Full local tests pass.
 - Dashboard visual proof shows the Phase 41 score, revision count, deterministic reclosure, before/suggested/revised rows, and production driving disabled.
+
+## Phase 42: PEMS Reviewer Follow-Up Workflow Binding
+
+Goal: connect Phase 41 reviewer claim revisions to later explicit review decisions and follow-up workflow state without creating evidence or production authority.
+
+Scope:
+
+- Add a `pems_candidate_review_followups` append-only ledger.
+- Add `PEMS_REVIEWER_FOLLOW_UP_VERSION`.
+- Add a safe follow-up writer that binds candidate id, advisory draft id, claim revision id, promotion review id, actor, workflow status, revision outcome, safe rationale preview/hash, and advisory-only safety metadata.
+- Expose `POST /api/continuous-intelligence/pems/follow-ups`.
+- Expose `reviewerFollowUps` through `/api/continuous-intelligence/pems/workbench`.
+- Expose `pems_reviewer_follow_up_workflows` through connector proof.
+- Render Phase 42 follow-up status and revision-to-review binding rows in the dashboard.
+- Allow approval after a deterministic reclosure-passed claim revision, then bind that explicit review decision to the revision through a separate follow-up record.
+
+Non-goals:
+
+- Do not make follow-ups production-driving.
+- Do not create evidence from follow-up records.
+- Do not mutate advisory drafts, claim revisions, or promotion reviews to imply production authority.
+- Do not store raw claims, raw review text, raw rationale text, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, or PHI.
+- Do not allow follow-up records to drive healthcare answers, routing, OpenClaw dispatch, payer contact, external messages, or payer writes.
+
+Acceptance:
+
+- Focused PEMS tests prove reviewer follow-ups bind a revision to an explicit review decision and score `98 / 98` only when the binding is resolved.
+- Build checks fail if the Phase 42 proof, API route, UI strings, CSS chain, or schema table are removed.
+- Full local tests pass.
+- Dashboard visual proof shows the Phase 42 score, follow-up count, revision binding, review binding, workflow status, and production driving disabled.

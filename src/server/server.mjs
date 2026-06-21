@@ -78,6 +78,7 @@ import {
   buildPemsPromotionReadinessProof,
   buildPemsReviewerClaimRevisionProof,
   buildPemsReviewerComparisonProvenance,
+  buildPemsReviewerFollowUpProof,
   buildPemsReviewerWorkbenchReadinessProof,
   createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
@@ -85,6 +86,7 @@ import {
   getPemsPromotionGateStatus,
   getPemsReviewerWorkbenchStatus,
   recordPemsClaimRevision,
+  recordPemsReviewerFollowUp,
   recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
@@ -1081,6 +1083,10 @@ function buildPemsClaimRevisionProof(status) {
   return buildPemsReviewerClaimRevisionProof(status);
 }
 
+function buildPemsReviewerFollowUpWorkflowProof(status) {
+  return buildPemsReviewerFollowUpProof(status);
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1098,6 +1104,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const pemsLiveEvaluatorFiltering = buildPemsLiveEvaluatorProof(pemsReviewerWorkbenchStatus);
   const pemsClaimCitationClosure = buildPemsClaimCitationClosureProof(pemsReviewerWorkbenchStatus);
   const pemsClaimRevision = buildPemsClaimRevisionProof(pemsReviewerWorkbenchStatus);
+  const pemsReviewerFollowUp = buildPemsReviewerFollowUpWorkflowProof(pemsReviewerWorkbenchStatus);
   const productMemorySchemaReady = Boolean(productMemory.enabled && productMemory.schemaReady);
   const databaseScoreStatus = storage.status;
   const openclawReadiness = await checkOfficialOpenClawReadiness({ config: getOfficialOpenClawConfig() }).catch((error) => ({
@@ -1182,6 +1189,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "pems_reviewer_claim_revisions",
         status: pemsClaimRevision.status,
         target: "Phase 41 persists reviewer claim edits as ref-only revision records, preserves before/after hashes, and re-runs deterministic closure without creating evidence."
+      },
+      {
+        key: "pems_reviewer_follow_up_workflows",
+        status: pemsReviewerFollowUp.status,
+        target: "Phase 42 binds reviewer claim revision records to later explicit review decisions and follow-up workflow state without enabling production recommendations."
       },
       {
         key: "docker_connector_deployment",
@@ -1768,6 +1780,24 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: pemsClaimRevision.productionDrivingAllowed,
         safety: pemsClaimRevision.safety
       },
+      {
+        key: "pems_reviewer_follow_up_workflows",
+        status: pemsReviewerFollowUp.status,
+        ok: pemsReviewerFollowUp.ok,
+        mode: pemsReviewerFollowUp.mode,
+        score: pemsReviewerFollowUp.score,
+        target: pemsReviewerFollowUp.target,
+        reviewerFollowUpCount: pemsReviewerFollowUp.reviewerFollowUpCount,
+        reviewerFollowUpResolvedCount: pemsReviewerFollowUp.reviewerFollowUpResolvedCount,
+        reviewerFollowUpOpenCount: pemsReviewerFollowUp.reviewerFollowUpOpenCount,
+        revisionBoundFollowUpCount: pemsReviewerFollowUp.revisionBoundFollowUpCount,
+        reviewDecisionBoundFollowUpCount: pemsReviewerFollowUp.reviewDecisionBoundFollowUpCount,
+        revisionResolvedVeto: pemsReviewerFollowUp.revisionResolvedVeto,
+        latestReviewerFollowUp: pemsReviewerFollowUp.latestReviewerFollowUp,
+        latestPromotionReview: pemsReviewerFollowUp.latestPromotionReview,
+        productionDrivingAllowed: pemsReviewerFollowUp.productionDrivingAllowed,
+        safety: pemsReviewerFollowUp.safety
+      },
       { key: "docker_compose_contract", status: deployment.status, ok: deployment.ok, services: deployment.services, command: deployment.configCommand },
       { key: "approval_boundary", status: "approval_required_for_external_write_or_live_browser_actions", ok: true }
     ],
@@ -1841,6 +1871,12 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         required: true,
         status: pemsClaimRevision.status,
         proof: "Phase 41 reviewer workbench records before/after claim revisions, deterministic reclosure, source-pointer refs, and advisory-only safety."
+      },
+      {
+        route: "/",
+        required: true,
+        status: pemsReviewerFollowUp.status,
+        proof: "Phase 42 reviewer workbench binds claim revisions to explicit review decisions and follow-up workflow state without creating evidence or production authority."
       }
     ],
     scores: [
@@ -1860,10 +1896,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
           pemsReviewerComparison.score,
           pemsLiveEvaluatorFiltering.score,
           pemsClaimCitationClosure.score,
-          pemsClaimRevision.score
+          pemsClaimRevision.score,
+          pemsReviewerFollowUp.score
         ),
-        target: pemsClaimRevision.target,
-        status: pemsClaimRevision.status,
+        target: pemsReviewerFollowUp.target,
+        status: pemsReviewerFollowUp.status,
         pemsTrusted: continuousIntelligencePersistence.pemsTrusted,
         shadowRunCount: continuousIntelligencePersistence.shadowRunCount,
         supervisedAdvisoryCandidateCount: pemsPromotion.supervisedAdvisoryCandidateCount,
@@ -1880,6 +1917,8 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         reviewerEditRequired: pemsClaimCitationClosure.reviewerEditRequired,
         claimRevisionCount: pemsClaimRevision.claimRevisionCount,
         deterministicReclosurePassed: pemsClaimRevision.deterministicReclosurePassed,
+        reviewerFollowUpCount: pemsReviewerFollowUp.reviewerFollowUpCount,
+        revisionResolvedVeto: pemsReviewerFollowUp.revisionResolvedVeto,
         productionDrivingAllowed: continuousIntelligence.productionDrivingAllowed
       },
       { key: "deployment_contract", score: deployment.ok ? 75 : 0, target: 75, status: deployment.ok ? "pass_static_compose_contract" : "needs_files" },
@@ -2112,8 +2151,28 @@ async function handleApi(req, res, url) {
       reviewerComparison: buildPemsReviewerComparisonProof(status),
       liveEvaluatorFiltering: buildPemsLiveEvaluatorProof(status),
       liveClaimCitationClosure: buildPemsClaimCitationClosureProof(status),
-      reviewerClaimRevisions: buildPemsClaimRevisionProof(status)
+      reviewerClaimRevisions: buildPemsClaimRevisionProof(status),
+      reviewerFollowUps: buildPemsReviewerFollowUpWorkflowProof(status)
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/continuous-intelligence/pems/follow-ups") {
+    const body = await readJson(req);
+    const result = await recordPemsReviewerFollowUp(store, {
+      candidateId: body.candidateId,
+      advisoryDraftId: body.advisoryDraftId,
+      claimRevisionId: body.claimRevisionId,
+      promotionReviewId: body.promotionReviewId,
+      actorUserId: body.actorUserId ?? "operator",
+      followupType: body.followupType ?? "revision_decision_binding",
+      followupStatus: body.followupStatus ?? null,
+      workflowStatus: body.workflowStatus ?? null,
+      actionRequired: body.actionRequired ?? "",
+      rationale: body.rationale ?? "",
+      metadata: body.metadata ?? {}
+    });
+    sendJson(res, 200, result);
     return;
   }
 

@@ -12,6 +12,7 @@ export const PEMS_REVIEWER_COMPARISON_VERSION = "2026-06-19.phase38-pems-reviewe
 export const PEMS_LIVE_EVALUATOR_FILTERING_VERSION = "2026-06-20.phase39-live-evaluator-generation-filtering.v1";
 export const PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION = "2026-06-20.phase40-live-claim-citation-closure.v1";
 export const PEMS_REVIEWER_CLAIM_REVISION_VERSION = "2026-06-20.phase41-reviewer-claim-revision-records.v1";
+export const PEMS_REVIEWER_FOLLOW_UP_VERSION = "2026-06-20.phase42-reviewer-follow-up-workflows.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -559,6 +560,64 @@ function formatPemsClaimRevisionRow(row) {
   };
 }
 
+function formatPemsPromotionReviewRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    candidateId: row.candidate_id,
+    actorUserId: row.actor_user_id,
+    reviewType: row.review_type,
+    decision: row.decision,
+    evidenceRefCount: rowNumber(row.evidence_ref_count),
+    validatorPassCount: rowNumber(row.validator_pass_count),
+    safetyIncidentCount: rowNumber(row.safety_incident_count),
+    rationaleHash: row.rationale_hash,
+    rationalePreview: row.rationale_preview,
+    metadata: jsonValue(row.metadata_json, {}),
+    createdAt: row.created_at,
+    advisoryOnly: jsonValue(row.metadata_json, {}).advisoryOnly === true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawRationaleStored: false,
+      rawSourceStored: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function formatPemsReviewFollowUpRow(row) {
+  if (!row) return null;
+  const metadata = jsonValue(row.metadata_json, {});
+  return {
+    id: row.id,
+    candidateId: row.candidate_id,
+    advisoryDraftId: row.advisory_draft_id,
+    claimRevisionId: row.claim_revision_id,
+    promotionReviewId: row.promotion_review_id,
+    actorUserId: row.actor_user_id,
+    followupType: row.followup_type,
+    followupStatus: row.followup_status,
+    workflowStatus: row.workflow_status,
+    revisionOutcome: row.revision_outcome,
+    actionRequired: row.action_required,
+    rationaleHash: row.rationale_hash,
+    rationalePreview: row.rationale_preview,
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawRationaleStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      followUpCreatesEvidence: false,
+      followUpBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
 function buildRevisionDeterministicReclosure({ revisedClaim, sourcePointerIds, allowedSourcePointerIds }) {
   const closure = normalizePemsClaimCitationClosure(
     [
@@ -614,6 +673,26 @@ function normalizeReviewDecision(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (["approved", "rejected", "pass", "fail", "blocked"].includes(normalized)) return normalized;
   throw new Error(`Unsupported PEMS promotion review decision: ${value}`);
+}
+
+function normalizeFollowUpType(value) {
+  const normalized = String(value ?? "revision_decision_binding").trim().toLowerCase();
+  if (["revision_decision_binding", "revision_resolved_review", "revision_needs_review", "citation_followup", "safety_block"].includes(normalized)) {
+    return normalized;
+  }
+  throw new Error(`Unsupported PEMS reviewer follow-up type: ${value}`);
+}
+
+function normalizeFollowUpStatus(value) {
+  const normalized = String(value ?? "open").trim().toLowerCase();
+  if (["open", "resolved", "blocked"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS reviewer follow-up status: ${value}`);
+}
+
+function normalizeFollowUpWorkflowStatus(value) {
+  const normalized = String(value ?? "follow_up_required").trim().toLowerCase();
+  if (["follow_up_required", "review_decision_linked", "advisory_closed", "blocked_by_safety"].includes(normalized)) return normalized;
+  throw new Error(`Unsupported PEMS reviewer follow-up workflow status: ${value}`);
 }
 
 function normalizeEvaluatorDraftType(value) {
@@ -1086,6 +1165,136 @@ export async function recordPemsClaimRevision(
         rawRevisedClaimStored: false,
         rawSourceStored: false,
         revisionCreatesEvidence: false,
+        productionDrivingAllowed: false
+      }
+    };
+  });
+}
+
+export async function recordPemsReviewerFollowUp(
+  store,
+  {
+    candidateId,
+    advisoryDraftId,
+    claimRevisionId,
+    promotionReviewId,
+    actorUserId = "operator",
+    followupType = "revision_decision_binding",
+    followupStatus = null,
+    workflowStatus = null,
+    actionRequired = "",
+    rationale = "",
+    metadata = {},
+    createdAt = new Date().toISOString()
+  } = {}
+) {
+  if (!store) throw new Error("A store is required to record a PEMS reviewer follow-up.");
+  const normalizedCandidateId = String(candidateId ?? "").trim();
+  const normalizedDraftId = String(advisoryDraftId ?? "").trim();
+  const normalizedRevisionId = String(claimRevisionId ?? "").trim();
+  const normalizedReviewId = String(promotionReviewId ?? "").trim();
+  if (!normalizedCandidateId) throw new Error("PEMS reviewer follow-up requires candidateId.");
+  if (!normalizedDraftId) throw new Error("PEMS reviewer follow-up requires advisoryDraftId.");
+  if (!normalizedRevisionId) throw new Error("PEMS reviewer follow-up requires claimRevisionId.");
+  if (!normalizedReviewId) throw new Error("PEMS reviewer follow-up requires promotionReviewId.");
+
+  return store.transaction(async (tx) => {
+    const candidate = await tx.findOne("pems_candidate_maturity", { candidate_id: normalizedCandidateId });
+    if (!candidate) throw new Error(`PEMS candidate not found: ${normalizedCandidateId}`);
+    const draft = await tx.findOne("pems_candidate_evaluator_drafts", { id: normalizedDraftId });
+    if (!draft) throw new Error(`PEMS evaluator draft not found: ${normalizedDraftId}`);
+    if (draft.candidate_id !== normalizedCandidateId) {
+      throw new Error(`PEMS evaluator draft does not belong to candidate: ${normalizedCandidateId}`);
+    }
+    const revision = await tx.findOne("pems_candidate_claim_revisions", { id: normalizedRevisionId });
+    if (!revision) throw new Error(`PEMS claim revision not found: ${normalizedRevisionId}`);
+    if (revision.candidate_id !== normalizedCandidateId || revision.advisory_draft_id !== normalizedDraftId) {
+      throw new Error("PEMS claim revision does not match the follow-up candidate and advisory draft.");
+    }
+    const review = await tx.findOne("pems_candidate_promotion_reviews", { id: normalizedReviewId });
+    if (!review) throw new Error(`PEMS promotion review not found: ${normalizedReviewId}`);
+    if (review.candidate_id !== normalizedCandidateId) {
+      throw new Error(`PEMS promotion review does not belong to candidate: ${normalizedCandidateId}`);
+    }
+    const reviewMetadata = jsonValue(review.metadata_json, {});
+    if (reviewMetadata.advisoryDraftId && reviewMetadata.advisoryDraftId !== normalizedDraftId) {
+      throw new Error("PEMS promotion review does not match the follow-up advisory draft.");
+    }
+
+    const revisionOutcome =
+      revision.revision_status === "revision_reclosure_passed"
+        ? "revision_reclosure_passed"
+        : "revision_reclosure_needs_attention";
+    const decisionCloses = ["approved", "pass"].includes(String(review.decision ?? "").toLowerCase());
+    const decisionBlocks = ["blocked", "rejected", "fail"].includes(String(review.decision ?? "").toLowerCase());
+    const safetyBlocked = rowNumber(review.safety_incident_count) > 0;
+    const derivedStatus = revisionOutcome === "revision_reclosure_passed" && decisionCloses && !safetyBlocked
+      ? "resolved"
+      : decisionBlocks || safetyBlocked
+        ? "blocked"
+        : "open";
+    const normalizedFollowUpStatus = normalizeFollowUpStatus(followupStatus ?? derivedStatus);
+    const derivedWorkflowStatus = normalizedFollowUpStatus === "resolved"
+      ? "advisory_closed"
+      : normalizedFollowUpStatus === "blocked"
+        ? "blocked_by_safety"
+        : "review_decision_linked";
+    const normalizedWorkflowStatus = normalizeFollowUpWorkflowStatus(workflowStatus ?? derivedWorkflowStatus);
+    const normalizedFollowUpType = normalizeFollowUpType(followupType);
+    const safeMetadata = jsonValue(metadata, {});
+    const followUp = await tx.insert("pems_candidate_review_followups", {
+      id: createPersistedId("pems_review_followup"),
+      candidate_id: normalizedCandidateId,
+      advisory_draft_id: normalizedDraftId,
+      claim_revision_id: normalizedRevisionId,
+      promotion_review_id: normalizedReviewId,
+      actor_user_id: actorUserId ? String(actorUserId) : null,
+      followup_type: normalizedFollowUpType,
+      followup_status: normalizedFollowUpStatus,
+      workflow_status: normalizedWorkflowStatus,
+      revision_outcome: revisionOutcome,
+      action_required: safePreview(actionRequired || (normalizedFollowUpStatus === "resolved" ? "No advisory follow-up remains open." : "Reviewer follow-up remains required."), 180),
+      rationale_hash: hashText(rationale),
+      rationale_preview: safePreview(rationale, 180),
+      metadata_json: JSON.stringify({
+        ...safeMetadata,
+        phase: 42,
+        advisoryOnly: true,
+        claimRevisionId: normalizedRevisionId,
+        promotionReviewId: normalizedReviewId,
+        reviewDecision: review.decision,
+        reviewType: review.review_type,
+        revisionOutcome,
+        revisionResolvedVeto: normalizedFollowUpStatus === "resolved",
+        rawRationaleStored: false,
+        rawRevisionStored: false,
+        rawReviewStored: false,
+        followUpCreatesEvidence: false,
+        followUpBypassesHumanReview: false,
+        productionDrivingAllowed: false
+      }),
+      created_at: createdAt,
+      updated_at: createdAt
+    });
+    return {
+      version: PEMS_REVIEWER_FOLLOW_UP_VERSION,
+      status: normalizedFollowUpStatus === "resolved"
+        ? "phase42_reviewer_follow_up_resolved"
+        : normalizedFollowUpStatus === "blocked"
+          ? "phase42_reviewer_follow_up_blocked"
+          : "phase42_reviewer_follow_up_open",
+      ok: true,
+      followUp: formatPemsReviewFollowUpRow(followUp),
+      linkedClaimRevision: formatPemsClaimRevisionRow(revision),
+      linkedPromotionReview: formatPemsPromotionReviewRow(review),
+      advisoryOnly: true,
+      productionDrivingAllowed: false,
+      safety: {
+        rawRationaleStored: false,
+        rawRevisionStored: false,
+        rawReviewStored: false,
+        followUpCreatesEvidence: false,
+        followUpBypassesHumanReview: false,
         productionDrivingAllowed: false
       }
     };
@@ -1826,6 +2035,16 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
        COALESCE(SUM(CASE WHEN revision_status = 'revision_needs_reviewer_attention' THEN 1 ELSE 0 END), 0) AS claimRevisionAttentionCount
      FROM pems_candidate_claim_revisions;`
   );
+  const followUpCounts = await store.get(
+    `SELECT
+       COUNT(*) AS reviewerFollowUpCount,
+       COALESCE(SUM(CASE WHEN followup_status = 'resolved' THEN 1 ELSE 0 END), 0) AS reviewerFollowUpResolvedCount,
+       COALESCE(SUM(CASE WHEN followup_status = 'open' THEN 1 ELSE 0 END), 0) AS reviewerFollowUpOpenCount,
+       COALESCE(SUM(CASE WHEN followup_status = 'blocked' THEN 1 ELSE 0 END), 0) AS reviewerFollowUpBlockedCount,
+       COALESCE(SUM(CASE WHEN claim_revision_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS revisionBoundFollowUpCount,
+       COALESCE(SUM(CASE WHEN promotion_review_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewDecisionBoundFollowUpCount
+     FROM pems_candidate_review_followups;`
+  );
   const latestDraft = await store.get(
     `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
             deterministic_validator_status, suggested_review_type, suggested_decision,
@@ -1858,6 +2077,14 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
       ORDER BY created_at DESC
       LIMIT 1;`
   );
+  const latestFollowUp = await store.get(
+    `SELECT id, candidate_id, advisory_draft_id, claim_revision_id, promotion_review_id,
+            actor_user_id, followup_type, followup_status, workflow_status, revision_outcome,
+            action_required, rationale_hash, rationale_preview, metadata_json, created_at, updated_at
+       FROM pems_candidate_review_followups
+      ORDER BY created_at DESC
+      LIMIT 1;`
+  );
   const latestCandidate = latestDraft?.candidate_id
     ? await store.findOne("pems_candidate_maturity", { candidate_id: latestDraft.candidate_id })
     : await store.get(
@@ -1868,6 +2095,7 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
           LIMIT 1;`
       );
   const latestReviews = latestCandidate?.candidate_id ? await listPemsPromotionReviewsForCandidate(store, latestCandidate.candidate_id) : [];
+  const latestReview = latestReviews.length ? latestReviews[latestReviews.length - 1] : null;
   const latestGate = latestCandidate ? evaluatePemsPromotionGate(latestCandidate, latestReviews) : null;
   const draftCountValue = rowNumber(draftCounts?.draftCount);
   const formattedDraftQueue = draftQueueRows.map(formatPemsDraftRow);
@@ -1903,6 +2131,12 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     claimRevisionCount: rowNumber(revisionCounts?.claimRevisionCount),
     claimRevisionReclosedCount: rowNumber(revisionCounts?.claimRevisionReclosedCount),
     claimRevisionAttentionCount: rowNumber(revisionCounts?.claimRevisionAttentionCount),
+    reviewerFollowUpCount: rowNumber(followUpCounts?.reviewerFollowUpCount),
+    reviewerFollowUpResolvedCount: rowNumber(followUpCounts?.reviewerFollowUpResolvedCount),
+    reviewerFollowUpOpenCount: rowNumber(followUpCounts?.reviewerFollowUpOpenCount),
+    reviewerFollowUpBlockedCount: rowNumber(followUpCounts?.reviewerFollowUpBlockedCount),
+    revisionBoundFollowUpCount: rowNumber(followUpCounts?.revisionBoundFollowUpCount),
+    reviewDecisionBoundFollowUpCount: rowNumber(followUpCounts?.reviewDecisionBoundFollowUpCount),
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
@@ -1916,6 +2150,8 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     latestDraft: formattedLatestDraft,
     latestClaimCitationClosure,
     latestClaimRevision: formatPemsClaimRevisionRow(latestRevision),
+    latestPromotionReview: formatPemsPromotionReviewRow(latestReview),
+    latestReviewerFollowUp: formatPemsReviewFollowUpRow(latestFollowUp),
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -2116,6 +2352,51 @@ export function buildPemsReviewerClaimRevisionProof(status = {}) {
       rawSourceStored: false,
       revisionCreatesEvidence: false,
       revisionBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsReviewerFollowUpProof(status = {}) {
+  const followUp = status.latestReviewerFollowUp ?? null;
+  const hasFollowUp = Boolean(followUp?.id);
+  const bindsRevision = Boolean(followUp?.claimRevisionId);
+  const bindsReviewDecision = Boolean(followUp?.promotionReviewId);
+  const resolved = followUp?.followupStatus === "resolved" && followUp?.workflowStatus === "advisory_closed";
+  const revisionResolved = followUp?.revisionOutcome === "revision_reclosure_passed";
+  const ready = hasFollowUp && bindsRevision && bindsReviewDecision && resolved && revisionResolved;
+  return {
+    version: PEMS_REVIEWER_FOLLOW_UP_VERSION,
+    status: ready
+      ? "phase42_reviewer_follow_up_workflow_ready"
+      : hasFollowUp
+        ? "phase42_reviewer_follow_up_workflow_needs_attention"
+        : "phase42_reviewer_follow_up_workflow_waiting",
+    ok: ready,
+    mode: "reviewer_decision_history_and_follow_up_binding",
+    score: ready ? 98 : hasFollowUp ? 97 : 96,
+    target: 98,
+    reviewerFollowUpCount: status.reviewerFollowUpCount ?? (hasFollowUp ? 1 : 0),
+    reviewerFollowUpResolvedCount: status.reviewerFollowUpResolvedCount ?? (resolved ? 1 : 0),
+    reviewerFollowUpOpenCount: status.reviewerFollowUpOpenCount ?? (hasFollowUp && !resolved ? 1 : 0),
+    reviewerFollowUpBlockedCount: status.reviewerFollowUpBlockedCount ?? 0,
+    revisionBoundFollowUpCount: status.revisionBoundFollowUpCount ?? (bindsRevision ? 1 : 0),
+    reviewDecisionBoundFollowUpCount: status.reviewDecisionBoundFollowUpCount ?? (bindsReviewDecision ? 1 : 0),
+    bindsRevision,
+    bindsReviewDecision,
+    revisionResolvedVeto: resolved && revisionResolved,
+    latestReviewerFollowUp: followUp,
+    latestPromotionReview: status.latestPromotionReview ?? null,
+    latestClaimRevision: status.latestClaimRevision ?? null,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawRationaleStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      followUpCreatesEvidence: false,
+      followUpBypassesHumanReview: false,
+      automaticProductionRecommendation: false,
       productionDrivingAllowed: false
     }
   };

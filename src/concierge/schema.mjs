@@ -40,6 +40,7 @@ export const TABLES = [
   "pems_candidate_promotion_reviews",
   "pems_candidate_evaluator_drafts",
   "pems_candidate_claim_revisions",
+  "pems_candidate_review_followups",
   "operator_tool_proposals",
   "openclaw_skills",
   "workflow_runs",
@@ -766,6 +767,29 @@ CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id),
   FOREIGN KEY (advisory_draft_id) REFERENCES pems_candidate_evaluator_drafts(id)
+);
+
+CREATE TABLE IF NOT EXISTS pems_candidate_review_followups (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  advisory_draft_id TEXT NOT NULL,
+  claim_revision_id TEXT NOT NULL,
+  promotion_review_id TEXT NOT NULL,
+  actor_user_id TEXT,
+  followup_type TEXT NOT NULL,
+  followup_status TEXT NOT NULL,
+  workflow_status TEXT NOT NULL,
+  revision_outcome TEXT NOT NULL,
+  action_required TEXT NOT NULL,
+  rationale_hash TEXT NOT NULL,
+  rationale_preview TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id),
+  FOREIGN KEY (advisory_draft_id) REFERENCES pems_candidate_evaluator_drafts(id),
+  FOREIGN KEY (claim_revision_id) REFERENCES pems_candidate_claim_revisions(id),
+  FOREIGN KEY (promotion_review_id) REFERENCES pems_candidate_promotion_reviews(id)
 );
 
 CREATE TABLE IF NOT EXISTS operator_tool_proposals (

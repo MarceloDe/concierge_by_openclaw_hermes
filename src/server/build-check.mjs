@@ -13,11 +13,13 @@ import {
   buildPemsPromotionReadinessProof,
   buildPemsReviewerClaimRevisionProof,
   buildPemsReviewerComparisonProvenance,
+  buildPemsReviewerFollowUpProof,
   buildPemsReviewerWorkbenchReadinessProof,
   PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION,
   PEMS_LIVE_EVALUATOR_FILTERING_VERSION,
   PEMS_REVIEWER_CLAIM_REVISION_VERSION,
   PEMS_REVIEWER_COMPARISON_VERSION,
+  PEMS_REVIEWER_FOLLOW_UP_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
   PEMS_PROMOTION_GATE_VERSION
 } from "../concierge/continuousIntelligence.mjs";
@@ -220,13 +222,15 @@ if (
   !TABLES.includes("pems_candidate_promotion_reviews") ||
   !TABLES.includes("pems_candidate_evaluator_drafts") ||
   !TABLES.includes("pems_candidate_claim_revisions") ||
+  !TABLES.includes("pems_candidate_review_followups") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_evaluator_drafts") ||
-  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions")
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_followups")
 ) {
-  throw new Error("Database schema is missing Phase 41 continuous-intelligence review workbench tables");
+  throw new Error("Database schema is missing Phase 42 continuous-intelligence review workbench tables");
 }
 
 const pemsPromotionProof = buildPemsPromotionReadinessProof({
@@ -389,6 +393,35 @@ if (
   throw new Error("Phase 41 PEMS reviewer claim revision proof contract is incomplete.");
 }
 
+const pemsReviewerFollowUpProof = buildPemsReviewerFollowUpProof({
+  reviewerFollowUpCount: 1,
+  reviewerFollowUpResolvedCount: 1,
+  latestReviewerFollowUp: {
+    id: "followup_1",
+    claimRevisionId: "revision_1",
+    promotionReviewId: "review_1",
+    followupStatus: "resolved",
+    workflowStatus: "advisory_closed",
+    revisionOutcome: "revision_reclosure_passed"
+  },
+  latestPromotionReview: {
+    id: "review_1",
+    decision: "approved"
+  }
+});
+if (
+  pemsReviewerFollowUpProof.version !== PEMS_REVIEWER_FOLLOW_UP_VERSION ||
+  pemsReviewerFollowUpProof.status !== "phase42_reviewer_follow_up_workflow_ready" ||
+  pemsReviewerFollowUpProof.score !== 98 ||
+  pemsReviewerFollowUpProof.bindsRevision !== true ||
+  pemsReviewerFollowUpProof.bindsReviewDecision !== true ||
+  pemsReviewerFollowUpProof.revisionResolvedVeto !== true ||
+  pemsReviewerFollowUpProof.safety.followUpCreatesEvidence !== false ||
+  pemsReviewerFollowUpProof.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 42 PEMS reviewer follow-up proof contract is incomplete.");
+}
+
 for (const requiredFragment of [
   "PEMS Reviewer Workbench",
   "pemsWorkbench",
@@ -401,7 +434,9 @@ for (const requiredFragment of [
   "pemsLiveOnlyFilter",
   "recordPemsClaimRevision",
   "pemsClaimRevisionText",
-  "Phase 41"
+  "recordPemsFollowUp",
+  "pemsFollowUpRationale",
+  "Phase 42"
 ]) {
   if (!appHtml.includes(requiredFragment)) {
     throw new Error(`Phase 37 PEMS reviewer UI is missing required HTML fragment: ${requiredFragment}`);
@@ -416,7 +451,6 @@ for (const requiredFragment of [
   "advisoryDraftId",
   "rawAdvisoryNoteStored",
   "rawConsistencyTraceStored",
-  "Phase 41 Reviewer Claim Revisions",
   "Deterministic Vs Advisory Comparison",
   "Evaluator Provenance",
   "liveProofClaimed",
@@ -429,18 +463,22 @@ for (const requiredFragment of [
   "renderPemsClaimRevision",
   "liveClaimCitationClosure",
   "reviewerClaimRevisions",
+  "reviewerFollowUps",
   "submitPemsClaimRevision",
+  "submitPemsReviewerFollowUp",
   "/api/continuous-intelligence/pems/claim-revisions",
+  "/api/continuous-intelligence/pems/follow-ups",
+  "Phase 42 Reviewer Follow-Up Workflows",
   "pemsClaimClosureVetoed",
   "Claim citation closure requires reviewer edits before approval"
 ]) {
   if (!appJs.includes(requiredFragment)) {
-    throw new Error(`Phase 40 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 42 PEMS reviewer UI is missing required JS fragment: ${requiredFragment}`);
   }
 }
-for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-revision-diff", "pems-evidence-chips"]) {
+for (const requiredFragment of ["pems-workbench-grid", "pems-filter-bar", "pems-draft-queue", "pems-review-form", "pems-review-actions", "pems-comparison-table", "pems-claim-closure-table", "pems-revision-diff", "pems-followup-chain", "pems-evidence-chips"]) {
   if (!appCss.includes(requiredFragment)) {
-    throw new Error(`Phase 40 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
+    throw new Error(`Phase 42 PEMS reviewer UI is missing required CSS fragment: ${requiredFragment}`);
   }
 }
 
@@ -665,4 +703,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
