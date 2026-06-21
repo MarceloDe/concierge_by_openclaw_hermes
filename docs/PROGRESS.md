@@ -8601,6 +8601,45 @@ Verification:
 - API proof showed `phase42_reviewer_follow_up_workflow_ready`, score `98 / 98`, revision binding true, review decision binding true, revision resolved veto true, raw follow-up storage false, follow-up creates no evidence, and `productionDrivingAllowed=false`.
 - Browser visual proof showed Phase 42 visible, follow-up panel visible, revision-to-review binding visible, explicit review decision visible, resolved advisory veto visible, raw revision/review not stored, approval enabled only after deterministic reclosure, and no console errors.
 
+## Phase 43 PEMS Reviewer History Audit Exports
+
+Timestamp: 2026-06-21T03:37:05Z.
+
+Goal:
+
+- Turn reviewer follow-up history into a longitudinal audit/export surface without enabling production procedural decisioning.
+
+Implemented:
+
+- Added `PEMS_REVIEWER_HISTORY_EXPORT_VERSION`.
+- Added `pems_candidate_review_history_exports` as an append-only export ledger.
+- Added safe snapshot assembly across advisory drafts, claim revisions, promotion reviews, and reviewer follow-ups.
+- Added export rows with filters, export ref, export hash, snapshot hash, safe snapshot preview, and safety metadata only.
+- Added `POST /api/continuous-intelligence/pems/history-exports`.
+- Workbench API returns `reviewerHistoryExports`.
+- Connector proof exposes `pems_reviewer_history_audit_exports`.
+- Dashboard renders the Phase 43 reviewer history audit export panel and a record-history-export control.
+
+Safety:
+
+- Export rows store refs, hashes, counts, IDs, and statuses only.
+- Raw history text, raw revision text, raw review text, raw follow-up text, raw source text, prompts, completions, OCR, frames, credentials, secrets, and PHI are not stored in export rows.
+- History exports do not create evidence, bypass human review, dispatch OpenClaw, contact payers, send external messages, write to payer portals, or drive healthcare answers.
+- `productionDrivingAllowed=false` remains enforced.
+
+Verification:
+
+- `node --check src/concierge/continuousIntelligence.mjs && node --check src/server/server.mjs && node --check src/server/build-check.mjs && node --check src/app/app.js` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/pems-reviewer-workbench.test.mjs` passed with 20/20 tests.
+- `npm run build` passed and names the Phase 43 reviewer history audit export contract.
+- `npm run test:local` passed with 228 total tests, 226 passed, 0 failed, and 2 expected live-gated OpenClaw skips.
+- `git diff --check` passed.
+- Targeted secret scan over changed files and `artifacts/phase43` found no real secrets; it only matched pre-existing fake test/safety example strings.
+- API proof artifact: `artifacts/phase43/phase43-api-proof-summary.json`.
+- API proof extract: `artifacts/phase43/phase43-api-proof-extract.json`.
+- Browser visual proof: `artifacts/phase43/phase43-dashboard-history-export-ref-section.png`.
+- Browser DOM proof showed `phase43_reviewer_history_audit_export_ready`, `99 / 99`, export ref visible, snapshot hash visible, raw history/source not stored, production authority disabled, and no console/page errors.
+
 Artifacts:
 
 - `artifacts/phase42/phase42-seed-before-followup.json`

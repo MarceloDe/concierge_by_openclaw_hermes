@@ -13,6 +13,7 @@ export const PEMS_LIVE_EVALUATOR_FILTERING_VERSION = "2026-06-20.phase39-live-ev
 export const PEMS_LIVE_CLAIM_CITATION_CLOSURE_VERSION = "2026-06-20.phase40-live-claim-citation-closure.v1";
 export const PEMS_REVIEWER_CLAIM_REVISION_VERSION = "2026-06-20.phase41-reviewer-claim-revision-records.v1";
 export const PEMS_REVIEWER_FOLLOW_UP_VERSION = "2026-06-20.phase42-reviewer-follow-up-workflows.v1";
+export const PEMS_REVIEWER_HISTORY_EXPORT_VERSION = "2026-06-20.phase43-reviewer-history-audit-exports.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -613,6 +614,43 @@ function formatPemsReviewFollowUpRow(row) {
       rawReviewStored: false,
       followUpCreatesEvidence: false,
       followUpBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+function formatPemsReviewerHistoryExportRow(row) {
+  if (!row) return null;
+  const metadata = jsonValue(row.metadata_json, {});
+  const snapshotPreview = jsonValue(row.history_snapshot_preview_json, {});
+  return {
+    id: row.id,
+    candidateId: row.candidate_id,
+    advisoryDraftId: row.advisory_draft_id,
+    actorUserId: row.actor_user_id,
+    exportReasonHash: row.export_reason_hash,
+    exportReasonPreview: row.export_reason_preview,
+    filters: jsonValue(row.filters_json, {}),
+    exportRef: row.export_ref,
+    exportHash: row.export_hash,
+    historySnapshotHash: row.history_snapshot_hash,
+    historySnapshotPreview: snapshotPreview,
+    metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      exportCreatesEvidence: false,
+      exportBypassesHumanReview: false,
       productionDrivingAllowed: false
     }
   };
@@ -1299,6 +1337,261 @@ export async function recordPemsReviewerFollowUp(
       }
     };
   });
+}
+
+function normalizeHistoryExportFilters(filters = {}) {
+  return {
+    candidateId: String(filters.candidateId ?? "").trim() || null,
+    advisoryDraftId: String(filters.advisoryDraftId ?? "").trim() || null,
+    followupStatus: normalizeWorkbenchFilter(filters.followupStatus, ["open", "resolved", "blocked"]) ?? "all",
+    reviewDecision: normalizeWorkbenchFilter(filters.reviewDecision, ["approved", "rejected", "pass", "fail", "blocked"]) ?? "all",
+    includeDrafts: filters.includeDrafts !== false,
+    includeRevisions: filters.includeRevisions !== false,
+    includeReviews: filters.includeReviews !== false,
+    includeFollowUps: filters.includeFollowUps !== false
+  };
+}
+
+function filteredPemsHistoryWhere(filters = {}) {
+  const normalized = normalizeHistoryExportFilters(filters);
+  const clauses = [];
+  const params = [];
+  if (normalized.candidateId) {
+    clauses.push("candidate_id = ?");
+    params.push(normalized.candidateId);
+  }
+  if (normalized.advisoryDraftId) {
+    clauses.push("advisory_draft_id = ?");
+    params.push(normalized.advisoryDraftId);
+  }
+  return { normalized, whereSql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
+function safeHistoryRow(type, row = {}) {
+  return {
+    type,
+    id: row.id ?? null,
+    candidateId: row.candidateId ?? row.candidate_id ?? null,
+    advisoryDraftId: row.advisoryDraftId ?? row.advisory_draft_id ?? null,
+    claimRevisionId: row.claimRevisionId ?? row.claim_revision_id ?? null,
+    promotionReviewId: row.promotionReviewId ?? row.promotion_review_id ?? null,
+    status: row.status ?? row.revisionStatus ?? row.revision_status ?? row.followupStatus ?? row.followup_status ?? null,
+    decision: row.decision ?? null,
+    reviewType: row.reviewType ?? row.review_type ?? null,
+    followupStatus: row.followupStatus ?? row.followup_status ?? null,
+    workflowStatus: row.workflowStatus ?? row.workflow_status ?? null,
+    revisionOutcome: row.revisionOutcome ?? row.revision_outcome ?? null,
+    createdAt: row.createdAt ?? row.created_at ?? null,
+    updatedAt: row.updatedAt ?? row.updated_at ?? null
+  };
+}
+
+export async function buildPemsReviewerHistorySnapshot(store, filters = {}) {
+  if (!store) throw new Error("A store is required to build a PEMS reviewer history snapshot.");
+  const normalized = normalizeHistoryExportFilters(filters);
+  const draftClauses = [];
+  const draftParams = [];
+  if (normalized.candidateId) {
+    draftClauses.push("candidate_id = ?");
+    draftParams.push(normalized.candidateId);
+  }
+  if (normalized.advisoryDraftId) {
+    draftClauses.push("id = ?");
+    draftParams.push(normalized.advisoryDraftId);
+  }
+  const revisionFilter = filteredPemsHistoryWhere(normalized);
+  const drafts = normalized.includeDrafts
+    ? await store.all(
+        `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
+                deterministic_validator_status, suggested_review_type, suggested_decision,
+                advisory_note_hash, advisory_note_preview, consistency_trace_ref,
+                consistency_trace_hash, consistency_trace_preview, metadata_json, created_at, updated_at
+           FROM pems_candidate_evaluator_drafts
+          ${draftClauses.length ? `WHERE ${draftClauses.join(" AND ")}` : ""}
+          ORDER BY created_at DESC
+          LIMIT 50;`,
+        draftParams
+      )
+    : [];
+  const revisions = normalized.includeRevisions
+    ? await store.all(
+        `SELECT id, candidate_id, advisory_draft_id, claim_id, actor_user_id, revision_status,
+                original_claim_hash, original_claim_preview, suggested_edit_hash, suggested_edit_preview,
+                revised_claim_hash, revised_claim_preview, source_pointer_ids_json,
+                deterministic_reclosure_json, metadata_json, created_at, updated_at
+           FROM pems_candidate_claim_revisions
+          ${revisionFilter.whereSql}
+          ORDER BY created_at DESC
+          LIMIT 50;`,
+        revisionFilter.params
+      )
+    : [];
+  const followUpClauses = [];
+  const followUpParams = [];
+  if (normalized.candidateId) {
+    followUpClauses.push("candidate_id = ?");
+    followUpParams.push(normalized.candidateId);
+  }
+  if (normalized.advisoryDraftId) {
+    followUpClauses.push("advisory_draft_id = ?");
+    followUpParams.push(normalized.advisoryDraftId);
+  }
+  if (normalized.followupStatus !== "all") {
+    followUpClauses.push("followup_status = ?");
+    followUpParams.push(normalized.followupStatus);
+  }
+  const followUps = normalized.includeFollowUps
+    ? await store.all(
+        `SELECT id, candidate_id, advisory_draft_id, claim_revision_id, promotion_review_id,
+                actor_user_id, followup_type, followup_status, workflow_status, revision_outcome,
+                action_required, rationale_hash, rationale_preview, metadata_json, created_at, updated_at
+           FROM pems_candidate_review_followups
+          ${followUpClauses.length ? `WHERE ${followUpClauses.join(" AND ")}` : ""}
+          ORDER BY created_at DESC
+          LIMIT 50;`,
+        followUpParams
+      )
+    : [];
+  const reviewClauses = [];
+  const reviewParams = [];
+  if (normalized.candidateId) {
+    reviewClauses.push("candidate_id = ?");
+    reviewParams.push(normalized.candidateId);
+  }
+  if (normalized.reviewDecision !== "all") {
+    reviewClauses.push("decision = ?");
+    reviewParams.push(normalized.reviewDecision);
+  }
+  let reviews = normalized.includeReviews
+    ? await store.all(
+        `SELECT id, candidate_id, actor_user_id, review_type, decision, evidence_ref_count,
+                validator_pass_count, safety_incident_count, rationale_hash, rationale_preview,
+                metadata_json, created_at
+           FROM pems_candidate_promotion_reviews
+          ${reviewClauses.length ? `WHERE ${reviewClauses.join(" AND ")}` : ""}
+          ORDER BY created_at DESC
+          LIMIT 50;`,
+        reviewParams
+      )
+    : [];
+  if (normalized.advisoryDraftId) {
+    reviews = reviews.filter((row) => jsonValue(row.metadata_json, {}).advisoryDraftId === normalized.advisoryDraftId);
+  }
+  const formattedDrafts = drafts.map(formatPemsDraftRow).filter(Boolean);
+  const formattedRevisions = revisions.map(formatPemsClaimRevisionRow).filter(Boolean);
+  const formattedReviews = reviews.map(formatPemsPromotionReviewRow).filter(Boolean);
+  const formattedFollowUps = followUps.map(formatPemsReviewFollowUpRow).filter(Boolean);
+  const historyRows = [
+    ...formattedDrafts.map((row) => safeHistoryRow("advisory_draft", row)),
+    ...formattedRevisions.map((row) => safeHistoryRow("claim_revision", row)),
+    ...formattedReviews.map((row) => safeHistoryRow("promotion_review", row)),
+    ...formattedFollowUps.map((row) => safeHistoryRow("review_followup", row))
+  ].sort((a, b) => String(b.createdAt ?? b.updatedAt ?? "").localeCompare(String(a.createdAt ?? a.updatedAt ?? "")));
+  const counts = {
+    draftCount: formattedDrafts.length,
+    claimRevisionCount: formattedRevisions.length,
+    promotionReviewCount: formattedReviews.length,
+    reviewerFollowUpCount: formattedFollowUps.length,
+    resolvedFollowUpCount: formattedFollowUps.filter((row) => row.followupStatus === "resolved").length,
+    openFollowUpCount: formattedFollowUps.filter((row) => row.followupStatus === "open").length,
+    blockedFollowUpCount: formattedFollowUps.filter((row) => row.followupStatus === "blocked").length,
+    historyRowCount: historyRows.length
+  };
+  const preview = {
+    version: PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+    filters: normalized,
+    counts,
+    latestRefs: historyRows.slice(0, 12),
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      exportCreatesEvidence: false,
+      exportBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }
+  };
+  const snapshotHash = hashText(JSON.stringify({ filters: normalized, counts, historyRows }));
+  return {
+    version: PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+    filters: normalized,
+    counts,
+    historyRows,
+    snapshotHash,
+    snapshotPreview: preview,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: preview.safety
+  };
+}
+
+export async function recordPemsReviewerHistoryExport(
+  store,
+  {
+    candidateId = null,
+    advisoryDraftId = null,
+    actorUserId = "operator",
+    filters = {},
+    exportReason = "",
+    metadata = {},
+    createdAt = new Date().toISOString()
+  } = {}
+) {
+  if (!store) throw new Error("A store is required to record a PEMS reviewer history export.");
+  const effectiveFilters = normalizeHistoryExportFilters({ ...filters, candidateId: candidateId ?? filters.candidateId, advisoryDraftId: advisoryDraftId ?? filters.advisoryDraftId });
+  const snapshot = await buildPemsReviewerHistorySnapshot(store, effectiveFilters);
+  const normalizedCandidateId = effectiveFilters.candidateId ?? snapshot.historyRows.find((row) => row.candidateId)?.candidateId ?? null;
+  const normalizedDraftId = effectiveFilters.advisoryDraftId ?? snapshot.historyRows.find((row) => row.advisoryDraftId)?.advisoryDraftId ?? null;
+  const safeMetadata = jsonValue(metadata, {});
+  const exportRef = stableRef("pems_review_history_export", normalizedCandidateId, normalizedDraftId, JSON.stringify(effectiveFilters), snapshot.snapshotHash);
+  const exportHash = hashText(JSON.stringify({ exportRef, snapshotHash: snapshot.snapshotHash, filters: effectiveFilters, counts: snapshot.counts }));
+  const exportRow = await store.insert("pems_candidate_review_history_exports", {
+    id: createPersistedId("pems_history_export"),
+    candidate_id: normalizedCandidateId,
+    advisory_draft_id: normalizedDraftId,
+    actor_user_id: actorUserId ? String(actorUserId) : null,
+    export_reason_hash: hashText(exportReason),
+    export_reason_preview: safePreview(exportReason || "Reviewer history audit export requested.", 180),
+    filters_json: JSON.stringify(effectiveFilters),
+    export_ref: exportRef,
+    export_hash: exportHash,
+    history_snapshot_hash: snapshot.snapshotHash,
+    history_snapshot_preview_json: JSON.stringify(snapshot.snapshotPreview),
+    metadata_json: JSON.stringify({
+      ...safeMetadata,
+      phase: 43,
+      version: PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+      advisoryOnly: true,
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      exportCreatesEvidence: false,
+      exportBypassesHumanReview: false,
+      productionDrivingAllowed: false
+    }),
+    created_at: createdAt,
+    updated_at: createdAt
+  });
+  return {
+    version: PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+    status: "phase43_reviewer_history_audit_export_recorded",
+    ok: true,
+    export: formatPemsReviewerHistoryExportRow(exportRow),
+    snapshot,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: snapshot.safety
+  };
 }
 
 function liveEvaluatorBlocked(status, reason, details = {}) {
@@ -2045,6 +2338,12 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
        COALESCE(SUM(CASE WHEN promotion_review_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS reviewDecisionBoundFollowUpCount
      FROM pems_candidate_review_followups;`
   );
+  const historyExportCounts = await store.get(
+    `SELECT
+       COUNT(*) AS reviewerHistoryExportCount,
+       COALESCE(SUM(CASE WHEN metadata_json LIKE '%"rawHistoryStored":false%' THEN 1 ELSE 0 END), 0) AS safeHistoryExportCount
+     FROM pems_candidate_review_history_exports;`
+  );
   const latestDraft = await store.get(
     `SELECT id, candidate_id, actor_user_id, draft_type, evaluator_mode, status,
             deterministic_validator_status, suggested_review_type, suggested_decision,
@@ -2082,6 +2381,15 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
             actor_user_id, followup_type, followup_status, workflow_status, revision_outcome,
             action_required, rationale_hash, rationale_preview, metadata_json, created_at, updated_at
        FROM pems_candidate_review_followups
+      ORDER BY created_at DESC
+      LIMIT 1;`
+  );
+  const latestHistoryExport = await store.get(
+    `SELECT id, candidate_id, advisory_draft_id, actor_user_id, export_reason_hash,
+            export_reason_preview, filters_json, export_ref, export_hash,
+            history_snapshot_hash, history_snapshot_preview_json, metadata_json,
+            created_at, updated_at
+       FROM pems_candidate_review_history_exports
       ORDER BY created_at DESC
       LIMIT 1;`
   );
@@ -2137,6 +2445,8 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     reviewerFollowUpBlockedCount: rowNumber(followUpCounts?.reviewerFollowUpBlockedCount),
     revisionBoundFollowUpCount: rowNumber(followUpCounts?.revisionBoundFollowUpCount),
     reviewDecisionBoundFollowUpCount: rowNumber(followUpCounts?.reviewDecisionBoundFollowUpCount),
+    reviewerHistoryExportCount: rowNumber(historyExportCounts?.reviewerHistoryExportCount),
+    safeHistoryExportCount: rowNumber(historyExportCounts?.safeHistoryExportCount),
     reviewCount: rowNumber(reviewCounts?.reviewCount),
     advisoryLinkedReviewCount: rowNumber(reviewCounts?.advisoryLinkedReviewCount),
     productionDrivingAllowed: false,
@@ -2152,6 +2462,7 @@ export async function getPemsReviewerWorkbenchStatus(store, filters = {}) {
     latestClaimRevision: formatPemsClaimRevisionRow(latestRevision),
     latestPromotionReview: formatPemsPromotionReviewRow(latestReview),
     latestReviewerFollowUp: formatPemsReviewFollowUpRow(latestFollowUp),
+    latestReviewerHistoryExport: formatPemsReviewerHistoryExportRow(latestHistoryExport),
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -2396,6 +2707,67 @@ export function buildPemsReviewerFollowUpProof(status = {}) {
       rawReviewStored: false,
       followUpCreatesEvidence: false,
       followUpBypassesHumanReview: false,
+      automaticProductionRecommendation: false,
+      productionDrivingAllowed: false
+    }
+  };
+}
+
+export function buildPemsReviewerHistoryExportProof(status = {}) {
+  const historyExport = status.latestReviewerHistoryExport ?? null;
+  const preview = historyExport?.historySnapshotPreview ?? {};
+  const counts = preview.counts ?? {};
+  const safety = historyExport?.safety ?? {};
+  const hasExport = Boolean(historyExport?.id);
+  const hasRefs = Boolean(historyExport?.exportRef && historyExport?.exportHash && historyExport?.historySnapshotHash);
+  const hasLongitudinalRows =
+    (counts.claimRevisionCount ?? 0) > 0 &&
+    (counts.promotionReviewCount ?? 0) > 0 &&
+    (counts.reviewerFollowUpCount ?? 0) > 0;
+  const safeExport =
+    safety.rawHistoryStored === false &&
+    safety.rawRevisionStored === false &&
+    safety.rawReviewStored === false &&
+    safety.rawSourceStored === false &&
+    safety.exportCreatesEvidence === false &&
+    safety.exportBypassesHumanReview === false &&
+    safety.productionDrivingAllowed === false;
+  const ready = hasExport && hasRefs && hasLongitudinalRows && safeExport;
+  return {
+    version: PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
+    status: ready
+      ? "phase43_reviewer_history_audit_export_ready"
+      : hasExport
+        ? "phase43_reviewer_history_audit_export_needs_attention"
+        : "phase43_reviewer_history_audit_export_waiting",
+    ok: ready,
+    mode: "reviewer_history_audit_export_refs",
+    score: ready ? 99 : hasExport ? 98 : 97,
+    target: 99,
+    reviewerHistoryExportCount: status.reviewerHistoryExportCount ?? (hasExport ? 1 : 0),
+    safeHistoryExportCount: status.safeHistoryExportCount ?? (safeExport ? 1 : 0),
+    historyRowCount: counts.historyRowCount ?? 0,
+    claimRevisionCount: counts.claimRevisionCount ?? status.claimRevisionCount ?? 0,
+    promotionReviewCount: counts.promotionReviewCount ?? status.reviewCount ?? 0,
+    reviewerFollowUpCount: counts.reviewerFollowUpCount ?? status.reviewerFollowUpCount ?? 0,
+    resolvedFollowUpCount: counts.resolvedFollowUpCount ?? status.reviewerFollowUpResolvedCount ?? 0,
+    hasExportRef: Boolean(historyExport?.exportRef),
+    hasExportHash: Boolean(historyExport?.exportHash),
+    hasSnapshotHash: Boolean(historyExport?.historySnapshotHash),
+    latestReviewerHistoryExport: historyExport,
+    advisoryOnly: true,
+    productionDrivingAllowed: false,
+    safety: {
+      rawHistoryStored: false,
+      rawRevisionStored: false,
+      rawReviewStored: false,
+      rawSourceStored: false,
+      rawPromptStored: false,
+      rawCompletionStored: false,
+      rawOcrStored: false,
+      rawFrameStored: false,
+      exportCreatesEvidence: false,
+      exportBypassesHumanReview: false,
       automaticProductionRecommendation: false,
       productionDrivingAllowed: false
     }

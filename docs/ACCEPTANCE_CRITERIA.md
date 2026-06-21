@@ -2485,6 +2485,18 @@ Focused proof:
 - A resolved follow-up requires a deterministic reclosure-passed revision and a later explicit review decision.
 - Workbench API returns `reviewerFollowUps`.
 - Connector proof exposes `pems_reviewer_follow_up_workflows`.
+
+## Phase 43: PEMS Reviewer History Audit Exports
+
+- `PEMS_REVIEWER_HISTORY_EXPORT_VERSION` is defined.
+- `pems_candidate_review_history_exports` exists.
+- Reviewer history exports store export refs, export hashes, snapshot hashes, filters, counts, and latest safe row refs only.
+- Raw history, raw revision text, raw review text, raw follow-up text, raw source text, raw prompts, raw completions, raw OCR, raw frames, credentials, secrets, and PHI are not stored in export rows.
+- Workbench API returns `reviewerHistoryExports`.
+- Connector proof exposes `pems_reviewer_history_audit_exports`.
+- The `continuous_procedural_memory` score can advance only to the Phase 43 history-export target while `productionDrivingAllowed=false`.
+- History exports do not create evidence, bypass human review, drive healthcare answers, route workflows, dispatch OpenClaw, contact payers, send messages, or write to payer portals.
+- Browser/API proof for `pems_reviewer_history_audit_exports`.
 - Dashboard renders `Reviewer Follow-Up Workflow` with revision binding, review binding, workflow state, and action required.
 - Follow-up records do not create evidence or production authority.
 - Raw revision text, raw review text, raw rationale text, raw source text, raw prompts, raw completions, credentials, secrets, and PHI are not stored in reviewer surfaces.

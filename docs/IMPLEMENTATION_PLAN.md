@@ -2984,3 +2984,25 @@ Acceptance:
 - Build checks fail if the Phase 42 proof, API route, UI strings, CSS chain, or schema table are removed.
 - Full local tests pass.
 - Dashboard visual proof shows the Phase 42 score, follow-up count, revision binding, review binding, workflow status, and production driving disabled.
+
+## Phase 43: PEMS Reviewer History Audit Exports
+
+Goal: turn the Phase 42 reviewer follow-up ledger into a longitudinal audit/export surface without granting production procedural authority.
+
+Build:
+
+- Add `pems_candidate_review_history_exports` as an append-only ledger.
+- Add `PEMS_REVIEWER_HISTORY_EXPORT_VERSION`.
+- Build safe reviewer-history snapshots across advisory drafts, claim revisions, promotion reviews, and review follow-ups.
+- Persist export refs, export hashes, snapshot hashes, filters, counts, latest safe row refs, and safety metadata only.
+- Expose `reviewerHistoryExports` through `/api/continuous-intelligence/pems/workbench`.
+- Add `POST /api/continuous-intelligence/pems/history-exports`.
+- Expose `pems_reviewer_history_audit_exports` through connector proof.
+- Render a dashboard history export panel and record-history-export control.
+
+Gates:
+
+- Focused PEMS reviewer-workbench tests prove the export includes revision/review/follow-up history and stores no raw history/source text.
+- Build checks fail if the Phase 43 table, proof, API route, UI strings, CSS, or version contract are removed.
+- API proof shows `phase43_reviewer_history_audit_export_ready`, score `99 / 99`, export ref/hash/snapshot hash present, and production driving disabled.
+- Dashboard visual proof shows the Phase 43 panel, export ref, snapshot hash, row counts, and raw-history-not-stored safety.
