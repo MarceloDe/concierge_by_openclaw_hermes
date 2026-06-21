@@ -8830,3 +8830,28 @@ Verification:
 - `npm run test:local` passed with 239 passing tests and 2 expected live-gated OpenClaw skips.
 - `npm run test:live` passed with the live OpenAI smoke plus research/UI slices.
 - `npm run test:facade` passed with 53 tests and 2 expected skips.
+
+## Phase 47 Expanded Review Queues - 2026-06-21
+
+Goal:
+- Close final verification row `C21`.
+
+Implemented:
+- Added `getResearchReviewQueues` in `src/concierge/researchOps.mjs`.
+- Added Node and FastAPI operator/admin routes for `GET /api/research/review-queues`.
+- Added a dashboard Review Queues button and proof card for pending artifacts, low-confidence/unsupported user answers, downvoted feedback, escalated handoffs, and user-answer review rows.
+- Updated the final verification report so `C21` is now `PASSING`.
+
+Safety:
+- The queue is read-only and ref-only.
+- It returns IDs, hashes, safe previews, counts, statuses, and audit refs, not raw artifact bodies, raw feedback comments, raw handoff reasons, credentials, secrets, source-pointer payload dumps, or PHI.
+
+Verification:
+- `node --check src/concierge/researchOps.mjs && node --check src/server/server.mjs && node --check src/app/app.js` passed.
+- `python3 -m py_compile project/api/main.py project/tests/test_fastapi_facade.py` passed.
+- `node --test src/tests/research-ops.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/final-system-verification-report.test.mjs` passed with 30/30 tests.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run build` passed.
+- `npm run test:local` passed with 240 passing tests and 2 expected live-gated OpenClaw skips.
+- Browser dashboard proof passed at `http://127.0.0.1:4218/?phase=phase-47-review-queues`: Review Queues rendered all five queue families, safety flags showed read-only/ref-only/raw-hidden behavior, and console error count was 0.
+- Visual artifacts: `artifacts/phase47/research-review-queues-dashboard-proof.png` and `artifacts/phase47/research-review-queues-dashboard-proof.json`.

@@ -2371,6 +2371,7 @@ function renderResearchConsole(payload, mode = "kpis") {
   const workerResult = payload.workerResult ?? null;
   const budgetPayload = payload.budget ?? (payload.policy && payload.usage ? payload : null);
   const analyticsPayload = payload.distributions ? payload : null;
+  const reviewQueuesPayload = payload.queues && payload.counts ? payload : null;
   const embeddingStatus = payload.route && (payload.counts || payload.job || payload.latestJob) ? payload : null;
   const graphPayload = payload.graph?.nodes && payload.graph?.edges ? payload : null;
   const researchDocumentUpload = payload.document && payload.artifact ? payload : null;
@@ -2445,6 +2446,52 @@ function renderResearchConsole(payload, mode = "kpis") {
           <dt>Safety</dt>
           <dd>${escapeHtml(budgetPayload.safety?.failClosed ? "fail-closed · persisted policy" : "verify budget safety")}</dd>
         </dl>
+      </article>
+    `);
+  }
+  if (reviewQueuesPayload) {
+    const counts = reviewQueuesPayload.counts ?? {};
+    const queues = reviewQueuesPayload.queues ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Expanded Review Queues</h3>
+        <dl>
+          <dt>Pending artifacts</dt>
+          <dd>${escapeHtml(counts.pendingArtifacts ?? 0)}</dd>
+          <dt>Low confidence</dt>
+          <dd>${escapeHtml(counts.lowConfidenceAnswers ?? 0)}</dd>
+          <dt>Downvoted feedback</dt>
+          <dd>${escapeHtml(counts.downvotedFeedback ?? 0)}</dd>
+          <dt>Escalated handoffs</dt>
+          <dd>${escapeHtml(counts.escalatedHandoffs ?? 0)}</dd>
+          <dt>User-answer reviews</dt>
+          <dd>${escapeHtml(counts.userAnswerReviews ?? 0)}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(reviewQueuesPayload.safety?.reviewQueuesAreRefOnly ? "ref-only queues · raw text hidden" : "verify review queue safety")}</dd>
+        </dl>
+        <h4>Queue Samples</h4>
+        <ol class="research-event-list">
+          ${(queues.pendingArtifacts ?? [])
+            .slice(0, 3)
+            .map((item) => `<li><b>artifact</b><span>${escapeHtml(item.id)} · ${escapeHtml(item.citationStatus)} · ${escapeHtml(item.title ?? item.sourceUrl ?? "")}</span></li>`)
+            .join("")}
+          ${(queues.lowConfidenceAnswers ?? [])
+            .slice(0, 3)
+            .map((item) => `<li><b>low confidence</b><span>${escapeHtml(item.id)} · claims ${escapeHtml(item.claimCount)} · answer ${escapeHtml(item.answerHash)}</span></li>`)
+            .join("")}
+          ${(queues.downvotedFeedback ?? [])
+            .slice(0, 3)
+            .map((item) => `<li><b>${escapeHtml(item.rating)}</b><span>${escapeHtml(item.id)} · session ${escapeHtml(item.sessionId)} · comment ${escapeHtml(item.commentHash ?? "none")}</span></li>`)
+            .join("")}
+          ${(queues.escalatedHandoffs ?? [])
+            .slice(0, 3)
+            .map((item) => `<li><b>${escapeHtml(item.priority)}</b><span>${escapeHtml(item.id)} · ${escapeHtml(item.status)} · ${escapeHtml(item.summary)}</span></li>`)
+            .join("")}
+          ${(queues.userAnswerReviews ?? [])
+            .slice(0, 3)
+            .map((item) => `<li><b>${escapeHtml(item.queueType)}</b><span>${escapeHtml(item.id)} · unsupported ${escapeHtml(item.unsupportedCount)} · low ${escapeHtml(item.lowConfidenceCount)}</span></li>`)
+            .join("") || "<li>No review queue samples yet.</li>"}
+        </ol>
       </article>
     `);
   }
@@ -3031,6 +3078,15 @@ async function loadResearchBudget() {
   document.querySelector("#researchBudgetKillSwitchReason").value = policy.killSwitchReason ?? "";
   researchStatus.textContent = `Budget ${usage.queuedRuns ?? 0}/${policy.dailyRunLimit ?? 0} runs · kill switch ${policy.killSwitchEnabled ? "on" : "off"}`;
   renderResearchConsole(result, "budget");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function loadResearchReviewQueues() {
+  const result = await api("/api/research/review-queues");
+  const counts = result.counts ?? {};
+  researchStatus.textContent = `${counts.pendingArtifacts ?? 0} artifacts · ${counts.lowConfidenceAnswers ?? 0} low confidence · ${counts.downvotedFeedback ?? 0} downvotes`;
+  renderResearchConsole(result, "review queues");
   trace.textContent = JSON.stringify(result, null, 2);
   return result;
 }
@@ -4216,6 +4272,18 @@ document.querySelector("#loadResearchBudget").addEventListener("click", async ()
   const restore = setBusy(document.querySelector("#loadResearchBudget"), "Loading...");
   try {
     await loadResearchBudget();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#loadResearchReviewQueues").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#loadResearchReviewQueues"), "Loading...");
+  try {
+    await loadResearchReviewQueues();
   } catch (error) {
     researchStatus.textContent = error.message;
     trace.textContent = error.stack ?? error.message;

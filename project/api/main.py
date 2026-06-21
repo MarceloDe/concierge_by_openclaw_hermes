@@ -554,6 +554,11 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         await enforce_rate_limit(app, request_context, principal=principal, scope="research")
         return await app.state.node_client.get_json("/api/research/budget", params={"actorUserId": principal.user_id})
 
+    @app.get("/api/research/review-queues")
+    async def research_review_queues(request: Request, principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request, principal=principal, scope="research")
+        return await app.state.node_client.get_json("/api/research/review-queues", params=query_for_actor(request, principal))
+
     @app.post("/api/research/budget")
     async def update_research_budget(request_context: Request, body: dict[str, Any] = Body(...), principal: UserPrincipal = Depends(require_operator)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="research")

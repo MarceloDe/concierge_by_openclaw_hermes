@@ -1,7 +1,7 @@
 # Final System Verification Report
 
 Project: `workerprototype_openclaw`
-Report phase: Phase 46 research analytics and budget kill-switch update to the final-system PASS / FAIL / BLOCKED matrix
+Report phase: Phase 47 expanded review queues update to the final-system PASS / FAIL / BLOCKED matrix
 Created: 2026-06-01
 Scope source: `docs/goal_final_system.md`
 
@@ -35,19 +35,20 @@ Scope source: `docs/goal_final_system.md`
 - Phase 10T build/facade/local gates passed: `npm run build`, `npm run test:facade` with 32 tests and 2 expected live-gated skips, and `npm run test:local` with 163 tests total, 161 passed, 0 failed, and 2 expected live-gated official OpenClaw skips.
 - Phase 10T browser proof passed on `/`: scheduler daemon status showed `process running`, daemon tick queued `research_run_adc6aa4a-ce74-45ca-bc51-a2a750404bdf`, approved-schedule-only safety was visible, and console error count was 0. Screenshot: `artifacts/phase10t-research-scheduler-daemon-browser-proof.png`.
 - Phase 10T graceful shutdown proof passed: scheduler-enabled Node server handled `SIGINT`, stopped the daemon, exited with code 0, and left no listener on port 4173.
-- Phase 46 adds `GET /api/research/analytics`, persisted `research_budget_policies` / `research_budget_events`, Node/FastAPI budget endpoints, and dashboard budget/kill-switch controls.
+- Phase 46 research analytics and budget kill-switch update adds `GET /api/research/analytics`, persisted `research_budget_policies` / `research_budget_events`, Node/FastAPI budget endpoints, and dashboard budget/kill-switch controls.
 - Phase 46 focused proof passed through `npm run test:local` with 239 passing tests and 2 expected live-gated OpenClaw skips, `npm run test:live` with the live OpenAI smoke plus research/UI slices, and `npm run test:facade` with 53 tests and 2 expected skips.
 - Phase 46 researchOps proof shows the persisted kill switch blocks both run queueing and execution, emits blocked budget events, and audits `research_budget_blocked` without raw prompts or artifact text.
+- Phase 47 adds `GET /api/research/review-queues` and a dashboard Review Queues panel for pending artifacts, low-confidence/unsupported answers, downvoted feedback, escalated handoffs, and user-answer reviews.
 - Earlier phase evidence in `docs/goal_final_system.md`, `docs/PROGRESS.md`, and `docs/ACCEPTANCE_CRITERIA.md` remains part of the verification base, but any item below marked `FAILING / NEEDS FIX` or `BLOCKED BY EXTERNAL DEPENDENCY` is not complete.
 
 ## Summary
 
 | Category | Count |
 | --- | ---: |
-| PASSING | 121 |
+| PASSING | 122 |
 | IMPLEMENTED DURING THIS RUN | 0 |
 | BLOCKED BY EXTERNAL DEPENDENCY | 2 |
-| FAILING / NEEDS FIX | 9 |
+| FAILING / NEEDS FIX | 8 |
 
 The system is not yet complete. The strongest local MVP path is real and well-instrumented, but the broad final contract still has unbuilt product surfaces and externally gated live worker proof.
 
@@ -115,7 +116,7 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 | C18 | PASSING | Trusted evidence search returns source metadata, scores, snippets, and review status. |
 | C19 | PASSING | Retrieval test/search shows chunks/snippets, scores, embedding contribution, and low-confidence states. |
 | C20 | PASSING | Phase 10P claim closure links supported claims to citations and fails unsupported claims. |
-| C21 | FAILING / NEEDS FIX | Pending artifact review exists, but low-confidence/downvoted/escalated/user-answer review queues are not complete. |
+| C21 | PASSING | Phase 47 adds expanded read-only review queues for pending artifacts, low-confidence/unsupported user answers, downvoted feedback, and escalated handoffs. |
 | C22 | PASSING | Operator NL console uses registry-bound tools only. |
 | C23 | PASSING | Operator write requests become structured proposals with risk/effect and no mutation. |
 | C24 | PASSING | Proposal approval executes exactly once; rejection causes no mutation; lifecycle is audited. |
@@ -233,9 +234,6 @@ The system is not yet complete. The strongest local MVP path is real and well-in
 ## Failing / Needs Fix Backlog
 
 Priority 1:
-- Expand review queues for low-confidence/downvoted/escalated/user-answer items (`C21`).
-
-Priority 2:
 - Broaden domain journeys for cost/comparison, prescription, procedure-prep, provider/network options, and general entity extraction (`A9`, `A11`, `A12`, `A13`, `E5`).
 
 ## Code Changes Made In Phase 10Q
@@ -289,8 +287,8 @@ Priority 2:
 
 The next phase should address the next highest-risk remaining gaps:
 
-1. Expanded review queues for low-confidence/downvoted/escalated/user-answer items (`C21`).
-2. Broader journey/entity extraction for cost/comparison, prescriptions, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`, `E5`).
+1. General entity extraction with source/page/span/confidence for the research evidence pipeline (`E5`).
+2. Broader journeys for cost/comparison, prescriptions, procedure-prep, and provider/network options (`A9`, `A11`, `A12`, `A13`).
 
 ## Phase 46 Research Analytics And Budget Kill-Switch Update
 
@@ -305,6 +303,20 @@ Tests added or updated:
 - Updated `src/tests/research-ops.test.mjs` to prove analytics safety and persisted kill-switch enforcement for queue and execution paths.
 - Updated `src/tests/chat-ui-contract.test.mjs` to pin the new dashboard controls and endpoints.
 - Updated `project/tests/test_fastapi_facade.py` to prove operator/admin RBAC and actor binding for analytics and budget routes.
+
+## Phase 47 Expanded Review Queues Update
+
+Code changes:
+- Added `getResearchReviewQueues` to aggregate pending artifacts, low-confidence citation evaluations, unsupported answer reviews, downvoted feedback, and open escalated handoffs.
+- Added Node and FastAPI routes for `GET /api/research/review-queues` behind operator/admin RBAC and actor binding.
+- Added the dashboard Review Queues control and a ref-only proof card for counts plus queue samples.
+
+Safety:
+- The queue is read-only and returns refs, hashes, safe previews, counts, statuses, and audit refs only.
+- Raw artifact bodies, raw feedback comments, raw handoff reasons, source-pointer payload dumps, credentials, secrets, and PHI are not returned.
+
+Verification target:
+- Row `C21` is implemented by this phase when focused research, facade, build, local, and visual dashboard proof pass.
 
 ## Phase 10T Research Scheduler Daemon Update
 

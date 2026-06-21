@@ -36,6 +36,7 @@ import {
   getResearchEmbeddingStatus,
   getResearchGraph,
   getResearchKpis,
+  getResearchReviewQueues,
   getResearchRun,
   getResearchWorkerStatus,
   ingestResearchDocumentUpload,
@@ -3200,6 +3201,22 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/research/budget") {
     try {
       sendJson(res, 200, await getResearchBudgetStatus(store));
+    } catch (error) {
+      sendApiError(res, error);
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/research/review-queues") {
+    try {
+      sendJson(
+        res,
+        200,
+        await getResearchReviewQueues(store, {
+          actorUserId: url.searchParams.get("actorUserId") ?? null,
+          limit: Number(url.searchParams.get("limit") ?? 25)
+        })
+      );
     } catch (error) {
       sendApiError(res, error);
     }

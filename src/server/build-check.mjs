@@ -161,6 +161,7 @@ const appCss = await readFile(resolve("src/app/styles.css"), "utf8");
 for (const requiredFragment of [
   "Phase 10S AI2UI modes update",
   "Phase 46 research analytics and budget kill-switch update",
+  "Phase 47 expanded review queues update",
   "FAILING / NEEDS FIX",
   "BLOCKED BY EXTERNAL DEPENDENCY",
   "Chat/Split/Guided/Bento",
@@ -168,6 +169,7 @@ for (const requiredFragment of [
   "research knowledge-base PDF upload",
   "always-on approved-schedule daemon",
   "GET /api/research/analytics",
+  "GET /api/research/review-queues",
   "research_budget_policies",
   "research_budget_blocked"
 ]) {
