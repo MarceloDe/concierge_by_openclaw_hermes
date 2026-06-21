@@ -80,6 +80,15 @@ function value(id) {
   return document.querySelector(`#${id}`).value.trim();
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? "").split(",", 2)[1] ?? "");
+    reader.onerror = () => reject(reader.error ?? new Error("File read failed."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function addMessage(role, content, options = {}) {
   const node = document.createElement("div");
   node.className = `message ${role}${options.className ? ` ${options.className}` : ""}`;
@@ -2362,12 +2371,38 @@ function renderResearchConsole(payload, mode = "kpis") {
   const workerResult = payload.workerResult ?? null;
   const embeddingStatus = payload.route && (payload.counts || payload.job || payload.latestJob) ? payload : null;
   const graphPayload = payload.graph?.nodes && payload.graph?.edges ? payload : null;
+  const researchDocumentUpload = payload.document && payload.artifact ? payload : null;
   const schedulerDaemon = payload.daemon
     ? payload
     : payload.schedulerDaemon
       ? { daemon: payload.schedulerDaemon, schedules: payload.schedules ?? {}, dueCount: payload.dueCount, safety: payload.safety ?? {} }
       : null;
   const sections = [];
+  if (researchDocumentUpload) {
+    const document = researchDocumentUpload.document ?? {};
+    const artifact = researchDocumentUpload.artifact ?? {};
+    const safety = researchDocumentUpload.safety ?? {};
+    sections.push(`
+      <article class="research-card wide">
+        <h3>Research Knowledge-Base Upload</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>${escapeHtml(researchDocumentUpload.status ?? "uploaded")} · ${escapeHtml(document.extractionStatus ?? "unknown")} · ${escapeHtml(document.extractionMethod ?? "unknown")}</dd>
+          <dt>Artifact</dt>
+          <dd>${escapeHtml(`${artifact.id ?? "pending"} · ${artifact.citationStatus ?? "unknown"} · ${artifact.artifactType ?? "document"}`)}</dd>
+          <dt>Document</dt>
+          <dd>${escapeHtml(`${document.filename ?? "document"} · ${document.contentType ?? "unknown"} · ${document.byteSize ?? 0} bytes · pages ${document.pageCount ?? "unknown"}`)}</dd>
+          <dt>Hashes</dt>
+          <dd>${escapeHtml(`upload ${document.uploadSha256 ?? "none"} · extraction ${artifact.extractionHash ?? "none"}`)}</dd>
+          <dt>Safety</dt>
+          <dd>${escapeHtml(safety.artifactPendingReview ? "pending review · raw document/text hidden" : "verify upload safety")}</dd>
+          <dt>Actions</dt>
+          <dd>${escapeHtml((researchDocumentUpload.actionsTaken ?? []).join(", ") || "none")}</dd>
+        </dl>
+        <p>${escapeHtml(artifact.safeTextPreview ?? "")}</p>
+      </article>
+    `);
+  }
   if (payload.status && Array.isArray(payload.results)) {
     const embeddingSearch = payload.embeddingSearch ?? {};
     sections.push(`
@@ -3064,6 +3099,30 @@ async function evaluateCitationClosure() {
   });
   researchStatus.textContent = `${result.status ?? "citation closure"} · ${result.verdict ?? "unknown"}`;
   renderResearchConsole(result, "citation closure");
+  trace.textContent = JSON.stringify(result, null, 2);
+  return result;
+}
+
+async function uploadResearchDocument() {
+  const input = document.querySelector("#researchDocumentFile");
+  const file = input?.files?.[0];
+  if (!file) throw new Error("Choose a research PDF or text file first.");
+  const contentBase64 = await fileToBase64(file);
+  const result = await api("/api/research/documents", {
+    method: "POST",
+    body: JSON.stringify({
+      actorUserId: value("email"),
+      filename: file.name,
+      contentType: file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "text/plain"),
+      contentBase64,
+      title: value("researchDocumentTitle") || file.name,
+      workflowKeys: ["general_rag", "eligibility_benefits_navigation"],
+      documentKind: "research_knowledge_base_pdf",
+      sourceStatus: "approved"
+    })
+  });
+  researchStatus.textContent = `${result.status ?? "uploaded"} · ${result.artifact?.citationStatus ?? "pending review"}`;
+  renderResearchConsole(result, "research document upload");
   trace.textContent = JSON.stringify(result, null, 2);
   return result;
 }
@@ -4141,6 +4200,18 @@ document.querySelector("#loadCitationClosure").addEventListener("click", async (
   const restore = setBusy(document.querySelector("#loadCitationClosure"), "Loading...");
   try {
     await loadCitationClosure();
+  } catch (error) {
+    researchStatus.textContent = error.message;
+    trace.textContent = error.stack ?? error.message;
+  } finally {
+    restore();
+  }
+});
+
+document.querySelector("#uploadResearchDocument").addEventListener("click", async () => {
+  const restore = setBusy(document.querySelector("#uploadResearchDocument"), "Uploading...");
+  try {
+    await uploadResearchDocument();
   } catch (error) {
     researchStatus.textContent = error.message;
     trace.textContent = error.stack ?? error.message;

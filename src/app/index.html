@@ -225,6 +225,7 @@
               <button id="loadResearchGraph" type="button">Research Graph</button>
               <button id="buildResearchGraph" type="button">Build Graph</button>
               <button id="loadCitationClosure" type="button">Citation Closure</button>
+              <button id="uploadResearchDocument" type="button">Upload Research PDF</button>
               <button id="loadResearchArtifacts" type="button">Review Artifacts</button>
               <button id="loadResearchSources" type="button">Load Sources</button>
               <button id="loadResearchRuns" type="button">Load Runs</button>
@@ -266,6 +267,14 @@
             <label>
               Answer to judge
               <textarea id="researchAnswerToJudge" rows="4">The annual deductible applies before coinsurance starts for covered services. Skydiving vacations are fully reimbursed.</textarea>
+            </label>
+            <label>
+              Research PDF/Text
+              <input id="researchDocumentFile" type="file" accept=".pdf,.txt,.md,.csv,application/pdf,text/plain,text/markdown,text/csv" />
+            </label>
+            <label>
+              Research document title
+              <input id="researchDocumentTitle" value="Operator Research Knowledge Base PDF" />
             </label>
             <label>
               Embedding provider

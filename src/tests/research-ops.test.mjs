@@ -16,6 +16,7 @@ import {
   getResearchKpis,
   getResearchRun,
   getResearchWorkerStatus,
+  ingestResearchDocumentUpload,
   listCitationClosureEvaluations,
   listResearchArtifacts,
   listResearchRunEvents,
@@ -262,6 +263,63 @@ test("operator research execution fetches approved source, stores artifact, and 
         assert.doesNotMatch(auditText, /123-45-6789/);
       }
     );
+  } finally {
+    if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+    else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;
+  }
+});
+
+test("operator research document upload creates pending-review KB artifact with safe metadata only", async () => {
+  const store = await createStore();
+  const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-research-upload-artifacts-"));
+  const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+  process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
+
+  try {
+    const rawDocument = [
+      "Summary of Benefits and Coverage",
+      "The annual deductible is $1,500 before coinsurance starts.",
+      "Email upload-probe@example.com and SSN 123-45-6789 are redaction probes."
+    ].join("\n");
+    const uploaded = await ingestResearchDocumentUpload(store, {
+      actorUserId: "operator_research_pdf_upload",
+      filename: "benefits-summary.pdf",
+      contentType: "application/pdf",
+      contentBase64: Buffer.from(rawDocument, "utf8").toString("base64"),
+      title: "Uploaded Benefits Summary PDF",
+      workflowKeys: ["general_rag", "eligibility_benefits_navigation"],
+      documentKind: "research_knowledge_base_pdf"
+    });
+
+    assert.equal(uploaded.ok, true);
+    assert.equal(uploaded.status, "research_document_upload_extracted");
+    assert.equal(uploaded.document.contentType, "application/pdf");
+    assert.equal(uploaded.artifact.artifactType, "operator_uploaded_pdf_extraction");
+    assert.equal(uploaded.artifact.citationStatus, "extracted_pending_review");
+    assert.equal(uploaded.source.status, "approved");
+    assert.equal(uploaded.run.status, "completed");
+    assert.equal(uploaded.event.eventType, "research_document_upload_extracted");
+    assert.equal(uploaded.audit.eventType, "research_document_uploaded");
+    assert.equal(uploaded.safety.rawDocumentReturned, false);
+    assert.equal(uploaded.safety.rawTextReturned, false);
+    assert.equal(uploaded.safety.artifactPendingReview, true);
+    assert.match(uploaded.artifact.safeTextPreview, /Summary of Benefits/);
+    assert.match(uploaded.artifact.safeTextPreview, /\[redacted-email\]/);
+    assert.match(uploaded.artifact.safeTextPreview, /\[DB_POINTER:sensitive_identifiers:ssn:not_stored\]/);
+
+    const pendingSearch = await searchResearchEvidence(store, { query: "annual deductible" });
+    assert.equal(pendingSearch.status, "pending_review_only");
+    assert.equal(pendingSearch.trustedResultCount, 0);
+
+    const queue = await listResearchArtifacts(store, { citationStatus: "extracted_pending_review" });
+    assert.ok(queue.artifacts.some((artifact) => artifact.id === uploaded.artifact.id));
+
+    const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
+    const auditText = JSON.stringify(auditRows);
+    assert.match(auditText, /research_document_uploaded/);
+    assert.doesNotMatch(auditText, /upload-probe@example\.com/);
+    assert.doesNotMatch(auditText, /123-45-6789/);
+    assert.doesNotMatch(auditText, /annual deductible is \$1,500/);
   } finally {
     if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
     else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;

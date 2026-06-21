@@ -426,6 +426,46 @@ class FakeNodeRuntimeClient:
                 },
                 "event": {"id": "event_one", "eventType": "research_run_queued", "status": "queued"}
             }
+        if path == "/api/research/documents":
+            return {
+                "ok": True,
+                "version": "test",
+                "status": "research_document_upload_extracted",
+                "document": {
+                    "filename": body.get("filename"),
+                    "contentType": body.get("contentType"),
+                    "byteSize": 128,
+                    "uploadSha256": "upload_hash",
+                    "extractionStatus": "completed",
+                    "extractionMethod": "pypdf",
+                    "rawDocumentReturned": False,
+                    "rawTextReturned": False
+                },
+                "source": {
+                    "id": "source_uploaded_pdf",
+                    "status": "approved",
+                    "sourceType": "uploaded_research_document"
+                },
+                "run": {
+                    "id": "run_uploaded_pdf",
+                    "actorUserId": body.get("actorUserId"),
+                    "status": "completed",
+                    "runType": "manual_research_document_upload"
+                },
+                "artifact": {
+                    "id": "artifact_uploaded_pdf",
+                    "artifactType": "operator_uploaded_pdf_extraction",
+                    "citationStatus": "extracted_pending_review",
+                    "safeTextPreview": "Redacted PDF preview"
+                },
+                "safety": {
+                    "operatorOnly": True,
+                    "rawDocumentReturned": False,
+                    "rawTextReturned": False,
+                    "artifactPendingReview": True,
+                    "trustedRetrievalReady": False
+                }
+            }
         if path == "/api/research/runs/run_one/cancel":
             return {
                 "ok": True,
@@ -2473,6 +2513,41 @@ class FastApiFacadeTest(unittest.TestCase):
             (
                 "/api/research/citation-closure/evaluate",
                 {"question": "What happens before coinsurance?", "answer": "The deductible applies before coinsurance.", "actorUserId": "operator_user"}
+            )
+        )
+
+        plain_upload = client.post(
+            "/api/research/documents",
+            headers=self.bearer_headers("plain_user"),
+            json={"filename": "benefits.pdf", "contentType": "application/pdf", "contentBase64": base64.b64encode(b"benefits").decode("ascii")}
+        )
+        self.assertEqual(plain_upload.status_code, 403)
+
+        uploaded_document = client.post(
+            "/api/research/documents",
+            headers=headers,
+            json={
+                "filename": "benefits.pdf",
+                "contentType": "application/pdf",
+                "contentBase64": base64.b64encode(b"benefits deductible").decode("ascii"),
+                "title": "Benefits PDF"
+            }
+        )
+        self.assertEqual(uploaded_document.status_code, 200)
+        self.assertEqual(uploaded_document.json()["artifact"]["citationStatus"], "extracted_pending_review")
+        self.assertEqual(uploaded_document.json()["run"]["actorUserId"], "operator_user")
+        self.assertFalse(uploaded_document.json()["safety"]["rawDocumentReturned"])
+        self.assertEqual(
+            app.state.node_client.post_calls[-1],
+            (
+                "/api/research/documents",
+                {
+                    "filename": "benefits.pdf",
+                    "contentType": "application/pdf",
+                    "contentBase64": base64.b64encode(b"benefits deductible").decode("ascii"),
+                    "title": "Benefits PDF",
+                    "actorUserId": "operator_user"
+                }
             )
         )
 

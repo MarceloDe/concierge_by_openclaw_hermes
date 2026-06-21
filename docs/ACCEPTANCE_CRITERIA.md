@@ -2534,3 +2534,15 @@ Focused proof:
 - Existing `src/tests/browser-takeover-safety.test.mjs` remains unchanged and green.
 - Committed browser-sandbox provider config remains contract-only; the AWS/Steel production-candidate strategy is documented without enabling live writes.
 - Full acceptance requires focused Execution V2 tests, existing safety tests, build, local suite, and secret scan with all v2/live/write gates off by default.
+
+## Phase 45: Research Knowledge-Base PDF Upload And Extraction
+
+- Node exposes `POST /api/research/documents`.
+- FastAPI proxies `POST /api/research/documents` behind operator/admin RBAC and binds `actorUserId` from the JWT subject.
+- Uploads support PDF and safe text formats with a local byte limit.
+- PDF/text extraction runs locally only; no external OCR or LLM is used for ingestion.
+- The upload creates a `knowledge_sources` row, a completed `research_runs` row, a `research_document_upload_extracted` event, and a `research_artifacts` row.
+- The artifact status is `extracted_pending_review`; it must not enter trusted retrieval until the existing artifact review gate approves it.
+- API/dashboard responses expose hashes, extraction method, byte size, safe preview, citation status, and safety flags, but not raw document bytes or raw extracted text dumps.
+- Audit rows contain hashes and IDs only, not raw email, SSN, PHI, raw PDF bytes, or raw document text.
+- `/` exposes a regular operator control to upload a research PDF/text document and immediately shows the pending-review artifact proof.
