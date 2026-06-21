@@ -1,0 +1,65 @@
+{
+  "phase": "phase-50-pharmacy-formulary-journey",
+  "method": "bundled-playwright-fallback-after-in-app-browser-verification",
+  "modeProof": [
+    {
+      "label": "Chat",
+      "mode": "chat",
+      "pharmacyCards": 1,
+      "blockCount": 4
+    },
+    {
+      "label": "Split",
+      "mode": "split",
+      "pharmacyCards": 1,
+      "blockCount": 9
+    },
+    {
+      "label": "Guided",
+      "mode": "guided",
+      "pharmacyCards": 1,
+      "blockCount": 8
+    },
+    {
+      "label": "Bento",
+      "mode": "bento",
+      "pharmacyCards": 1,
+      "blockCount": 9
+    }
+  ],
+  "proof": {
+    "url": "http://127.0.0.1:4218/mvp?phase=phase-50-pharmacy-formulary-journey",
+    "title": "Brainstyworkers Concierge MVP",
+    "activeMode": "split",
+    "pharmacyCardCount": 1,
+    "pharmacyRowCount": 1,
+    "pharmacyCardText": "Pharmacy Formulary source_backed_pharmacy_answer_ready · 1 source-backed row(s) Ozempic covered_or_on_formulary_signal quantity_limit_signal, mail_order_signal, tier_signal research_artifacts/research_artifact_f32322e8-686c-4a57-902c-ea79137d57c6 This card is evidence navigation, not medication advice.Clinical substitutions or medication changes belong with the prescriber or pharmacist.",
+    "sourceCitationText": "Citations 1 stored source pointer(s) · captured_trusted_research_evidence Phase 50 Reviewed Formulary Evidence research_artifacts/research_artifact_f32322e8-686c-4a57-902c-ea79137d57c6 29115fd27c6df799b2ce0cae7554eaa350871af15bc163e7e89cb9fcf531fac7",
+    "sequenceText": [
+      "Authsigned in",
+      "GPT / Intenteligibility_benefits_navigation",
+      "Skillinsurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser",
+      "Approvalapproved_consumed",
+      "OpenClawcaptured_trusted_research_evidence",
+      "Evidence1 pointers",
+      "Memorydegraded",
+      "Answerready"
+    ],
+    "answerIncludesFixture": true,
+    "trustedResearchCaptured": true,
+    "busy": false,
+    "rawSensitiveFixturePresent": false
+  },
+  "consoleErrors": [],
+  "consoleErrorCount": 0,
+  "assertions": {
+    "pharmacyCardVisible": true,
+    "sourceBackedRowsVisible": true,
+    "allModesPreservePharmacyCard": true,
+    "sourcePointerVisible": true,
+    "trustedResearchCaptured": true,
+    "noBusyState": true,
+    "noConsoleErrors": true,
+    "noRawSensitiveFixture": true
+  }
+}

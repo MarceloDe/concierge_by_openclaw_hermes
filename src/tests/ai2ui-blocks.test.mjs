@@ -108,6 +108,62 @@ test("AI2UI cost comparison fails closed when a cost ask has no source pointers"
   assert.equal(comparison.payload.safety.noFabricatedExactPrices, true);
 });
 
+test("AI2UI builder returns source-backed pharmacy formulary rows for prescription questions", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_rx",
+    workflow: "pharmacy_formulary",
+    user_input: "Is Ozempic on formulary or does it need prior authorization?",
+    final_response: "A sourced formulary answer.",
+    source_pointers: [
+      {
+        table: "research_artifacts",
+        id: "artifact_rx_1",
+        displayLabel: "Reviewed formulary evidence",
+        evidenceFields: [
+          {
+            label: "Medication Ozempic formulary status",
+            value: "Ozempic is listed as covered on formulary, tier 3, with prior authorization and quantity limit signals.",
+            confidence: "high"
+          }
+        ],
+        citation: { confidence: "high" }
+      }
+    ],
+    evidence_observation: { status: "captured_trusted_research_evidence", actionsTaken: ["trusted_research_evidence_search"] }
+  });
+
+  const formulary = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PHARMACY_FORMULARY);
+  assert.ok(formulary);
+  assert.equal(formulary.payload.status, "source_backed_pharmacy_answer_ready");
+  assert.equal(formulary.payload.safety.noMedicationAdvice, true);
+  assert.equal(formulary.payload.safety.noClinicalSubstitutionAdvice, true);
+  assert.equal(formulary.payload.safety.everyRowHasSourcePointer, true);
+  assert.ok(formulary.payload.rows.length >= 1);
+  assert.ok(formulary.payload.rows.some((row) => row.medicationLabel === "Ozempic"));
+  assert.ok(formulary.payload.rows.some((row) => row.requirements.includes("prior_authorization_signal")));
+  assert.ok(formulary.payload.rows.some((row) => row.requirements.includes("quantity_limit_signal")));
+  assert.ok(formulary.payload.rows.every((row) => row.sourcePointerIds.includes("research_artifacts/artifact_rx_1")));
+});
+
+test("AI2UI pharmacy formulary fails closed when a prescription ask has no source pointers", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_rx_missing",
+    workflow: "pharmacy_formulary",
+    user_input: "Is this medication covered under my plan formulary?",
+    final_response: "I cannot answer without evidence.",
+    source_pointers: [],
+    evidence_observation: { status: "blocked_no_trusted_research_evidence", actionsTaken: [] }
+  });
+
+  const formulary = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PHARMACY_FORMULARY);
+  assert.ok(formulary);
+  assert.equal(formulary.payload.status, "blocked_missing_source_pointers");
+  assert.equal(formulary.payload.rowCount, 0);
+  assert.deepEqual(formulary.payload.rows, []);
+  assert.equal(formulary.payload.safety.noMedicationAdvice, true);
+  assert.ok(formulary.payload.missingEvidence.includes("cited formulary or drug-list evidence"));
+});
+
 test("AI2UI normalizer converts unknown block types into safe fallback cards", () => {
   const blocks = normalizeAi2UiBlocks([
     {

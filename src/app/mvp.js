@@ -6,10 +6,10 @@ const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
 const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
 const UI_MODES = ["chat", "split", "guided", "bento"];
 const AI2UI_MODE_BLOCKS = {
-  chat: ["answer_markdown", "cost_comparison", "source_citations", "human_handoff", "next_steps"],
-  split: ["answer_markdown", "cost_comparison", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"],
-  guided: ["workflow_status", "cost_comparison", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "next_steps", "safety_notice"],
-  bento: ["answer_markdown", "cost_comparison", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"]
+  chat: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "source_citations", "human_handoff", "next_steps"],
+  split: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"],
+  guided: ["workflow_status", "cost_comparison", "pharmacy_formulary", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "next_steps", "safety_notice"],
+  bento: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"]
 };
 const AI2UI_SUPPORTED_TYPES = new Set([...AI2UI_MODE_BLOCKS.bento, "unknown"]);
 
@@ -220,6 +220,9 @@ function renderAi2UiBlock(block, result) {
   if (block.type === "cost_comparison") {
     return renderCostComparisonBlock(block);
   }
+  if (block.type === "pharmacy_formulary") {
+    return renderPharmacyFormularyBlock(block);
+  }
   if (block.type === "approval_gate") {
     return renderDefinitionBlock(block, [
       ["Status", payload.status],
@@ -329,6 +332,40 @@ function renderCostComparisonBlock(block) {
       }
       <ul class="ai2ui-checklist">
         ${(payload.assumptions ?? []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </article>
+  `;
+}
+
+function renderPharmacyFormularyBlock(block) {
+  const payload = block.payload ?? {};
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const className = `ai2ui-block block-${block.type} ${block.renderHints?.severity ?? ""}`.trim();
+  return `
+    <article class="${className}">
+      <h3>${escapeHtml(block.title)}</h3>
+      <p class="status-text">${escapeHtml(payload.status ?? "not ready")} · ${escapeHtml(payload.rowCount ?? rows.length)} source-backed row(s)</p>
+      ${
+        rows.length
+          ? `<div class="pharmacy-formulary-grid">
+              ${rows.map((row) => `
+                <div class="pharmacy-formulary-row">
+                  <strong>${escapeHtml(row.medicationLabel ?? "Medication or pharmacy benefit")}</strong>
+                  <b>${escapeHtml(row.formularySignal ?? "formulary signal")}</b>
+                  <span>${escapeHtml((row.requirements ?? []).length ? row.requirements.join(", ") : "No requirement signal extracted from cited evidence.")}</span>
+                  <small>${escapeHtml((row.sourcePointerIds ?? []).join(", ") || "source pointer required")}</small>
+                </div>
+              `).join("")}
+            </div>`
+          : '<p class="status-text">No pharmacy/formulary row is shown because no cited source pointer carried formulary, drug tier, prior authorization, quantity-limit, specialty, or mail-order evidence.</p>'
+      }
+      <ul class="ai2ui-checklist">
+        ${rows.length
+          ? [
+              "This card is evidence navigation, not medication advice.",
+              "Clinical substitutions or medication changes belong with the prescriber or pharmacist."
+            ].map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+          : (payload.missingEvidence ?? []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
     </article>
   `;

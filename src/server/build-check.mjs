@@ -161,7 +161,7 @@ const appCss = await readFile(resolve("src/app/styles.css"), "utf8");
 for (const requiredFragment of [
   "Phase 10S AI2UI modes update",
   "Phase 46 research analytics and budget kill-switch update",
-  "Phase 48 research entity extraction update",
+  "Phase 48 adds persisted `research_entities`",
   "FAILING / NEEDS FIX",
   "BLOCKED BY EXTERNAL DEPENDENCY",
   "Chat/Split/Guided/Bento",
@@ -173,7 +173,9 @@ for (const requiredFragment of [
   "GET /api/research/entities",
   "research_budget_policies",
   "research_budget_blocked",
-  "research_entities"
+  "research_entities",
+  "pharmacy_formulary",
+  "Phase 50 pharmacy formulary journey"
 ]) {
   if (!finalVerificationReport.includes(requiredFragment)) {
     throw new Error(`Final system verification report is missing required fragment: ${requiredFragment}`);

@@ -4,6 +4,7 @@ export const AI2UI_BLOCK_TYPES = Object.freeze({
   ANSWER_MARKDOWN: "answer_markdown",
   WORKFLOW_STATUS: "workflow_status",
   COST_COMPARISON: "cost_comparison",
+  PHARMACY_FORMULARY: "pharmacy_formulary",
   APPROVAL_GATE: "approval_gate",
   WORKER_STATUS: "worker_status",
   SOURCE_CITATIONS: "source_citations",
@@ -94,6 +95,11 @@ function sourcePointerRef(pointer = {}) {
 function costComparisonRequested(state = {}) {
   const text = `${state.user_input ?? ""} ${state.structured_intent?.intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
   return /\b(cost|costs|estimate|comparison|compare|cheaper|lower[- ]cost|cash price|allowed amount|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop|owe|pay)\b/.test(text);
+}
+
+function pharmacyFormularyRequested(state = {}) {
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.structured_intent?.intent ?? ""} ${state.structured_intent?.reasoning?.primary_intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  return /\b(pharmacy|formulary|prescription|medication|medicine|drug list|drug tier|tier\s+\d|rx\b|prior auth(?:orization)? for.*(?:drug|medicine|medication)|mail[- ]order|specialty drug|quantity limit|step therapy)\b/.test(text);
 }
 
 function costText(value) {
@@ -214,6 +220,118 @@ function buildCostComparisonPayload(state = {}) {
   };
 }
 
+function pharmacyEvidenceText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function firstMedicationName(text) {
+  const cleaned = pharmacyEvidenceText(text);
+  const generic = /^(coverage|formulary|status|benefit|snippet|evidence|listed|covered|plan)$/i;
+  const quoted = cleaned.match(/["']([^"']{3,48})["']/);
+  if (quoted?.[1]) return quoted[1].trim();
+  const questionSubject = cleaned.match(/\b(?:is|does|will|would|can)\s+([A-Z][A-Za-z0-9-]{2,})\b.{0,80}\b(?:formulary|covered|tier|drug|prescription|pharmacy)\b/i);
+  if (questionSubject?.[1] && !generic.test(questionSubject[1])) return questionSubject[1].trim();
+  const explicit = cleaned.match(/\b(?:medication|medicine|drug|prescription|rx)\s*(?:name|for|:)?\s+([A-Z][A-Za-z0-9-]{2,})/i);
+  const candidate = explicit?.[1]?.trim();
+  if (candidate && !generic.test(candidate)) return candidate;
+  return null;
+}
+
+function pharmacySignalFromText(text) {
+  const lower = pharmacyEvidenceText(text).toLowerCase();
+  if (!lower) return null;
+  if (/\bnot covered|excluded|non[- ]formulary|not on formulary\b/.test(lower)) return "not_covered_or_non_formulary_signal";
+  if (/\bcovered|on formulary|preferred|generic covered|brand covered\b/.test(lower)) return "covered_or_on_formulary_signal";
+  if (/\bformulary|drug list|pharmacy benefit|prescription coverage|rx\b/.test(lower)) return "formulary_signal_found";
+  return null;
+}
+
+function pharmacyRequirementsFromText(text) {
+  const lower = pharmacyEvidenceText(text).toLowerCase();
+  return [
+    /\bprior auth(?:orization)?|pa required\b/.test(lower) ? "prior_authorization_signal" : null,
+    /\bquantity limit|ql\b/.test(lower) ? "quantity_limit_signal" : null,
+    /\bstep therapy\b/.test(lower) ? "step_therapy_signal" : null,
+    /\bspecialty\b/.test(lower) ? "specialty_pharmacy_signal" : null,
+    /\bmail[- ]order\b/.test(lower) ? "mail_order_signal" : null,
+    /\btier\s*(?:1|2|3|4|5|one|two|three|four|five)\b/.test(lower) ? "tier_signal" : null
+  ].filter(Boolean);
+}
+
+function strongestPharmacySignal(text) {
+  const signals = [
+    pharmacySignalFromText(text),
+    ...pharmacyEvidenceText(text)
+      .split(/[.;]/)
+      .map(pharmacySignalFromText)
+      .filter(Boolean)
+  ];
+  if (signals.includes("not_covered_or_non_formulary_signal")) return "not_covered_or_non_formulary_signal";
+  if (signals.includes("covered_or_on_formulary_signal")) return "covered_or_on_formulary_signal";
+  return signals[0] ?? null;
+}
+
+function buildPharmacyRowsFromPointer(pointer = {}, queryText = "") {
+  const ref = sourcePointerRef(pointer);
+  const fields = Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields : [];
+  const texts = [
+    { label: "Source summary", value: pointer.summary, confidence: pointer.confidence ?? pointer.citation?.confidence },
+    { label: "Source label", value: pointer.displayLabel, confidence: pointer.confidence ?? pointer.citation?.confidence },
+    ...fields.map((field) => ({
+      label: field.label ?? "Evidence field",
+      value: field.value ?? field.text ?? field.summary ?? "",
+      confidence: field.confidence ?? pointer.confidence ?? pointer.citation?.confidence
+    }))
+  ];
+  const combined = texts.map((item) => pharmacyEvidenceText(`${item.label ?? ""} ${item.value ?? ""}`)).filter(Boolean).join(" ");
+  const formularySignal = strongestPharmacySignal(combined);
+  const requirements = [...new Set(texts.flatMap((item) => pharmacyRequirementsFromText(`${item.label ?? ""} ${item.value ?? ""}`)))];
+  if (!formularySignal && !requirements.length) return [];
+  return [
+    {
+      medicationLabel: firstMedicationName(combined) ?? firstMedicationName(queryText) ?? "Medication or pharmacy benefit",
+      formularySignal: formularySignal ?? "pharmacy_requirement_signal_found",
+      requirements,
+      evidenceSummary: texts.map((item) => pharmacyEvidenceText(item.value ?? "")).filter(Boolean).join(" ").slice(0, 240),
+      sourcePointerIds: [ref],
+      confidence: texts.find((item) => item.confidence)?.confidence ?? pointer.confidence ?? pointer.citation?.confidence ?? "source_backed",
+      userAction:
+        "Use the cited plan, portal, upload, or reviewed research evidence; ask the prescriber or pharmacist for clinical substitutions."
+    }
+  ];
+}
+
+function buildPharmacyFormularyPayload(state = {}) {
+  const requested = pharmacyFormularyRequested(state);
+  const rows = (state.source_pointers ?? [])
+    .flatMap((pointer) => buildPharmacyRowsFromPointer(pointer, state.user_input))
+    .filter((row) => row.sourcePointerIds.length > 0)
+    .slice(0, 6);
+  if (!requested && !rows.length) return null;
+  const sourcePointerIds = [...new Set(rows.flatMap((row) => row.sourcePointerIds))];
+  return {
+    status: rows.length ? "source_backed_pharmacy_answer_ready" : "blocked_missing_source_pointers",
+    requested,
+    rows,
+    rowCount: rows.length,
+    sourcePointerIds,
+    missingEvidence: rows.length
+      ? []
+      : [
+          "cited formulary or drug-list evidence",
+          "plan pharmacy-benefit document",
+          "trusted reviewed research artifact",
+          "approved read-only portal or uploaded document source pointer"
+        ],
+    safety: {
+      noMedicationAdvice: true,
+      noClinicalSubstitutionAdvice: true,
+      everyRowHasSourcePointer: rows.every((row) => row.sourcePointerIds.length > 0),
+      externalActionsTaken: false
+    }
+  };
+}
+
 function approvalPayload(state = {}) {
   const proposal = state.openclaw_skill_proposal ?? {};
   const evidence = state.evidence_observation ?? {};
@@ -309,6 +427,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   const productMemory = options.productMemory ?? {};
   const handoff = state.human_handoff?.handoff ?? null;
   const costComparison = buildCostComparisonPayload(state);
+  const pharmacyFormulary = buildPharmacyFormularyPayload(state);
   const blocks = [
     {
       id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
@@ -329,6 +448,17 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
             title: "Cost Comparison",
             payload: costComparison,
             renderHints: { severity: costComparison.rows.length ? "info" : "warning" }
+          }
+        ]
+      : []),
+    ...(pharmacyFormulary
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.PHARMACY_FORMULARY, 1),
+            type: AI2UI_BLOCK_TYPES.PHARMACY_FORMULARY,
+            title: "Pharmacy Formulary",
+            payload: pharmacyFormulary,
+            renderHints: { severity: pharmacyFormulary.rows.length ? "info" : "warning" }
           }
         ]
       : []),
