@@ -3112,3 +3112,30 @@ Gates:
 - `project/tests/test_fastapi_facade.py` proves RBAC and actor binding.
 - `src/tests/chat-ui-contract.test.mjs` pins the dashboard controls and endpoints.
 - `npm run build`, `npm run test:local`, and visual dashboard proof pass.
+
+## Phase 57 - Extensible Skills And Worker Breadth
+
+Goal: map the next-step packet Phase 51 onto the current repo numbering. De-hardcode OpenClaw skill artifacts and execution selection, keep worker breadth inside the read-only approval envelope, and add masked procedural worker memory that feeds PEMS without driving answers.
+
+Build:
+
+- Make `openclawSkillArtifacts` validate any skill through a generic contract while preserving optional domain checks for `insurance_portal_browser`.
+- Make `dynamicSkillServer` select execution skills by match score only, with no literal fallback.
+- Ensure worker policy/executor routing fails closed when no execution skill is selected.
+- Add `workerMemory.mjs` and `worker_procedural_memory` storage for masked, source-pointered successful procedure traces.
+- Add connector proof and dashboard visibility for Phase 57.
+
+Non-goals:
+
+- Do not widen the blocked-action matrix.
+- Do not let OpenClaw choose healthcare workflows.
+- Do not allow worker procedural memory to drive answers.
+- Do not touch `productionDrivingAllowed=true`; that is reserved for the later trusted answer-driving path after reviewer approval.
+
+Gates:
+
+- `npm run test:openclaw:skills`.
+- Focused dynamic skill, worker contract, and worker-memory tests.
+- `npm run build`.
+- `npm run test:local`.
+- API and visual proof through the operator dashboard.

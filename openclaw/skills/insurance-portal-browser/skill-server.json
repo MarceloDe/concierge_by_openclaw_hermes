@@ -1,0 +1,97 @@
+{
+  "schema_version": "brainstyworkers.dynamic_skill.v1",
+  "skill_key": "insurance_portal_browser",
+  "skill_kind": "execution_specific",
+  "title": "Insurance Portal Browser Execution Skill",
+  "status": "repo_artifact_ready_adapter_execution_gated",
+  "editable_by": "external_skill_generator_llm",
+  "matching": {
+    "workflows": [
+      "eligibility_benefits_navigation",
+      "claim_status_navigation",
+      "prior_authorization_navigation",
+      "payer_portal_read_only_extraction"
+    ],
+    "intents": [
+      "eligibility_benefits_question",
+      "claim_status_question",
+      "prior_authorization_question"
+    ],
+    "keywords": [
+      "portal",
+      "benefits",
+      "coverage",
+      "claim",
+      "authorization",
+      "deductible",
+      "out of pocket"
+    ],
+    "question_types": [
+      "read_only_observation",
+      "benefit_lookup",
+      "claim_status",
+      "portal_evidence"
+    ]
+  },
+  "runtime_mounts": {
+    "database_queries": [
+      "latest_eligibility_snapshot_by_session",
+      "recent_claim_items_by_session",
+      "recent_prior_authorizations_by_session",
+      "latest_portal_pages_by_session",
+      "open_tasks_by_user"
+    ]
+  },
+  "data_needed": {
+    "required": [
+      "approval_scope",
+      "source_pointer"
+    ],
+    "optional": [
+      "portal_url",
+      "authenticated_current_tab",
+      "document_candidate"
+    ]
+  },
+  "required_workers": {
+    "openclaw_tasks": [
+      "insurance_portal_browser.read_only_observation",
+      "insurance_portal_browser.read_only_claims_observation",
+      "insurance_portal_browser.read_only_prior_authorization_observation"
+    ]
+  },
+  "required_search": {
+    "engines": [
+      "portal_search_when_available",
+      "official_payer_read_only_sections"
+    ]
+  },
+  "required_apis": {
+    "connectors": [
+      "local_sqlite_source_pointer_lookup"
+    ]
+  },
+  "success_model": {
+    "base_chance": 0.45,
+    "blockers": [
+      "no_authenticated_portal",
+      "no_source_pointer"
+    ]
+  },
+  "answer_contract": {
+    "required_fields": [
+      "status",
+      "facts",
+      "citations",
+      "uncertainties",
+      "next_actions"
+    ],
+    "forbidden": [
+      "credential_entry",
+      "payer_contact",
+      "form_submission",
+      "external_message",
+      "medical_advice"
+    ]
+  }
+}

@@ -82,6 +82,7 @@ test("dynamic skill resolver mounts session memory and selects insurance plus cl
   assert.equal(resolved.selected.insuranceSkillKey, "insurance_plan_aetna_temporary");
   assert.equal(resolved.selected.journeySkillKey, "claim_journey_temporary");
   assert.equal(resolved.selected.executionSkillKey, "insurance_portal_browser");
+  assert.ok(resolved.matches.some((item) => item.skillKey === "insurance_portal_browser" && item.skillKind === "execution_specific" && item.fit.score > 0));
   assert.ok(resolved.requiredOpenClawTasks.includes("insurance_portal_browser.read_only_claims_observation"));
   assert.ok(resolved.requiredOpenClawTasks.includes("insurance_portal_browser.read_only_observation"));
   assert.ok(resolved.requiredApis.includes("local_sqlite_claim_lookup"));
@@ -177,4 +178,55 @@ test("dynamic skill loader reads externally generated skill-server files from a 
   assert.equal(result.definitions.length, 1);
   assert.equal(result.definitions[0].skillKey, "generated_skill");
   assert.equal(result.definitions[0].validation.valid, true);
+});
+
+test("dynamic skill resolver selects execution skills by score without hardcoded fallback", async () => {
+  const root = await mkdtemp(join(tmpdir(), "brainsty-execution-skill-root-"));
+  for (const skill of [
+    {
+      dir: "generic-browser",
+      key: "generic_browser_execution",
+      keywords: ["portal"],
+      tasks: ["generic_browser_execution.read_only_observation"]
+    },
+    {
+      dir: "claim-browser",
+      key: "claim_browser_execution",
+      keywords: ["claim", "eob", "paid"],
+      tasks: ["claim_browser_execution.read_only_claims_observation"]
+    }
+  ]) {
+    const skillDir = join(root, skill.dir);
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "skill-server.json"),
+      JSON.stringify(
+        {
+          schema_version: "brainstyworkers.dynamic_skill.v1",
+          skill_key: skill.key,
+          skill_kind: "execution_specific",
+          title: skill.key,
+          status: "draft_sketch_runtime_gated",
+          editable_by: "external_skill_generator_llm",
+          matching: { workflows: ["claim_status_navigation"], keywords: skill.keywords },
+          runtime_mounts: { database_queries: [] },
+          required_workers: { openclaw_tasks: skill.tasks },
+          answer_contract: { required_fields: ["status", "facts", "citations", "uncertainties", "next_actions"] }
+        },
+        null,
+        2
+      )
+    );
+  }
+
+  const resolved = await resolveDynamicSkillContext(null, {
+    user_input: "Find claim and EOB status from the portal",
+    workflow: "claim_status_navigation",
+    structured_intent: { intent: "claim_status_question", workflow: "claim_status_navigation" },
+    context_packet: { currentSession: { id: "session_score" }, user: { id: "user_score" } }
+  }, { root });
+
+  assert.equal(resolved.selected.executionSkillKey, "claim_browser_execution");
+  assert.ok(resolved.requiredOpenClawTasks.includes("claim_browser_execution.read_only_claims_observation"));
+  assert.equal(resolved.requiredOpenClawTasks.some((task) => task.startsWith("insurance_portal_browser")), false);
 });

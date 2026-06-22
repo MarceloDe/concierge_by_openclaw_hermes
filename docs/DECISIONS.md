@@ -2794,3 +2794,17 @@ Durable graph state is useful only if it preserves the healthcare safety envelop
 
 Consequences:
 `BRAINSTY_GRAPH_CHECKPOINTER=file` now fails closed unless `BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY` is configured outside Git. Retention remains disabled by default but can be explicitly ticked or enabled with environment flags. The operator dashboard now has a first-class Phase 56 P0 hardening card and score.
+
+## 2026-06-22 - Phase 57 De-Hardcodes Skills And Adds Worker Procedural Memory
+
+Problem:
+The next-step packet's extensibility slice required OpenClaw to stop behaving like a single hardcoded `insurance_portal_browser` helper. The registry already contained multiple skill folders, but artifact validation and routing still had literal fallback behavior, and successful worker procedure traces had no dedicated masked memory surface feeding PEMS candidates.
+
+Decision:
+Implement repo Phase 57 as the packet Phase 51 slice. Make skill artifact validation generic, keep the insurance portal skill's deeper domain checks as an optional contract, advertise the portal browser as an execution skill through `skill-server.json`, remove selector fallback literals, and add masked source-pointered `worker_procedural_memory` records that create non-driving PEMS candidates.
+
+Rationale:
+The worker can gain breadth only if skill selection is registry-driven and fail-closed. Procedural memory is useful for the continuous-learning loop, but it must not drive answers until the later reviewer-approved trusted path exists.
+
+Consequences:
+Dropping a valid skill folder can now participate in artifact validation and dynamic score-based selection without editing selector code. Unsafe community skills declaring credentials, write actions, external messaging, non-local OCR, or page-text-instruction behavior are rejected. Worker memory remains advisory with `productionDrivingAllowed=false`.
