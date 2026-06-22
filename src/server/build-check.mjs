@@ -45,6 +45,7 @@ import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.m
 import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { GENERATED_SKILL_REVIEW_QUEUE_VERSION } from "../concierge/generatedSkillReviewQueue.mjs";
 import { GENERATED_SKILL_PR_EXECUTOR_VERSION } from "../concierge/generatedSkillPrExecutor.mjs";
+import { MVP_COMPLETION_AUDIT_VERSION } from "../concierge/mvpCompletionAudit.mjs";
 import { WORKER_MEMORY_VERSION } from "../concierge/workerMemory.mjs";
 
 const requiredFiles = [
@@ -146,6 +147,7 @@ const requiredFiles = [
   "src/concierge/generatedSkillPrWorkflow.mjs",
   "src/concierge/generatedSkillReviewQueue.mjs",
   "src/concierge/generatedSkillPrExecutor.mjs",
+  "src/concierge/mvpCompletionAudit.mjs",
   "src/concierge/workerMemory.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
@@ -154,6 +156,7 @@ const requiredFiles = [
   "src/tests/generated-skill-pr-workflow.test.mjs",
   "src/tests/generated-skill-review-queue.test.mjs",
   "src/tests/generated-skill-pr-executor.test.mjs",
+  "src/tests/mvp-completion-audit.test.mjs",
   "src/tests/final-system-verification-report.test.mjs",
   "docs/FINAL_SYSTEM_VERIFICATION_REPORT.md",
   "docs/goal_final_system.md",
@@ -369,6 +372,9 @@ if (!GENERATED_SKILL_REVIEW_QUEUE_VERSION.includes("phase62-generated-skill-revi
 }
 if (!GENERATED_SKILL_PR_EXECUTOR_VERSION.includes("phase63-generated-skill-pr-executor")) {
   throw new Error("Phase 63 generated-skill PR executor version is missing.");
+}
+if (!MVP_COMPLETION_AUDIT_VERSION.includes("phase64-mvp-completion-audit")) {
+  throw new Error("Phase 64 MVP completion audit version is missing.");
 }
 
 const pemsWorkbenchProof = buildPemsReviewerWorkbenchReadinessProof({
@@ -992,4 +998,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, Phase 61 generated-skill PR workflow, Phase 62 generated-skill reviewer queue, Phase 63 generated-skill PR executor, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, Phase 61 generated-skill PR workflow, Phase 62 generated-skill reviewer queue, Phase 63 generated-skill PR executor, Phase 64 MVP completion audit, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

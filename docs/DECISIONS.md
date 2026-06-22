@@ -2892,3 +2892,17 @@ This completes the learning-loop promotion bridge without giving Graphiti, the L
 
 Consequences:
 Generated skill promotion is now operationally staged: memory candidate -> generated package -> reviewer queue -> operator executor proof -> explicit branch/PR action. Future phases can improve the operator UI or run pilot-hardening checks, but must keep generated skill activation behind PR review and existing trusted answer-driving gates.
+
+## 2026-06-22 - Phase 64 Separates MVP Pilot Readiness From Production Completion
+
+Problem:
+After the generated-skill learning loop reached a safe executor surface, the project needed an honest answer to whether the MVP is ready for a regular user. A single green score would be misleading because local/PWA/API flows can be pilot-ready while production dependencies such as Postgres rollout, Graphiti schema readiness, hosted browser readiness, and authenticated OpenClaw live proof remain incomplete or live-gated.
+
+Decision:
+Add a Phase 64 MVP completion audit. It computes a regular-user MVP score separately from a production score, includes the PWA, connector API, database, OpenClaw approval boundary, Graphiti/Zep advisory posture, generated-skill loop, dashboard proof, and explicit blockers, and exposes the result in both `/api/proof/runs/local` and `/api/mvp/completion-audit`.
+
+Rationale:
+This keeps momentum toward a usable MVP without overclaiming production readiness. The audit gives a precise next-step list for Phase 65 instead of letting degraded dependencies disappear behind prior successful local tests.
+
+Consequences:
+The product may be considered pilot-ready for local/non-PHI regular-user testing only if the regular-user MVP score passes. Production launch remains blocked until the production score and listed blockers are resolved.
