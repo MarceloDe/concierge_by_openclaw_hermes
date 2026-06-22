@@ -9166,3 +9166,32 @@ Verification:
 - API proof passed at `http://127.0.0.1:4223/api/proof/runs/local`: `phase57_extensible_skills_worker_breadth` scored `100 / 100`, loaded 3 required skills, selected `insurance_portal_browser` through dynamic scoring, kept fallback literals unused, and reported `worker_procedural_memory_contract_ready`.
 - Dashboard visual proof passed at `http://127.0.0.1:4223/?phase=phase-57-extensible-skills`: Chrome DevTools Protocol scrolled to the connector proof panel and asserted the Phase 57 card text for `100 / 100`, `insurance_portal_browser`, `fallback literal not used`, `LangGraph owns workflow`, `writes blocked`, and `answer-driving disabled`.
 - Artifacts: `artifacts/phase57/phase57-extensible-skills-proof.json`, `artifacts/phase57/phase57-dashboard-extensible-skills-card.png`, and `artifacts/phase57/phase57-dashboard-extensible-skills-card.json`.
+
+## Phase 58 Trusted Answer Driving - 2026-06-22
+
+Goal:
+- Implement the next migration wave's continuous-learning slice as repo Phase 58. This maps to the packet's Phase 52 because repo Phases 56 and 57 already completed packet Phases 50 and 51.
+
+Implemented:
+- Added `src/concierge/trustedAnswerDriving.mjs` as the only trusted answer-driving helper. It reconstructs answers from reviewer-approved PEMS candidates, structured facts, allowed source pointer IDs, and advisory memory fragments.
+- Added `pems_trusted_answer_driving_controls` with a global kill switch. The kill switch demotes active production-driving candidates and keeps the gate fail-closed until cleared.
+- Updated PEMS promotion evaluation so `productionDrivingAllowed=true` can appear only when maturity, reviewer approvals, validator pass, citation pass, source evidence, no safety veto, and kill switch clear all pass.
+- Preserved the old supervised advisory readiness proof for non-driving candidates and added a distinct Phase 58 trusted answer-driving proof at 100/100.
+- Added Graphiti-style memory namespaces: semantic plan, hashed episodic member, user-agnostic procedural skills, and collective patterns. Product memory episodes now carry these namespaces without putting raw member IDs in procedural memory.
+- Added candidate-only seed helpers for resolved cases and nightly research changes. Both stay non-driving until reviewer approval promotes them through the trusted gate.
+- Added dashboard/API visibility through `phase58_trusted_answer_driving`.
+
+Safety:
+- Safety-invariant suites were not loosened.
+- Safety refusals, emergency handoff, credential entry, medical advice, prompt injection, payer contact, external writes, and browser takeover boundaries remain deterministic hard stops.
+- Unsupported claims are explicitly labeled and source-less; every supported factual claim must cite an allowed source pointer ID.
+- The kill switch and safety incident paths demote trusted answer-driving to non-driving.
+- Procedural memory must be user-agnostic; user/member/session/email identifiers are rejected.
+
+Verification:
+- Focused Phase 58 suite passed: `node --test src/tests/pems-promotion-gates.test.mjs src/tests/pems-trusted-answer-driving.test.mjs src/tests/product-memory-contract.test.mjs` reported 11/11 passing.
+- `npm run build` passed and reports the Phase 58 trusted answer-driving contract.
+- `npm run test:local` passed with 276 tests total, 274 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4224/api/proof/runs/local`: `phase58_trusted_answer_driving` scored `100 / 100`, promotion was `trusted_answer_driving`, citation rails passed, unsupported items were labeled, kill switch demoted, safety incident demoted, memory namespaces passed, and candidate generation stayed non-driving.
+- Dashboard visual proof passed at `http://127.0.0.1:4224/?phase=phase-58-trusted-answer-driving`: bundled Playwright captured the rendered Phase 58 card with `100 / 100`, `production-driving trusted path only`, `validated cited answer`, `unsupported items labeled`, `kill switch demotes`, `safety incident demotes`, and `procedural:skills`.
+- Artifacts: `artifacts/phase58/phase58-trusted-answer-driving-proof.json`, `artifacts/phase58/phase58-dashboard-trusted-answer-driving-card.png`, and `artifacts/phase58/phase58-dashboard-trusted-answer-driving-card.json`.

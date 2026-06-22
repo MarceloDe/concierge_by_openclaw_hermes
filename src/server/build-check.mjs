@@ -25,8 +25,10 @@ import {
   PEMS_REVIEWER_HISTORY_EXPORT_VERSION,
   PEMS_REVIEWER_HISTORY_REVIEW_VERSION,
   PEMS_REVIEW_WORKBENCH_VERSION,
-  PEMS_PROMOTION_GATE_VERSION
+  PEMS_PROMOTION_GATE_VERSION,
+  PEMS_TRUSTED_ANSWER_DRIVING_VERSION
 } from "../concierge/continuousIntelligence.mjs";
+import { composeTrustedSkillDrivenAnswer } from "../concierge/trustedAnswerDriving.mjs";
 import { auditPromptContractSafety, buildPromptBundle } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
 import { loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
@@ -118,6 +120,8 @@ const requiredFiles = [
   "src/tests/worker-leases.test.mjs",
   "src/server/server.mjs",
   "src/concierge/langgraphCompatibility.mjs",
+  "src/concierge/trustedAnswerDriving.mjs",
+  "src/tests/pems-trusted-answer-driving.test.mjs",
   "src/concierge/traceSession.mjs",
   "src/concierge/graphCheckpointer.mjs",
   "src/concierge/openclawSkillInvocation.mjs",
@@ -247,15 +251,17 @@ if (
   !TABLES.includes("pems_candidate_claim_revisions") ||
   !TABLES.includes("pems_candidate_review_followups") ||
   !TABLES.includes("pems_candidate_review_history_exports") ||
+  !TABLES.includes("pems_trusted_answer_driving_controls") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_evaluator_drafts") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_followups") ||
-  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_history_exports")
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_history_exports") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls")
 ) {
-  throw new Error("Database schema is missing Phase 43 continuous-intelligence review workbench tables");
+  throw new Error("Database schema is missing Phase 58 continuous-intelligence review/trusted answer-driving tables");
 }
 
 const pemsPromotionProof = buildPemsPromotionReadinessProof({
@@ -274,6 +280,47 @@ if (
   pemsPromotionProof.productionDrivingAllowed !== false
 ) {
   throw new Error("Phase 35 PEMS supervised promotion proof contract is incomplete.");
+}
+
+const pemsTrustedAnswerDrivingProof = buildPemsPromotionReadinessProof({
+  ok: true,
+  candidateCount: 1,
+  reviewCount: 4,
+  humanApprovalCount: 2,
+  validatorPassCount: 1,
+  citationPassCount: 1,
+  supervisedAdvisoryCandidateCount: 1,
+  productionDrivingCandidateCount: 1,
+  trustedAnswerDrivingCandidateCount: 1,
+  trustedAnswerDrivingControl: { killSwitchEnabled: false }
+});
+const pemsTrustedAnswer = composeTrustedSkillDrivenAnswer({
+  candidate: {
+    candidate_id: "phase58_build_candidate",
+    selected_skill_key: "insurance_portal_browser",
+    promotion_status: "trusted_answer_driving",
+    production_driving_allowed: 1
+  },
+  sourcePointers: [{ table: "research_artifacts", id: "phase58_build_artifact" }],
+  structuredFacts: [
+    {
+      label: "Covered source",
+      value: "verified by the build contract",
+      sourcePointerIds: ["research_artifacts/phase58_build_artifact"]
+    }
+  ],
+  unverifiedItems: ["Missing copay remains unsupported"]
+});
+if (
+  pemsTrustedAnswerDrivingProof.version !== PEMS_TRUSTED_ANSWER_DRIVING_VERSION ||
+  pemsTrustedAnswerDrivingProof.status !== "phase58_trusted_answer_driving_active" ||
+  pemsTrustedAnswerDrivingProof.score !== 100 ||
+  pemsTrustedAnswerDrivingProof.productionDrivingAllowed !== true ||
+  pemsTrustedAnswer.status !== "trusted_answer_driving_validated" ||
+  pemsTrustedAnswer.productionDrivingAllowed !== true ||
+  pemsTrustedAnswer.safety.unsupportedItemsLabeled !== true
+) {
+  throw new Error("Phase 58 trusted answer-driving proof contract is incomplete.");
 }
 
 const pemsWorkbenchProof = buildPemsReviewerWorkbenchReadinessProof({
@@ -897,4 +944,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

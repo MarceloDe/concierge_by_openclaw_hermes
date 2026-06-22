@@ -45,6 +45,7 @@ export const TABLES = [
   "pems_candidate_claim_revisions",
   "pems_candidate_review_followups",
   "pems_candidate_review_history_exports",
+  "pems_trusted_answer_driving_controls",
   "worker_procedural_memory",
   "operator_tool_proposals",
   "openclaw_skills",
@@ -865,6 +866,17 @@ CREATE TABLE IF NOT EXISTS pems_candidate_review_history_exports (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (candidate_id) REFERENCES pems_candidate_maturity(candidate_id),
   FOREIGN KEY (advisory_draft_id) REFERENCES pems_candidate_evaluator_drafts(id)
+);
+
+CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls (
+  control_key TEXT PRIMARY KEY,
+  kill_switch_enabled INTEGER NOT NULL DEFAULT 0,
+  actor_user_id TEXT,
+  reason_hash TEXT NOT NULL DEFAULT '',
+  reason_preview TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS worker_procedural_memory (

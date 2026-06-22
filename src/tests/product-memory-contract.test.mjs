@@ -62,6 +62,9 @@ test("product memory contract builds safe source-pointer summaries without raw d
   assert.doesNotMatch(serialized, /Safe Contract User/);
   assert.equal(episode.sourcePointers[0].table, "eligibility_snapshots");
   assert.equal(episode.localMemoryItemPointers[0].table, "memory_items");
+  assert.equal(episode.memoryNamespaces.proceduralSkills, "procedural:skills");
+  assert.match(episode.memoryNamespaces.episodicMember, /^episodic:member:[a-f0-9]{16}$/);
+  assert.equal(episode.memoryNamespaces.episodicMember.includes("user_contract"), false);
 });
 
 test("product memory contract keeps uploaded document retain payload sourced and identifier-safe", () => {

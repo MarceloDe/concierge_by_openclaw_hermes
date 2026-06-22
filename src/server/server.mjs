@@ -96,14 +96,23 @@ import {
   buildPemsReviewerWorkbenchReadinessProof,
   createLiveGatedPemsEvaluatorDraft,
   createPemsEvaluatorDraft,
+  evaluatePemsPromotionGate,
   getContinuousIntelligencePersistenceStatus,
   getPemsPromotionGateStatus,
   getPemsReviewerWorkbenchStatus,
+  PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
   recordPemsClaimRevision,
   recordPemsReviewerFollowUp,
   recordPemsReviewerHistoryExport,
   recordPemsPromotionReview
 } from "../concierge/continuousIntelligence.mjs";
+import {
+  assertProceduralSkillIsUserAgnostic,
+  buildGraphitiMemoryNamespaces,
+  buildNightlyResearchChangeCandidateSeed,
+  buildResolvedCaseCandidateSeed,
+  composeTrustedSkillDrivenAnswer
+} from "../concierge/trustedAnswerDriving.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1240,6 +1249,112 @@ async function buildPhase57ExtensibleSkillsProof() {
   };
 }
 
+function buildPhase58TrustedAnswerDrivingProof() {
+  const maturity = {
+    candidate_id: "phase58_candidate",
+    selected_skill_key: "insurance_portal_browser",
+    shadow_run_count: 10,
+    evidence_ref_count: 3,
+    successful_outcome_count: 8,
+    reviewer_approval_count: 2,
+    authority_citation_count: 3,
+    validator_pass_count: 1,
+    safety_incident_count: 0,
+    latest_score: 90,
+    trusted: 1,
+    production_driving_allowed: 0
+  };
+  const reviews = [
+    { reviewType: "human_review", decision: "approved", evidenceRefCount: 1 },
+    { reviewType: "human_review", decision: "approved", evidenceRefCount: 1 },
+    { reviewType: "validator_evaluation", decision: "pass", validatorPassCount: 1 },
+    { reviewType: "citation_evaluation", decision: "pass", evidenceRefCount: 3 }
+  ];
+  const trustedGate = evaluatePemsPromotionGate(maturity, reviews);
+  const killSwitchGate = evaluatePemsPromotionGate({ ...maturity, trustedAnswerDrivingKillSwitchEnabled: true }, reviews);
+  const safetyVetoGate = evaluatePemsPromotionGate(maturity, [
+    ...reviews,
+    { reviewType: "safety_review", decision: "fail", safetyIncidentCount: 1 }
+  ]);
+  const sourcePointers = [{ table: "research_artifacts", id: "artifact_phase58", summary: "Reviewed benefits evidence." }];
+  const drivenAnswer = composeTrustedSkillDrivenAnswer({
+    candidate: { ...maturity, promotion_status: trustedGate.status, production_driving_allowed: trustedGate.productionDrivingAllowed ? 1 : 0 },
+    sourcePointers,
+    question: "Can the trusted skill answer from cited evidence?",
+    structuredFacts: [
+      {
+        label: "Deductible remaining",
+        value: "$500 remaining",
+        sourcePointerIds: ["research_artifacts/artifact_phase58"]
+      }
+    ],
+    unverifiedItems: ["Exact specialist copay is not verified"],
+    user: { id: "phase58_user" },
+    planId: "aetna"
+  });
+  const namespaces = buildGraphitiMemoryNamespaces({ userId: "phase58_user", planId: "aetna", scenarioKey: "benefits" });
+  const proceduralAgnostic = assertProceduralSkillIsUserAgnostic({
+    cue: "benefits",
+    tag: "deductible",
+    content: "Use cited plan evidence only."
+  });
+  const resolvedCandidate = buildResolvedCaseCandidateSeed({
+    caseState: {
+      decision: { workflow: "eligibility_benefits_navigation" },
+      skill: { selected: { executionSkillKey: "insurance_portal_browser" } },
+      evidence: { sourcePointerRefs: [{ id: "research_artifacts/artifact_phase58" }] }
+    }
+  });
+  const researchCandidate = buildNightlyResearchChangeCandidateSeed({
+    sourceRef: { id: "source_phase58", host: "payer.example.test" },
+    workflow: "prior_authorization",
+    topic: "policy change detector"
+  });
+  const checks = {
+    promotionGateTrusted: trustedGate.status === "trusted_answer_driving" && trustedGate.productionDrivingAllowed === true,
+    citationRailsPass: drivenAnswer.validation.valid === true && drivenAnswer.productionDrivingAllowed === true,
+    unsupportedItemsLabeled: drivenAnswer.answer.claims.some((claim) => claim.unsupported === true),
+    killSwitchDemotes: killSwitchGate.productionDrivingAllowed === false && killSwitchGate.status === "trusted_answer_driving_kill_switch",
+    safetyIncidentDemotes: safetyVetoGate.productionDrivingAllowed === false && safetyVetoGate.status === "safety_veto",
+    privacyNamespaces: namespaces.proceduralSkills === "procedural:skills" && namespaces.episodicMember.startsWith("episodic:member:"),
+    proceduralUserAgnostic: proceduralAgnostic.ok === true,
+    candidateGenerationNonDriving: resolvedCandidate.productionDrivingAllowed === false && researchCandidate.productionDrivingAllowed === false
+  };
+  const passed = Object.values(checks).filter(Boolean).length;
+  return {
+    version: PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
+    status: passed === Object.keys(checks).length ? "phase58_trusted_answer_driving_proof_ready" : "phase58_trusted_answer_driving_contract_ready",
+    ok: passed === Object.keys(checks).length,
+    score: Math.round((passed / Object.keys(checks).length) * 100),
+    target: 100,
+    checks,
+    promotionGate: trustedGate,
+    drivenAnswer: {
+      status: drivenAnswer.status,
+      validation: drivenAnswer.validation,
+      productionDrivingAllowed: drivenAnswer.productionDrivingAllowed,
+      unsupportedItemsLabeled: checks.unsupportedItemsLabeled
+    },
+    demotion: {
+      killSwitchStatus: killSwitchGate.status,
+      safetyVetoStatus: safetyVetoGate.status
+    },
+    namespaces,
+    candidateGeneration: {
+      resolvedCasePath: resolvedCandidate.path,
+      researchChangePath: researchCandidate.path,
+      candidateOnly: resolvedCandidate.candidateOnly && researchCandidate.candidateOnly
+    },
+    safety: {
+      productionDrivingAllowedOnlyOnTrustedPath: true,
+      reviewerApprovalRequired: true,
+      citationRailsRequired: true,
+      killSwitchRequired: true,
+      rawPhiReturned: false
+    }
+  };
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1270,6 +1385,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const liveReadiness = classifyOfficialOpenClawLiveReadiness(openclawReadiness);
   const phase56Hardening = await buildPhase56HardeningProof();
   const phase57ExtensibleSkills = await buildPhase57ExtensibleSkillsProof();
+  const phase58TrustedAnswerDriving = buildPhase58TrustedAnswerDrivingProof();
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1466,6 +1582,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase57_extensible_skills_worker_breadth",
         status: phase57ExtensibleSkills.status,
         target: "Registry-driven multi-skill selection, bounded worker breadth, and masked procedural worker memory feeding PEMS without answer driving."
+      },
+      {
+        key: "phase58_trusted_answer_driving",
+        status: phase58TrustedAnswerDriving.status,
+        target: "Reviewer-approved matured PEMS skills may drive answers only through citation rails, demotion, kill switch, and privacy namespacing."
       }
     ],
     checks: [
@@ -1504,6 +1625,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         dynamicSelection: phase57ExtensibleSkills.dynamicSelection,
         proposal: phase57ExtensibleSkills.proposal,
         workerMemory: phase57ExtensibleSkills.workerMemory
+      },
+      {
+        key: "phase58_trusted_answer_driving",
+        status: phase58TrustedAnswerDriving.status,
+        ok: phase58TrustedAnswerDriving.ok,
+        checks: phase58TrustedAnswerDriving.checks,
+        promotionGate: phase58TrustedAnswerDriving.promotionGate,
+        drivenAnswer: phase58TrustedAnswerDriving.drivenAnswer,
+        demotion: phase58TrustedAnswerDriving.demotion,
+        namespaces: phase58TrustedAnswerDriving.namespaces,
+        candidateGeneration: phase58TrustedAnswerDriving.candidateGeneration,
+        safety: phase58TrustedAnswerDriving.safety
       },
       {
         key: "database_storage",
@@ -2135,6 +2268,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         skillCount: phase57ExtensibleSkills.registry.skillCount,
         selectedExecutionSkillKey: phase57ExtensibleSkills.dynamicSelection.selected.executionSkillKey,
         workerMemoryStatus: phase57ExtensibleSkills.workerMemory.status
+      },
+      {
+        key: "phase58_trusted_answer_driving",
+        score: phase58TrustedAnswerDriving.score,
+        target: phase58TrustedAnswerDriving.target,
+        status: phase58TrustedAnswerDriving.status,
+        productionDrivingAllowed: phase58TrustedAnswerDriving.promotionGate.productionDrivingAllowed,
+        killSwitchDemotes: phase58TrustedAnswerDriving.checks.killSwitchDemotes,
+        safetyIncidentDemotes: phase58TrustedAnswerDriving.checks.safetyIncidentDemotes,
+        citationRailsPass: phase58TrustedAnswerDriving.checks.citationRailsPass
       },
       {
         key: "canonical_goal_tied_phase_execution",
