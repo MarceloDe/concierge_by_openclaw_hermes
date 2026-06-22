@@ -2836,3 +2836,17 @@ Pilot readiness needs real proof across the connector boundary, not another stat
 
 Consequences:
 The MVP is now live-model-default when credentials exist and fallback-safe when they do not. Phase 59 can pass as `pilot_ready_with_external_degraded` while Graphiti is explicit as degraded/not production-ready. A later product-memory slice must repair Graphiti retain/recall masking and source-pointer behavior without loosening outbound payload policy.
+
+## 2026-06-22 - Phase 60 Makes Memory A Skill-Tree Consolidation Layer, Not A Second Database
+
+Problem:
+The user goal requires a mature memory system that learns from cases, supports non-standard insurance journeys, and eventually creates new skills. But the system must not move user/session/control truth into Graphiti or let recalled memory bypass safety, source, approval, and reviewer gates.
+
+Decision:
+Add a memory skill-tree selector. The deterministic DB remains authoritative for users, sessions, tasks, approvals, audit, source pointers, and runtime control. Zep/Graphiti facts are advisory retrieval and consolidation signals used by LangGraph and the LLM orchestration payload when a journey is non-standard, a plan is unknown/new, or the skill pool has a gap. Consolidation produces reviewer-ready skill candidates and a RALPH-style loop, but worktree writes and production driving remain review-gated.
+
+Rationale:
+This follows the literature pattern without importing unsafe autonomy. Reflexion supports feedback-to-episodic-memory loops; Generative Agents supports reflection and planning over memory streams; Voyager supports verified skill-library growth; CoALA supports separating memory roles and action spaces. In this healthcare/insurance product, those ideas must be bounded by DB authority, deterministic policy, source-pointer validation, reviewer promotion, and kill switches.
+
+Consequences:
+LangGraph now carries `memory_skill_tree`, and the LLM sees bounded procedural-memory instructions instead of raw memory blobs. The dashboard exposes `phase60_memory_skill_tree`. Live Graphiti/FalkorDB proof is green after allowing hashed `episodic:member:<hash>` namespace refs while still blocking real member/subscriber identifiers and raw PHI.

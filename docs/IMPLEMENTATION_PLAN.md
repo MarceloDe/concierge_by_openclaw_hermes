@@ -3202,3 +3202,41 @@ Gates:
 - `npm run build`.
 - `npm run test:local`.
 - Visual screenshots for the operator dashboard and mobile PWA.
+
+## Phase 60 - Memory Skill Tree And Graphiti Consolidation Loop
+
+Goal: make product memory useful as a mature learning/consolidation layer without making it the source of truth for user/session/control data. The deterministic DB remains authoritative for users, sessions, approvals, tasks, audit, source pointers, and runtime state. Zep/Graphiti is used as advisory retrieval and consolidation signal for non-standard journeys, new plan designs, new user demands, and skill-pool gaps.
+
+Literature alignment:
+
+- Reflexion-style episodic feedback supports repeated loop improvement after task feedback.
+- Generative Agents-style reflection/planning supports synthesizing stored experiences into higher-level procedural cues.
+- Voyager-style skill-library growth supports turning repeated verified procedures into reusable skills.
+- CoALA-style modular memory supports keeping working, episodic, semantic, and procedural memory roles separate.
+
+Build:
+
+- Add `src/concierge/memorySkillTree.mjs` with a selector that binds DB authority, Graphiti advisory facts, dynamic skill matches, source pointers, and a RALPH-style loop procedure.
+- Add a reviewer-gated consolidation candidate generator that can propose a `skill-server.json` shape but cannot write worktree skills or drive production unless existing reviewer gates approve it.
+- Add LangGraph `memory_skill_tree` state and feed the bounded selector summary into the LLM orchestration payload.
+- Add connector proof/dashboard visibility for `phase60_memory_skill_tree`.
+- Repair live Graphiti product-memory proof without weakening outbound policy:
+  - enabled-but-unsourced graph runs now return `skipped_no_sourced_memory` instead of looking disabled;
+  - uploaded-document source pointers are recognized by outbound payload observability;
+  - hashed `episodic:member:<hash>` Graphiti namespaces are allowed while real member/subscriber identifiers remain blocked.
+
+Non-goals:
+
+- Do not move user/session/task/approval state into Graphiti.
+- Do not let Graphiti facts override DB records.
+- Do not write generated skills directly into production skill folders without reviewer approval and PR review.
+- Do not allow credential entry, payer contact, external writes, medical advice, or raw PHI storage.
+
+Gates:
+
+- `node --test src/tests/memory-skill-tree.test.mjs`.
+- Product-memory and outbound policy focused tests.
+- `npm run test:memory:graphiti`.
+- `npm run build`.
+- `npm run test:local`.
+- API and visual proof through the operator dashboard Phase 60 card.

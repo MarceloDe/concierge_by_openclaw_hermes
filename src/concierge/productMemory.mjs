@@ -189,6 +189,23 @@ function disabledResult(action) {
   };
 }
 
+function skippedRetainResult(action, config, reason) {
+  return {
+    ok: true,
+    action,
+    contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
+    adapter: "graphiti",
+    enabled: true,
+    provider: "zep_graphiti",
+    status: reason,
+    facts: [],
+    retained: false,
+    reason,
+    message: "Graphiti product memory is enabled, but this graph run had no sourced memory episode to retain.",
+    config
+  };
+}
+
 export async function getProductMemoryReplayQueueSummary(store) {
   if (!store) {
     return {
@@ -657,7 +674,8 @@ export function buildProductMemoryRetainRepairPlan(errorOrMessage, { sourcePoint
 export async function retainProductMemoryFromGraphRun(store, { user, session, state, localMemoryItems = [] }) {
   await loadLocalEnvOnce();
   const config = getProductMemoryConfig();
-  if (!config.enabled || !state?.should_remember) return { ...disabledResult("retain"), config };
+  if (!config.enabled) return { ...disabledResult("retain"), config };
+  if (!state?.should_remember) return skippedRetainResult("retain", config, "skipped_no_sourced_memory");
   if (!config.phiCleared) {
     const result = phiClearanceRequiredResult("retain", config, {
       repairPlan: {

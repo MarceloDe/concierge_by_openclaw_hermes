@@ -1,0 +1,14 @@
+{
+  "state": {
+    "hasPhase60": true,
+    "hasScore": true,
+    "hasDbAuthority": true,
+    "hasGraphitiAdvisory": true,
+    "hasReviewGated": true,
+    "hasProductionBlocked": true,
+    "cardText": "Phase 60 Memory Skill Tree\nScore\n100 / 100 · phase60_memory_skill_tree_ready\nAuthority\nDB authoritative · Graphiti advisory\nSelector\nnon-standard demand route · insurance_portal_browser\nLoop\nralph_rigg_sequential_goal_loop · 7 gates\nConsolidation\nready_for_reviewer_skill_candidate · worktree write review-gated\nSafety\nproduction-driving blocked · raw PHI hidden"
+  },
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "url": "http://127.0.0.1:4225/?phase=phase-60-memory-skill-tree"
+}

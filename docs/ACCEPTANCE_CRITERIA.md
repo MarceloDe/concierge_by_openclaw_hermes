@@ -2602,4 +2602,25 @@ Focused proof:
 - Dashboard proof exposes `phase59_pilot_readiness` with score, proof command, API inventory, live-model default, product-memory status, and AWS proof posture.
 - Visual proof includes screenshots for the operator dashboard and mobile PWA under `artifacts/phase59/`.
 - Required gates: `npm run phase59:pilot-readiness`, live LLM tests when credentials are present, `npm run test:openclaw:skills`, `npm run test:facade`, `npm run test:db:safety`, `npm run test:phi`, `npm run test:egress`, `npm run build`, and `npm run test:local`.
-- Remaining blocker before declaring Graphiti fully on: `npm run test:memory:graphiti` must pass without loosening outbound direct-identifier policy or storing raw PHI.
+- Phase 59 carry-forward blocker: Graphiti is not fully on until `npm run test:memory:graphiti` passes without loosening outbound direct-identifier policy or storing raw PHI. Phase 60 resolves this with the dedicated product-memory safety/masking slice.
+
+## Phase 60: Memory Skill Tree And Graphiti Consolidation Loop
+
+- DB remains authoritative for user data, sessions, task lifecycle, approvals, audit, source pointers, and runtime state.
+- Graphiti/Zep memory is advisory retrieval and consolidation signal only; it cannot override DB state or create session/control truth.
+- LangGraph state contains a `memory_skill_tree` object that the LLM orchestration payload can inspect as bounded procedural guidance.
+- The selector activates for non-standard journeys, unknown/new insurance plans, new user demand, personal case patterns, or skill-pool gaps.
+- The selector exposes tool, extractor, verifier, sensor, and controller groups plus a RALPH-style loop:
+  - current state evaluation,
+  - target planning,
+  - implementation,
+  - testing,
+  - visual/OCR sensor proof,
+  - separated goal evaluation score,
+  - pass/fail restart or promotion decision.
+- Consolidation can produce a reviewer-ready skill candidate shape but `worktreeWriteAllowed=false` and `productionDrivingAllowed=false` until existing reviewer, citation, validator, safety, and kill-switch gates allow promotion.
+- Product memory live proof passes with real Graphiti/FalkorDB through `npm run test:memory:graphiti`.
+- Outbound payload policy still blocks raw member/subscriber identifiers, user names, emails, SSNs, raw portal text, and raw OCR/frame text.
+- Hashed Graphiti namespace refs such as `episodic:member:<hash>` are allowed and do not count as direct identifiers.
+- Uploaded-document source pointers are recognized as allowed source-pointer contracts.
+- Dashboard proof exposes `phase60_memory_skill_tree` with score, DB authority, Graphiti advisory posture, selector route, loop, consolidation status, and safety flags.

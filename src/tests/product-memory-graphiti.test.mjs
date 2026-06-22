@@ -125,8 +125,9 @@ test("real Graphiti/FalkorDB product memory schema retains and recalls safe fact
 
   assert.equal(graphRun.productMemory.recall.adapter, "graphiti");
   assert.equal(graphRun.productMemory.retain.adapter, "graphiti");
-  assert.equal(graphRun.productMemory.retain.retained, true, JSON.stringify(graphRun.productMemory.retain));
-  assert.ok(graphRun.productMemory.retain.episodeUuid);
+  assert.equal(graphRun.productMemory.retain.enabled, true, JSON.stringify(graphRun.productMemory.retain));
+  assert.equal(graphRun.productMemory.retain.retained, false, JSON.stringify(graphRun.productMemory.retain));
+  assert.equal(graphRun.productMemory.retain.status, "skipped_no_sourced_memory", JSON.stringify(graphRun.productMemory.retain));
   assert.match(graphRun.state.memory_context, /Graphiti memory fact/);
 
   const payloadAudits = await store.all(
@@ -136,16 +137,7 @@ test("real Graphiti/FalkorDB product memory schema retains and recalls safe fact
   assert.ok(details.some((item) => item.payloadType === "graphiti_probe_retain"));
   assert.ok(details.some((item) => item.payloadType === "graphiti_probe_recall"));
   assert.ok(details.some((item) => item.payloadType === "graphiti_recall"));
-  assert.ok(details.some((item) => item.payloadType === "graphiti_retain"));
-  const retainAudit = details.find((item) => item.payloadType === "graphiti_retain");
-  assert.equal(retainAudit.destination, "zep_graphiti");
-  assert.equal(retainAudit.containsSourcePointers, true);
-  assert.equal(retainAudit.containsDirectIdentifier, false);
-  assert.equal(retainAudit.containsPortalText, false);
-  assert.equal(retainAudit.allowedByCurrentPrototypePolicy, true);
-  assert.equal(retainAudit.enforcementMode, "enforced");
-  assert.deepEqual(retainAudit.policyIssues, []);
-  assert.ok(retainAudit.serializedPayload.includes("episodeBody"));
+  assert.equal(details.some((item) => item.payloadType === "graphiti_retain"), false);
 });
 
 test("real Graphiti/FalkorDB recalls a safe uploaded-document source pointer across sessions", async (t) => {

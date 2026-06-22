@@ -88,6 +88,44 @@ function dynamicSkillHints(state) {
   };
 }
 
+function memorySkillTreeHints(state) {
+  const tree = state.memory_skill_tree ?? {};
+  return {
+    version: tree.version ?? null,
+    status: tree.status ?? null,
+    workflow: tree.workflow ?? null,
+    payer: tree.payer ?? null,
+    dbAuthority: tree.dbAuthority ?? {},
+    memoryUsePolicy: tree.memoryUsePolicy ?? {},
+    selectedProcedureMemory: tree.selectedProcedureMemory
+      ? {
+          selectedSkillKey: tree.selectedProcedureMemory.selectedSkillKey ?? null,
+          bestDynamicSkillScore: tree.selectedProcedureMemory.bestDynamicSkillScore ?? 0,
+          nonStandardDemand: Boolean(tree.selectedProcedureMemory.nonStandardDemand),
+          selectedSkillRefs: tree.selectedProcedureMemory.selectedSkillRefs ?? [],
+          sourcePointerCount: tree.selectedProcedureMemory.sourcePointerRefs?.length ?? 0,
+          productMemoryFactCount: tree.selectedProcedureMemory.productMemoryFactRefs?.length ?? 0
+        }
+      : null,
+    ralphLoop: tree.skillTree?.loop
+      ? {
+          loopStyle: tree.skillTree.loop.loopStyle,
+          stepIds: (tree.skillTree.loop.steps ?? []).map((step) => step.id),
+          passDecision: tree.skillTree.loop.passDecision
+        }
+      : null,
+    consolidationCandidate: tree.consolidationCandidate
+      ? {
+          status: tree.consolidationCandidate.status,
+          readyForReviewer: Boolean(tree.consolidationCandidate.readyForReviewer),
+          worktreeWriteAllowed: Boolean(tree.consolidationCandidate.worktreeWriteAllowed),
+          productionDrivingAllowed: Boolean(tree.consolidationCandidate.productionDrivingAllowed)
+        }
+      : null,
+    safety: tree.safety ?? {}
+  };
+}
+
 export function buildLlmOrchestrationDecisionPayload(state) {
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
@@ -103,6 +141,7 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
     dynamicSkills: dynamicSkillHints(state),
+    memorySkillTree: memorySkillTreeHints(state),
     productMemory: {
       adapter: state.product_memory_recall?.adapter ?? "disabled",
       enabled: Boolean(state.product_memory_recall?.enabled),

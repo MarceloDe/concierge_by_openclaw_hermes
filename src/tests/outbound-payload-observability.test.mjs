@@ -39,3 +39,37 @@ test("outbound payload observability records exact payload and enforced labels b
   assert.equal(instructionOnly.containsDirectIdentifier, false);
   assert.equal(instructionOnly.enforcementMode, "enforced");
 });
+
+test("outbound payload observability allows hashed Graphiti member namespace but blocks real member identifiers", () => {
+  const namespaceOnly = buildOutboundPayloadObservation(
+    {
+      memoryNamespaces: {
+        episodicMember: "episodic:member:dc8d6613f8cc44d6",
+        proceduralSkills: "procedural:skills"
+      },
+      sourcePointers: [{ table: "uploaded_document_extractions", id: "upload_safe" }]
+    },
+    {
+      user: { id: "user_test", name: "Payload Test User", email: "payload@example.com" },
+      payloadType: "graphiti_retain",
+      destination: "zep_graphiti"
+    }
+  );
+  assert.equal(namespaceOnly.containsDirectIdentifier, false);
+  assert.equal(namespaceOnly.containsSourcePointers, true);
+  assert.deepEqual(namespaceOnly.policyIssues, []);
+
+  const rawMemberId = buildOutboundPayloadObservation(
+    {
+      message: "Member ID ABCD-1234-7788",
+      sourcePointers: [{ table: "uploaded_document_extractions", id: "upload_unsafe" }]
+    },
+    {
+      user: { id: "user_test", name: "Payload Test User", email: "payload@example.com" },
+      payloadType: "graphiti_retain",
+      destination: "zep_graphiti"
+    }
+  );
+  assert.equal(rawMemberId.containsDirectIdentifier, true);
+  assert.ok(rawMemberId.policyIssues.includes("direct_identifier_present"));
+});
