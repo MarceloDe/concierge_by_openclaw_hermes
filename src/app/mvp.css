@@ -830,6 +830,7 @@ textarea {
 }
 
 .cost-comparison-grid,
+.degraded-options-grid,
 .procedure-checklist-grid,
 .provider-network-grid {
   display: grid;
@@ -837,6 +838,7 @@ textarea {
 }
 
 .cost-comparison-row,
+.degraded-option-row,
 .pharmacy-formulary-row,
 .procedure-checklist-row,
 .provider-network-row {
@@ -853,6 +855,10 @@ textarea {
 .cost-comparison-row b,
 .cost-comparison-row span,
 .cost-comparison-row small,
+.degraded-option-row strong,
+.degraded-option-row b,
+.degraded-option-row span,
+.degraded-option-row small,
 .pharmacy-formulary-row strong,
 .pharmacy-formulary-row b,
 .pharmacy-formulary-row span,
@@ -869,6 +875,7 @@ textarea {
 }
 
 .cost-comparison-row b,
+.degraded-option-row b,
 .pharmacy-formulary-row b,
 .procedure-checklist-row b,
 .provider-network-row b {
@@ -879,6 +886,8 @@ textarea {
 
 .cost-comparison-row span,
 .cost-comparison-row small,
+.degraded-option-row span,
+.degraded-option-row small,
 .pharmacy-formulary-row span,
 .pharmacy-formulary-row small,
 .procedure-checklist-row span,

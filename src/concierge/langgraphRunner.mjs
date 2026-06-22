@@ -56,6 +56,7 @@ import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
 import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
+import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
   finalizeWorkerContinuationDispatch,
@@ -127,6 +128,7 @@ const BrainstyState = Annotation.Root({
   case_state: field(null),
   continuous_intelligence: field(null),
   sourced_answer: field(null),
+  degraded_answer: field(null),
   research_evidence: field(null),
   uploaded_document_context: field(null),
   browser_result: field(null),
@@ -2576,17 +2578,35 @@ async function composeResponseNode(state) {
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
   if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
-    const finalResponse = composeBlockedEvidenceResponse(state, routeSummary);
+    const degraded = await composeBestEffortAnswer(state, {
+      reason: state.evidence_observation.reason ?? "authenticated_portal_evidence_unavailable",
+      missingEvidence: ["authenticated portal evidence", "current source pointers"],
+      store: activeStores.get(state.session_id),
+      sessionId: state.session_id,
+      user
+    });
     return {
-      final_response: finalResponse,
+      final_response: degraded.finalResponse,
+      degraded_answer: {
+        ...degraded,
+        clarification: proposeBasicClarification(state)
+      },
+      answer_claims: degraded.answer?.claims?.map((claim) => ({
+        ...claim,
+        composerMode: degraded.mode,
+        workflow: state.workflow
+      })) ?? [],
       should_remember: false,
-      memory_summary: `LangGraph blocked ${state.workflow} for session ${state.session_id}: ${state.evidence_observation.reason}`,
-      memory_type: "workflow_blocker_event",
-      workflow_outcome: "portal_evidence_blocked",
+      memory_summary: `LangGraph degraded ${state.workflow} for session ${state.session_id}: ${state.evidence_observation.reason}`,
+      memory_type: "best_effort_degraded_event",
+      workflow_outcome: "best_effort_degraded",
       proof: appendProof(state, "response_policy", {
         finalResponsePrepared: true,
-        blockedReason: state.evidence_observation.reason,
-        sourcePointerCount: 0
+        degraded: true,
+        degradedMode: degraded.mode,
+        evidenceObservationStatus: state.evidence_observation.status,
+        sourcePointerCount: 0,
+        unverifiedCount: degraded.unverified?.length ?? 0
       })
     };
   }
@@ -2633,18 +2653,41 @@ async function composeResponseNode(state) {
   if (
     ["blocked_pending_research_evidence_review", "blocked_no_trusted_research_evidence"].includes(state.evidence_observation?.status)
   ) {
-    const finalResponse = composeMissingTrustedResearchEvidenceResponse(state, routeSummary);
+    const degraded = await composeBestEffortAnswer(state, {
+      reason: state.evidence_observation.reason ?? state.evidence_observation.status,
+      missingEvidence: [
+        state.evidence_observation.status === "blocked_pending_research_evidence_review"
+          ? "operator-reviewed citation approval"
+          : "trusted reviewed research evidence",
+        "source pointers"
+      ],
+      store: activeStores.get(state.session_id),
+      sessionId: state.session_id,
+      user
+    });
     return {
-      final_response: finalResponse,
+      final_response: degraded.finalResponse,
+      degraded_answer: {
+        ...degraded,
+        clarification: proposeBasicClarification(state)
+      },
+      answer_claims: degraded.answer?.claims?.map((claim) => ({
+        ...claim,
+        composerMode: degraded.mode,
+        workflow: state.workflow
+      })) ?? [],
       should_remember: false,
-      memory_summary: `LangGraph could not answer ${state.workflow} from trusted research evidence; ${state.evidence_observation.reason}`,
-      memory_type: "workflow_blocker_event",
-      workflow_outcome: "trusted_research_evidence_unavailable",
+      memory_summary: `LangGraph degraded ${state.workflow} from missing trusted research evidence; ${state.evidence_observation.reason}`,
+      memory_type: "best_effort_degraded_event",
+      workflow_outcome: "best_effort_degraded",
       proof: appendProof(state, "response_policy", {
         finalResponsePrepared: true,
+        degraded: true,
+        degradedMode: degraded.mode,
         evidenceObservationStatus: state.evidence_observation.status,
         sourcePointerCount: 0,
-        pendingReviewCount: state.evidence_observation.pendingReviewCount ?? 0
+        pendingReviewCount: state.evidence_observation.pendingReviewCount ?? 0,
+        unverifiedCount: degraded.unverified?.length ?? 0
       })
     };
   }

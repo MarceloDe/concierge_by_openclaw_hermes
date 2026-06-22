@@ -1,4 +1,6 @@
-export const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
+import { SANDBOX_PRIVACY_COPY } from "./gracefulDegradation.mjs";
+
+export const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v2";
 
 export const AI2UI_BLOCK_TYPES = Object.freeze({
   ANSWER_MARKDOWN: "answer_markdown",
@@ -7,6 +9,7 @@ export const AI2UI_BLOCK_TYPES = Object.freeze({
   PHARMACY_FORMULARY: "pharmacy_formulary",
   PROCEDURE_CHECKLIST: "procedure_checklist",
   PROVIDER_NETWORK: "provider_network",
+  DEGRADED_ANSWER_WITH_OPTIONS: "degraded_answer_with_options",
   APPROVAL_GATE: "approval_gate",
   WORKER_STATUS: "worker_status",
   SOURCE_CITATIONS: "source_citations",
@@ -589,6 +592,69 @@ function approvalPayload(state = {}) {
   };
 }
 
+function degradedAnswerPayload(state = {}) {
+  const degraded = state.degraded_answer;
+  if (!degraded || state.workflow_outcome !== "best_effort_degraded") return null;
+  const proposal = state.openclaw_skill_proposal ?? {};
+  const validation = state.openclaw_skill_validation ?? {};
+  const canCheck =
+    Boolean(proposal.task?.id) &&
+    !validation.blocked &&
+    ["valid", "recorded", "proposal_recorded", "validated_proposal_not_executed", undefined].includes(validation.status);
+  const options = [
+    {
+      id: "verify_myself",
+      label: "Verify myself",
+      type: "self_verify",
+      requiresApproval: false,
+      description: "Use the missing evidence checklist to verify the answer in your plan, portal, document, or reviewed source."
+    },
+    ...(canCheck
+      ? [
+          {
+            id: "let_concierge_check",
+            label: "Let concierge check",
+            type: "read_only_observation",
+            requiresApproval: true,
+            taskId: proposal.task?.id ?? null,
+            approvalScope: validation.approvalScope ?? "read_only_observation",
+            allowedAction: validation.allowedAction ?? "read_only_observation",
+            description: SANDBOX_PRIVACY_COPY
+          }
+        ]
+      : []),
+    {
+      id: "provide_more_info",
+      label: "Provide more info",
+      type: "user_detail",
+      requiresApproval: false,
+      description: "Add a plan document, claim/EOB, provider, medication, procedure, or other detail so the answer can become source-backed."
+    }
+  ];
+  return {
+    status: "best_effort_degraded",
+    mode: degraded.mode ?? "not_reported",
+    reason: degraded.reason ?? state.evidence_observation?.reason ?? "missing_evidence",
+    unverified: degraded.unverified ?? degraded.answer?.uncertainties ?? [],
+    claims: (degraded.answer?.claims ?? []).map((claim) => ({
+      claim: claim.claim,
+      unsupported: Boolean(claim.unsupported),
+      sourcePointerIds: claim.source_pointer_ids ?? []
+    })),
+    nextSteps: degraded.answer?.next_steps ?? [],
+    clarification: degraded.clarification ?? null,
+    options,
+    privacyCopy: SANDBOX_PRIVACY_COPY,
+    safety: {
+      noConfidentUncitedClaims: (degraded.answer?.claims ?? []).every(
+        (claim) => claim.unsupported || (claim.source_pointer_ids ?? []).length > 0
+      ),
+      externalActionsTaken: false,
+      medicalAdvice: false
+    }
+  };
+}
+
 function workerPayload(state = {}) {
   const evidence = state.evidence_observation ?? {};
   return {
@@ -664,6 +730,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   const pharmacyFormulary = buildPharmacyFormularyPayload(state);
   const procedureChecklist = buildProcedureChecklistPayload(state);
   const providerNetwork = buildProviderNetworkPayload(state);
+  const degradedAnswer = degradedAnswerPayload(state);
   const blocks = [
     {
       id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
@@ -717,6 +784,17 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
             title: "Provider Network",
             payload: providerNetwork,
             renderHints: { severity: providerNetwork.rows.length ? "info" : "warning" }
+          }
+        ]
+      : []),
+    ...(degradedAnswer
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.DEGRADED_ANSWER_WITH_OPTIONS, 1),
+            type: AI2UI_BLOCK_TYPES.DEGRADED_ANSWER_WITH_OPTIONS,
+            title: "Best Effort Options",
+            payload: degradedAnswer,
+            renderHints: { severity: "warning" }
           }
         ]
       : []),

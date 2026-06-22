@@ -9035,3 +9035,42 @@ Verification:
 - API proof passed at `http://127.0.0.1:4219/api/chat` with omitted `useLiveModel`, non-PHI provider-network input, `useLive=true`, `structuredReasoningSource=llm`, `llmDecisionMode=openai_chatopenai_invoked`, and route reason `llm_orchestration_decision`.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4219/mvp?phase=phase-53-intelligence-default`: Live GPT decisioning was checked by default, the MVP loaded with no visible errors, and browser console error count was 0.
 - Visual/API artifacts: `artifacts/phase53/intelligence-default-api-proof.json`, `artifacts/phase53/intelligence-default-mvp-proof.png`, and `artifacts/phase53/intelligence-default-mvp-proof.json`.
+
+## Phase 54 Graceful Degradation And Tiered Offer - 2026-06-22
+
+Goal:
+- Implement corrected migration Phase 48 as repo Phase 54: missing evidence should no longer dead-end an otherwise safe healthcare/insurance journey.
+
+Implemented:
+- Added `src/concierge/gracefulDegradation.mjs` as the best-effort answer composer for evidence-insufficient states.
+- Evidence-insufficiency states now route through `source pointers + structured facts + advisory memory -> best-effort composer -> strict sourced-answer validator -> deterministic output policy -> final_response`.
+- Deterministic safety refusals remain hard stops; only missing or untrusted evidence becomes `workflow_outcome: best_effort_degraded`.
+- Added `degraded_answer` to the LangGraph state schema so API and UI consumers can render the tiered offer.
+- Added `degraded_answer_with_options` to the AI2UI block contract and `/mvp` renderer.
+- The tiered offer presents three bounded user choices when possible: verify myself, let concierge check with approval, or provide more information.
+- Shared sandbox privacy copy now appears in prompt safety rules and the degraded AI2UI block: user login/2FA remains human-only and isolated.
+- Public chat/runtime-collapse tests now assert the API returns best-effort degradation instead of the old trusted-citation terminal blocker.
+
+Safety:
+- No confident coverage, cost, claim, provider, pharmacy, or document factual claim is allowed without a source pointer.
+- Unsupported degraded claims are explicitly marked `unsupported: true` and shown as unverified.
+- The `let_concierge_check` option is shown only when a registry-routed OpenClaw proposal exists and still requires approval.
+- Credential entry, medical advice, external/write actions, prompt injection, and urgent handoff remain deterministic hard stops.
+
+Verification:
+- Focused Phase 54 suite passed: `node --test src/tests/graceful-degradation.test.mjs src/tests/ai2ui-blocks.test.mjs src/tests/langgraph-runner.test.mjs src/tests/prompt-contracts.test.mjs` reported 32/32 tests passing.
+- `npm run build` passed.
+- `npm run test:journeys` passed with 18/18 tests.
+- `npm run test:phi` passed with 1/1 tests.
+- `npm run test:egress` passed with 4/4 tests.
+- `npm run test:graph:topology` passed with 2/2 tests.
+- `npm run test:execution:v2` passed with 11/11 tests.
+- Safety-invariant batch passed: `policy`, `model-payload-policy`, `prompt-contracts`, `output-policy`, `approval-resume`, `openclaw-worker-contract`, and `graceful-degradation` reported 27/27 tests passing.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `npm run test:retention` passed with 1/1 tests.
+- `npm run test:openclaw:skills` passed with 11/11 tests.
+- `npm run test:local` passed with 265 tests total, 263 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4220/api/chat` with `workflowOutcome=best_effort_degraded`, `blocked_no_trusted_research_evidence`, no source pointers, `degraded_answer_with_options`, all three user options, privacy copy present, no confident uncited claims, no external actions, and no medical advice.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4220/mvp?phase=phase-54-graceful-degradation`: deterministic local chat rendered the `Best Effort Options` card, all three option rows, pending approval-gated concierge check, unverified evidence text, isolated-sandbox privacy copy, and 0 console errors.
+- Visual/API artifacts: `artifacts/phase54/graceful-degradation-api-proof.json`, `artifacts/phase54/graceful-degradation-mvp-proof.png`, and `artifacts/phase54/graceful-degradation-mvp-proof.json`.

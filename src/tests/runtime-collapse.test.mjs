@@ -51,8 +51,12 @@ test("public chat endpoints share the LangGraph product runtime contract", async
     assert.deepEqual(graphPayload.graphRun.state.source_pointers, []);
     assert.equal(chatPayload.graphRun.state.openclaw_skill_proposal.task.status, "pending_approval");
     assert.equal(graphPayload.graphRun.state.openclaw_skill_proposal.task.status, "pending_approval");
-    assert.match(chatPayload.finalResponse, /cannot answer the insurance question from trusted citations yet/);
-    assert.match(graphPayload.graphRun.state.final_response, /cannot answer the insurance question from trusted citations yet/);
+    assert.equal(chatPayload.graphRun.state.workflow_outcome, "best_effort_degraded");
+    assert.equal(graphPayload.graphRun.state.workflow_outcome, "best_effort_degraded");
+    assert.match(chatPayload.finalResponse, /Unverified:/);
+    assert.match(graphPayload.graphRun.state.final_response, /Unverified:/);
+    assert.ok(chatPayload.graphRun.state.ai2ui_blocks.some((block) => block.type === "degraded_answer_with_options"));
+    assert.ok(graphPayload.graphRun.state.ai2ui_blocks.some((block) => block.type === "degraded_answer_with_options"));
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }

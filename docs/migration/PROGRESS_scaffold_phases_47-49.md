@@ -67,7 +67,7 @@ Known risks or gaps:
 
 ---
 
-## Phase 48 Graceful Degradation And The Tiered Offer - <YYYY-MM-DD>
+## Phase 54 Graceful Degradation And The Tiered Offer - 2026-06-22
 
 Slice name:
 - Best-effort answers + AI2UI tiered offer; clarify-don't-block.
@@ -80,7 +80,12 @@ Files changed (expected):
 - `src/tests/graceful-degradation.test.mjs` (new)
 
 Implemented:
-- _<fill>_
+- Added `src/concierge/gracefulDegradation.mjs` with deterministic and live-capable best-effort answer composition.
+- Converted missing or untrusted evidence branches in `composeResponseNode` to produce `workflow_outcome: best_effort_degraded`, `degraded_answer`, strict unsupported claims, unverified evidence lists, and non-terminal clarification suggestions.
+- Added `degraded_answer` to the LangGraph state annotation so API/UI payloads retain the degradation contract.
+- Added `degraded_answer_with_options` to the AI2UI contract and `/mvp` renderer, including verify-myself, approval-gated concierge-check, and provide-more-info choices.
+- Shared the isolated sandbox privacy copy through prompt safety rules and the UI payload.
+- Updated public endpoint and graph tests from the old terminal blocker copy to the new best-effort degraded contract.
 
 Verification commands:
 - `npm run build`
@@ -89,13 +94,24 @@ Verification commands:
 - API proof + visual proof
 
 Verification result:
-- _<fill>_
+- Focused Phase 54 suite passed with 32/32 tests.
+- `npm run build` passed.
+- `npm run test:journeys` passed with 18/18 tests.
+- `npm run test:phi`, `npm run test:egress`, `npm run test:graph:topology`, and `npm run test:execution:v2` all passed.
+- Safety-invariant batch passed with 27/27 tests.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:db:safety`, `npm run test:retention`, and `npm run test:openclaw:skills` all passed.
+- `npm run test:local` passed with 265 tests total, 263 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4220/api/chat`; artifact: `artifacts/phase54/graceful-degradation-api-proof.json`.
+- In-app browser visual proof passed at `http://127.0.0.1:4220/mvp?phase=phase-54-graceful-degradation` with 0 console errors; artifacts: `artifacts/phase54/graceful-degradation-mvp-proof.png` and `artifacts/phase54/graceful-degradation-mvp-proof.json`.
 
 What the user can try locally:
-- _<fill: e.g. "Ask 'I think I already paid this bill' with no portal connected → receive a best-effort answer + verify/let-me-check/more-info options, not a refusal.">_
+- Ask a safe insurance-navigation question with no trusted evidence, such as "What does reviewed evidence say about my deductible before coinsurance?", with `useLiveModel: false` for deterministic proof.
+- The response should be a best-effort answer with `Unverified:` evidence, a `degraded_answer_with_options` UI block, and a pending approval-gated concierge-check option if OpenClaw produced a task proposal.
 
 Known risks or gaps:
-- Grounding discipline in degraded mode (no confident uncited claims). Confirm `validateSourcedAnswer` labels unverified items.
+- Live-model graceful-degradation composition remains credential-gated; deterministic fallback is covered.
+- Phase 55 still needs durable native LangGraph interrupt/resume for the approval pause.
 
 ---
 
