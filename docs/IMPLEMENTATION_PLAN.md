@@ -3240,3 +3240,32 @@ Gates:
 - `npm run build`.
 - `npm run test:local`.
 - API and visual proof through the operator dashboard Phase 60 card.
+
+## Phase 61 - Generated Skill PR Workflow
+
+Goal: turn mature memory-derived consolidation candidates into reviewer-gated generated skill PR packages without letting memory silently edit production skills or drive healthcare answers.
+
+Build:
+
+- Add a deterministic generated-skill PR workflow that consumes a Phase 60 consolidation candidate plus explicit review records.
+- Require at least two human approvals, one validator pass, one citation pass, at least one source pointer, no safety veto, raw PHI blocked, and production-driving blocked before a PR package is ready.
+- Generate a proposed `openclaw/skills/<skill>/` package with `skill-server.json`, `SKILL.md`, and `README.md` content hashes.
+- Validate the generated artifact with the existing OpenClaw skill artifact validator and user-agnostic procedural-memory guard.
+- Expose PR metadata: branch name, base branch, title, body sections, reviewer requirement, and `autoMergeAllowed=false`.
+- Keep tests and dashboard proof side-effect-free: no files are written, no branch is created, and no PR is opened by the proof helper.
+- Add connector proof/dashboard visibility for `phase61_generated_skill_pr_workflow` plus a read API at `/api/continuous-intelligence/pems/generated-skill-pr`.
+
+Non-goals:
+
+- Do not auto-merge generated skills.
+- Do not let generated skills enter production answer-driving authority.
+- Do not store raw PHI, raw OCR/frame text, credentials, payer portal text, or user-specific identifiers in procedural skill files.
+- Do not let Graphiti/Zep override DB-authoritative user/session/control state.
+
+Gates:
+
+- `npm run test:generated-skills`.
+- `npm run build`.
+- `npm run test:local`.
+- API proof through `/api/proof/runs/local`.
+- Visual proof through the operator dashboard Phase 61 card.

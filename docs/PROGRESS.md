@@ -9272,3 +9272,42 @@ Verification:
 - `npm run test:memory:graphiti` passed with real Graphiti/FalkorDB: 2/2 passing.
 - `npm run build` passed and reports the Phase 60 memory skill-tree contract.
 - `npm run test:local` passed with 284 tests total, 282 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+
+## Phase 61 Generated Skill PR Workflow - 2026-06-22
+
+Goal:
+- Finish the next planned memory-learning step after Phase 60: mature Graphiti/Zep consolidation candidates should become concrete generated skill PR packages only after reviewer, validator, citation, source-pointer, and safety gates pass.
+
+Implemented:
+- Added `src/concierge/generatedSkillPrWorkflow.mjs`.
+- Added `evaluateGeneratedSkillPrGate`, requiring:
+  - two human reviewer approvals,
+  - validator pass,
+  - citation pass,
+  - source pointer presence,
+  - no safety veto,
+  - raw PHI blocked,
+  - production-driving blocked.
+- Added generated skill package construction for `openclaw/skills/<skill>/skill-server.json`, `SKILL.md`, and `README.md` with content hashes.
+- Validated generated packages through the existing OpenClaw skill artifact validator.
+- Validated generated procedural content through the existing user-agnostic procedural-memory guard.
+- Added PR metadata: branch name, base branch, title, body sections, reviewer requirement, and auto-merge disabled.
+- Kept proof mode side-effect-free: no generated skill files are written, no Git branch is created, no PR is opened, and no auto-merge or production-driving authority is added.
+- Added `npm run test:generated-skills`.
+- Added `/api/continuous-intelligence/pems/generated-skill-pr`.
+- Added connector proof/dashboard visibility through `phase61_generated_skill_pr_workflow`.
+
+Safety:
+- DB remains authoritative; Graphiti/Zep cannot write session, user, approval, audit, or task truth.
+- Generated skills are PR packages only and do not become active production skills automatically.
+- Worktree write permission is true only when the PR gate passes and an explicit reviewer worktree-write approval is present.
+- Production-driving, credential entry, external writes, payer contact, form submission, auto-merge, raw PHI, raw OCR/frame text, and medical advice remain blocked.
+
+Verification:
+- Focused Phase 61 suite passed: `npm run test:generated-skills` reported 4/4 passing.
+- Focused safety-adjacent suite passed: `node --test src/tests/memory-skill-tree.test.mjs src/tests/openclaw-skill-artifacts.test.mjs src/tests/pems-trusted-answer-driving.test.mjs src/tests/generated-skill-pr-workflow.test.mjs` reported 16/16 passing.
+- `npm run build` passed and reports the Phase 61 generated-skill PR workflow contract.
+- `npm run test:local` passed with 289 tests total, 287 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4226/api/proof/runs/local`: `phase61_generated_skill_pr_workflow` scored `100 / 100`, gate status was `generated_skill_pr_gate_passed`, package validation was valid, auto-merge was blocked, and production-driving was blocked.
+- Dashboard visual proof passed at `http://127.0.0.1:4226/?phase=phase-61-generated-skill-pr-workflow`: the Phase 61 card rendered `100 / 100`, reviewers `2/2`, package `files 3`, artifact valid, generated branch name, auto-merge blocked, no files written, reviewer-approved worktree write, production-driving blocked, and raw PHI hidden. Console errors: 0.
+- Artifacts: `artifacts/phase61/phase61-dashboard-generated-skill-pr.png` and `artifacts/phase61/phase61-generated-skill-pr-proof.json`.

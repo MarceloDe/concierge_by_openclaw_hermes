@@ -2850,3 +2850,17 @@ This follows the literature pattern without importing unsafe autonomy. Reflexion
 
 Consequences:
 LangGraph now carries `memory_skill_tree`, and the LLM sees bounded procedural-memory instructions instead of raw memory blobs. The dashboard exposes `phase60_memory_skill_tree`. Live Graphiti/FalkorDB proof is green after allowing hashed `episodic:member:<hash>` namespace refs while still blocking real member/subscriber identifiers and raw PHI.
+
+## 2026-06-22 - Phase 61 Makes Memory-Derived Skills PR-Ready Only After Review
+
+Problem:
+Phase 60 could produce mature reviewer-ready skill candidates, but there was no deterministic bridge from a mature memory-derived candidate to a concrete skill package that a reviewer could inspect and promote through Git. Without that bridge, Graphiti/Zep learning could remain trapped as advisory memory, or future agents might be tempted to write generated skills directly without a review envelope.
+
+Decision:
+Add a generated-skill PR workflow. It consumes a Phase 60 consolidation candidate and explicit review records, requires two human approvals, validator pass, citation pass, at least one source pointer, no safety veto, raw PHI blocked, and production-driving blocked. When the gate passes, it creates a proposed `openclaw/skills/<skill>/` package with `skill-server.json`, `SKILL.md`, and `README.md` hashes plus branch/PR metadata. Proof mode stays side-effect-free: no files are written, no branch is created, no PR is opened, no auto-merge is allowed, and production-driving remains false.
+
+Rationale:
+This gives the learning loop a real promotion artifact while preserving Git review, deterministic validation, source-pointer safety, and human authority. Memory can now teach the skill tree, but only through reviewable code/package artifacts.
+
+Consequences:
+Future phases can connect this package to an operator reviewer queue and then an explicit PR-opening executor. The current phase deliberately stops before automatic worktree mutation or production use.
