@@ -2864,3 +2864,17 @@ This gives the learning loop a real promotion artifact while preserving Git revi
 
 Consequences:
 Future phases can connect this package to an operator reviewer queue and then an explicit PR-opening executor. The current phase deliberately stops before automatic worktree mutation or production use.
+
+## 2026-06-22 - Phase 62 Persists Generated Skills In A Reviewer Queue Before Any Executor
+
+Problem:
+Phase 61 could create a reviewer-gated generated skill PR package, but the package was still transient proof output. The system needed durable operator state before any generated skill could be promoted, rejected, blocked, or sent to an executor.
+
+Decision:
+Add `generated_skill_review_queue` as deterministic DB state. Queue rows persist candidate/package identifiers, file paths, hashes, PR metadata, review decision, executor plan, and safety flags. They intentionally do not persist raw generated file bodies or raw PHI. A human reviewer can approve, reject, block, or request more evidence. Even after approval, executor commands are only prepared when a separate explicit executor approval is present; the product still does not auto-run Git or auto-merge.
+
+Rationale:
+This makes the learning loop operationally real without letting Graphiti/Zep or an LLM mutate the skill pool directly. Durable DB state gives operators auditability, retryability, and review queues while preserving Git review and human control.
+
+Consequences:
+The next phase can harden real pilot flows with the queue visible as a product control. A later executor phase may write generated files and open a PR, but it must keep auto-merge and production-driving disabled.

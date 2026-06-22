@@ -2636,3 +2636,15 @@ Focused proof:
 - Worktree write permission is true only when the gate passes and an explicit reviewer worktree-write approval is present.
 - Dashboard proof exposes `phase61_generated_skill_pr_workflow` with score, gate, package, PR branch, side effects, and safety flags.
 - Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phase 62: Generated Skill Reviewer Queue
+
+- `generated_skill_review_queue` exists in the deterministic DB schema and migration path.
+- Generated skill package proposals can be enqueued as durable rows.
+- Queue rows store package metadata, file paths, hashes, PR metadata, and safety flags, but not raw generated file bodies or raw PHI.
+- Review decisions support `approved`, `rejected`, `blocked`, and `needs_more_evidence`.
+- Rejected, blocked, and needs-more-evidence decisions never prepare executor commands.
+- Approved decisions prepare executor commands only when a separate explicit executor approval is present.
+- Executor plans never auto-run commands, auto-open PRs, auto-merge, or enable production-driving.
+- Dashboard proof exposes `phase62_generated_skill_review_queue` with score, queue status, executor status, branch, storage, and safety flags.
+- Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.

@@ -3269,3 +3269,33 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local`.
 - Visual proof through the operator dashboard Phase 61 card.
+
+## Phase 62 - Generated Skill Reviewer Queue
+
+Goal: persist generated-skill PR packages in a durable reviewer queue and prepare an explicit bounded executor plan only after a human reviewer approves the package.
+
+Build:
+
+- Add `generated_skill_review_queue` to the deterministic DB schema.
+- Add `src/concierge/generatedSkillReviewQueue.mjs` for enqueue, review decision, queue listing, and executor-plan construction.
+- Store package metadata, file paths, and hashes, not raw generated file bodies.
+- Support reviewer decisions: approve, reject, block, and request more evidence.
+- Require a separate explicit executor approval before preparing branch/PR commands.
+- Keep executor proof non-running: commands are prepared as an operator plan but never auto-run.
+- Add `/api/continuous-intelligence/pems/generated-skill-review-queue`.
+- Add connector proof/dashboard visibility for `phase62_generated_skill_review_queue`.
+
+Non-goals:
+
+- Do not auto-run Git commands.
+- Do not auto-open or auto-merge generated skill PRs.
+- Do not enable generated skills for production answer-driving.
+- Do not store raw PHI or raw generated file bodies in the review queue.
+
+Gates:
+
+- `npm run test:generated-skills`.
+- `npm run build`.
+- `npm run test:local`.
+- API proof through `/api/proof/runs/local`.
+- Visual proof through the operator dashboard Phase 62 card.

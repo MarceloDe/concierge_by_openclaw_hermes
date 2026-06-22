@@ -9311,3 +9311,36 @@ Verification:
 - API proof passed at `http://127.0.0.1:4226/api/proof/runs/local`: `phase61_generated_skill_pr_workflow` scored `100 / 100`, gate status was `generated_skill_pr_gate_passed`, package validation was valid, auto-merge was blocked, and production-driving was blocked.
 - Dashboard visual proof passed at `http://127.0.0.1:4226/?phase=phase-61-generated-skill-pr-workflow`: the Phase 61 card rendered `100 / 100`, reviewers `2/2`, package `files 3`, artifact valid, generated branch name, auto-merge blocked, no files written, reviewer-approved worktree write, production-driving blocked, and raw PHI hidden. Console errors: 0.
 - Artifacts: `artifacts/phase61/phase61-dashboard-generated-skill-pr.png` and `artifacts/phase61/phase61-generated-skill-pr-proof.json`.
+
+## Phase 62 Generated Skill Reviewer Queue - 2026-06-22
+
+Goal:
+- Make Phase 61's generated skill package durable and operator-reviewable before any worktree mutation or PR executor can run.
+
+Implemented:
+- Added `generated_skill_review_queue` to the deterministic DB schema and migration path.
+- Added `src/concierge/generatedSkillReviewQueue.mjs`.
+- Added durable enqueue/list/review helpers for generated skill package proposals.
+- Added supported decisions: `approved`, `rejected`, `blocked`, and `needs_more_evidence`.
+- Added a bounded executor-plan builder that prepares branch/PR commands only after reviewer approval and a separate explicit executor approval.
+- Added `src/tests/generated-skill-review-queue.test.mjs`.
+- Updated `npm run test:generated-skills` to cover both Phase 61 and Phase 62.
+- Added `/api/continuous-intelligence/pems/generated-skill-review-queue`.
+- Added connector proof/dashboard visibility through `phase62_generated_skill_review_queue`.
+
+Safety:
+- Queue rows store package metadata, file paths, and hashes, not raw generated file bodies.
+- Raw PHI storage remains blocked.
+- DB remains authoritative for queue/reviewer/executor state.
+- Rejected, blocked, and needs-more-evidence decisions never prepare executor commands.
+- Approved queue items still require explicit executor approval before commands are prepared.
+- Executor plans do not auto-run commands, auto-open PRs, auto-merge, or enable production-driving.
+
+Verification:
+- Focused Phase 62 suite passed: `node --test src/tests/generated-skill-review-queue.test.mjs` reported 5/5 passing.
+- Combined generated-skill gate passed: `npm run test:generated-skills` reported 9/9 passing.
+- `npm run build` passed and reports the Phase 62 generated-skill reviewer queue contract.
+- `npm run test:local` passed with 294 tests total, 292 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4228/api/proof/runs/local`: `phase62_generated_skill_review_queue` scored `100 / 100`, persisted one approved queue row, prepared an executor plan after explicit approval, blocked auto-run, blocked auto-merge, blocked production-driving, and hid raw PHI/raw file bodies.
+- Dashboard visual proof passed at `http://127.0.0.1:4228/?phase=phase-62-generated-skill-reviewer-queue`: the Phase 62 card rendered `100 / 100`, queue status `approved_for_pr_execution`, executor status `ready_to_open_generated_skill_pr`, generated branch name, auto-run blocked, auto-merge blocked, production-driving blocked, raw PHI hidden, and zero console errors.
+- Artifacts: `artifacts/phase62/phase62-dashboard-generated-skill-review-queue.png` and `artifacts/phase62/phase62-generated-skill-review-queue-proof.json`.

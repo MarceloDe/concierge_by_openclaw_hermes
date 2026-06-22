@@ -115,6 +115,7 @@ import {
 } from "../concierge/trustedAnswerDriving.mjs";
 import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
 import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
+import { buildPhase62GeneratedSkillReviewQueueProof, listGeneratedSkillReviewQueue } from "../concierge/generatedSkillReviewQueue.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1459,6 +1460,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   });
   const phase60MemorySkillTree = buildPhase60MemorySkillTreeProof();
   const phase61GeneratedSkillPr = buildPhase61GeneratedSkillPrProof();
+  const phase62GeneratedSkillReviewQueue = await buildPhase62GeneratedSkillReviewQueueProof(store);
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1675,6 +1677,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase61_generated_skill_pr_workflow",
         status: phase61GeneratedSkillPr.status,
         target: "Reviewer-approved mature memory candidates become PR-ready generated skill packages without auto-merge or production-driving authority."
+      },
+      {
+        key: "phase62_generated_skill_review_queue",
+        status: phase62GeneratedSkillReviewQueue.status,
+        target: "Generated skill PR packages persist in a reviewer queue and produce an explicit non-auto-running PR executor plan after approval."
       }
     ],
     checks: [
@@ -1763,6 +1770,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         pullRequest: phase61GeneratedSkillPr.pullRequest,
         sideEffects: phase61GeneratedSkillPr.sideEffects,
         safety: phase61GeneratedSkillPr.safety
+      },
+      {
+        key: "phase62_generated_skill_review_queue",
+        status: phase62GeneratedSkillReviewQueue.status,
+        ok: phase62GeneratedSkillReviewQueue.ok,
+        score: phase62GeneratedSkillReviewQueue.score,
+        target: phase62GeneratedSkillReviewQueue.target,
+        checks: phase62GeneratedSkillReviewQueue.checks,
+        queue: phase62GeneratedSkillReviewQueue.queue,
+        executor: phase62GeneratedSkillReviewQueue.executor,
+        safety: phase62GeneratedSkillReviewQueue.safety
       },
       {
         key: "database_storage",
@@ -2437,6 +2455,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: phase61GeneratedSkillPr.safety.productionDrivingAllowed
       },
       {
+        key: "phase62_generated_skill_review_queue",
+        score: phase62GeneratedSkillReviewQueue.score,
+        target: phase62GeneratedSkillReviewQueue.target,
+        status: phase62GeneratedSkillReviewQueue.status,
+        queueRowPersisted: phase62GeneratedSkillReviewQueue.checks.queueRowPersisted,
+        executorReady: phase62GeneratedSkillReviewQueue.executor.executorReady,
+        autoRunCommands: phase62GeneratedSkillReviewQueue.executor.safety.autoRunCommands,
+        autoMergeAllowed: phase62GeneratedSkillReviewQueue.executor.safety.autoMergeAllowed,
+        productionDrivingAllowed: phase62GeneratedSkillReviewQueue.safety.productionDrivingAllowed
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2723,6 +2752,11 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-pr") {
     sendJson(res, 200, buildPhase61GeneratedSkillPrProof());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-review-queue") {
+    sendJson(res, 200, await listGeneratedSkillReviewQueue(store));
     return;
   }
 

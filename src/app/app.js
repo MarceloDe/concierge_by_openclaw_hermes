@@ -955,6 +955,8 @@ function renderConnectorProof(payload) {
   const phase60Check = checks.find((check) => check.key === "phase60_memory_skill_tree") ?? null;
   const phase61Score = scores.find((score) => score.key === "phase61_generated_skill_pr_workflow") ?? null;
   const phase61Check = checks.find((check) => check.key === "phase61_generated_skill_pr_workflow") ?? null;
+  const phase62Score = scores.find((score) => score.key === "phase62_generated_skill_review_queue") ?? null;
+  const phase62Check = checks.find((check) => check.key === "phase62_generated_skill_review_queue") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1071,6 +1073,25 @@ function renderConnectorProof(payload) {
           <dd>files written ${escapeHtml(phase61Check?.sideEffects?.filesWritten ? "yes" : "no")} · worktree write ${escapeHtml(phase61Check?.sideEffects?.worktreeWriteAllowed ? "reviewer-approved" : "blocked")}</dd>
           <dt>Safety</dt>
           <dd>production-driving ${escapeHtml(phase61Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")} · raw PHI ${escapeHtml(phase61Check?.safety?.rawPhiStored ? "attention" : "hidden")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase62Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 62 Generated Skill Queue</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase62Score.score)} / ${escapeHtml(phase62Score.target)} · ${escapeHtml(phase62Score.status)}</dd>
+          <dt>Queue</dt>
+          <dd>${escapeHtml(phase62Check?.queue?.count ?? 0)} package(s) · ${escapeHtml(phase62Check?.queue?.latestStatus ?? "none")} · ${escapeHtml(phase62Check?.queue?.skillKey ?? "no skill")}</dd>
+          <dt>Executor</dt>
+          <dd>${escapeHtml(phase62Check?.executor?.status ?? "not prepared")} · commands ${escapeHtml(phase62Check?.executor?.commandsPrepared ? "prepared" : "blocked")}</dd>
+          <dt>Branch</dt>
+          <dd>${escapeHtml(phase62Check?.queue?.prBranchName ?? "not queued")}</dd>
+          <dt>Safety</dt>
+          <dd>auto-run ${escapeHtml(phase62Check?.executor?.safety?.autoRunCommands ? "enabled" : "blocked")} · auto-merge ${escapeHtml(phase62Check?.executor?.safety?.autoMergeAllowed ? "enabled" : "blocked")} · production-driving ${escapeHtml(phase62Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")}</dd>
+          <dt>Storage</dt>
+          <dd>raw PHI ${escapeHtml(phase62Check?.safety?.rawPhiStored ? "attention" : "hidden")} · DB authoritative ${escapeHtml(phase62Check?.safety?.dbAuthoritative ? "yes" : "attention")}</dd>
         </dl>
       </article>
     ` : ""}
