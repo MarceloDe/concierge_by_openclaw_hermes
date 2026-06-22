@@ -3299,3 +3299,34 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local`.
 - Visual proof through the operator dashboard Phase 62 card.
+
+## Phase 63 - Generated Skill PR Executor
+
+Goal: add a human-operated executor surface for approved generated-skill queue items while keeping dashboard proof dry-run and side-effect-free.
+
+Build:
+
+- Add `generated_skill_pr_executor_runs` to the deterministic DB schema.
+- Add `src/concierge/generatedSkillPrExecutor.mjs` for executor surface validation, dry-run run recording, optional explicit materialization, and run listing.
+- Reuse the Phase 61 reviewed materialization package and Phase 62 queue hash so executor runs can prove package hash closure without storing raw generated file bodies in the queue.
+- Require queue approval, executor readiness, package hash match, explicit operator approval, and bounded output paths before materialization is allowed.
+- Keep connector/dashboard proof on dry-run by default: no branch is created, no files are written, and no PR is opened.
+- Support explicit non-dry-run materialization into a supplied repo root for human-operated execution tests.
+- Keep PR opening behind explicit `openPullRequest=true`; no auto-merge path exists.
+- Add `/api/continuous-intelligence/pems/generated-skill-pr-executor`.
+- Add connector proof/dashboard visibility for `phase63_generated_skill_pr_executor`.
+
+Non-goals:
+
+- Do not auto-run generated skill executor commands from dashboard proof.
+- Do not auto-open or auto-merge generated skill PRs.
+- Do not enable generated skills for production answer-driving.
+- Do not store raw PHI or raw generated file bodies in the review queue or executor run table.
+
+Gates:
+
+- `npm run test:generated-skills`.
+- `npm run build`.
+- `npm run test:local`.
+- API proof through `/api/proof/runs/local`.
+- Visual proof through the operator dashboard Phase 63 card.

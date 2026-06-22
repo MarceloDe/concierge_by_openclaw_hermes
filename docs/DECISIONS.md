@@ -2878,3 +2878,17 @@ This makes the learning loop operationally real without letting Graphiti/Zep or 
 
 Consequences:
 The next phase can harden real pilot flows with the queue visible as a product control. A later executor phase may write generated files and open a PR, but it must keep auto-merge and production-driving disabled.
+
+## 2026-06-22 - Phase 63 Makes Generated Skill Execution Human-Operated And Dry-Run-Proven
+
+Problem:
+Phase 62 made generated skill packages durable and reviewer-approved, but it still stopped at a command plan. The system needed an executor surface that could prove exact branch/file/PR intent while preserving human authority and avoiding hidden Git mutations from dashboard proof.
+
+Decision:
+Add a generated-skill PR executor contract and `generated_skill_pr_executor_runs`. The executor validates queue approval, executor readiness, package hash closure, explicit operator approval, and bounded output paths before any materialization is allowed. The connector proof records a dry-run executor run only; it does not create a branch, write files, or open a PR. Tests cover explicit non-dry-run materialization into a supplied temporary repo root and explicit PR-opening command invocation through an injected command runner.
+
+Rationale:
+This completes the learning-loop promotion bridge without giving Graphiti, the LLM, or the dashboard autonomous write authority over the skill pool. Operators get a visible executor surface and audit trail, while Git review, no-auto-merge, and no-production-driving remain intact.
+
+Consequences:
+Generated skill promotion is now operationally staged: memory candidate -> generated package -> reviewer queue -> operator executor proof -> explicit branch/PR action. Future phases can improve the operator UI or run pilot-hardening checks, but must keep generated skill activation behind PR review and existing trusted answer-driving gates.

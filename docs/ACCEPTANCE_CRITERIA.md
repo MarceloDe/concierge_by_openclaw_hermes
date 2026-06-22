@@ -2648,3 +2648,15 @@ Focused proof:
 - Executor plans never auto-run commands, auto-open PRs, auto-merge, or enable production-driving.
 - Dashboard proof exposes `phase62_generated_skill_review_queue` with score, queue status, executor status, branch, storage, and safety flags.
 - Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phase 63: Generated Skill PR Executor
+
+- `generated_skill_pr_executor_runs` exists in the deterministic DB schema and migration path.
+- Executor runs are blocked unless the queue item is approved, executor-ready, package-hash matched, explicitly operator-approved, and output paths are bounded to `openclaw/skills/`.
+- Dashboard/API proof records a dry-run executor attempt by default and proves no files are written, no branch is created, and no PR is opened.
+- Explicit non-dry-run execution can materialize reviewed generated skill files into a supplied repo root only after operator approval.
+- PR opening is possible only when explicitly requested and remains non-auto-merge.
+- Executor run rows store command/file metadata and hashes, not raw PHI.
+- Production-driving, credential entry, external writes, payer contact, and auto-merge remain blocked.
+- Dashboard proof exposes `phase63_generated_skill_pr_executor` with score, queue status, executor status, branch, reviewed file count, run side effects, and safety flags.
+- Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.

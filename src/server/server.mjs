@@ -116,6 +116,7 @@ import {
 import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
 import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { buildPhase62GeneratedSkillReviewQueueProof, listGeneratedSkillReviewQueue } from "../concierge/generatedSkillReviewQueue.mjs";
+import { buildPhase63GeneratedSkillPrExecutorProof, listGeneratedSkillPrExecutorRuns } from "../concierge/generatedSkillPrExecutor.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1461,6 +1462,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const phase60MemorySkillTree = buildPhase60MemorySkillTreeProof();
   const phase61GeneratedSkillPr = buildPhase61GeneratedSkillPrProof();
   const phase62GeneratedSkillReviewQueue = await buildPhase62GeneratedSkillReviewQueueProof(store);
+  const phase63GeneratedSkillPrExecutor = await buildPhase63GeneratedSkillPrExecutorProof(store);
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1682,6 +1684,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase62_generated_skill_review_queue",
         status: phase62GeneratedSkillReviewQueue.status,
         target: "Generated skill PR packages persist in a reviewer queue and produce an explicit non-auto-running PR executor plan after approval."
+      },
+      {
+        key: "phase63_generated_skill_pr_executor",
+        status: phase63GeneratedSkillPrExecutor.status,
+        target: "Approved generated skill queue items expose a human-operated dry-run executor surface before any branch, file write, or PR action can occur."
       }
     ],
     checks: [
@@ -1781,6 +1788,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         queue: phase62GeneratedSkillReviewQueue.queue,
         executor: phase62GeneratedSkillReviewQueue.executor,
         safety: phase62GeneratedSkillReviewQueue.safety
+      },
+      {
+        key: "phase63_generated_skill_pr_executor",
+        status: phase63GeneratedSkillPrExecutor.status,
+        ok: phase63GeneratedSkillPrExecutor.ok,
+        score: phase63GeneratedSkillPrExecutor.score,
+        target: phase63GeneratedSkillPrExecutor.target,
+        checks: phase63GeneratedSkillPrExecutor.checks,
+        queue: phase63GeneratedSkillPrExecutor.queue,
+        executor: phase63GeneratedSkillPrExecutor.executor,
+        run: phase63GeneratedSkillPrExecutor.run,
+        safety: phase63GeneratedSkillPrExecutor.safety
       },
       {
         key: "database_storage",
@@ -2466,6 +2485,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: phase62GeneratedSkillReviewQueue.safety.productionDrivingAllowed
       },
       {
+        key: "phase63_generated_skill_pr_executor",
+        score: phase63GeneratedSkillPrExecutor.score,
+        target: phase63GeneratedSkillPrExecutor.target,
+        status: phase63GeneratedSkillPrExecutor.status,
+        queueItemApproved: phase63GeneratedSkillPrExecutor.checks.queueItemApproved,
+        dryRunRecorded: phase63GeneratedSkillPrExecutor.checks.dryRunRecorded,
+        filesWritten: phase63GeneratedSkillPrExecutor.run.filesWritten,
+        pullRequestOpened: phase63GeneratedSkillPrExecutor.run.pullRequestOpened,
+        autoMergeAllowed: phase63GeneratedSkillPrExecutor.safety.autoMergeAllowed,
+        productionDrivingAllowed: phase63GeneratedSkillPrExecutor.safety.productionDrivingAllowed
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2757,6 +2788,11 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-review-queue") {
     sendJson(res, 200, await listGeneratedSkillReviewQueue(store));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-pr-executor") {
+    sendJson(res, 200, await listGeneratedSkillPrExecutorRuns(store));
     return;
   }
 
