@@ -2670,3 +2670,13 @@ Focused proof:
 - Dashboard proof exposes `phase64_mvp_completion_audit` with MVP score, production score, user-MVP posture, connector route counts, memory posture, recommendation, and blockers.
 - `/api/mvp/completion-audit` returns the same audit check object.
 - Required gates: `npm run test:mvp:audit`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phase 65: Final MVP Goal Evaluation
+
+- The final evaluation states local/pilot MVP status separately from production launch status.
+- The local/pilot MVP decision is based on Phase 64 audit score and required goal status.
+- Production launch is not marked achieved while Phase 64 blockers remain.
+- The final answer explicitly says the MVP is achieved for local/pilot regular-user testing and production launch is not complete.
+- Dashboard proof exposes `phase65_final_mvp_goal_evaluation` with score, decision, final answer, next recommended phase, and production blockers.
+- `/api/mvp/final-goal-evaluation` returns the same final evaluation check object.
+- Required gates: `npm run test:mvp:final`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.

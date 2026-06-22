@@ -961,6 +961,8 @@ function renderConnectorProof(payload) {
   const phase63Check = checks.find((check) => check.key === "phase63_generated_skill_pr_executor") ?? null;
   const phase64Score = scores.find((score) => score.key === "phase64_mvp_completion_audit") ?? null;
   const phase64Check = checks.find((check) => check.key === "phase64_mvp_completion_audit") ?? null;
+  const phase65Score = scores.find((score) => score.key === "phase65_final_mvp_goal_evaluation") ?? null;
+  const phase65Check = checks.find((check) => check.key === "phase65_final_mvp_goal_evaluation") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1138,6 +1140,24 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase64Check?.recommendation ?? "not evaluated")}</dd>
         </dl>
         ${(phase64Check?.blockers ?? []).length ? `<ul>${phase64Check.blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}</ul>` : ""}
+      </article>
+    ` : ""}
+    ${phase65Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 65 Final MVP Goal Evaluation</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase65Score.score)} / ${escapeHtml(phase65Score.target)} · ${escapeHtml(phase65Score.status)}</dd>
+          <dt>Decision</dt>
+          <dd>local/pilot MVP ${escapeHtml(phase65Check?.decision?.localPilotMvp ?? "unknown")} · production launch ${escapeHtml(phase65Check?.decision?.productionLaunch ?? "unknown")}</dd>
+          <dt>Final Answer</dt>
+          <dd>${escapeHtml(phase65Check?.finalAnswer ?? "not evaluated")}</dd>
+          <dt>Next</dt>
+          <dd>${escapeHtml(phase65Check?.nextRecommendedPhase ?? "unknown")}</dd>
+          <dt>Production Blockers</dt>
+          <dd>${escapeHtml((phase65Check?.decision?.productionLaunchBlockedBy ?? []).length)} blocker(s)</dd>
+        </dl>
+        ${(phase65Check?.decision?.productionLaunchBlockedBy ?? []).length ? `<ul>${phase65Check.decision.productionLaunchBlockedBy.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}</ul>` : ""}
       </article>
     ` : ""}
     <article class="connector-card">
