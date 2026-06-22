@@ -9103,3 +9103,37 @@ Verification:
 - API proof passed and is saved at `artifacts/phase55/native-hitl-api-proof.json`: proposal -> native approval interrupt -> checkpoint pending `approval_pause` -> approval token -> `Command.resume` -> captured visible-page source pointers.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4221/mvp?phase=phase-55-native-hitl`: session start worked, FastAPI facade on port 8001 was reachable and connected to Node 4221, OpenClaw and run-state panels rendered, and browser console error count was 0.
 - Visual artifacts: `artifacts/phase55/native-hitl-mvp-proof.png`, `artifacts/phase55/native-hitl-mvp-proof.json`, `artifacts/phase55/native-hitl-mvp-facade-connected-proof.png`, and `artifacts/phase55/native-hitl-mvp-facade-connected-proof.json`.
+
+## Phase 56 P0 Production Hardening - 2026-06-22
+
+Goal:
+- Implement the next migration wave's P0 hardening slice as repo Phase 56: make durable graph checkpoints encrypted at rest, keep outbound payload enforcement default-on, prove retention sweeper execution through an API/dashboard gate, and continue removing hand-escaped SQL from active runtime modules.
+
+Implemented:
+- Upgraded `src/concierge/graphCheckpointer.mjs` so file-backed LangGraph checkpoints require `BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY` and persist AES-256-GCM encrypted checkpoint/writes payloads. Legacy plaintext checkpoint files remain readable for migration, but new writes are encrypted.
+- Added `src/concierge/retentionScheduler.mjs`, a disabled-by-default retention sweeper daemon with explicit tick/status APIs, runtime events, and audit proof.
+- Added `/api/retention/sweeper/status` and `/api/retention/sweeper/tick`.
+- Added a `phase56_p0_hardening` connector proof goal, check, score, and operator-dashboard card showing checkpointer encryption, retention tick state, egress default, and local DB driver proof.
+- Changed low-level outbound payload observation defaults from observe-only to enforced while preserving explicit observe-only override for diagnostic tests.
+- Parameterized remaining active runtime query paths in human handoffs, document candidate approval, dynamic skill mounted queries, runtime events, operator proposals, and workflow architecture seeding/lookups.
+- Added cache-busting for the operator dashboard module so phase proof panels refresh after implementation.
+
+Safety:
+- Safety-invariant suites were not loosened.
+- The retention daemon does not run hidden work unless enabled or explicitly ticked; every tick writes runtime and audit proof.
+- The graph interrupt remains control flow only; approval token authority remains unchanged.
+- File-backed graph checkpoint mode fails closed without a private encryption key.
+- Browser, payer-contact, credential, captcha/2FA, external write, and medical-advice boundaries are unchanged.
+
+Verification:
+- `npm run test:graph:topology` passed with 4/4 tests.
+- `npm run test:retention` passed with 2/2 tests.
+- `npm run test:egress` passed with 4/4 tests.
+- `npm run test:db:safety` passed with 15/15 tests.
+- `node --test src/tests/outbound-payload-observability.test.mjs` passed with 1/1 test.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed with 14/14 tests.
+- `npm run build` passed and reports the Phase 56 P0 hardening contract.
+- `npm run test:local` passed with 268 tests total, 266 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed after `POST /api/retention/sweeper/tick`: `phase56_p0_hardening` scored `100 / 100`, retention `tick_completed`, encrypted checkpoint required/configured, egress `enforced`, DB `node:sqlite`, and sqlite shell-out absent.
+- In-app browser dashboard proof passed at `http://127.0.0.1:4222/?phase=phase-56-p0-hardening&v=2`: Phase 56 P0 Hardening card rendered `100 / 100`, `encrypted-at-rest configured`, `tick_completed`, `enforced by default`, `node:sqlite`, and browser console error count was 0.
+- Artifacts: `artifacts/phase56/phase56-p0-hardening-proof.json`, `artifacts/phase56/retention-sweeper-tick-proof.json`, `artifacts/phase56/phase56-dashboard-hardening-card.png`, and `artifacts/phase56/phase56-dashboard-hardening-card.json`.

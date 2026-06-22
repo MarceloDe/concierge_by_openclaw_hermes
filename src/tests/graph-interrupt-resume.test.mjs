@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
@@ -96,6 +96,7 @@ test("LangGraph native interrupt pauses read-only observation until an approved 
 test("file-backed checkpointer restores an interrupted LangGraph thread for Command resume", async () => {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-checkpointer-"));
   const checkpointPath = join(dir, "checkpoints.json");
+  const encryptionKey = Buffer.from("phase56-test-key-phase56-test-key").subarray(0, 32);
   const ToyState = Annotation.Root({
     value: Annotation({
       reducer: (_, value) => value,
@@ -113,11 +114,19 @@ test("file-backed checkpointer restores an interrupted LangGraph thread for Comm
       .compile({ checkpointer });
 
   const config = { configurable: { thread_id: "phase55-thread", checkpoint_ns: "phase55" } };
-  const first = buildToyGraph(new FileBackedMemorySaver({ path: checkpointPath }));
+  const first = buildToyGraph(new FileBackedMemorySaver({ path: checkpointPath, encryptionKey }));
   const paused = await first.invoke({ value: "initial" }, config);
   assert.ok(paused.__interrupt__);
 
-  const second = buildToyGraph(new FileBackedMemorySaver({ path: checkpointPath }));
+  const rawCheckpoint = await readFile(checkpointPath, "utf8");
+  assert.match(rawCheckpoint, /"encrypted": true/);
+  assert.match(rawCheckpoint, /"cipher": "aes-256-gcm"/);
+  assert.doesNotMatch(rawCheckpoint, /initial|toy_approval|approved-token/);
+
+  const second = buildToyGraph(new FileBackedMemorySaver({ path: checkpointPath, encryptionKey }));
   const resumed = await second.invoke(new Command({ resume: "approved-token" }), config);
   assert.equal(resumed.value, "approved-token");
+
+  const finalCheckpoint = await readFile(checkpointPath, "utf8");
+  assert.doesNotMatch(finalCheckpoint, /approved-token/);
 });

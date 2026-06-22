@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { audit } from "./audit.mjs";
 
-export const OUTBOUND_PAYLOAD_OBSERVABILITY_VERSION = "2026-05-27.outbound-payload-observability.v1";
-export const OUTBOUND_PAYLOAD_POLICY_VERSION = "2026-05-27.outbound-payload-policy.v1";
+export const OUTBOUND_PAYLOAD_OBSERVABILITY_VERSION = "2026-06-22.outbound-payload-observability.enforced-default.v2";
+export const OUTBOUND_PAYLOAD_POLICY_VERSION = "2026-06-22.outbound-payload-policy.enforced-default.v2";
 
 function safeStringify(value) {
   return JSON.stringify(value ?? null);
@@ -27,7 +27,7 @@ function directIdentifierPatterns(user = {}) {
   return patterns;
 }
 
-export function classifyOutboundPayload(payload, { user = {}, payloadType, destination, policyMode = "observe_only" } = {}) {
+export function classifyOutboundPayload(payload, { user = {}, payloadType, destination, policyMode = "enforced" } = {}) {
   const serializedPayload = safeStringify(payload);
   const containsDirectIdentifier = directIdentifierPatterns(user).some((pattern) => pattern.test(serializedPayload));
   const containsSourcePointers =
@@ -50,7 +50,7 @@ export function classifyOutboundPayload(payload, { user = {}, payloadType, desti
     containsDirectIdentifier,
     containsSourcePointers,
     allowedByCurrentPrototypePolicy: true,
-    enforcementMode: "observe_only",
+    enforcementMode: "enforced",
     policyIssues: []
   };
 }
@@ -86,7 +86,7 @@ export function buildOutboundPayloadObservation(payload, options = {}) {
   return {
     ...classification,
     allowedByCurrentPrototypePolicy: policy.allowed,
-    enforcementMode: options.enforcementMode ?? "observe_only",
+    enforcementMode: options.enforcementMode ?? "enforced",
     policyIssues: policy.issues,
     policyRequirements: {
       allowDirectIdentifiers: policy.allowDirectIdentifiers,

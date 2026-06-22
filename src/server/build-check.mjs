@@ -37,6 +37,7 @@ import { ORCHESTRATOR_FLOW_CASES } from "../concierge/orchestratorDemo.mjs";
 import { listOperatorTools, OPERATOR_ASSISTANT_VERSION } from "../concierge/operatorAssistant.mjs";
 import { getResearchWorkerStatus } from "../concierge/researchOps.mjs";
 import { RESEARCH_SCHEDULER_DAEMON_VERSION } from "../concierge/researchScheduler.mjs";
+import { RETENTION_SCHEDULER_VERSION } from "../concierge/retentionScheduler.mjs";
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
 
 const requiredFiles = [
@@ -129,6 +130,7 @@ const requiredFiles = [
   "src/concierge/runtimeEvents.mjs",
   "src/concierge/researchOps.mjs",
   "src/concierge/researchScheduler.mjs",
+  "src/concierge/retentionScheduler.mjs",
   "src/concierge/dynamicSkillServer.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
@@ -730,7 +732,7 @@ if (
   !AUDIT_CHAIN_VERSION.includes("audit-chain") ||
   !AUDIT_LOG_API_VERSION.includes("audit-log-api") ||
   outboundObservation.version !== OUTBOUND_PAYLOAD_OBSERVABILITY_VERSION ||
-  outboundObservation.enforcementMode !== "observe_only" ||
+  outboundObservation.enforcementMode !== "enforced" ||
   outboundObservation.containsDirectIdentifier
 ) {
   throw new Error("Outbound payload observability or audit log API contract is incomplete.");
@@ -868,6 +870,9 @@ const researchWorkerStatus = getResearchWorkerStatus();
 if (!RESEARCH_SCHEDULER_DAEMON_VERSION.includes("phase10t-research-scheduler-daemon")) {
   throw new Error("Research scheduler daemon version is not the Phase 10T contract.");
 }
+if (!RETENTION_SCHEDULER_VERSION.includes("phase56-retention-scheduler")) {
+  throw new Error("Retention scheduler daemon version is not the Phase 56 contract.");
+}
 if (
   !OPERATOR_ASSISTANT_VERSION.includes("claim-citation-closure-proposals") ||
   !operatorTools.tools.some((tool) => tool.key === "research.searchEvidence" && tool.type === "read" && tool.approvalRequired === false) ||
@@ -886,4 +891,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

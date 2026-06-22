@@ -32,10 +32,6 @@ function asArray(value) {
   return Array.isArray(value) ? value.filter((item) => item !== null && item !== undefined).map((item) => String(item)) : [String(value)];
 }
 
-function sql(value) {
-  return `'${String(value ?? "").replaceAll("'", "''")}'`;
-}
-
 function hashObject(value) {
   return createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex");
 }
@@ -129,23 +125,24 @@ export async function loadDynamicSkillDefinitions(options = {}) {
 
 async function runMountedDatabaseQuery(store, queryKey, { userId, sessionId, workflow }) {
   if (!store || !ALLOWED_DATABASE_QUERIES.has(queryKey)) return { queryKey, status: "blocked_or_unavailable", rows: [] };
-  const safeUserId = userId ? sql(userId) : null;
-  const safeSessionId = sessionId ? sql(sessionId) : null;
-  const safeWorkflow = workflow ? sql(workflow) : null;
   let rows = [];
-  if (queryKey === "latest_eligibility_snapshot_by_session" && safeSessionId) {
-    rows = await store.all(`SELECT id, portal_account_id, source_url, summary, created_at FROM eligibility_snapshots WHERE session_id = ${safeSessionId} ORDER BY created_at DESC LIMIT 3;`);
-  } else if (queryKey === "recent_claim_items_by_session" && safeSessionId) {
-    rows = await store.all(`SELECT ci.id, ci.description, ci.service_date, ci.share_amount, ci.source, ci.created_at FROM claim_items ci JOIN eligibility_snapshots es ON es.id = ci.snapshot_id WHERE es.session_id = ${safeSessionId} ORDER BY ci.created_at DESC LIMIT 6;`);
-  } else if (queryKey === "recent_prior_authorizations_by_session" && safeSessionId) {
-    rows = await store.all(`SELECT pa.id, pa.provider_or_facility, pa.service_date, pa.status, pa.source, pa.created_at FROM prior_authorizations pa JOIN eligibility_snapshots es ON es.id = pa.snapshot_id WHERE es.session_id = ${safeSessionId} ORDER BY pa.created_at DESC LIMIT 6;`);
-  } else if (queryKey === "latest_portal_pages_by_session" && safeSessionId) {
-    rows = await store.all(`SELECT id, page_kind, title, url, created_at FROM portal_page_snapshots WHERE session_id = ${safeSessionId} ORDER BY created_at DESC LIMIT 6;`);
-  } else if (queryKey === "open_tasks_by_user" && safeUserId) {
-    rows = await store.all(`SELECT id, task_type, status, description, created_at FROM agent_tasks WHERE user_id = ${safeUserId} AND status NOT IN ('completed', 'cancelled', 'denied') ORDER BY created_at DESC LIMIT 8;`);
+  if (queryKey === "latest_eligibility_snapshot_by_session" && sessionId) {
+    rows = await store.all("SELECT id, portal_account_id, source_url, summary, created_at FROM eligibility_snapshots WHERE session_id = ? ORDER BY created_at DESC LIMIT 3;", [sessionId]);
+  } else if (queryKey === "recent_claim_items_by_session" && sessionId) {
+    rows = await store.all("SELECT ci.id, ci.description, ci.service_date, ci.share_amount, ci.source, ci.created_at FROM claim_items ci JOIN eligibility_snapshots es ON es.id = ci.snapshot_id WHERE es.session_id = ? ORDER BY ci.created_at DESC LIMIT 6;", [sessionId]);
+  } else if (queryKey === "recent_prior_authorizations_by_session" && sessionId) {
+    rows = await store.all("SELECT pa.id, pa.provider_or_facility, pa.service_date, pa.status, pa.source, pa.created_at FROM prior_authorizations pa JOIN eligibility_snapshots es ON es.id = pa.snapshot_id WHERE es.session_id = ? ORDER BY pa.created_at DESC LIMIT 6;", [sessionId]);
+  } else if (queryKey === "latest_portal_pages_by_session" && sessionId) {
+    rows = await store.all("SELECT id, page_kind, title, url, created_at FROM portal_page_snapshots WHERE session_id = ? ORDER BY created_at DESC LIMIT 6;", [sessionId]);
+  } else if (queryKey === "open_tasks_by_user" && userId) {
+    rows = await store.all("SELECT id, task_type, status, description, created_at FROM agent_tasks WHERE user_id = ? AND status NOT IN ('completed', 'cancelled', 'denied') ORDER BY created_at DESC LIMIT 8;", [userId]);
   } else if (queryKey === "trusted_research_artifacts_by_workflow") {
-    const workflowFragment = workflow ? String(workflow).replaceAll("'", "''") : "";
-    rows = await store.all(`SELECT id, artifact_type, title, source_id, run_id, citation_status, created_at FROM research_artifacts WHERE citation_status = 'trusted_retrieval_approved' AND (${workflowFragment ? `metadata_json LIKE '%${workflowFragment}%' OR ` : ""}1 = 1) ORDER BY created_at DESC LIMIT 6;`);
+    rows = workflow
+      ? await store.all(
+          "SELECT id, artifact_type, title, source_id, run_id, citation_status, created_at FROM research_artifacts WHERE citation_status = 'trusted_retrieval_approved' AND metadata_json LIKE ? ORDER BY created_at DESC LIMIT 6;",
+          [`%${workflow}%`]
+        )
+      : await store.all("SELECT id, artifact_type, title, source_id, run_id, citation_status, created_at FROM research_artifacts WHERE citation_status = 'trusted_retrieval_approved' ORDER BY created_at DESC LIMIT 6;");
   }
   return {
     queryKey,

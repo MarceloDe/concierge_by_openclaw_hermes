@@ -1,9 +1,11 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { MemorySaver } from "@langchain/langgraph";
 
-export const GRAPH_CHECKPOINTER_VERSION = "2026-06-21.phase55-native-hitl-checkpointer.v1";
+export const GRAPH_CHECKPOINTER_VERSION = "2026-06-22.phase56-encrypted-hitl-checkpointer.v2";
+export const GRAPH_CHECKPOINTER_CIPHER = "aes-256-gcm";
 
 function expandHome(path) {
   if (!path) return path;
@@ -17,6 +19,31 @@ function defaultCheckpointPath(env = process.env) {
     env.BRAINSTY_GRAPH_CHECKPOINTER_PATH ??
       "~/.config/workerprototype_openclaw/langgraph-checkpoints/brainstyworkers-checkpoints.json"
   );
+}
+
+function decodeEncryptionKey(rawKey) {
+  const value = String(rawKey ?? "").trim();
+  if (!value) return null;
+  if (/^[a-f0-9]{64}$/i.test(value)) return { key: Buffer.from(value, "hex"), keySource: "hex_256" };
+  try {
+    const decoded = Buffer.from(value, "base64");
+    if (decoded.length === 32) return { key: decoded, keySource: "base64_256" };
+  } catch {
+    // Fall through to passphrase hashing.
+  }
+  return { key: createHash("sha256").update(value).digest(), keySource: "sha256_passphrase" };
+}
+
+function encryptionConfigFromEnv(env = process.env) {
+  const decoded = decodeEncryptionKey(env.BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY);
+  if (decoded) return decoded;
+  if (env.BRAINSTY_GRAPH_CHECKPOINTER_ALLOW_TEST_KEY === "1") {
+    return {
+      key: createHash("sha256").update("brainstyworkers-phase56-test-only-checkpointer-key").digest(),
+      keySource: "test_only_sha256"
+    };
+  }
+  return null;
 }
 
 function nullObject(value) {
@@ -49,12 +76,46 @@ function decodeCheckpointValue(value) {
   return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, decodeCheckpointValue(nested)]));
 }
 
+function encryptCheckpointPayload(payload, encryptionKey) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(GRAPH_CHECKPOINTER_CIPHER, encryptionKey, iv);
+  const plaintext = Buffer.from(JSON.stringify(payload), "utf8");
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  return {
+    version: GRAPH_CHECKPOINTER_VERSION,
+    encrypted: true,
+    cipher: GRAPH_CHECKPOINTER_CIPHER,
+    persistedAt: payload.persistedAt,
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64")
+  };
+}
+
+function decryptCheckpointPayload(wrapper, encryptionKey) {
+  const decipher = createDecipheriv(
+    wrapper.cipher ?? GRAPH_CHECKPOINTER_CIPHER,
+    encryptionKey,
+    Buffer.from(wrapper.iv, "base64")
+  );
+  decipher.setAuthTag(Buffer.from(wrapper.tag, "base64"));
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(wrapper.ciphertext, "base64")),
+    decipher.final()
+  ]).toString("utf8");
+  return JSON.parse(plaintext);
+}
+
 export class FileBackedMemorySaver extends MemorySaver {
-  constructor({ path }) {
+  constructor({ path, encryptionKey, allowPlaintextMigration = true }) {
     super();
+    if (!encryptionKey) throw new Error("File-backed LangGraph checkpointer requires BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY.");
     this.path = path;
+    this.encryptionKey = encryptionKey;
+    this.allowPlaintextMigration = allowPlaintextMigration;
     this.loaded = false;
     this.persisting = Promise.resolve();
+    this.lastReadEncrypted = false;
   }
 
   async load() {
@@ -63,8 +124,16 @@ export class FileBackedMemorySaver extends MemorySaver {
     try {
       const raw = await readFile(this.path, "utf8");
       const parsed = JSON.parse(raw);
-      this.storage = nullObject(decodeCheckpointValue(parsed.storage ?? {}));
-      this.writes = nullObject(decodeCheckpointValue(parsed.writes ?? {}));
+      const payload = parsed.encrypted
+        ? decryptCheckpointPayload(parsed, this.encryptionKey)
+        : this.allowPlaintextMigration
+          ? parsed
+          : (() => {
+              throw new Error("Plaintext LangGraph checkpoint file is not allowed.");
+            })();
+      this.lastReadEncrypted = Boolean(parsed.encrypted);
+      this.storage = nullObject(decodeCheckpointValue(payload.storage ?? {}));
+      this.writes = nullObject(decodeCheckpointValue(payload.writes ?? {}));
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
@@ -73,18 +142,17 @@ export class FileBackedMemorySaver extends MemorySaver {
   async persist() {
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
     const tmpPath = `${this.path}.tmp`;
-    const payload = JSON.stringify(
-      {
+    const payload = {
         version: GRAPH_CHECKPOINTER_VERSION,
         persistedAt: new Date().toISOString(),
         storage: encodeCheckpointValue(this.storage),
         writes: encodeCheckpointValue(this.writes)
-      },
-      null,
-      2
-    );
-    await writeFile(tmpPath, payload, { mode: 0o600 });
+      };
+    const encryptedPayload = encryptCheckpointPayload(payload, this.encryptionKey);
+    const serializedPayload = JSON.stringify(encryptedPayload, null, 2);
+    await writeFile(tmpPath, serializedPayload, { mode: 0o600 });
     await rename(tmpPath, this.path);
+    this.lastReadEncrypted = true;
   }
 
   async getTuple(config) {
@@ -126,14 +194,26 @@ export function createGraphCheckpointer(env = process.env) {
   const mode = String(env.BRAINSTY_GRAPH_CHECKPOINTER ?? "memory").trim().toLowerCase();
   if (["file", "local_file", "durable_file"].includes(mode)) {
     const path = defaultCheckpointPath(env);
+    const encryption = encryptionConfigFromEnv(env);
+    if (!encryption) {
+      throw new Error(
+        "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY is required when BRAINSTY_GRAPH_CHECKPOINTER=file."
+      );
+    }
     return {
-      checkpointer: new FileBackedMemorySaver({ path }),
+      checkpointer: new FileBackedMemorySaver({ path, encryptionKey: encryption.key }),
       readiness: {
         version: GRAPH_CHECKPOINTER_VERSION,
         mode: "file",
         durable: true,
         path,
-        phiAtRest: "local_private_config_path_0600",
+        phiAtRest: "encrypted_at_rest_aes_256_gcm",
+        encryption: {
+          required: true,
+          configured: true,
+          keySource: encryption.keySource,
+          rawKeyReturned: false
+        },
         status: "ready"
       }
     };

@@ -6,13 +6,6 @@ export const RUNTIME_EVENTS_VERSION = "2026-05-28.runtime-events.v1";
 const listeners = new Set();
 const codeHooks = new Map();
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function safePayload(value) {
   return JSON.parse(JSON.stringify(value ?? {}));
 }
@@ -144,10 +137,11 @@ async function deliverHookSubscriptions(store, event) {
   const rows = await store.all(
     `SELECT * FROM runtime_hook_subscriptions
      WHERE status = 'active'
-       AND (event_type = '*' OR event_type = ${sql(event.eventType)})
-       AND (session_id IS NULL OR session_id = ${sql(event.sessionId)})
-       AND (user_id IS NULL OR user_id = ${sql(event.userId)})
-     ORDER BY created_at ASC;`
+       AND (event_type = '*' OR event_type = ?)
+       AND (session_id IS NULL OR session_id = ?)
+       AND (user_id IS NULL OR user_id = ?)
+     ORDER BY created_at ASC;`,
+    [event.eventType, event.sessionId ?? null, event.userId ?? null]
   );
   for (const row of rows) {
     if (row.target_type === "webhook") {
@@ -209,15 +203,25 @@ export async function publishRuntimeEvent(store, options = {}) {
 }
 
 export async function listRuntimeEvents(store, { sessionId = null, userId = null, eventType = null, limit = 100 } = {}) {
-  const where = [
-    sessionId ? `session_id = ${sql(sessionId)}` : null,
-    userId ? `user_id = ${sql(userId)}` : null,
-    eventType ? `event_type = ${sql(eventType)}` : null
-  ]
-    .filter(Boolean)
-    .join(" AND ");
+  const bounded = Math.max(1, Math.min(200, Number(limit) || 100));
+  const clauses = [];
+  const params = [];
+  if (sessionId) {
+    clauses.push("session_id = ?");
+    params.push(sessionId);
+  }
+  if (userId) {
+    clauses.push("user_id = ?");
+    params.push(userId);
+  }
+  if (eventType) {
+    clauses.push("event_type = ?");
+    params.push(eventType);
+  }
+  const where = clauses.join(" AND ");
   const rows = await store.all(
-    `SELECT * FROM runtime_events${where ? ` WHERE ${where}` : ""} ORDER BY created_at DESC LIMIT ${Number(limit)};`
+    `SELECT * FROM runtime_events${where ? ` WHERE ${where}` : ""} ORDER BY created_at DESC LIMIT ${bounded};`,
+    params
   );
   return rows.map(compactEvent);
 }
@@ -246,16 +250,23 @@ export async function createRuntimeHookSubscription(
 }
 
 export async function listRuntimeHookSubscriptions(store, { sessionId = null, userId = null, limit = 100 } = {}) {
-  const where = [
-    sessionId ? `session_id = ${sql(sessionId)}` : null,
-    userId ? `user_id = ${sql(userId)}` : null
-  ]
-    .filter(Boolean)
-    .join(" AND ");
+  const bounded = Math.max(1, Math.min(200, Number(limit) || 100));
+  const clauses = [];
+  const params = [];
+  if (sessionId) {
+    clauses.push("session_id = ?");
+    params.push(sessionId);
+  }
+  if (userId) {
+    clauses.push("user_id = ?");
+    params.push(userId);
+  }
+  const where = clauses.join(" AND ");
   const rows = await store.all(
     `SELECT id, user_id, session_id, event_type, target_type, target_url, status, created_at, updated_at
      FROM runtime_hook_subscriptions${where ? ` WHERE ${where}` : ""}
-     ORDER BY created_at DESC LIMIT ${Number(limit)};`
+     ORDER BY created_at DESC LIMIT ${bounded};`,
+    params
   );
   return rows;
 }

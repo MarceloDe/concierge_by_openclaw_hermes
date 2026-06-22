@@ -10,13 +10,6 @@ const URGENT_RESPONSE_GUIDANCE = [
   "I cannot evaluate symptoms or provide clinical care decisions in chat. I created a human handoff record for follow-up, and I did not run OpenClaw, contact a payer, enter credentials, submit a form, or change any account record."
 ].join(" ");
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function clampLimit(value, fallback = 25) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -72,7 +65,8 @@ export async function createHumanHandoffItem(
   if (!user?.id || !session?.id) throw new Error("A user and session are required to create a human handoff.");
 
   const latestMessage = await store.get(
-    `SELECT id, content FROM conversation_messages WHERE session_id = ${sql(session.id)} AND role = 'user' ORDER BY created_at DESC LIMIT 1;`
+    "SELECT id, content FROM conversation_messages WHERE session_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1;",
+    [session.id]
   );
   const category = policyResult.urgentEscalation?.category ?? "urgent_emergency";
   const time = nowIso();
@@ -165,17 +159,30 @@ export async function createHumanHandoffItem(
 
 export async function listHumanHandoffs(store, { userId = null, sessionId = null, status = null, limit = 25 } = {}) {
   const ownershipClauses = [];
-  if (userId) ownershipClauses.push(`user_id = ${sql(userId)}`);
-  if (sessionId) ownershipClauses.push(`session_id = ${sql(sessionId)}`);
+  const ownershipParams = [];
+  if (userId) {
+    ownershipClauses.push("user_id = ?");
+    ownershipParams.push(userId);
+  }
+  if (sessionId) {
+    ownershipClauses.push("session_id = ?");
+    ownershipParams.push(sessionId);
+  }
   const clauses = [...ownershipClauses];
-  if (status) clauses.push(`status = ${sql(status)}`);
+  const params = [...ownershipParams];
+  if (status) {
+    clauses.push("status = ?");
+    params.push(status);
+  }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const rows = await store.all(
-    `SELECT * FROM human_handoff_items ${where} ORDER BY created_at DESC LIMIT ${clampLimit(limit)};`
+    `SELECT * FROM human_handoff_items ${where} ORDER BY created_at DESC LIMIT ${clampLimit(limit)};`,
+    params
   );
   const openClauses = [...ownershipClauses, "status = 'open'"];
   const open = await store.get(
-    `SELECT COUNT(*) AS count FROM human_handoff_items WHERE ${openClauses.join(" AND ")};`
+    `SELECT COUNT(*) AS count FROM human_handoff_items WHERE ${openClauses.join(" AND ")};`,
+    ownershipParams
   );
   return {
     version: HUMAN_HANDOFF_VERSION,

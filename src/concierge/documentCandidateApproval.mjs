@@ -11,13 +11,6 @@ export const READ_ONLY_DOCUMENT_ALLOWED_ACTION = "read_only_document_observation
 const IRREVERSIBLE_OR_MIXED_PATH = /(?:\/|\b)(upload|submit|send|message|messages|payment|payments|preferences|profile|appeal|appeals|authorization|authorizations|documents-and-forms|forms?|digital-claims)(?:\/|\b|-)/i;
 const SUBMISSION_TEXT = /\b(submit|upload|send|message|pay|payment|appeal|start claim|new authorization|change|update|cancel)\b/i;
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function parseJson(value, fallback = {}) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -120,11 +113,13 @@ export function approvalMetadataForDocumentCandidateTask(task = {}) {
 
 export async function latestDocumentDiscovery(store, { sessionId, portalUrl = null, limit = 80 } = {}) {
   if (!sessionId) return { ok: false, status: "missing_session", candidates: [], discoveryReport: null, sourceRuntimeEvent: null };
+  const bounded = Math.max(1, Math.min(200, Number(limit) || 80));
   const rows = await store.all(
     `SELECT * FROM runtime_events
-     WHERE session_id = ${sql(sessionId)}
+     WHERE session_id = ?
      ORDER BY created_at DESC
-     LIMIT ${Number(limit)};`
+     LIMIT ${bounded};`,
+    [sessionId]
   );
   for (const row of rows) {
     const payload = parseJson(row.payload_json);
@@ -150,18 +145,23 @@ export async function latestDocumentDiscovery(store, { sessionId, portalUrl = nu
 }
 
 export async function listDocumentCandidateProposals(store, { sessionId = null, userId = null, limit = 50 } = {}) {
-  const where = [
-    `task_type = ${sql(DOCUMENT_CANDIDATE_TASK_TYPE)}`,
-    sessionId ? `session_id = ${sql(sessionId)}` : null,
-    userId ? `user_id = ${sql(userId)}` : null
-  ]
-    .filter(Boolean)
-    .join(" AND ");
+  const bounded = Math.max(1, Math.min(200, Number(limit) || 50));
+  const clauses = ["task_type = ?"];
+  const params = [DOCUMENT_CANDIDATE_TASK_TYPE];
+  if (sessionId) {
+    clauses.push("session_id = ?");
+    params.push(sessionId);
+  }
+  if (userId) {
+    clauses.push("user_id = ?");
+    params.push(userId);
+  }
   const rows = await store.all(
     `SELECT * FROM agent_tasks
-     WHERE ${where}
+     WHERE ${clauses.join(" AND ")}
      ORDER BY created_at DESC
-     LIMIT ${Number(limit)};`
+     LIMIT ${bounded};`,
+    params
   );
   return rows.map((task) => {
     const { metadata, candidate, approvalScope, allowedAction } = approvalMetadataForDocumentCandidateTask(task);
@@ -272,4 +272,3 @@ export async function createDocumentCandidateProposal(
     actionsTaken: []
   };
 }
-
