@@ -1,0 +1,20 @@
+{
+  "version": "2026-06-22.phase56-retention-scheduler.v1",
+  "schedulerKey": "retention_sweeper_default",
+  "status": "tick_completed",
+  "trigger": "phase56_api_proof",
+  "now": "2026-06-22T12:00:00.000Z",
+  "sweep": {
+    "version": "2026-06-15.retention-policy.v1",
+    "now": "2026-06-22T12:00:00.000Z",
+    "expiredSessions": 553,
+    "expiredContinuations": 23,
+    "tombstonedMemoryItems": 0
+  },
+  "auditEventId": "audit_215e2059-0a4c-4d67-9c6c-dce4a007381b",
+  "auditEventHash": "b03662ee0fa28a5a41f2cd054c45514a4e44a7a774dc3cf283a57208a239bb7e",
+  "actionsTaken": [
+    "retention_sweeper_executed",
+    "retention_sweeper_audit_created"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "hasEgress": true,
+  "hasEncrypted": true,
+  "hasPhase56Card": true,
+  "hasRetentionTick": true,
+  "hasScore100": true,
+  "rect": {
+    "height": 159,
+    "width": 930,
+    "x": 45,
+    "y": 370.96875
+  },
+  "text": "\n        Phase 56 P0 Hardening\n        \n          Score\n          100 / 100 · phase56_hardening_proof_ready\n          Checkpointer\n          encrypted-at-rest configured\n          Retention\n          tick_completed\n          Egress\n          enforced by default\n          Database\n          node:sqlite · shell-out sqlite3 absent\n        \n      ",
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "screenshot": "artifacts/phase56/phase56-dashboard-hardening-card.png"
+}

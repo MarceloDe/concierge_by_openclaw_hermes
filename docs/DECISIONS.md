@@ -2780,3 +2780,17 @@ Human-in-the-loop approval needs to be durable, observable, and resumable withou
 
 Consequences:
 `compose_response` is now the terminal answer path. `model_invocation` is retired for the old side-node; live model proof lives in structured intent, orchestration decision, sourced answer composition, and PEMS paths. Native graph checkpointing uses the LangGraph root checkpoint namespace for resume correctness, while app-facing compatibility config still exposes the historical `brainstyworkers` namespace where needed.
+
+## 2026-06-22 - Phase 56 Hardens Persistent Graph State And Retention Proof
+
+Problem:
+Phase 55 introduced file-backed LangGraph checkpoints for durable HITL proof. That created a new PHI-at-rest surface. The system also had a retention sweeper function, but no explicit scheduler/proof surface, and the low-level outbound-payload helper still defaulted to observe-only labels even though the send guard enforced policy.
+
+Decision:
+Make file-backed graph checkpoints encrypted by construction with AES-256-GCM and a private env-provided key. Add a disabled-by-default retention sweeper daemon with explicit status/tick APIs, runtime event proof, and audit proof. Align outbound-payload observability defaults with enforced policy. Continue replacing hand-escaped SQL in active runtime modules with bound parameters.
+
+Rationale:
+Durable graph state is useful only if it preserves the healthcare safety envelope. Encryption, explicit retention execution, and dashboard-visible proof make Phase 55's native HITL persistence credible without widening browser, approval, or data boundaries.
+
+Consequences:
+`BRAINSTY_GRAPH_CHECKPOINTER=file` now fails closed unless `BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY` is configured outside Git. Retention remains disabled by default but can be explicitly ticked or enabled with environment flags. The operator dashboard now has a first-class Phase 56 P0 hardening card and score.

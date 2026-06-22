@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { createId, SqliteStore } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { sweepExpiredRuntimeState } from "../concierge/retentionPolicy.mjs";
+import { createRetentionSweepDaemon } from "../concierge/retentionScheduler.mjs";
 
 test("retention sweeper expires sessions and tombstones expired memory items", async () => {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-retention-"));
@@ -52,4 +53,32 @@ test("retention sweeper expires sessions and tombstones expired memory items", a
   assert.ok(auditTypes.includes("retention.session_expired"));
   assert.ok(auditTypes.includes("retention.memory_item_tombstoned"));
   assert.ok(auditRows.every((row) => row.event_hash));
+});
+
+test("retention sweeper daemon creates scheduled-run runtime and audit proof", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "brainsty-retention-daemon-"));
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const { session } = await enrollDefaultMember(store);
+  const now = "2026-06-22T12:00:00.000Z";
+  await store.update("sessions", { expires_at: "2026-06-01T00:00:00.000Z" }, { id: session.id });
+
+  const daemon = createRetentionSweepDaemon(store, {
+    enabled: true,
+    runOnStart: false,
+    schedulerKey: "retention_sweeper_unit",
+    intervalMs: 60_000
+  });
+  const tick = await daemon.tickOnce({ now, trigger: "unit_scheduled_tick" });
+
+  assert.equal(tick.status, "tick_completed");
+  assert.equal(tick.sweep.expiredSessions, 1);
+  assert.ok(tick.auditEventHash);
+  const completedEvent = await store.findOne("runtime_events", { event_type: "retention.sweeper.tick_completed" });
+  assert.ok(completedEvent);
+  const scheduledAudit = await store.findOne("audit_events", { event_type: "retention.sweeper_scheduled_run_completed" });
+  assert.ok(scheduledAudit);
+  const status = daemon.status();
+  assert.equal(status.enabled, true);
+  assert.equal(status.lastTick.status, "tick_completed");
+  assert.equal(status.safety.rawPhiReturned, false);
 });

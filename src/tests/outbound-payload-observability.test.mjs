@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildOutboundPayloadObservation } from "../concierge/outboundPayloadObservability.mjs";
 
-test("outbound payload observability records exact payload and observe-only labels", () => {
+test("outbound payload observability records exact payload and enforced labels by default", () => {
   const payload = {
     message: "Use [DB_POINTER:users:user_test:name] for benefits.",
     sourcePointers: [{ table: "eligibility_snapshots", id: "snap_test" }],
@@ -14,12 +14,12 @@ test("outbound payload observability records exact payload and observe-only labe
     user: { id: "user_test", name: "Payload Test User", email: "payload@example.com" },
     payloadType: "unit_test_payload",
     destination: "test_destination",
-    policyMode: "observe_only"
+    policyMode: "enforced"
   });
 
   assert.equal(observation.payloadType, "unit_test_payload");
   assert.equal(observation.destination, "test_destination");
-  assert.equal(observation.enforcementMode, "observe_only");
+  assert.equal(observation.enforcementMode, "enforced");
   assert.equal(observation.allowedByCurrentPrototypePolicy, false);
   assert.deepEqual(observation.policyIssues, ["raw_portal_text_present"]);
   assert.equal(observation.containsPortalText, true);
@@ -37,4 +37,5 @@ test("outbound payload observability records exact payload and observe-only labe
     }
   );
   assert.equal(instructionOnly.containsDirectIdentifier, false);
+  assert.equal(instructionOnly.enforcementMode, "enforced");
 });

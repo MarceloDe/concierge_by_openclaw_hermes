@@ -943,6 +943,8 @@ function renderConnectorProof(payload) {
   const checks = payload.checks ?? [];
   const scores = payload.scores ?? [];
   const visuals = payload.visualArtifacts ?? payload.visual_artifacts ?? [];
+  const phase56Score = scores.find((score) => score.key === "phase56_p0_hardening") ?? null;
+  const phase56Check = checks.find((check) => check.key === "phase56_p0_hardening") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -956,6 +958,23 @@ function renderConnectorProof(payload) {
         <dd>${escapeHtml(payload.safety?.rawOcrTextReturned ? "attention: raw OCR returned" : "raw OCR hidden")} · external writes ${escapeHtml(payload.safety?.externalWriteActionsWithoutApproval ? "attention" : "approval-gated")}</dd>
       </dl>
     </article>
+    ${phase56Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 56 P0 Hardening</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase56Score.score)} / ${escapeHtml(phase56Score.target)} · ${escapeHtml(phase56Score.status)}</dd>
+          <dt>Checkpointer</dt>
+          <dd>${escapeHtml(phase56Check?.graphCheckpointer?.encryptedAtRestConfigured ? "encrypted-at-rest configured" : "verify encrypted file mode")}</dd>
+          <dt>Retention</dt>
+          <dd>${escapeHtml(phase56Check?.retentionSweeper?.lastTick?.status ?? phase56Check?.retentionSweeper?.status ?? phase56Score.retentionSweeperStatus ?? "not ticked")}</dd>
+          <dt>Egress</dt>
+          <dd>${escapeHtml(phase56Check?.egress?.defaultEnforcementMode ?? "enforced")} by default</dd>
+          <dt>Database</dt>
+          <dd>${escapeHtml(phase56Check?.database?.sqliteAdapter ?? "node:sqlite")} · shell-out sqlite3 ${escapeHtml(phase56Check?.database?.shellOutSqlite3 ? "present" : "absent")}</dd>
+        </dl>
+      </article>
+    ` : ""}
     <article class="connector-card">
       <h3>Goals</h3>
       <ol>

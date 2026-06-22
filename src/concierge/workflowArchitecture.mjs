@@ -467,7 +467,8 @@ export async function seedRuntimeRegistries(store, { nowIso, createId }) {
   }
   for (const row of requirementRows) {
     const existing = await store.get(
-      `SELECT id FROM workflow_tool_requirements WHERE workflow_key = '${row.workflow_key}' AND tool_key = '${row.tool_key}' LIMIT 1;`
+      "SELECT id FROM workflow_tool_requirements WHERE workflow_key = ? AND tool_key = ? LIMIT 1;",
+      [row.workflow_key, row.tool_key]
     );
     if (!existing) {
       await store.insert("workflow_tool_requirements", {
@@ -588,10 +589,10 @@ export async function loadWorkflowArchitecture(store, { user, portal, userInput 
     store.all("SELECT * FROM knowledge_sources ORDER BY source_key ASC;"),
     store.all("SELECT * FROM openclaw_skills ORDER BY skill_key ASC;"),
     user?.id
-      ? store.all(`SELECT * FROM user_journey_events WHERE user_id = '${user.id.replaceAll("'", "''")}' ORDER BY occurred_at DESC LIMIT 20;`)
+      ? store.all("SELECT * FROM user_journey_events WHERE user_id = ? ORDER BY occurred_at DESC LIMIT 20;", [user.id])
       : Promise.resolve([]),
     user?.id
-      ? store.all(`SELECT * FROM memory_reflections WHERE user_id = '${user.id.replaceAll("'", "''")}' ORDER BY created_at DESC LIMIT 10;`)
+      ? store.all("SELECT * FROM memory_reflections WHERE user_id = ? ORDER BY created_at DESC LIMIT 10;", [user.id])
       : Promise.resolve([])
   ]);
   const workflows = workflowRows.map(normalizeWorkflow);

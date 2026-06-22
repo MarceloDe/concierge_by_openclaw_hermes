@@ -88,13 +88,6 @@ function parseJson(value, fallback) {
   }
 }
 
-function sql(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "1" : "0";
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
 function sha256(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
 }
@@ -983,14 +976,19 @@ async function executeWriteTool(store, toolKey, args, actorUserId) {
 
 export async function listOperatorProposals(store, { status = null, actorUserId = null, limit = 50 } = {}) {
   const conditions = [];
+  const params = [];
   if (status) {
     if (!PROPOSAL_STATUSES.has(status)) throw new OperatorAssistantError("Unsupported proposal status.", 400);
-    conditions.push(`status = ${sql(status)}`);
+    conditions.push("status = ?");
+    params.push(status);
   }
-  if (actorUserId) conditions.push(`actor_user_id = ${sql(actorUserId)}`);
+  if (actorUserId) {
+    conditions.push("actor_user_id = ?");
+    params.push(actorUserId);
+  }
   const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
   const bounded = Math.min(Math.max(Number(limit) || 50, 1), 200);
-  const rows = await store.all(`SELECT * FROM operator_tool_proposals${where} ORDER BY created_at DESC LIMIT ${bounded};`);
+  const rows = await store.all(`SELECT * FROM operator_tool_proposals${where} ORDER BY created_at DESC LIMIT ${bounded};`, params);
   return {
     ok: true,
     version: OPERATOR_ASSISTANT_VERSION,

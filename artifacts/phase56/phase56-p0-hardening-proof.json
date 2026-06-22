@@ -1,0 +1,3622 @@
+{
+  "version": "server-connector-next-mobile-mvp.v2",
+  "runId": "server-connector-next-mobile-mvp",
+  "status": "cycle_contract_ready",
+  "cycle": "server_connector_next_mobile_mvp",
+  "generatedAt": "2026-06-22T03:56:54.132Z",
+  "goals": [
+    {
+      "key": "fastapi_v1_connector",
+      "status": "implemented",
+      "target": "Remote clients integrate through FastAPI /api/v1 instead of Node internals."
+    },
+    {
+      "key": "next_mobile_pwa",
+      "status": "implemented_visual_verified",
+      "target": "Mobile-first Next.js PWA shell uses only /api/v1 calls."
+    },
+    {
+      "key": "browser_sandbox_gateway",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "Live worker browser sessions are represented as remote sandbox sessions, with hosted provider readiness separate from local CDP proof."
+    },
+    {
+      "key": "dashboard_visual_proof",
+      "status": "implemented",
+      "target": "Operator dashboard exposes API, browser, safety, and visual-test readiness."
+    },
+    {
+      "key": "canonical_goal_tied_phase_execution",
+      "status": "implemented_phase32_operating_system",
+      "target": "All future phases use one Cortex-canonical RALPH loop, role-separated execution, non-mocked proof labels, dashboard scoring, and PR-based memory visibility."
+    },
+    {
+      "key": "continuous_procedural_memory_shadow",
+      "status": "phase33_shadow_scaffold_ready",
+      "target": "Phase 33 introduces typed CaseState, G0-G8 universal gate skeleton, PEMS maturity schema, and shadow-mode procedural reconstruction without letting it drive healthcare answers."
+    },
+    {
+      "key": "continuous_intelligence_shadow_persistence",
+      "status": "phase34_shadow_persistence_active",
+      "target": "Phase 34 persists final shadow runs and accumulates PEMS candidate maturity from real graph traces while keeping procedural candidates non-driving."
+    },
+    {
+      "key": "pems_supervised_promotion_gate",
+      "status": "phase35_supervised_promotion_gate_reviewing",
+      "target": "Phase 35 requires explicit reviewer, validator, citation, and safety gates before a PEMS candidate can enter supervised advisory mode; production driving remains disabled."
+    },
+    {
+      "key": "pems_reviewer_evaluator_workbench",
+      "status": "phase36_reviewer_evaluator_workbench_active",
+      "target": "Phase 36 lets evaluator draft notes and NeSTR-style consistency traces advise reviewers while human and deterministic review gates remain authoritative."
+    },
+    {
+      "key": "pems_reviewer_ui",
+      "status": "phase37_pems_reviewer_ui_ready",
+      "target": "Phase 37 exposes an operator-facing reviewer UI for ref-only advisory material and explicit approve/reject/block review actions."
+    },
+    {
+      "key": "pems_reviewer_comparison_provenance",
+      "status": "phase38_reviewer_comparison_provenance_ready",
+      "target": "Phase 38 renders deterministic-vs-advisory comparison rows, cited evidence chips, and live-gated evaluator provenance without automatic production recommendations."
+    },
+    {
+      "key": "pems_live_evaluator_generation_filtering",
+      "status": "phase39_live_evaluator_filtering_ready",
+      "target": "Phase 39 creates live-gated advisory drafts only through observed egress and adds reviewer filters without counting mocked LLM output as proof."
+    },
+    {
+      "key": "pems_live_claim_citation_closure",
+      "status": "phase40_claim_citation_closure_veto_visible",
+      "target": "Phase 40 labels live evaluator advisory claims as supported, low confidence, or unsupported and makes unsupported claims a visible reviewer veto without creating evidence."
+    },
+    {
+      "key": "pems_reviewer_claim_revisions",
+      "status": "phase41_reviewer_claim_revision_ready",
+      "target": "Phase 41 persists reviewer claim edits as ref-only revision records, preserves before/after hashes, and re-runs deterministic closure without creating evidence."
+    },
+    {
+      "key": "pems_reviewer_follow_up_workflows",
+      "status": "phase42_reviewer_follow_up_workflow_ready",
+      "target": "Phase 42 binds reviewer claim revision records to later explicit review decisions and follow-up workflow state without enabling production recommendations."
+    },
+    {
+      "key": "pems_reviewer_history_audit_exports",
+      "status": "phase43_reviewer_history_audit_export_ready",
+      "target": "Phase 43 exports longitudinal reviewer history refs and hashes across drafts, revisions, reviews, and follow-ups without storing raw history or enabling production recommendations."
+    },
+    {
+      "key": "pems_reviewer_history_review_refinement",
+      "status": "phase44_reviewer_history_review_refinement_ready",
+      "target": "Phase 44 lets operators search, sort, and compare reviewer history export snapshots across longer windows without creating evidence or production recommendations."
+    },
+    {
+      "key": "docker_connector_deployment",
+      "status": "compose_contract_present",
+      "target": "Docker Compose defines the Node runtime, FastAPI connector, Next.js PWA, and FalkorDB dependency services."
+    },
+    {
+      "key": "graphiti_container_product_memory",
+      "status": "graphiti_container_runtime_present",
+      "target": "Node connector image can run real Graphiti/FalkorDB product memory when credentials enable the adapter."
+    },
+    {
+      "key": "postgres_storage_profile",
+      "status": "postgres_compose_profile_present_sqlite_runtime",
+      "target": "Docker Compose defines a Postgres transactional storage target while the current app runtime remains safely on SQLite until migration tests pass."
+    },
+    {
+      "key": "postgres_docker_secret_runtime_profile",
+      "status": "postgres_docker_secret_runtime_profile_present",
+      "target": "A dedicated compose override selects Postgres runtime through a Docker-secret database URL without bypassing proof gates."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "Hosted/WebRTC browser sandbox provider can replace local CDP without changing the public /api/v1 browser contract."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "status": "hosted_browser_sandbox_provider_selection_contract_ready",
+      "target": "A provider-selection/preflight gate chooses a live sandbox candidate without storing provider URLs or secrets in Git."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_preflight",
+      "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
+      "target": "Private provider config, selected provider, endpoint, and auth refs can be preflighted before live hosted browser enablement."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_verification",
+      "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+      "target": "A selected real hosted provider must pass create-session, stream, screenshot/OCR, takeover, input, offsite fail-closed, teardown, and GUI/OCR proof before hosted readiness scores."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_self_host",
+      "status": "steel_self_host_live_proof_missing",
+      "target": "Self-hosted Steel Browser proves the selected-provider lifecycle locally without exposing raw frames, OCR text, endpoints, or input values."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_operations",
+      "status": "steel_self_host_operations_contract_ready",
+      "target": "Self-hosted Steel Browser operations are hardened for loopback-only networking, cleanup, retention, monitoring, digest-pinned images, and no hosted-readiness overclaim."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_remote_host",
+      "status": "steel_remote_host_lifecycle_verified",
+      "target": "Remote self-hosted Steel must prove TLS API access, private CDP tunnel, host firewall defense in depth, and ten-check lifecycle proof before remote-host readiness scores."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_ops_drills",
+      "status": "steel_remote_ops_drills_ready",
+      "target": "Remote self-hosted Steel operations must prove patch cadence, backup/restore drill, health alerting, and on-call handoff after remote-host readiness."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_webrtc_signaling",
+      "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
+      "target": "WebRTC live-block signaling must exchange opaque offer/answer/ICE refs before WebRTC hosted readiness scores."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+      "status": "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+      "target": "Operator-supplied dashboard/mobile live-block visual and OCR proof must replay from a private manifest before hosted readiness scores."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_launch_readiness",
+      "status": "hosted_browser_sandbox_provider_launch_runbook_ready",
+      "target": "Operator launch readiness aggregates private config, live provider, WebRTC, visual/OCR, and final enablement gates without leaking secrets."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_private_launch_execution",
+      "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+      "target": "Real selected-provider private launch execution must be explicitly gated and human-reviewed before final hosted readiness can score."
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted adapter lifecycle can be contract-tested without provider credentials or live frames."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted provider HTTP create-session adapter can be exercised against a local provider-compatible harness without leaking secrets."
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "target": "The hosted provider stream, screenshot/OCR, takeover, input, teardown, and offsite-fail-closed lifecycle can be contract-tested before live provider enablement."
+    },
+    {
+      "key": "phase56_p0_hardening",
+      "status": "phase56_hardening_proof_ready",
+      "target": "Encrypted durable graph checkpoints, enforced egress default, bound-parameter local store, and retention sweeper proof gate."
+    }
+  ],
+  "checks": [
+    {
+      "key": "node_runtime",
+      "status": "ready",
+      "ok": true,
+      "detail": "db tables 65"
+    },
+    {
+      "key": "fastapi_v1",
+      "status": "available_when_facade_running",
+      "ok": true,
+      "endpoints": [
+        "/api/v1/sessions",
+        "/api/v1/tasks",
+        "/api/v1/browser/sessions",
+        "/api/v1/proof/runs/{run_id}"
+      ]
+    },
+    {
+      "key": "openclaw_readiness",
+      "status": "auth_required",
+      "ok": false,
+      "nextAction": "Open the member portal in the dedicated OpenClaw browser profile and sign in manually. Leave the authenticated tab open."
+    },
+    {
+      "key": "product_memory",
+      "status": "disabled_by_env",
+      "ok": false,
+      "adapter": "disabled",
+      "safeDegraded": true,
+      "replayQueue": {
+        "queueVersion": "2026-06-15.product-memory-replay-queue.v1",
+        "available": true,
+        "pending": 11,
+        "retryableFailed": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "oldestPending": {
+          "id": "pm_replay_32b0ed6d-85aa-4911-a0db-82645cda6a4a",
+          "created_at": "2026-06-15T19:15:56.810Z",
+          "next_attempt_at": "2026-06-15T19:15:56.810Z",
+          "last_error": "Graphiti bridge failed with exit 1: {\"ok\": false, \"contractVersion\": \"2026-05-27.graphiti-product-memory.v1\", \"error\": \"Error 61 connecting to localhost:6380. Connection refused.\", \"errorType\": \"ConnectionError\"}\n"
+        }
+      }
+    },
+    {
+      "key": "graphiti_container_runtime",
+      "status": "graphiti_container_runtime_present",
+      "ok": true,
+      "command": "npm run docker:memory:smoke"
+    },
+    {
+      "key": "phase56_p0_hardening",
+      "status": "phase56_hardening_proof_ready",
+      "ok": true,
+      "graphCheckpointer": {
+        "fileMode": false,
+        "encryptedAtRestRequired": true,
+        "encryptedAtRestConfigured": true,
+        "rawCheckpointStateReturned": false
+      },
+      "retentionSweeper": {
+        "version": "2026-06-22.phase56-retention-scheduler.v1",
+        "enabled": false,
+        "status": "disabled",
+        "lastTick": {
+          "version": "2026-06-22.phase56-retention-scheduler.v1",
+          "schedulerKey": "retention_sweeper_default",
+          "status": "tick_completed",
+          "trigger": "phase56_api_proof",
+          "now": "2026-06-22T12:00:00.000Z",
+          "sweep": {
+            "version": "2026-06-15.retention-policy.v1",
+            "now": "2026-06-22T12:00:00.000Z",
+            "expiredSessions": 553,
+            "expiredContinuations": 23,
+            "tombstonedMemoryItems": 0
+          },
+          "auditEventId": "audit_215e2059-0a4c-4d67-9c6c-dce4a007381b",
+          "auditEventHash": "b03662ee0fa28a5a41f2cd054c45514a4e44a7a774dc3cf283a57208a239bb7e",
+          "actionsTaken": [
+            "retention_sweeper_executed",
+            "retention_sweeper_audit_created"
+          ]
+        },
+        "endpointStatus": "/api/retention/sweeper/status",
+        "endpointTick": "/api/retention/sweeper/tick",
+        "rawPhiReturned": false
+      },
+      "egress": {
+        "defaultEnforcementMode": "enforced",
+        "testOnlyObserveOverrideAvailable": true
+      },
+      "database": {
+        "sqliteAdapter": "node:sqlite",
+        "shellOutSqlite3": false,
+        "boundParameterHelpers": true
+      }
+    },
+    {
+      "key": "database_storage",
+      "status": "postgres_compose_profile_present_sqlite_runtime",
+      "ok": true,
+      "runtimeDriver": "sqlite",
+      "productionTarget": "postgres",
+      "migrationPending": true,
+      "command": "npm run storage:postgres:smoke",
+      "runtimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+      "productionSmokeCommand": "npm run storage:postgres:production-smoke",
+      "defaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+      "productionGates": {
+        "endpointParityReady": false,
+        "workerLeaseReady": false,
+        "backupRestoreReady": false,
+        "backupRunbookReady": false,
+        "providerBackupPolicyReady": false,
+        "secretProfileReady": false,
+        "defaultRolloutReady": false
+      },
+      "productionProfileReady": true,
+      "productionProfileCommand": "npm run storage:postgres:profile-contract"
+    },
+    {
+      "key": "postgres_backup_runbook",
+      "status": "available_runbook_gate",
+      "ok": false,
+      "command": "npm run storage:postgres:backup-runbook-smoke"
+    },
+    {
+      "key": "postgres_provider_backup_policy",
+      "status": "provider_policy_contract_available",
+      "ok": false,
+      "command": "npm run storage:postgres:provider-backup-policy-smoke"
+    },
+    {
+      "key": "postgres_production_profile",
+      "status": "postgres_docker_secret_runtime_profile_present",
+      "ok": true,
+      "command": "npm run storage:postgres:profile-contract"
+    },
+    {
+      "key": "postgres_endpoint_regression",
+      "status": "available_smoke_gate",
+      "ok": true,
+      "command": "npm run storage:postgres:endpoint-regression-smoke"
+    },
+    {
+      "key": "postgres_profile_live_smoke",
+      "status": "available_live_profile_gate",
+      "ok": true,
+      "command": "npm run storage:postgres:profile-live-smoke"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-contract",
+      "resolver": {
+        "status": "hosted_browser_sandbox_provider_not_selected",
+        "resolverReady": false,
+        "ready": false,
+        "endpointResolved": false,
+        "authResolved": false,
+        "liveVerified": false,
+        "liveVerificationReady": false,
+        "streamRequiresWebrtc": true,
+        "webrtcSignalingReady": false,
+        "visualOcrReplayReady": false,
+        "endpointRefKind": "logical_ref",
+        "authTokenRefKind": "env",
+        "endpointEnvPresent": false,
+        "authEnvPresent": true,
+        "providerStrategy": "generic-hosted-provider",
+        "rawEndpointReturned": false,
+        "rawSecretReturned": false,
+        "rawSecretPathReturned": false
+      }
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_resolver",
+      "status": "hosted_browser_sandbox_provider_not_selected",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-resolver",
+      "endpointResolved": false,
+      "authResolved": false,
+      "liveVerified": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "status": "hosted_browser_sandbox_provider_selection_contract_ready",
+      "ok": true,
+      "command": "npm run sandbox:browser:provider-selection",
+      "preflightReady": false,
+      "selectedProviderKnown": false,
+      "selectedProviderKey": null,
+      "candidateKeys": [
+        "custom_webrtc",
+        "browserbase",
+        "vercel_sandbox"
+      ],
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_preflight",
+      "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-live-preflight",
+      "resolverReady": false,
+      "selectionPreflightReady": false,
+      "liveProbeEnabled": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_verification",
+      "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-live-verification",
+      "resolverReady": false,
+      "livePreflightReady": false,
+      "providerLiveConnected": false,
+      "liveVerified": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_self_host",
+      "status": "steel_self_host_live_proof_missing",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-live-verification",
+      "artifactRef": null,
+      "score": 0,
+      "target": 100,
+      "checks": [
+        {
+          "key": "session_create",
+          "ok": false
+        },
+        {
+          "key": "cdp_connect",
+          "ok": false
+        },
+        {
+          "key": "live_viewer_stream_ref",
+          "ok": false
+        },
+        {
+          "key": "screenshot_ref",
+          "ok": false
+        },
+        {
+          "key": "ocr_caption_ref",
+          "ok": false
+        },
+        {
+          "key": "approved_input_relay",
+          "ok": false
+        },
+        {
+          "key": "takeover_approval_scope",
+          "ok": false
+        },
+        {
+          "key": "teardown_release",
+          "ok": false
+        },
+        {
+          "key": "offsite_fail_closed",
+          "ok": false
+        },
+        {
+          "key": "phi_redaction_policy",
+          "ok": false
+        }
+      ],
+      "viewerUrlEnvRef": "WEFELLA_BROWSER_SANDBOX_VIEWER_URL",
+      "lifecycleRefPresent": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_operations",
+      "status": "steel_self_host_operations_contract_ready",
+      "ok": false,
+      "contractReady": true,
+      "command": "npm run sandbox:browser:steel-operations",
+      "score": 85,
+      "target": 100,
+      "checks": [
+        {
+          "key": "api_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "ui_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "no_latest_tags",
+          "ok": true
+        },
+        {
+          "key": "api_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "cdp_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "viewer_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "log_storage_disabled_by_default",
+          "ok": true
+        },
+        {
+          "key": "fingerprint_injection_skip_documented",
+          "ok": true
+        },
+        {
+          "key": "fastapi_remote_boundary_documented",
+          "ok": true
+        },
+        {
+          "key": "cleanup_documented",
+          "ok": true
+        },
+        {
+          "key": "operations_gate",
+          "ok": false
+        },
+        {
+          "key": "live_probe_requested",
+          "ok": false
+        },
+        {
+          "key": "live_probe_config_present",
+          "ok": false
+        }
+      ],
+      "composeFile": "infra/steel/compose.yaml",
+      "configFile": "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+      "runbook": "infra/steel/README.md",
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_remote_host",
+      "status": "steel_remote_host_lifecycle_verified",
+      "ok": true,
+      "contractReady": true,
+      "command": "npm run sandbox:browser:steel-remote-readiness",
+      "score": 100,
+      "target": 100,
+      "checks": [
+        {
+          "key": "remote_api_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "remote_ui_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "remote_no_latest_tags",
+          "ok": true
+        },
+        {
+          "key": "remote_api_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "remote_cdp_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "remote_no_public_cdp_or_api_bind",
+          "ok": true
+        },
+        {
+          "key": "remote_restart_unless_stopped",
+          "ok": true
+        },
+        {
+          "key": "remote_healthcheck_local",
+          "ok": true
+        },
+        {
+          "key": "remote_encrypted_logs_mount_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_tls_placeholder_host",
+          "ok": true
+        },
+        {
+          "key": "remote_ip_allowlist_matcher",
+          "ok": true
+        },
+        {
+          "key": "remote_forbid_non_allowlisted",
+          "ok": true
+        },
+        {
+          "key": "remote_only_expected_steel_routes",
+          "ok": true
+        },
+        {
+          "key": "remote_blocks_everything_else",
+          "ok": true
+        },
+        {
+          "key": "remote_no_cdp_proxy",
+          "ok": true
+        },
+        {
+          "key": "remote_firewall_inbound_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_firewall_outbound_allowlist_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_wireguard_private_cdp_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_recovery_script_health_and_smoke",
+          "ok": true
+        },
+        {
+          "key": "remote_no_secrets_or_runtime_values",
+          "ok": true
+        }
+      ],
+      "tenChecks": [
+        {
+          "key": "session_create_returns_websocket_and_viewer_refs",
+          "ok": true
+        },
+        {
+          "key": "cdp_connect_over_private_tunnel",
+          "ok": true
+        },
+        {
+          "key": "live_stream_ref_reachable_over_tls",
+          "ok": true
+        },
+        {
+          "key": "screenshot_ref_only",
+          "ok": true
+        },
+        {
+          "key": "local_ocr_caption_ref_only",
+          "ok": true
+        },
+        {
+          "key": "approved_synthetic_input_relay",
+          "ok": true
+        },
+        {
+          "key": "human_takeover_event_required",
+          "ok": true
+        },
+        {
+          "key": "teardown_removes_session",
+          "ok": true
+        },
+        {
+          "key": "offsite_fail_closed_and_host_firewall_proof",
+          "ok": true
+        },
+        {
+          "key": "phi_redaction_policy_holds",
+          "ok": true
+        }
+      ],
+      "lifecycleArtifactRef": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+      "labels": {
+        "contractReadiness": "contract readiness",
+        "localHostReadiness": "local-host readiness",
+        "remoteHostReadiness": "remote-host readiness"
+      },
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_ops_drills",
+      "status": "steel_remote_ops_drills_ready",
+      "ok": true,
+      "command": "npm run sandbox:browser:steel-ops-drills",
+      "score": 100,
+      "target": 100,
+      "checks": [
+        {
+          "key": "phase30_remote_lifecycle_artifact_green",
+          "ok": true
+        },
+        {
+          "key": "patching_weekly_and_critical_cve_window_documented",
+          "ok": true
+        },
+        {
+          "key": "patching_forbids_latest_and_requires_digest_rollback",
+          "ok": true
+        },
+        {
+          "key": "patching_runs_remote_readiness_and_ops_drills",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_script_dry_run_safe",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_excludes_raw_visual_artifacts",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_runs_recovery_smoke",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_cover_required_probes",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_thresholds_are_operational",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_no_raw_payload_surfaces",
+          "ok": true
+        },
+        {
+          "key": "oncall_handoff_contains_safety_fields",
+          "ok": true
+        },
+        {
+          "key": "oncall_handoff_requires_phase31_commands",
+          "ok": true
+        },
+        {
+          "key": "ops_config_defers_concurrency",
+          "ok": true
+        },
+        {
+          "key": "ops_config_preserves_human_takeover_boundary",
+          "ok": true
+        },
+        {
+          "key": "ops_config_forbids_raw_recording",
+          "ok": true
+        },
+        {
+          "key": "ops_drills_no_secret_or_runtime_values",
+          "ok": true
+        }
+      ],
+      "lifecycleArtifactRef": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+      "configFile": "infra/steel/remote/ops-drills.example.json",
+      "patchingRunbook": "infra/steel/remote/patching.md",
+      "backupRestoreDrill": "infra/steel/remote/backup-restore-drill.sh",
+      "healthAlerts": "infra/steel/remote/health-alerts.example.json",
+      "oncallHandoff": "infra/steel/remote/oncall-handoff.md",
+      "labels": {
+        "contractReadiness": "contract readiness",
+        "localHostReadiness": "local-host readiness",
+        "remoteHostReadiness": "remote-host readiness",
+        "opsDrillReadiness": "ops-drill readiness"
+      },
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_webrtc_signaling",
+      "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-webrtc-signaling",
+      "resolverReady": false,
+      "liveVerificationReady": false,
+      "streamRequiresWebrtc": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawSdpReturned": false,
+      "rawIceCandidateReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+      "status": "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-visual-ocr-replay",
+      "liveVerificationReady": false,
+      "webrtcSignalingReady": false,
+      "proofFilePresent": false,
+      "proofFileOutsideGit": false,
+      "proofValidationOk": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_launch_readiness",
+      "status": "hosted_browser_sandbox_provider_launch_runbook_ready",
+      "ok": true,
+      "command": "npm run sandbox:browser:provider-launch-readiness",
+      "runbookReady": true,
+      "privateProofChainReady": false,
+      "finalEnablementAllowed": false,
+      "missing": [
+        "selection_preflight",
+        "live_verification",
+        "webrtc_signaling",
+        "visual_ocr_replay_private_proof",
+        "private_provider_config_outside_git",
+        "private_visual_ocr_proof_outside_git",
+        "final_live_verified_switch"
+      ],
+      "configOutsideGit": false,
+      "proofFileOutsideGit": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_private_launch_execution",
+      "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-private-launch-execution",
+      "executionGate": false,
+      "finalHumanReviewed": false,
+      "privateProofChainReady": false,
+      "finalEnablementAllowed": false,
+      "missing": [
+        "private_launch_execution_gate",
+        "private_proof_chain_ready",
+        "launch_final_enablement_allowed",
+        "final_human_review"
+      ],
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-adapter",
+      "providerNetworkCalled": false,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-http-adapter",
+      "providerNetworkCalled": false,
+      "localHarnessOnly": true,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:provider-live-lifecycle",
+      "providerNetworkCalled": false,
+      "localHarnessOnly": true,
+      "streamFrames": "sse_frame_ref_only",
+      "screenshot": "opaque_screenshot_ref_only",
+      "ocrCaption": "opaque_caption_ref_only",
+      "takeover": "approval_gated_human_only",
+      "inputRelay": "redacted_approved_input_only",
+      "teardown": "ephemeral_session_closed",
+      "offsiteFailClosed": true,
+      "providerLiveConnected": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "status": "hosted_browser_sandbox_contract_valid_not_configured",
+      "ok": false,
+      "command": "npm run sandbox:browser:adapter-harness",
+      "adapterMode": "contract_only"
+    },
+    {
+      "key": "canonical_phase_operating_system",
+      "status": "phase32_goal_tied_execution_contract_ready",
+      "ok": true,
+      "docs": [
+        "docs/PROJECT_OPERATING_SYSTEM.md",
+        "docs/PHASE_SCOREBOARD.md",
+        "docs/NON_MOCKED_PROOF_RULES.md"
+      ],
+      "cortexMirrorRequired": true,
+      "ralphLoopRequired": true,
+      "roleSeparationRequired": true,
+      "nonMockedProofRequired": true
+    },
+    {
+      "key": "continuous_intelligence_shadow",
+      "status": "phase33_shadow_scaffold_ready",
+      "ok": true,
+      "mode": "shadow_only",
+      "schemas": [
+        "brainstyworkers.case_state.v1",
+        "brainstyworkers.pems.v1"
+      ],
+      "gateIds": [
+        "G0",
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8"
+      ],
+      "gateCount": 9,
+      "pemsTrusted": false,
+      "productionDrivingAllowed": false,
+      "score": 60,
+      "target": 60,
+      "safety": {
+        "cortexProductMemory": false,
+        "rawInputReturned": false,
+        "rawSourceReturned": false,
+        "shadowOnly": true,
+        "finalAnswerDecisioningChanged": false
+      }
+    },
+    {
+      "key": "continuous_intelligence_shadow_persistence",
+      "status": "phase34_shadow_persistence_active",
+      "ok": true,
+      "mode": "shadow_only",
+      "score": 70,
+      "target": 70,
+      "shadowRunCount": 64,
+      "candidateCount": 1,
+      "latestRun": {
+        "id": "ci_shadow_8b04a883-b859-4efd-be73-0dd15a1e95c7",
+        "workflow": "eligibility_benefits_navigation",
+        "gateScore": 89,
+        "gatePassed": 8,
+        "gateTotal": 9,
+        "candidateId": "pems_40d7cea4abb98732",
+        "pemsScore": 100,
+        "pemsTrusted": true,
+        "productionDrivingAllowed": false,
+        "sourcePointerCount": 19,
+        "workflowOutcome": "evidence_captured",
+        "finalResponsePrepared": true,
+        "createdAt": "2026-06-22T03:56:02.117Z"
+      },
+      "latestMaturity": {
+        "candidateId": "pems_40d7cea4abb98732",
+        "workflow": "eligibility_benefits_navigation",
+        "selectedSkillKey": "insurance_portal_browser",
+        "shadowRunCount": 64,
+        "evidenceRefCount": 146,
+        "successfulOutcomeCount": 64,
+        "reviewerApprovalCount": 3,
+        "authorityCitationCount": 146,
+        "validatorPassCount": 511,
+        "safetyIncidentCount": 0,
+        "latestScore": 100,
+        "trusted": true,
+        "supervisedAdvisoryAllowed": false,
+        "promotionStatus": "shadow_review_required",
+        "productionDrivingAllowed": false,
+        "maturity": {
+          "version": "2026-06-18.phase34-shadow-persistence.v1",
+          "pems": {
+            "schemaVersion": "brainstyworkers.pems.v1",
+            "candidateId": "pems_40d7cea4abb98732",
+            "score": 100,
+            "target": 85,
+            "trusted": true,
+            "minimums": {
+              "shadowRuns": 10,
+              "reviewerApprovals": 2,
+              "safetyIncidentCount": 0
+            },
+            "inputs": {
+              "shadowRuns": 64,
+              "evidenceRefCount": 146,
+              "successfulOutcomeCount": 64,
+              "reviewerApprovals": 3,
+              "authorityCitationCount": 146,
+              "validatorPassCount": 511,
+              "safetyIncidentCount": 0,
+              "freshnessDays": 0
+            },
+            "status": "trusted_procedural_skill_candidate"
+          },
+          "aggregate": {
+            "candidateId": "pems_40d7cea4abb98732",
+            "workflow": "eligibility_benefits_navigation",
+            "selectedSkillKey": "insurance_portal_browser",
+            "shadowRunCount": 64,
+            "evidenceRefCount": 146,
+            "successfulOutcomeCount": 64,
+            "reviewerApprovalCount": 3,
+            "authorityCitationCount": 146,
+            "validatorPassCount": 511,
+            "safetyIncidentCount": 0
+          },
+          "productionDrivingAllowed": false
+        },
+        "promotion": {
+          "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+          "status": "shadow_review_required",
+          "ok": false,
+          "supervisedAdvisoryAllowed": false,
+          "productionDrivingAllowed": false,
+          "candidateId": "pems_40d7cea4abb98732",
+          "counts": {
+            "humanApprovals": 3,
+            "humanRejections": 0,
+            "validatorPasses": 1,
+            "validatorFailures": 0,
+            "citationPasses": 0,
+            "citationFailures": 0,
+            "citationEvidenceRefCount": 0,
+            "safetyIncidentCount": 0,
+            "reviewCount": 4
+          },
+          "requirements": [
+            {
+              "key": "maturity_score",
+              "ok": true,
+              "actual": 100,
+              "target": 85
+            },
+            {
+              "key": "shadow_runs",
+              "ok": true,
+              "actual": 40,
+              "target": 10
+            },
+            {
+              "key": "human_reviewer_approvals",
+              "ok": true,
+              "actual": 3,
+              "target": 2
+            },
+            {
+              "key": "validator_evaluation_passes",
+              "ok": true,
+              "actual": 1,
+              "target": 1
+            },
+            {
+              "key": "citation_evaluation_passes",
+              "ok": false,
+              "actual": 0,
+              "target": 1
+            },
+            {
+              "key": "citation_evidence_refs",
+              "ok": true,
+              "actual": 40,
+              "target": 1
+            },
+            {
+              "key": "safety_incidents",
+              "ok": true,
+              "actual": 0,
+              "target": 0
+            },
+            {
+              "key": "production_driving_disabled",
+              "ok": true,
+              "actual": 0,
+              "target": 0
+            }
+          ],
+          "safety": {
+            "rawRationaleStored": false,
+            "rawSourceStored": false,
+            "supervisedAdvisoryOnly": true,
+            "productionDrivingAllowed": false
+          }
+        }
+      },
+      "pemsTrusted": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "appendOnlyShadowRuns": true,
+        "rawInputReturned": false,
+        "rawSourceReturned": false,
+        "productionDrivingAllowed": false,
+        "cortexProductMemory": false
+      }
+    },
+    {
+      "key": "pems_supervised_promotion_gate",
+      "status": "phase35_supervised_promotion_gate_reviewing",
+      "ok": true,
+      "mode": "supervised_advisory_gate_only",
+      "score": 78,
+      "target": 80,
+      "candidateCount": 1,
+      "reviewCount": 4,
+      "humanApprovalCount": 3,
+      "validatorPassCount": 1,
+      "citationPassCount": 0,
+      "supervisedAdvisoryCandidateCount": 0,
+      "latestCandidate": {
+        "candidateId": "pems_40d7cea4abb98732",
+        "workflow": "eligibility_benefits_navigation",
+        "selectedSkillKey": "insurance_portal_browser",
+        "shadowRunCount": 64,
+        "evidenceRefCount": 146,
+        "successfulOutcomeCount": 64,
+        "reviewerApprovalCount": 3,
+        "authorityCitationCount": 146,
+        "validatorPassCount": 511,
+        "safetyIncidentCount": 0,
+        "latestScore": 100,
+        "trusted": true,
+        "supervisedAdvisoryAllowed": false,
+        "promotionStatus": "shadow_review_required",
+        "lastReviewedAt": "2026-06-21T15:40:50.793Z",
+        "productionDrivingAllowed": false,
+        "promotion": {
+          "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+          "status": "shadow_review_required",
+          "ok": false,
+          "supervisedAdvisoryAllowed": false,
+          "productionDrivingAllowed": false,
+          "candidateId": "pems_40d7cea4abb98732",
+          "counts": {
+            "humanApprovals": 3,
+            "humanRejections": 0,
+            "validatorPasses": 1,
+            "validatorFailures": 0,
+            "citationPasses": 0,
+            "citationFailures": 0,
+            "citationEvidenceRefCount": 0,
+            "safetyIncidentCount": 0,
+            "reviewCount": 4
+          },
+          "requirements": [
+            {
+              "key": "maturity_score",
+              "ok": true,
+              "actual": 100,
+              "target": 85
+            },
+            {
+              "key": "shadow_runs",
+              "ok": true,
+              "actual": 40,
+              "target": 10
+            },
+            {
+              "key": "human_reviewer_approvals",
+              "ok": true,
+              "actual": 3,
+              "target": 2
+            },
+            {
+              "key": "validator_evaluation_passes",
+              "ok": true,
+              "actual": 1,
+              "target": 1
+            },
+            {
+              "key": "citation_evaluation_passes",
+              "ok": false,
+              "actual": 0,
+              "target": 1
+            },
+            {
+              "key": "citation_evidence_refs",
+              "ok": true,
+              "actual": 40,
+              "target": 1
+            },
+            {
+              "key": "safety_incidents",
+              "ok": true,
+              "actual": 0,
+              "target": 0
+            },
+            {
+              "key": "production_driving_disabled",
+              "ok": true,
+              "actual": 0,
+              "target": 0
+            }
+          ],
+          "safety": {
+            "rawRationaleStored": false,
+            "rawSourceStored": false,
+            "supervisedAdvisoryOnly": true,
+            "productionDrivingAllowed": false
+          }
+        }
+      },
+      "latestGate": {
+        "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+        "status": "shadow_review_required",
+        "ok": false,
+        "supervisedAdvisoryAllowed": false,
+        "productionDrivingAllowed": false,
+        "candidateId": "pems_40d7cea4abb98732",
+        "counts": {
+          "humanApprovals": 3,
+          "humanRejections": 0,
+          "validatorPasses": 1,
+          "validatorFailures": 0,
+          "citationPasses": 0,
+          "citationFailures": 0,
+          "citationEvidenceRefCount": 0,
+          "safetyIncidentCount": 0,
+          "reviewCount": 4
+        },
+        "requirements": [
+          {
+            "key": "maturity_score",
+            "ok": true,
+            "actual": 100,
+            "target": 85
+          },
+          {
+            "key": "shadow_runs",
+            "ok": true,
+            "actual": 64,
+            "target": 10
+          },
+          {
+            "key": "human_reviewer_approvals",
+            "ok": true,
+            "actual": 3,
+            "target": 2
+          },
+          {
+            "key": "validator_evaluation_passes",
+            "ok": true,
+            "actual": 1,
+            "target": 1
+          },
+          {
+            "key": "citation_evaluation_passes",
+            "ok": false,
+            "actual": 0,
+            "target": 1
+          },
+          {
+            "key": "citation_evidence_refs",
+            "ok": true,
+            "actual": 146,
+            "target": 1
+          },
+          {
+            "key": "safety_incidents",
+            "ok": true,
+            "actual": 0,
+            "target": 0
+          },
+          {
+            "key": "production_driving_disabled",
+            "ok": true,
+            "actual": 0,
+            "target": 0
+          }
+        ],
+        "safety": {
+          "rawRationaleStored": false,
+          "rawSourceStored": false,
+          "supervisedAdvisoryOnly": true,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawRationaleStored": false,
+        "rawSourceStored": false,
+        "supervisedAdvisoryOnly": true,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_evaluator_workbench",
+      "status": "phase36_reviewer_evaluator_workbench_active",
+      "ok": true,
+      "mode": "supervised_advisory_workbench_only",
+      "score": 85,
+      "target": 85,
+      "candidateCount": 1,
+      "draftCount": 7,
+      "llmAssistedDraftCount": 7,
+      "consistencyTraceDraftCount": 1,
+      "advisoryLinkedReviewCount": 4,
+      "latestDraft": {
+        "id": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+        "candidateId": "pems_40d7cea4abb98732",
+        "actorUserId": "phase44_visual_seed",
+        "draftType": "evaluator_draft_note",
+        "evaluatorMode": "llm_assisted_advisory",
+        "status": "needs_reviewer_attention",
+        "deterministicValidatorStatus": "pass",
+        "suggestedReviewType": "citation_evaluation",
+        "suggestedDecision": "blocked",
+        "advisoryNoteHash": "db556af09f71ee20b37c5a6ea53fa0ee09ef98785b460157281fa8e7dfc62235",
+        "advisoryNotePreview": "Synthetic advisory note for Phase 44 history review proof.",
+        "consistencyTraceRef": "pems_consistency_trace_3dd0ed11dc5e7831",
+        "consistencyTraceHash": "bf5c2f752edd074d68d7f2d33476481f13bbd9bbe9ff6418f5af402002f7d830",
+        "consistencyTracePreview": "{\"traceKind\":\"phase39_live_evaluator_ref_trace\",\"candidateId\":\"pems_40d7cea4abb98732\",\"sourcePointerIds\":[\"artifact_phase44-[identifier]\"],\"citationClosure\":[\"a",
+        "metadata": {
+          "phase": 39,
+          "liveEvaluatorGeneration": true,
+          "sourcePointerIds": [
+            "artifact_phase44-[identifier]"
+          ],
+          "citationClosure": [
+            "artifact_phase44-[identifier]"
+          ],
+          "claimCitationClosure": [
+            {
+              "id": "pems_claim_ba9e22111fb7bed8",
+              "claimHash": "88b8d26c3d30d446159b3212156e8cc265953e3679a5dd1c1bdc77b1572589dc",
+              "claimPreview": "The cited source pointer supports manual review.",
+              "status": "supported",
+              "sourcePointerIds": [
+                "artifact_phase44-[identifier]"
+              ],
+              "sourcePointerCount": 1,
+              "confidence": 0.94,
+              "explanationPreview": "",
+              "suggestedEditPreview": "",
+              "requiresReviewerEdit": false,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            },
+            {
+              "id": "pems_claim_5639ac5f8283681e",
+              "claimHash": "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b",
+              "claimPreview": "Production recommendations can be automatic.",
+              "status": "unsupported",
+              "sourcePointerIds": [],
+              "sourcePointerCount": 0,
+              "confidence": 0.1,
+              "explanationPreview": "",
+              "suggestedEditPreview": "State that production driving remains disabled.",
+              "requiresReviewerEdit": true,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            }
+          ],
+          "claimCitationClosureSummary": {
+            "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+            "status": "phase40_claim_citation_closure_vetoed",
+            "verdict": "unsupported_claims_found",
+            "claimCount": 2,
+            "supportedCount": 1,
+            "lowConfidenceCount": 0,
+            "unsupportedCount": 1,
+            "reviewerEditRequired": true,
+            "unsupportedClaimHashes": [
+              "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b"
+            ],
+            "productionDrivingAllowed": false
+          },
+          "claimLevelCitationClosure": true,
+          "evaluatorModelRef": "openai:gpt-5-mini",
+          "modelProviderRef": "openai",
+          "egressTraceRef": "outbound_payload:766d38e7700ddb78",
+          "egressObserved": true,
+          "liveLlmEvaluatorUsed": true,
+          "mockedLlmOutput": true,
+          "outboundPayloadHash": "766d38e7700ddb78912ad103218e5e51898f30c377adcf3bba44e3802e7db83e",
+          "completionHash": "4dbef0e4ae0119e1ac83e60927ca69c3ce2cb121e2a0a089d98eaf2b5b307f8a",
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false,
+          "productionDrivingAllowed": false,
+          "advisoryOnly": true,
+          "rawAdvisoryNoteStored": false,
+          "rawConsistencyTraceStored": false,
+          "deterministicValidatorAuthority": true,
+          "humanReviewerAuthority": true
+        },
+        "createdAt": "2026-06-21T15:40:50.790Z",
+        "updatedAt": "2026-06-21T15:40:50.790Z",
+        "claimCitationClosure": {
+          "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+          "status": "phase40_claim_citation_closure_vetoed",
+          "verdict": "unsupported_claims_found",
+          "claimCount": 2,
+          "supportedCount": 1,
+          "lowConfidenceCount": 0,
+          "unsupportedCount": 1,
+          "reviewerEditRequired": true,
+          "unsupportedClaimHashes": [
+            "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b"
+          ],
+          "productionDrivingAllowed": false,
+          "claims": [
+            {
+              "id": "pems_claim_ba9e22111fb7bed8",
+              "claimHash": "88b8d26c3d30d446159b3212156e8cc265953e3679a5dd1c1bdc77b1572589dc",
+              "claimPreview": "The cited source pointer supports manual review.",
+              "status": "supported",
+              "sourcePointerIds": [
+                "artifact_phase44-[identifier]"
+              ],
+              "sourcePointerCount": 1,
+              "confidence": 0.94,
+              "explanationPreview": "",
+              "suggestedEditPreview": "",
+              "requiresReviewerEdit": false,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            },
+            {
+              "id": "pems_claim_5639ac5f8283681e",
+              "claimHash": "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b",
+              "claimPreview": "Production recommendations can be automatic.",
+              "status": "unsupported",
+              "sourcePointerIds": [],
+              "sourcePointerCount": 0,
+              "confidence": 0.1,
+              "explanationPreview": "",
+              "suggestedEditPreview": "",
+              "requiresReviewerEdit": true,
+              "rawClaimStored": false,
+              "rawSourceStored": false
+            }
+          ],
+          "allowedSourcePointerIds": [
+            "artifact_phase44-[identifier]"
+          ],
+          "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+          "candidateId": "pems_40d7cea4abb98732",
+          "sourcePointerBounded": true,
+          "liveEvaluatorDraft": false,
+          "safety": {
+            "rawClaimStored": false,
+            "rawSourceStored": false,
+            "rawPromptStored": false,
+            "rawCompletionStored": false,
+            "reviewerEditRequiredForUnsupported": true,
+            "productionDrivingAllowed": false
+          }
+        }
+      },
+      "latestCandidate": {
+        "candidateId": "pems_40d7cea4abb98732",
+        "workflow": "eligibility_benefits_navigation",
+        "selectedSkillKey": "insurance_portal_browser",
+        "shadowRunCount": 64,
+        "latestScore": 100,
+        "supervisedAdvisoryAllowed": false,
+        "promotionStatus": "shadow_review_required",
+        "productionDrivingAllowed": false,
+        "updatedAt": "2026-06-22T03:56:02.117Z"
+      },
+      "latestGate": {
+        "version": "2026-06-18.phase35-pems-supervised-promotion-gate.v1",
+        "status": "shadow_review_required",
+        "ok": false,
+        "supervisedAdvisoryAllowed": false,
+        "productionDrivingAllowed": false,
+        "candidateId": "pems_40d7cea4abb98732",
+        "counts": {
+          "humanApprovals": 3,
+          "humanRejections": 0,
+          "validatorPasses": 1,
+          "validatorFailures": 0,
+          "citationPasses": 0,
+          "citationFailures": 0,
+          "citationEvidenceRefCount": 0,
+          "safetyIncidentCount": 0,
+          "reviewCount": 4
+        },
+        "requirements": [
+          {
+            "key": "maturity_score",
+            "ok": true,
+            "actual": 100,
+            "target": 85
+          },
+          {
+            "key": "shadow_runs",
+            "ok": true,
+            "actual": 64,
+            "target": 10
+          },
+          {
+            "key": "human_reviewer_approvals",
+            "ok": true,
+            "actual": 3,
+            "target": 2
+          },
+          {
+            "key": "validator_evaluation_passes",
+            "ok": true,
+            "actual": 1,
+            "target": 1
+          },
+          {
+            "key": "citation_evaluation_passes",
+            "ok": false,
+            "actual": 0,
+            "target": 1
+          },
+          {
+            "key": "citation_evidence_refs",
+            "ok": true,
+            "actual": 146,
+            "target": 1
+          },
+          {
+            "key": "safety_incidents",
+            "ok": true,
+            "actual": 0,
+            "target": 0
+          },
+          {
+            "key": "production_driving_disabled",
+            "ok": true,
+            "actual": 0,
+            "target": 0
+          }
+        ],
+        "safety": {
+          "rawRationaleStored": false,
+          "rawSourceStored": false,
+          "supervisedAdvisoryOnly": true,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "advisoryDraftsOnly": true,
+        "deterministicValidatorAuthority": true,
+        "humanReviewerAuthority": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawSourceStored": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_ui",
+      "status": "phase37_pems_reviewer_ui_ready",
+      "ok": true,
+      "mode": "ref_only_operator_review_ui",
+      "score": 88,
+      "target": 88,
+      "route": "/",
+      "apiRoutes": [
+        "/api/continuous-intelligence/pems/workbench",
+        "/api/continuous-intelligence/pems/reviews"
+      ],
+      "actions": [
+        "approved",
+        "rejected",
+        "blocked"
+      ],
+      "advisoryOnly": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "refOnlyAdvisoryMaterial": true,
+        "explicitReviewWriteRequired": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_comparison_provenance",
+      "status": "phase38_reviewer_comparison_provenance_ready",
+      "ok": true,
+      "mode": "deterministic_vs_advisory_ref_only",
+      "score": 90,
+      "target": 90,
+      "candidateId": "pems_40d7cea4abb98732",
+      "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+      "comparisonRows": [
+        {
+          "key": "validator_decision",
+          "label": "Validator decision",
+          "deterministicLabel": "deterministic validator",
+          "deterministicValue": "pass",
+          "advisoryLabel": "advisory suggestion",
+          "advisoryValue": "blocked",
+          "agreement": false
+        },
+        {
+          "key": "promotion_gate",
+          "label": "Promotion gate",
+          "deterministicLabel": "gate status",
+          "deterministicValue": "shadow_review_required",
+          "advisoryLabel": "draft status",
+          "advisoryValue": "needs_reviewer_attention",
+          "agreement": true
+        },
+        {
+          "key": "citation_refs",
+          "label": "Cited evidence refs",
+          "deterministicLabel": "gate evidence refs",
+          "deterministicValue": 146,
+          "advisoryLabel": "advisory source refs",
+          "advisoryValue": 1,
+          "agreement": true
+        },
+        {
+          "key": "production_boundary",
+          "label": "Production boundary",
+          "deterministicLabel": "deterministic policy",
+          "deterministicValue": "disabled",
+          "advisoryLabel": "advisory policy",
+          "advisoryValue": "disabled",
+          "agreement": true
+        }
+      ],
+      "evidenceChips": [
+        {
+          "id": "artifact_phase44-[identifier]",
+          "kind": "source_pointer_ref",
+          "rawSourceStored": false
+        }
+      ],
+      "evaluatorProvenance": {
+        "evaluatorMode": "llm_assisted_advisory",
+        "evaluatorModelRef": "openai:gpt-5-mini",
+        "modelProviderRef": "openai",
+        "egressTraceRef": "outbound_payload:766d38e7700ddb78",
+        "liveGated": true,
+        "liveLlmEvaluation": true,
+        "egressObserved": true,
+        "liveProofClaimed": false,
+        "mockedLlmOutputCountsAsProof": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "refOnlyComparison": true,
+        "rawAdvisoryNoteStored": false,
+        "rawConsistencyTraceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "automaticProductionRecommendation": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_live_evaluator_generation_filtering",
+      "status": "phase39_live_evaluator_filtering_ready",
+      "ok": true,
+      "mode": "live_gated_advisory_generation_and_filtering",
+      "score": 92,
+      "target": 92,
+      "openAiConfigured": true,
+      "draftCount": 7,
+      "filteredDraftCount": 7,
+      "liveGeneratedDraftCount": 6,
+      "liveProofDraftCount": 3,
+      "mockedDraftCount": 3,
+      "appliedFilters": {
+        "draftStatus": "all",
+        "evaluatorMode": "all",
+        "candidateId": null,
+        "liveOnly": false
+      },
+      "filterOptions": {
+        "draftStatuses": [
+          "all",
+          "draft_ready_for_human_review",
+          "needs_reviewer_attention",
+          "blocked_by_validator"
+        ],
+        "evaluatorModes": [
+          "all",
+          "deterministic_validator_advisory",
+          "llm_assisted_advisory",
+          "nestr_consistency_trace"
+        ],
+        "liveOnly": [
+          false,
+          true
+        ]
+      },
+      "liveProofClaimed": true,
+      "productionDrivingAllowed": false,
+      "safety": {
+        "liveRequiresObservedEgress": true,
+        "mockedLlmOutputCountsAsProof": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawSourceStored": false,
+        "automaticProductionRecommendation": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_live_claim_citation_closure",
+      "status": "phase40_claim_citation_closure_veto_visible",
+      "ok": true,
+      "mode": "live_evaluator_claim_citation_closure",
+      "score": 94,
+      "target": 94,
+      "claimCount": 2,
+      "supportedCount": 1,
+      "unsupportedCount": 1,
+      "lowConfidenceCount": 0,
+      "reviewerEditRequired": true,
+      "sourcePointerBounded": true,
+      "liveEvaluatorDraft": true,
+      "claimClosureDraftCount": 4,
+      "claimClosureVetoDraftCount": 4,
+      "claims": [
+        {
+          "id": "pems_claim_ba9e22111fb7bed8",
+          "claimHash": "88b8d26c3d30d446159b3212156e8cc265953e3679a5dd1c1bdc77b1572589dc",
+          "claimPreview": "The cited source pointer supports manual review.",
+          "status": "supported",
+          "sourcePointerIds": [
+            "artifact_phase44-[identifier]"
+          ],
+          "sourcePointerCount": 1,
+          "confidence": 0.94,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": false,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        },
+        {
+          "id": "pems_claim_5639ac5f8283681e",
+          "claimHash": "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b",
+          "claimPreview": "Production recommendations can be automatic.",
+          "status": "unsupported",
+          "sourcePointerIds": [],
+          "sourcePointerCount": 0,
+          "confidence": 0.1,
+          "explanationPreview": "",
+          "suggestedEditPreview": "",
+          "requiresReviewerEdit": true,
+          "rawClaimStored": false,
+          "rawSourceStored": false
+        }
+      ],
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawClaimStored": false,
+        "rawSourceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "claimLabelsCreateEvidence": false,
+        "unsupportedClaimsVetoApproval": true,
+        "reviewerEditRequiredForUnsupported": true,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_claim_revisions",
+      "status": "phase41_reviewer_claim_revision_ready",
+      "ok": true,
+      "mode": "reviewer_claim_revision_records",
+      "score": 96,
+      "target": 96,
+      "claimRevisionCount": 5,
+      "claimRevisionReclosedCount": 5,
+      "deterministicReclosurePassed": true,
+      "sourcePointerBounded": true,
+      "preservesOriginalAndRevisedHashes": true,
+      "latestClaimRevision": {
+        "id": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+        "candidateId": "pems_40d7cea4abb98732",
+        "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+        "claimId": "pems_claim_5639ac5f8283681e",
+        "actorUserId": "phase44_visual_reviewer",
+        "revisionStatus": "revision_reclosure_passed",
+        "originalClaimHash": "ad539363e6944fdf0fbc6f6dc7111d84cb5740da1a8f099f24190b576355805b",
+        "originalClaimPreview": "Production recommendations can be automatic.",
+        "suggestedEditHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "suggestedEditPreview": "",
+        "revisedClaimHash": "0f39c4a64f9d5161a1395e2cefdbe52ff1dfb58a31a127ab7b8297077b63598b",
+        "revisedClaimPreview": "The cited source pointer does not support automatic production recommendations.",
+        "sourcePointerIds": [
+          "artifact_phase44-[identifier]"
+        ],
+        "deterministicReclosure": {
+          "version": "2026-06-20.phase41-reviewer-claim-revision-records.v1",
+          "status": "phase41_revision_reclosure_passed",
+          "claimCitationClosure": {
+            "version": "2026-06-20.phase40-live-claim-citation-closure.v1",
+            "status": "phase40_claim_citation_closure_passed",
+            "verdict": "all_claims_supported",
+            "claimCount": 1,
+            "supportedCount": 1,
+            "lowConfidenceCount": 0,
+            "unsupportedCount": 0,
+            "reviewerEditRequired": false,
+            "unsupportedClaimHashes": [],
+            "productionDrivingAllowed": false,
+            "claims": [
+              {
+                "id": "pems_claim_0df9c0da693f6d9a",
+                "claimHash": "0f39c4a64f9d5161a1395e2cefdbe52ff1dfb58a31a127ab7b8297077b63598b",
+                "claimPreview": "The cited source pointer does not support automatic production recommendations.",
+                "status": "supported",
+                "sourcePointerIds": [
+                  "artifact_phase44-[identifier]"
+                ],
+                "sourcePointerCount": 1,
+                "confidence": 0.9,
+                "explanationPreview": "Reviewer revision cites allowed source pointers.",
+                "suggestedEditPreview": "",
+                "requiresReviewerEdit": false,
+                "rawClaimStored": false,
+                "rawSourceStored": false
+              }
+            ],
+            "sourcePointerBounded": true
+          },
+          "reviewerEditRequired": false,
+          "sourcePointerBounded": true,
+          "productionDrivingAllowed": false
+        },
+        "metadata": {
+          "reviewerUiAction": "phase44_visual_seed_revision",
+          "phase": 41,
+          "advisoryOnly": true,
+          "sourcePointerBounded": true,
+          "deterministicReclosurePassed": true,
+          "originalStatus": "unsupported",
+          "rawOriginalClaimStored": false,
+          "rawSuggestedEditStored": false,
+          "rawRevisedClaimStored": false,
+          "rawSourceStored": false,
+          "revisionCreatesEvidence": false,
+          "productionDrivingAllowed": false
+        },
+        "createdAt": "2026-06-21T15:40:50.793Z",
+        "updatedAt": "2026-06-21T15:40:50.793Z",
+        "advisoryOnly": true,
+        "productionDrivingAllowed": false,
+        "safety": {
+          "rawOriginalClaimStored": false,
+          "rawSuggestedEditStored": false,
+          "rawRevisedClaimStored": false,
+          "rawSourceStored": false,
+          "revisionCreatesEvidence": false,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawOriginalClaimStored": false,
+        "rawSuggestedEditStored": false,
+        "rawRevisedClaimStored": false,
+        "rawSourceStored": false,
+        "revisionCreatesEvidence": false,
+        "revisionBypassesHumanReview": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_follow_up_workflows",
+      "status": "phase42_reviewer_follow_up_workflow_ready",
+      "ok": true,
+      "mode": "reviewer_decision_history_and_follow_up_binding",
+      "score": 98,
+      "target": 98,
+      "reviewerFollowUpCount": 4,
+      "reviewerFollowUpResolvedCount": 4,
+      "reviewerFollowUpOpenCount": 0,
+      "revisionBoundFollowUpCount": 4,
+      "reviewDecisionBoundFollowUpCount": 4,
+      "revisionResolvedVeto": true,
+      "latestReviewerFollowUp": {
+        "id": "pems_review_followup_5cde99ae-4078-47a1-abb9-050308c3b44a",
+        "candidateId": "pems_40d7cea4abb98732",
+        "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+        "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+        "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+        "actorUserId": "phase44_visual_reviewer",
+        "followupType": "revision_decision_binding",
+        "followupStatus": "resolved",
+        "workflowStatus": "advisory_closed",
+        "revisionOutcome": "revision_reclosure_passed",
+        "actionRequired": "No advisory follow-up remains open.",
+        "rationaleHash": "d09f3d7a12cadeb5d4509040521ce6d6d6489e8cec0e4a9fee0b4886230cf1a6",
+        "rationalePreview": "Closed second synthetic advisory follow-up.",
+        "metadata": {
+          "phase": 42,
+          "advisoryOnly": true,
+          "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+          "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+          "reviewDecision": "approved",
+          "reviewType": "human_review",
+          "revisionOutcome": "revision_reclosure_passed",
+          "revisionResolvedVeto": true,
+          "rawRationaleStored": false,
+          "rawRevisionStored": false,
+          "rawReviewStored": false,
+          "followUpCreatesEvidence": false,
+          "followUpBypassesHumanReview": false,
+          "productionDrivingAllowed": false
+        },
+        "createdAt": "2026-06-21T15:43:00.000Z",
+        "updatedAt": "2026-06-21T15:43:00.000Z",
+        "advisoryOnly": true,
+        "productionDrivingAllowed": false,
+        "safety": {
+          "rawRationaleStored": false,
+          "rawRevisionStored": false,
+          "rawReviewStored": false,
+          "followUpCreatesEvidence": false,
+          "followUpBypassesHumanReview": false,
+          "productionDrivingAllowed": false
+        }
+      },
+      "latestPromotionReview": {
+        "id": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+        "candidateId": "pems_40d7cea4abb98732",
+        "actorUserId": "phase44_visual_reviewer",
+        "reviewType": "human_review",
+        "decision": "approved",
+        "evidenceRefCount": 0,
+        "validatorPassCount": 0,
+        "safetyIncidentCount": 0,
+        "rationaleHash": "7cd0433406e68fe113e484a35c582f541e57ca4bb28538b32e85092a4a1eda2b",
+        "rationalePreview": "Approved advisory material after deterministic revision reclosure.",
+        "metadata": {
+          "phase": 44,
+          "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+          "advisoryOnly": true,
+          "rawRationaleStored": false,
+          "productionDrivingAllowed": false,
+          "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+          "advisoryMaterialRef": "pems_advisory_material_5d1c002cc696c349"
+        },
+        "createdAt": "2026-06-21T15:40:50.793Z",
+        "advisoryOnly": true,
+        "productionDrivingAllowed": false,
+        "safety": {
+          "rawRationaleStored": false,
+          "rawSourceStored": false,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawRationaleStored": false,
+        "rawRevisionStored": false,
+        "rawReviewStored": false,
+        "followUpCreatesEvidence": false,
+        "followUpBypassesHumanReview": false,
+        "automaticProductionRecommendation": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_history_audit_exports",
+      "status": "phase43_reviewer_history_audit_export_ready",
+      "ok": true,
+      "mode": "reviewer_history_audit_export_refs",
+      "score": 99,
+      "target": 99,
+      "reviewerHistoryExportCount": 3,
+      "safeHistoryExportCount": 3,
+      "historyRowCount": 5,
+      "claimRevisionCount": 1,
+      "promotionReviewCount": 1,
+      "reviewerFollowUpCount": 2,
+      "hasExportRef": true,
+      "hasExportHash": true,
+      "hasSnapshotHash": true,
+      "latestReviewerHistoryExport": {
+        "id": "pems_history_export_52684968-d04d-433e-a2e8-c80e24185237",
+        "candidateId": "pems_40d7cea4abb98732",
+        "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+        "actorUserId": "phase44_visual_reviewer",
+        "exportReasonHash": "803e53a60f7b74172a2ee78be0575cc3e17bdb92ed46e4216c428b3126387d54",
+        "exportReasonPreview": "Second synthetic Phase 44 safe history export with comparison delta.",
+        "filters": {
+          "candidateId": "pems_40d7cea4abb98732",
+          "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+          "followupStatus": "resolved",
+          "reviewDecision": "approved",
+          "includeDrafts": true,
+          "includeRevisions": true,
+          "includeReviews": true,
+          "includeFollowUps": true
+        },
+        "exportRef": "pems_review_history_export_b9cd889362910d8c",
+        "exportHash": "d8f17eb5c65233a25ab697b2f6bc225921c00c3a9e28edef43798b5e61674148",
+        "historySnapshotHash": "7280e37043b81f8b444734b0d24e744f6878786795e5a879a34ddea8b5ab098c",
+        "historySnapshotPreview": {
+          "version": "2026-06-20.phase43-reviewer-history-audit-exports.v1",
+          "filters": {
+            "candidateId": "pems_40d7cea4abb98732",
+            "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+            "followupStatus": "resolved",
+            "reviewDecision": "approved",
+            "includeDrafts": true,
+            "includeRevisions": true,
+            "includeReviews": true,
+            "includeFollowUps": true
+          },
+          "counts": {
+            "draftCount": 1,
+            "claimRevisionCount": 1,
+            "promotionReviewCount": 1,
+            "reviewerFollowUpCount": 2,
+            "resolvedFollowUpCount": 2,
+            "openFollowUpCount": 0,
+            "blockedFollowUpCount": 0,
+            "historyRowCount": 5
+          },
+          "latestRefs": [
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_5cde99ae-4078-47a1-abb9-050308c3b44a",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:43:00.000Z",
+              "updatedAt": "2026-06-21T15:43:00.000Z"
+            },
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_54abf477-9126-4e67-9137-6f3bd735ba2b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:41:00.000Z",
+              "updatedAt": "2026-06-21T15:41:00.000Z"
+            },
+            {
+              "type": "claim_revision",
+              "id": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "revision_reclosure_passed",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": "2026-06-21T15:40:50.793Z"
+            },
+            {
+              "type": "promotion_review",
+              "id": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": null,
+              "decision": "approved",
+              "reviewType": "human_review",
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": null
+            },
+            {
+              "type": "advisory_draft",
+              "id": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "needs_reviewer_attention",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.790Z",
+              "updatedAt": "2026-06-21T15:40:50.790Z"
+            }
+          ],
+          "safety": {
+            "rawHistoryStored": false,
+            "rawRevisionStored": false,
+            "rawReviewStored": false,
+            "rawSourceStored": false,
+            "rawPromptStored": false,
+            "rawCompletionStored": false,
+            "rawOcrStored": false,
+            "rawFrameStored": false,
+            "exportCreatesEvidence": false,
+            "exportBypassesHumanReview": false,
+            "productionDrivingAllowed": false
+          }
+        },
+        "metadata": {
+          "phase": 43,
+          "version": "2026-06-20.phase43-reviewer-history-audit-exports.v1",
+          "advisoryOnly": true,
+          "rawHistoryStored": false,
+          "rawRevisionStored": false,
+          "rawReviewStored": false,
+          "rawSourceStored": false,
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "rawOcrStored": false,
+          "rawFrameStored": false,
+          "exportCreatesEvidence": false,
+          "exportBypassesHumanReview": false,
+          "productionDrivingAllowed": false
+        },
+        "createdAt": "2026-06-21T15:44:00.000Z",
+        "updatedAt": "2026-06-21T15:44:00.000Z",
+        "advisoryOnly": true,
+        "productionDrivingAllowed": false,
+        "safety": {
+          "rawHistoryStored": false,
+          "rawRevisionStored": false,
+          "rawReviewStored": false,
+          "rawSourceStored": false,
+          "rawPromptStored": false,
+          "rawCompletionStored": false,
+          "rawOcrStored": false,
+          "rawFrameStored": false,
+          "exportCreatesEvidence": false,
+          "exportBypassesHumanReview": false,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawHistoryStored": false,
+        "rawRevisionStored": false,
+        "rawReviewStored": false,
+        "rawSourceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawOcrStored": false,
+        "rawFrameStored": false,
+        "exportCreatesEvidence": false,
+        "exportBypassesHumanReview": false,
+        "automaticProductionRecommendation": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "pems_reviewer_history_review_refinement",
+      "status": "phase44_reviewer_history_review_refinement_ready",
+      "ok": true,
+      "mode": "operator_history_export_search_sort_and_snapshot_comparison",
+      "score": 100,
+      "target": 100,
+      "reviewerHistoryExportReviewCount": 3,
+      "filteredExportCount": 3,
+      "searchableBy": [
+        "candidateId",
+        "advisoryDraftId",
+        "followupStatus",
+        "exportRef",
+        "snapshotHash"
+      ],
+      "sortableBy": [
+        "created_at",
+        "history_row_count",
+        "export_ref",
+        "snapshot_hash"
+      ],
+      "appliedFilters": {
+        "candidateId": null,
+        "advisoryDraftId": null,
+        "followupStatus": "all",
+        "exportRef": null,
+        "snapshotHash": null,
+        "sortBy": "created_at",
+        "sortDirection": "desc",
+        "limit": 25
+      },
+      "comparison": {
+        "version": "2026-06-21.phase44-reviewer-history-review-refinement.v1",
+        "status": "phase44_history_export_snapshot_comparison_ready",
+        "ok": true,
+        "baseline": {
+          "id": "pems_history_export_6d72b6eb-dbd0-43f4-9f16-e077107c7615",
+          "candidateId": "pems_40d7cea4abb98732",
+          "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+          "exportRef": "pems_review_history_export_5da63924c8846828",
+          "exportHash": "789cb217eddcb94b6973db718e9781e9d55536e1380a7e5d5106cf8980ea18bc",
+          "historySnapshotHash": "9ebb4f509307b745625be106aad71443ce20c8c87ade21b33eaeb31cf8cf86bb",
+          "followupStatuses": [
+            "resolved"
+          ],
+          "createdAt": "2026-06-21T15:42:00.000Z",
+          "updatedAt": "2026-06-21T15:42:00.000Z",
+          "counts": {
+            "draftCount": 1,
+            "claimRevisionCount": 1,
+            "promotionReviewCount": 1,
+            "reviewerFollowUpCount": 1,
+            "resolvedFollowUpCount": 1,
+            "openFollowUpCount": 0,
+            "blockedFollowUpCount": 0,
+            "historyRowCount": 4
+          },
+          "latestRefs": [
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_54abf477-9126-4e67-9137-6f3bd735ba2b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:41:00.000Z",
+              "updatedAt": "2026-06-21T15:41:00.000Z"
+            },
+            {
+              "type": "claim_revision",
+              "id": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "revision_reclosure_passed",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": "2026-06-21T15:40:50.793Z"
+            },
+            {
+              "type": "promotion_review",
+              "id": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": null,
+              "decision": "approved",
+              "reviewType": "human_review",
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": null
+            },
+            {
+              "type": "advisory_draft",
+              "id": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "needs_reviewer_attention",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.790Z",
+              "updatedAt": "2026-06-21T15:40:50.790Z"
+            }
+          ],
+          "advisoryOnly": true,
+          "productionDrivingAllowed": false,
+          "safety": {
+            "rawHistoryStored": false,
+            "rawRevisionStored": false,
+            "rawReviewStored": false,
+            "rawSourceStored": false,
+            "rawPromptStored": false,
+            "rawCompletionStored": false,
+            "rawOcrStored": false,
+            "rawFrameStored": false,
+            "exportCreatesEvidence": false,
+            "exportBypassesHumanReview": false,
+            "productionDrivingAllowed": false
+          }
+        },
+        "comparison": {
+          "id": "pems_history_export_52684968-d04d-433e-a2e8-c80e24185237",
+          "candidateId": "pems_40d7cea4abb98732",
+          "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+          "exportRef": "pems_review_history_export_b9cd889362910d8c",
+          "exportHash": "d8f17eb5c65233a25ab697b2f6bc225921c00c3a9e28edef43798b5e61674148",
+          "historySnapshotHash": "7280e37043b81f8b444734b0d24e744f6878786795e5a879a34ddea8b5ab098c",
+          "followupStatuses": [
+            "resolved"
+          ],
+          "createdAt": "2026-06-21T15:44:00.000Z",
+          "updatedAt": "2026-06-21T15:44:00.000Z",
+          "counts": {
+            "draftCount": 1,
+            "claimRevisionCount": 1,
+            "promotionReviewCount": 1,
+            "reviewerFollowUpCount": 2,
+            "resolvedFollowUpCount": 2,
+            "openFollowUpCount": 0,
+            "blockedFollowUpCount": 0,
+            "historyRowCount": 5
+          },
+          "latestRefs": [
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_5cde99ae-4078-47a1-abb9-050308c3b44a",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:43:00.000Z",
+              "updatedAt": "2026-06-21T15:43:00.000Z"
+            },
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_54abf477-9126-4e67-9137-6f3bd735ba2b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:41:00.000Z",
+              "updatedAt": "2026-06-21T15:41:00.000Z"
+            },
+            {
+              "type": "claim_revision",
+              "id": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "revision_reclosure_passed",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": "2026-06-21T15:40:50.793Z"
+            },
+            {
+              "type": "promotion_review",
+              "id": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": null,
+              "decision": "approved",
+              "reviewType": "human_review",
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.793Z",
+              "updatedAt": null
+            },
+            {
+              "type": "advisory_draft",
+              "id": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": null,
+              "claimRevisionId": null,
+              "promotionReviewId": null,
+              "status": "needs_reviewer_attention",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": null,
+              "workflowStatus": null,
+              "revisionOutcome": null,
+              "createdAt": "2026-06-21T15:40:50.790Z",
+              "updatedAt": "2026-06-21T15:40:50.790Z"
+            }
+          ],
+          "advisoryOnly": true,
+          "productionDrivingAllowed": false,
+          "safety": {
+            "rawHistoryStored": false,
+            "rawRevisionStored": false,
+            "rawReviewStored": false,
+            "rawSourceStored": false,
+            "rawPromptStored": false,
+            "rawCompletionStored": false,
+            "rawOcrStored": false,
+            "rawFrameStored": false,
+            "exportCreatesEvidence": false,
+            "exportBypassesHumanReview": false,
+            "productionDrivingAllowed": false
+          }
+        },
+        "delta": {
+          "historyRowCount": 1,
+          "draftCount": 0,
+          "claimRevisionCount": 0,
+          "promotionReviewCount": 0,
+          "reviewerFollowUpCount": 1,
+          "resolvedFollowUpCount": 1,
+          "openFollowUpCount": 0,
+          "blockedFollowUpCount": 0
+        },
+        "changedRefs": {
+          "added": [
+            {
+              "type": "review_followup",
+              "id": "pems_review_followup_5cde99ae-4078-47a1-abb9-050308c3b44a",
+              "candidateId": "pems_40d7cea4abb98732",
+              "advisoryDraftId": "pems_eval_draft_5d075af6-d7db-4fa5-a0e3-2db4006811bd",
+              "claimRevisionId": "pems_claim_revision_524c35ae-6224-4551-a107-0a0a4d418e4b",
+              "promotionReviewId": "pems_review_b426f27d-5afd-4bbf-9ac7-ddd381e246bc",
+              "status": "resolved",
+              "decision": null,
+              "reviewType": null,
+              "followupStatus": "resolved",
+              "workflowStatus": "advisory_closed",
+              "revisionOutcome": "revision_reclosure_passed",
+              "createdAt": "2026-06-21T15:43:00.000Z",
+              "updatedAt": "2026-06-21T15:43:00.000Z"
+            }
+          ],
+          "removed": []
+        },
+        "advisoryOnly": true,
+        "productionDrivingAllowed": false,
+        "safety": {
+          "rawHistoryStored": false,
+          "rawRevisionStored": false,
+          "rawReviewStored": false,
+          "rawSourceStored": false,
+          "comparisonCreatesEvidence": false,
+          "comparisonBypassesHumanReview": false,
+          "automaticProductionRecommendation": false,
+          "productionDrivingAllowed": false
+        }
+      },
+      "productionDrivingAllowed": false,
+      "safety": {
+        "rawHistoryStored": false,
+        "rawRevisionStored": false,
+        "rawReviewStored": false,
+        "rawSourceStored": false,
+        "rawPromptStored": false,
+        "rawCompletionStored": false,
+        "rawOcrStored": false,
+        "rawFrameStored": false,
+        "searchCreatesEvidence": false,
+        "searchBypassesHumanReview": false,
+        "comparisonCreatesEvidence": false,
+        "comparisonBypassesHumanReview": false,
+        "automaticProductionRecommendation": false,
+        "productionDrivingAllowed": false
+      }
+    },
+    {
+      "key": "docker_compose_contract",
+      "status": "compose_contract_present",
+      "ok": true,
+      "services": [
+        "node-runtime",
+        "fastapi",
+        "mobile-pwa",
+        "falkordb",
+        "postgres"
+      ],
+      "command": "npm run docker:contract"
+    },
+    {
+      "key": "approval_boundary",
+      "status": "approval_required_for_external_write_or_live_browser_actions",
+      "ok": true
+    }
+  ],
+  "visualArtifacts": [
+    {
+      "route": "/",
+      "required": true,
+      "status": "dashboard_panel_verified",
+      "proof": "Connector Verification panel rendered in browser proof."
+    },
+    {
+      "route": "/mvp",
+      "required": true,
+      "status": "legacy_mvp_verified",
+      "proof": "Static MVP remains the compatibility harness until PWA parity."
+    },
+    {
+      "route": "apps/mobile-next",
+      "required": true,
+      "status": "pwa_mobile_view_verified",
+      "proof": "Next.js mobile viewport visual test passed.",
+      "artifact": "/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png"
+    },
+    {
+      "route": "/api/v1/browser/sessions/{browser_session_id}/stream",
+      "required": true,
+      "status": "live_worker_stream_verified",
+      "proof": "Worker Browser live block rendered a data:image/jpeg frame through FastAPI /api/v1.",
+      "artifact": "/private/tmp/workerprototype-openclaw-mobile-pwa-visual/15-mobile-pwa-final-clean-live-frame.png"
+    },
+    {
+      "route": "docs/PROJECT_OPERATING_SYSTEM.md",
+      "required": true,
+      "status": "phase32_operating_system_documented",
+      "proof": "Canonical goal-tied RALPH operating system is mirrored in repo docs and must be mirrored in Cortex before the phase is done."
+    },
+    {
+      "route": "src/concierge/continuousIntelligence.mjs",
+      "required": true,
+      "status": "phase33_shadow_scaffold_documented",
+      "proof": "Typed CaseState, G0-G8 gate skeleton, PEMS maturity schema, and shadow reconstruction are implemented in a deterministic module."
+    },
+    {
+      "route": "/api/continuous-intelligence/pems/promotion",
+      "required": true,
+      "status": "phase35_supervised_promotion_gate_reviewing",
+      "proof": "Phase 35 PEMS supervised promotion gate exposes reviewer, validator, citation, safety, and production-disabled proof."
+    },
+    {
+      "route": "/api/continuous-intelligence/pems/workbench",
+      "required": true,
+      "status": "phase36_reviewer_evaluator_workbench_active",
+      "proof": "Phase 36 reviewer/evaluator workbench exposes sanitized advisory draft notes, consistency trace refs, and explicit human-review linkage."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase37_pems_reviewer_ui_ready",
+      "proof": "Phase 37 reviewer UI renders ref-only advisory drafts and approve/reject/block controls backed by explicit review writes."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase38_reviewer_comparison_provenance_ready",
+      "proof": "Phase 38 reviewer comparison panel renders deterministic-vs-advisory rows, source-pointer chips, and evaluator provenance without claiming production authority."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase39_live_evaluator_filtering_ready",
+      "proof": "Phase 39 reviewer workbench can filter drafts and only marks live evaluator proof when observed egress created a non-mocked advisory draft."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase40_claim_citation_closure_veto_visible",
+      "proof": "Phase 40 reviewer workbench labels advisory claims, shows source-pointer support, and vetoes unsupported or low-confidence claims without creating evidence."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase41_reviewer_claim_revision_ready",
+      "proof": "Phase 41 reviewer workbench records before/after claim revisions, deterministic reclosure, source-pointer refs, and advisory-only safety."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase42_reviewer_follow_up_workflow_ready",
+      "proof": "Phase 42 reviewer workbench binds claim revisions to explicit review decisions and follow-up workflow state without creating evidence or production authority."
+    },
+    {
+      "route": "/",
+      "required": true,
+      "status": "phase43_reviewer_history_audit_export_ready",
+      "proof": "Phase 43 reviewer workbench exports longitudinal reviewer history refs and hashes without raw history, evidence creation, or production authority."
+    }
+  ],
+  "scores": [
+    {
+      "key": "api_readiness",
+      "score": 90,
+      "target": 90,
+      "status": "pass_contract"
+    },
+    {
+      "key": "phase56_p0_hardening",
+      "score": 100,
+      "target": 100,
+      "status": "phase56_hardening_proof_ready",
+      "encryptedCheckpointRequired": true,
+      "retentionSweeperStatus": "disabled"
+    },
+    {
+      "key": "canonical_goal_tied_phase_execution",
+      "score": 100,
+      "target": 100,
+      "status": "pass_phase32_operating_system_contract"
+    },
+    {
+      "key": "continuous_procedural_memory",
+      "score": 99,
+      "target": 99,
+      "status": "phase43_reviewer_history_audit_export_ready",
+      "pemsTrusted": true,
+      "shadowRunCount": 64,
+      "supervisedAdvisoryCandidateCount": 0,
+      "evaluatorDraftCount": 7,
+      "advisoryLinkedReviewCount": 4,
+      "reviewerUiActions": [
+        "approved",
+        "rejected",
+        "blocked"
+      ],
+      "comparisonRows": 4,
+      "liveProofClaimed": true,
+      "liveGeneratedDraftCount": 6,
+      "filteredDraftCount": 7,
+      "claimCount": 2,
+      "unsupportedCount": 1,
+      "lowConfidenceCount": 0,
+      "reviewerEditRequired": true,
+      "claimRevisionCount": 5,
+      "deterministicReclosurePassed": true,
+      "reviewerFollowUpCount": 4,
+      "revisionResolvedVeto": true,
+      "reviewerHistoryExportCount": 3,
+      "productionDrivingAllowed": false
+    },
+    {
+      "key": "deployment_contract",
+      "score": 75,
+      "target": 75,
+      "status": "pass_static_compose_contract"
+    },
+    {
+      "key": "product_memory_deployment",
+      "score": 75,
+      "target": 100,
+      "status": "runtime_present_enable_graphiti_for_live_schema"
+    },
+    {
+      "key": "database_product_ready_architecture",
+      "score": 75,
+      "target": 100,
+      "status": "postgres_compose_profile_present_sqlite_runtime"
+    },
+    {
+      "key": "database_deployment_profile",
+      "score": 100,
+      "target": 100,
+      "status": "postgres_docker_secret_runtime_profile_present"
+    },
+    {
+      "key": "database_backup_restore_runbook",
+      "score": 0,
+      "target": 100,
+      "status": "run_backup_runbook_smoke"
+    },
+    {
+      "key": "database_provider_backup_policy",
+      "score": 0,
+      "target": 100,
+      "status": "configure_hosted_provider_policy"
+    },
+    {
+      "key": "gui_visual_test",
+      "score": 100,
+      "target": 100,
+      "status": "pass_visual_browser_proof"
+    },
+    {
+      "key": "remote_browser_controls",
+      "score": 90,
+      "target": 90,
+      "status": "pass_live_frame_local_cdp",
+      "readinessStatus": "auth_required"
+    },
+    {
+      "key": "hosted_browser_sandbox_adapter_harness",
+      "score": 0,
+      "target": 75,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_resolver",
+      "score": 0,
+      "target": 50,
+      "status": "hosted_browser_sandbox_provider_not_selected"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_selection",
+      "score": 70,
+      "target": 90,
+      "status": "hosted_browser_sandbox_provider_selection_contract_ready"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_preflight",
+      "score": 0,
+      "target": 80,
+      "status": "hosted_browser_sandbox_provider_live_preflight_blocked"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_verification",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_provider_live_verification_blocked"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_self_host",
+      "score": 0,
+      "target": 100,
+      "status": "steel_self_host_live_proof_missing"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_operations",
+      "score": 85,
+      "target": 100,
+      "status": "steel_self_host_operations_contract_ready"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_remote_host",
+      "score": 100,
+      "target": 100,
+      "status": "steel_remote_host_lifecycle_verified"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_steel_ops_drills",
+      "score": 100,
+      "target": 100,
+      "status": "steel_remote_ops_drills_ready"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_webrtc_signaling",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_visual_ocr_replay",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_provider_visual_ocr_replay_blocked"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_launch_readiness",
+      "score": 60,
+      "target": 100,
+      "status": "hosted_browser_sandbox_provider_launch_runbook_ready"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_private_launch_execution",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_adapter",
+      "score": 0,
+      "target": 75,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_http_adapter",
+      "score": 0,
+      "target": 85,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_browser_sandbox_provider_live_lifecycle",
+      "score": 0,
+      "target": 95,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "hosted_remote_browser_sandbox",
+      "score": 0,
+      "target": 100,
+      "status": "hosted_browser_sandbox_contract_valid_not_configured"
+    },
+    {
+      "key": "approval_audit_scaffolding",
+      "score": 85,
+      "target": 85,
+      "status": "pass_existing_gate"
+    }
+  ],
+  "safety": {
+    "fastApiIsPublicConnector": true,
+    "nodeIsInternalRuntime": true,
+    "canonicalGoalTiedPhaseExecution": true,
+    "continuousIntelligenceShadowOnly": true,
+    "continuousIntelligencePersistenceOnly": true,
+    "pemsReviewerWorkbenchAdvisoryOnly": true,
+    "pemsReviewerUiRefOnly": true,
+    "pemsReviewerComparisonRefOnly": true,
+    "cortexIsProjectMemoryOnly": true,
+    "nonMockedProofRequired": true,
+    "publicApi": "/api/v1",
+    "frontendDirectNodeCallsAllowedForPwa": false,
+    "externalWriteActionsWithoutApproval": false,
+    "rawOcrTextReturned": false
+  },
+  "storage": {
+    "version": "2026-06-15.storage-readiness.v1",
+    "ok": true,
+    "status": "postgres_compose_profile_present_sqlite_runtime",
+    "score": 75,
+    "targetScore": 100,
+    "runtimeDriver": "sqlite",
+    "runtimeAdapterVersion": "2026-06-15.node-sqlite-bound-store.v1",
+    "postgresAdapterVersion": "2026-06-16.pg-bound-store-parity.v1",
+    "appRuntimeMigratedToPostgres": false,
+    "fullMigrationReady": false,
+    "migrationPending": true,
+    "sqlite": {
+      "enabled": true,
+      "dbPath": "/Users/mfelix/projects/workerprototype_openclaw/data/brainstyworkers.sqlite",
+      "boundedParameters": true,
+      "sqliteShellOut": false
+    },
+    "postgres": {
+      "target": true,
+      "configured": true,
+      "composeReady": true,
+      "liveReady": false,
+      "adapterReady": true,
+      "runtimeSmokeReady": false,
+      "productionSmokeReady": false,
+      "workerLeaseReady": false,
+      "backupRestoreReady": false,
+      "backupRunbookReady": false,
+      "providerBackupPolicyReady": false,
+      "endpointParityReady": false,
+      "operationalGatesReady": false,
+      "productionGatesReady": false,
+      "productionProfileReady": true,
+      "defaultRolloutReady": false,
+      "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+      "secretProfile": {
+        "version": "2026-06-16.database-secret-profile.v1",
+        "ready": false,
+        "status": "database_secret_profile_not_ready",
+        "source": "default_dev",
+        "secretBacked": false,
+        "urlPresent": true,
+        "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+        "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+        "fileConfigured": false,
+        "filePathHash": null,
+        "validPostgresUrl": true,
+        "protocol": "postgresql",
+        "host": "127.0.0.1",
+        "port": "55432",
+        "database": "brainstyworkers",
+        "hasUsername": true,
+        "hasPassword": true,
+        "devCredentialDetected": true,
+        "profileReadyClaimed": false,
+        "issues": [
+          "database_url_not_secret_backed"
+        ]
+      },
+      "initContract": "project/db/postgres-init/001_storage_readiness.sql",
+      "smokeCommand": "npm run storage:postgres:smoke",
+      "runtimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+      "productionSmokeCommand": "npm run storage:postgres:production-smoke",
+      "backupRunbookCommand": "npm run storage:postgres:backup-runbook-smoke",
+      "providerBackupPolicyCommand": "npm run storage:postgres:provider-backup-policy-smoke",
+      "defaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+      "productionProfileCommand": "npm run storage:postgres:profile-contract"
+    },
+    "safety": {
+      "secretsRedacted": true,
+      "secretProfileReady": false,
+      "databaseSecretProfile": {
+        "version": "2026-06-16.database-secret-profile.v1",
+        "ready": false,
+        "status": "database_secret_profile_not_ready",
+        "source": "default_dev",
+        "secretBacked": false,
+        "urlPresent": true,
+        "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+        "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+        "fileConfigured": false,
+        "filePathHash": null,
+        "validPostgresUrl": true,
+        "protocol": "postgresql",
+        "host": "127.0.0.1",
+        "port": "55432",
+        "database": "brainstyworkers",
+        "hasUsername": true,
+        "hasPassword": true,
+        "devCredentialDetected": true,
+        "profileReadyClaimed": false,
+        "issues": [
+          "database_url_not_secret_backed"
+        ]
+      },
+      "phiSeeded": false,
+      "transactionalTarget": "postgres",
+      "localRuntimeStillSQLite": true,
+      "boundParameterAdapter": true
+    },
+    "nextAction": "Keep SQLite local runtime stable while expanding Postgres adapter parity, leases, and migration tests."
+  },
+  "deployment": {
+    "ok": true,
+    "status": "compose_contract_present",
+    "files": [
+      ".dockerignore",
+      "Dockerfile.node",
+      "Dockerfile.api",
+      "apps/mobile-next/Dockerfile",
+      "compose.yaml",
+      "compose.postgres.yaml",
+      "scripts/browser-sandbox-provider-contract.mjs",
+      "scripts/browser-sandbox-provider-selection-smoke.mjs",
+      "scripts/browser-sandbox-provider-live-preflight-smoke.mjs",
+      "scripts/browser-sandbox-provider-live-verification-smoke.mjs",
+      "scripts/browser-sandbox-provider-webrtc-signaling-smoke.mjs",
+      "scripts/browser-sandbox-provider-visual-ocr-replay-smoke.mjs",
+      "scripts/browser-sandbox-provider-steel-operations-smoke.mjs",
+      "scripts/compose-contract.mjs",
+      "scripts/storage-contract.mjs",
+      "scripts/postgres-runtime-smoke.mjs",
+      "scripts/postgres-production-readiness-smoke.mjs",
+      "scripts/postgres-default-rollout-smoke.mjs",
+      "scripts/postgres-production-profile-contract.mjs",
+      "scripts/postgres-endpoint-regression-smoke.mjs",
+      "scripts/postgres-production-profile-live-smoke.mjs",
+      "scripts/postgres-backup-runbook-smoke.mjs",
+      "scripts/postgres-provider-backup-policy-smoke.mjs",
+      "project/deployment/postgres-provider-backup-policy.example.json",
+      "project/deployment/browser-sandbox-provider.example.json",
+      "project/deployment/browser-sandbox-provider.selection.example.json",
+      "project/deployment/browser-sandbox-provider.live-preflight.example.env",
+      "project/deployment/browser-sandbox-provider.live-verification.example.env",
+      "project/deployment/browser-sandbox-provider.webrtc-signaling.example.env",
+      "project/deployment/browser-sandbox-provider.visual-ocr-replay.example.env",
+      "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+      "infra/steel/compose.yaml",
+      "infra/steel/README.md",
+      "docs/POSTGRES_BACKUP_RESTORE_RUNBOOK.md",
+      "project/deployment/secrets/README.md",
+      "project/deployment/secrets/database-url.example",
+      "scripts/compose-memory-smoke.mjs",
+      "project/db/postgres-init/001_storage_readiness.sql",
+      "src/concierge/databaseFactory.mjs",
+      "src/concierge/databaseSecretProfile.mjs",
+      "src/concierge/postgresStore.mjs",
+      "src/concierge/workerLeases.mjs",
+      "src/concierge/storageReadiness.mjs",
+      "src/tests/deployment-compose.test.mjs",
+      "src/tests/deployment-graphiti-compose.test.mjs",
+      "src/tests/deployment-storage.test.mjs",
+      "src/tests/worker-leases.test.mjs",
+      "src/tests/postgres-production-readiness-contract.test.mjs",
+      "src/tests/postgres-production-profile-contract.test.mjs",
+      "src/tests/postgres-production-profile-live-contract.test.mjs",
+      "tools/graphiti/graphiti_bridge.py",
+      "vendor/getzep-graphiti/pyproject.toml"
+    ],
+    "missing": [],
+    "services": [
+      "node-runtime",
+      "fastapi",
+      "mobile-pwa",
+      "falkordb",
+      "postgres"
+    ],
+    "postgresRuntimeReady": true,
+    "postgresRuntimeStatus": "postgres_compose_profile_present",
+    "postgresLiveReady": false,
+    "postgresAdapterRuntimeReady": true,
+    "postgresRuntimeSmokeReady": false,
+    "postgresProductionSmokeReady": false,
+    "postgresWorkerLeaseReady": false,
+    "postgresBackupRestoreReady": false,
+    "postgresBackupRunbookReady": false,
+    "postgresProviderBackupPolicyReady": false,
+    "postgresEndpointParityReady": false,
+    "databaseSecretProfileReady": false,
+    "databaseSecretProfile": {
+      "version": "2026-06-16.database-secret-profile.v1",
+      "ready": false,
+      "status": "database_secret_profile_not_ready",
+      "source": "default_dev",
+      "secretBacked": false,
+      "urlPresent": true,
+      "redactedUrl": "postgresql://redacted:redacted@127.0.0.1:55432/brainstyworkers?sslmode=disable",
+      "urlHash": "e250b2ebead4d929442df573d2f4b2e09f37a6f5cb54090caab8c03f62aa0978",
+      "fileConfigured": false,
+      "filePathHash": null,
+      "validPostgresUrl": true,
+      "protocol": "postgresql",
+      "host": "127.0.0.1",
+      "port": "55432",
+      "database": "brainstyworkers",
+      "hasUsername": true,
+      "hasPassword": true,
+      "devCredentialDetected": true,
+      "profileReadyClaimed": false,
+      "issues": [
+        "database_url_not_secret_backed"
+      ]
+    },
+    "postgresDefaultRolloutReady": false,
+    "postgresProductionProfileReady": true,
+    "postgresProductionProfileStatus": "postgres_docker_secret_runtime_profile_present",
+    "hostedBrowserSandboxContractReady": true,
+    "hostedBrowserSandboxAdapterMode": "contract_only",
+    "hostedBrowserSandboxAdapterHarnessReady": false,
+    "hostedBrowserSandboxProviderResolverReady": false,
+    "hostedBrowserSandboxProviderResolver": {
+      "status": "hosted_browser_sandbox_provider_not_selected",
+      "resolverReady": false,
+      "ready": false,
+      "endpointResolved": false,
+      "authResolved": false,
+      "liveVerified": false,
+      "liveVerificationReady": false,
+      "streamRequiresWebrtc": true,
+      "webrtcSignalingReady": false,
+      "visualOcrReplayReady": false,
+      "endpointRefKind": "logical_ref",
+      "authTokenRefKind": "env",
+      "endpointEnvPresent": false,
+      "authEnvPresent": true,
+      "providerStrategy": "generic-hosted-provider",
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawSecretPathReturned": false
+    },
+    "hostedBrowserSandboxProviderSelectionReady": true,
+    "hostedBrowserSandboxProviderSelectionPreflightReady": false,
+    "hostedBrowserSandboxProviderSelection": {
+      "status": "hosted_browser_sandbox_provider_selection_contract_ready",
+      "selectedProviderKnown": false,
+      "selectedProviderKey": null,
+      "candidateKeys": [
+        "custom_webrtc",
+        "browserbase",
+        "vercel_sandbox"
+      ],
+      "failures": [],
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    "hostedBrowserSandboxProviderLivePreflightReady": false,
+    "hostedBrowserSandboxProviderLivePreflight": {
+      "status": "hosted_browser_sandbox_provider_live_preflight_blocked",
+      "resolverReady": false,
+      "selectionPreflightReady": false,
+      "liveProbeEnabled": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    "hostedBrowserSandboxProviderSteelSelfHostProofReady": false,
+    "hostedBrowserSandboxProviderSteelSelfHostProof": {
+      "status": "steel_self_host_live_proof_missing",
+      "ok": false,
+      "score": 0,
+      "target": 100,
+      "passed": 0,
+      "total": 10,
+      "checks": [
+        {
+          "key": "session_create",
+          "ok": false
+        },
+        {
+          "key": "cdp_connect",
+          "ok": false
+        },
+        {
+          "key": "live_viewer_stream_ref",
+          "ok": false
+        },
+        {
+          "key": "screenshot_ref",
+          "ok": false
+        },
+        {
+          "key": "ocr_caption_ref",
+          "ok": false
+        },
+        {
+          "key": "approved_input_relay",
+          "ok": false
+        },
+        {
+          "key": "takeover_approval_scope",
+          "ok": false
+        },
+        {
+          "key": "teardown_release",
+          "ok": false
+        },
+        {
+          "key": "offsite_fail_closed",
+          "ok": false
+        },
+        {
+          "key": "phi_redaction_policy",
+          "ok": false
+        }
+      ],
+      "artifactRef": null,
+      "providerStrategy": null,
+      "viewerUrlEnvRef": "WEFELLA_BROWSER_SANDBOX_VIEWER_URL",
+      "lifecycleRefPresent": false,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderSteelOperationsReady": false,
+    "hostedBrowserSandboxProviderSteelOperations": {
+      "status": "steel_self_host_operations_contract_ready",
+      "ok": false,
+      "contractReady": true,
+      "score": 85,
+      "target": 100,
+      "checks": [
+        {
+          "key": "api_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "ui_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "no_latest_tags",
+          "ok": true
+        },
+        {
+          "key": "api_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "cdp_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "viewer_port_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "log_storage_disabled_by_default",
+          "ok": true
+        },
+        {
+          "key": "fingerprint_injection_skip_documented",
+          "ok": true
+        },
+        {
+          "key": "fastapi_remote_boundary_documented",
+          "ok": true
+        },
+        {
+          "key": "cleanup_documented",
+          "ok": true
+        },
+        {
+          "key": "operations_gate",
+          "ok": false
+        },
+        {
+          "key": "live_probe_requested",
+          "ok": false
+        },
+        {
+          "key": "live_probe_config_present",
+          "ok": false
+        }
+      ],
+      "composeFile": "infra/steel/compose.yaml",
+      "configFile": "project/deployment/browser-sandbox-provider.steel-operations.example.json",
+      "runbook": "infra/steel/README.md",
+      "command": "npm run sandbox:browser:steel-operations",
+      "operationsReadyEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_READY",
+      "liveProbeEnv": "WEFELLA_BROWSER_SANDBOX_STEEL_OPERATIONS_LIVE_PROBE",
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderSteelRemoteHostReady": true,
+    "hostedBrowserSandboxProviderSteelRemoteHost": {
+      "status": "steel_remote_host_lifecycle_verified",
+      "ok": true,
+      "contractReady": true,
+      "score": 100,
+      "target": 100,
+      "checks": [
+        {
+          "key": "remote_api_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "remote_ui_image_pinned_digest",
+          "ok": true
+        },
+        {
+          "key": "remote_no_latest_tags",
+          "ok": true
+        },
+        {
+          "key": "remote_api_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "remote_cdp_loopback_only",
+          "ok": true
+        },
+        {
+          "key": "remote_no_public_cdp_or_api_bind",
+          "ok": true
+        },
+        {
+          "key": "remote_restart_unless_stopped",
+          "ok": true
+        },
+        {
+          "key": "remote_healthcheck_local",
+          "ok": true
+        },
+        {
+          "key": "remote_encrypted_logs_mount_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_tls_placeholder_host",
+          "ok": true
+        },
+        {
+          "key": "remote_ip_allowlist_matcher",
+          "ok": true
+        },
+        {
+          "key": "remote_forbid_non_allowlisted",
+          "ok": true
+        },
+        {
+          "key": "remote_only_expected_steel_routes",
+          "ok": true
+        },
+        {
+          "key": "remote_blocks_everything_else",
+          "ok": true
+        },
+        {
+          "key": "remote_no_cdp_proxy",
+          "ok": true
+        },
+        {
+          "key": "remote_firewall_inbound_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_firewall_outbound_allowlist_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_wireguard_private_cdp_documented",
+          "ok": true
+        },
+        {
+          "key": "remote_recovery_script_health_and_smoke",
+          "ok": true
+        },
+        {
+          "key": "remote_no_secrets_or_runtime_values",
+          "ok": true
+        }
+      ],
+      "tenChecks": [
+        {
+          "key": "session_create_returns_websocket_and_viewer_refs",
+          "ok": true
+        },
+        {
+          "key": "cdp_connect_over_private_tunnel",
+          "ok": true
+        },
+        {
+          "key": "live_stream_ref_reachable_over_tls",
+          "ok": true
+        },
+        {
+          "key": "screenshot_ref_only",
+          "ok": true
+        },
+        {
+          "key": "local_ocr_caption_ref_only",
+          "ok": true
+        },
+        {
+          "key": "approved_synthetic_input_relay",
+          "ok": true
+        },
+        {
+          "key": "human_takeover_event_required",
+          "ok": true
+        },
+        {
+          "key": "teardown_removes_session",
+          "ok": true
+        },
+        {
+          "key": "offsite_fail_closed_and_host_firewall_proof",
+          "ok": true
+        },
+        {
+          "key": "phi_redaction_policy_holds",
+          "ok": true
+        }
+      ],
+      "lifecycleArtifactRef": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+      "composeFile": "infra/steel/remote/compose.yaml",
+      "proxyConfig": "infra/steel/remote/Caddyfile",
+      "firewallRunbook": "infra/steel/remote/firewall.md",
+      "tunnelRunbook": "infra/steel/remote/wireguard.md",
+      "recoveryScript": "infra/steel/remote/recover.sh",
+      "command": "npm run sandbox:browser:steel-remote-readiness",
+      "contractReadinessLabel": "contract readiness",
+      "localHostReadinessLabel": "local-host readiness",
+      "remoteHostReadinessLabel": "remote-host readiness",
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderSteelOpsDrillsReady": true,
+    "hostedBrowserSandboxProviderSteelOpsDrills": {
+      "status": "steel_remote_ops_drills_ready",
+      "ok": true,
+      "score": 100,
+      "target": 100,
+      "checks": [
+        {
+          "key": "phase30_remote_lifecycle_artifact_green",
+          "ok": true
+        },
+        {
+          "key": "patching_weekly_and_critical_cve_window_documented",
+          "ok": true
+        },
+        {
+          "key": "patching_forbids_latest_and_requires_digest_rollback",
+          "ok": true
+        },
+        {
+          "key": "patching_runs_remote_readiness_and_ops_drills",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_script_dry_run_safe",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_excludes_raw_visual_artifacts",
+          "ok": true
+        },
+        {
+          "key": "backup_restore_drill_runs_recovery_smoke",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_cover_required_probes",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_thresholds_are_operational",
+          "ok": true
+        },
+        {
+          "key": "health_alerts_no_raw_payload_surfaces",
+          "ok": true
+        },
+        {
+          "key": "oncall_handoff_contains_safety_fields",
+          "ok": true
+        },
+        {
+          "key": "oncall_handoff_requires_phase31_commands",
+          "ok": true
+        },
+        {
+          "key": "ops_config_defers_concurrency",
+          "ok": true
+        },
+        {
+          "key": "ops_config_preserves_human_takeover_boundary",
+          "ok": true
+        },
+        {
+          "key": "ops_config_forbids_raw_recording",
+          "ok": true
+        },
+        {
+          "key": "ops_drills_no_secret_or_runtime_values",
+          "ok": true
+        }
+      ],
+      "lifecycleArtifactRef": "artifacts/phase30/steel-remote-live-lifecycle-2026-06-18T22-29-22-865Z.json",
+      "configFile": "infra/steel/remote/ops-drills.example.json",
+      "patchingRunbook": "infra/steel/remote/patching.md",
+      "backupRestoreDrill": "infra/steel/remote/backup-restore-drill.sh",
+      "healthAlerts": "infra/steel/remote/health-alerts.example.json",
+      "oncallHandoff": "infra/steel/remote/oncall-handoff.md",
+      "command": "npm run sandbox:browser:steel-ops-drills",
+      "contractReadinessLabel": "contract readiness",
+      "localHostReadinessLabel": "local-host readiness",
+      "remoteHostReadinessLabel": "remote-host readiness",
+      "opsDrillReadinessLabel": "ops-drill readiness",
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderLiveVerificationReady": false,
+    "hostedBrowserSandboxProviderLiveVerification": {
+      "status": "hosted_browser_sandbox_provider_live_verification_blocked",
+      "resolverReady": false,
+      "livePreflightReady": false,
+      "providerLiveConnected": false,
+      "liveVerified": false,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false
+    },
+    "hostedBrowserSandboxProviderWebrtcSignalingReady": false,
+    "hostedBrowserSandboxProviderWebrtcSignaling": {
+      "status": "hosted_browser_sandbox_provider_webrtc_signaling_blocked",
+      "resolverReady": false,
+      "liveVerificationReady": false,
+      "streamRequiresWebrtc": true,
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawSdpReturned": false,
+      "rawIceCandidateReturned": false
+    },
+    "hostedBrowserSandboxProviderVisualOcrReplayReady": false,
+    "hostedBrowserSandboxProviderVisualOcrReplay": {
+      "status": "hosted_browser_sandbox_provider_visual_ocr_replay_blocked",
+      "liveVerificationReady": false,
+      "webrtcSignalingReady": false,
+      "streamRequiresWebrtc": true,
+      "proofFilePresent": false,
+      "proofFileOutsideGit": false,
+      "proofValidationOk": false,
+      "failures": [
+        "visual_ocr_proof_file_required"
+      ],
+      "sanitizedProof": {},
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderLaunchReadinessRunbookReady": true,
+    "hostedBrowserSandboxProviderPrivateProofChainReady": false,
+    "hostedBrowserSandboxProviderFinalEnablementAllowed": false,
+    "hostedBrowserSandboxProviderLaunchReadiness": {
+      "status": "hosted_browser_sandbox_provider_launch_runbook_ready",
+      "runbookReady": true,
+      "privateProofChainReady": false,
+      "finalEnablementAllowed": false,
+      "envExample": "project/deployment/browser-sandbox-provider.launch-readiness.example.env",
+      "runbook": "docs/HOSTED_BROWSER_SANDBOX_PROVIDER_LAUNCH_RUNBOOK.md",
+      "command": "npm run sandbox:browser:provider-launch-readiness",
+      "configOutsideGit": false,
+      "proofFileOutsideGit": false,
+      "missing": [
+        "selection_preflight",
+        "live_verification",
+        "webrtc_signaling",
+        "visual_ocr_replay_private_proof",
+        "private_provider_config_outside_git",
+        "private_visual_ocr_proof_outside_git",
+        "final_live_verified_switch"
+      ],
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderPrivateLaunchExecutionReady": false,
+    "hostedBrowserSandboxProviderPrivateLaunchExecution": {
+      "status": "hosted_browser_sandbox_provider_private_launch_execution_not_enabled",
+      "envExampleReady": true,
+      "executionGate": false,
+      "finalHumanReviewed": false,
+      "privateProofChainReady": false,
+      "finalEnablementAllowed": false,
+      "command": "npm run sandbox:browser:provider-private-launch-execution",
+      "envExample": "project/deployment/browser-sandbox-provider.private-launch-execution.example.env",
+      "missing": [
+        "private_launch_execution_gate",
+        "private_proof_chain_ready",
+        "launch_final_enablement_allowed",
+        "final_human_review"
+      ],
+      "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
+      "rawEndpointReturned": false,
+      "rawSecretReturned": false,
+      "rawFrameReturned": false,
+      "rawOcrTextReturned": false,
+      "rawInputReturned": false
+    },
+    "hostedBrowserSandboxProviderAdapterReady": false,
+    "hostedBrowserSandboxProviderHttpAdapterReady": false,
+    "hostedBrowserSandboxProviderLiveLifecycleHarnessReady": false,
+    "hostedBrowserSandboxProviderReady": false,
+    "hostedBrowserSandboxProviderStatus": "hosted_browser_sandbox_contract_valid_not_configured",
+    "browserSandboxProviderContractCommand": "npm run sandbox:browser:provider-contract",
+    "browserSandboxProviderSelectionCommand": "npm run sandbox:browser:provider-selection",
+    "browserSandboxProviderLivePreflightCommand": "npm run sandbox:browser:provider-live-preflight",
+    "browserSandboxProviderLiveVerificationCommand": "npm run sandbox:browser:provider-live-verification",
+    "browserSandboxProviderWebrtcSignalingCommand": "npm run sandbox:browser:provider-webrtc-signaling",
+    "browserSandboxProviderVisualOcrReplayCommand": "npm run sandbox:browser:provider-visual-ocr-replay",
+    "browserSandboxProviderLaunchReadinessCommand": "npm run sandbox:browser:provider-launch-readiness",
+    "browserSandboxProviderPrivateLaunchExecutionCommand": "npm run sandbox:browser:provider-private-launch-execution",
+    "browserSandboxProviderSteelRemoteReadinessCommand": "npm run sandbox:browser:steel-remote-readiness",
+    "browserSandboxProviderSteelOpsDrillsCommand": "npm run sandbox:browser:steel-ops-drills",
+    "browserSandboxAdapterHarnessCommand": "npm run sandbox:browser:adapter-harness",
+    "browserSandboxProviderResolverCommand": "npm run sandbox:browser:provider-resolver",
+    "browserSandboxProviderAdapterCommand": "npm run sandbox:browser:provider-adapter",
+    "browserSandboxProviderHttpAdapterCommand": "npm run sandbox:browser:provider-http-adapter",
+    "browserSandboxProviderLiveLifecycleCommand": "npm run sandbox:browser:provider-live-lifecycle",
+    "storageSmokeCommand": "npm run storage:postgres:smoke",
+    "postgresRuntimeSmokeCommand": "npm run storage:postgres:runtime-smoke",
+    "postgresProductionSmokeCommand": "npm run storage:postgres:production-smoke",
+    "postgresDefaultRolloutCommand": "npm run storage:postgres:default-rollout-smoke",
+    "postgresProductionProfileCommand": "npm run storage:postgres:profile-contract",
+    "postgresEndpointRegressionCommand": "npm run storage:postgres:endpoint-regression-smoke",
+    "postgresProductionProfileLiveCommand": "npm run storage:postgres:profile-live-smoke",
+    "postgresBackupRunbookCommand": "npm run storage:postgres:backup-runbook-smoke",
+    "postgresProviderBackupPolicyCommand": "npm run storage:postgres:provider-backup-policy-smoke",
+    "graphitiRuntimeReady": true,
+    "graphitiRuntimeStatus": "graphiti_container_runtime_present",
+    "memorySmokeCommand": "npm run docker:memory:smoke",
+    "memoryLiveSmokeCommand": "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_EXPECT_GRAPHITI_READY=1 BRAINSTY_RUN_GRAPHITI_PROBE=1 npm run docker:memory:smoke",
+    "configCommand": "npm run docker:contract",
+    "liveSmokeCommand": "docker compose up --build"
+  }
+}
