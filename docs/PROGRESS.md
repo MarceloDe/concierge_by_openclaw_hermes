@@ -9344,3 +9344,35 @@ Verification:
 - API proof passed at `http://127.0.0.1:4228/api/proof/runs/local`: `phase62_generated_skill_review_queue` scored `100 / 100`, persisted one approved queue row, prepared an executor plan after explicit approval, blocked auto-run, blocked auto-merge, blocked production-driving, and hid raw PHI/raw file bodies.
 - Dashboard visual proof passed at `http://127.0.0.1:4228/?phase=phase-62-generated-skill-reviewer-queue`: the Phase 62 card rendered `100 / 100`, queue status `approved_for_pr_execution`, executor status `ready_to_open_generated_skill_pr`, generated branch name, auto-run blocked, auto-merge blocked, production-driving blocked, raw PHI hidden, and zero console errors.
 - Artifacts: `artifacts/phase62/phase62-dashboard-generated-skill-review-queue.png` and `artifacts/phase62/phase62-generated-skill-review-queue-proof.json`.
+
+## Phase 63 Generated Skill PR Executor - 2026-06-22
+
+Goal:
+- Add a human-operated generated-skill PR executor surface for approved queue items while keeping connector/dashboard proof dry-run and side-effect-free.
+
+Implemented:
+- Added `generated_skill_pr_executor_runs` to the deterministic DB schema and migration path.
+- Added `src/concierge/generatedSkillPrExecutor.mjs`.
+- Extracted a Phase 61 materialization helper so the executor can verify reviewed package hash closure without storing raw generated file bodies in queue rows.
+- Added executor surface checks for queue approval, executor readiness, package-hash match, explicit operator approval, bounded output paths, file-hash closure, explicit PR request, auto-merge blocked, and production-driving blocked.
+- Added dry-run run recording for dashboard/API proof.
+- Added explicit non-dry-run materialization support into a supplied repo root for human-operated execution tests.
+- Kept PR opening behind explicit `openPullRequest=true`.
+- Added `src/tests/generated-skill-pr-executor.test.mjs`.
+- Updated `npm run test:generated-skills` and `npm run test:local` to include Phase 63.
+- Added `/api/continuous-intelligence/pems/generated-skill-pr-executor`.
+- Added connector proof/dashboard visibility through `phase63_generated_skill_pr_executor`.
+
+Safety:
+- Dashboard/API proof does not create a branch, write files, or open a PR.
+- Non-dry-run materialization requires explicit operator approval and a supplied repo root.
+- Auto-merge and production-driving remain blocked.
+- Generated skill activation still requires Git review and later trusted-answer-driving promotion before production use.
+
+Verification:
+- Focused Phase 63/generated-skills suite passed: `npm run test:generated-skills` reported 14/14 passing.
+- `npm run build` passed and reports the Phase 63 generated-skill PR executor contract.
+- `npm run test:local` passed with 299 tests total, 297 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4229/api/proof/runs/local`: `phase63_generated_skill_pr_executor` scored `100 / 100`, recorded dry-run execution, preserved three reviewed generated files in the plan, wrote no files, opened no PR, blocked auto-merge, and blocked production-driving.
+- Dashboard visual proof passed at `http://127.0.0.1:4229/?phase=phase-63-generated-skill-pr-executor`: the Phase 63 card rendered `100 / 100`, dry-run recorded, writes not performed, PR opened no, auto-merge blocked, production-driving blocked, and zero console errors.
+- Artifacts: `artifacts/phase63/phase63-dashboard-generated-skill-pr-executor.png` and `artifacts/phase63/phase63-generated-skill-pr-executor-proof.json`.

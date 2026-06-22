@@ -957,6 +957,8 @@ function renderConnectorProof(payload) {
   const phase61Check = checks.find((check) => check.key === "phase61_generated_skill_pr_workflow") ?? null;
   const phase62Score = scores.find((score) => score.key === "phase62_generated_skill_review_queue") ?? null;
   const phase62Check = checks.find((check) => check.key === "phase62_generated_skill_review_queue") ?? null;
+  const phase63Score = scores.find((score) => score.key === "phase63_generated_skill_pr_executor") ?? null;
+  const phase63Check = checks.find((check) => check.key === "phase63_generated_skill_pr_executor") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1092,6 +1094,27 @@ function renderConnectorProof(payload) {
           <dd>auto-run ${escapeHtml(phase62Check?.executor?.safety?.autoRunCommands ? "enabled" : "blocked")} · auto-merge ${escapeHtml(phase62Check?.executor?.safety?.autoMergeAllowed ? "enabled" : "blocked")} · production-driving ${escapeHtml(phase62Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")}</dd>
           <dt>Storage</dt>
           <dd>raw PHI ${escapeHtml(phase62Check?.safety?.rawPhiStored ? "attention" : "hidden")} · DB authoritative ${escapeHtml(phase62Check?.safety?.dbAuthoritative ? "yes" : "attention")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase63Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 63 Generated Skill Executor</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase63Score.score)} / ${escapeHtml(phase63Score.target)} · ${escapeHtml(phase63Score.status)}</dd>
+          <dt>Queue</dt>
+          <dd>${escapeHtml(phase63Check?.queue?.status ?? "not approved")} · ${escapeHtml(phase63Check?.queue?.skillKey ?? "no skill")}</dd>
+          <dt>Executor</dt>
+          <dd>${escapeHtml(phase63Check?.executor?.status ?? "blocked")} · dry-run ${escapeHtml(phase63Check?.executor?.dryRun ? "recorded" : "attention")}</dd>
+          <dt>Branch</dt>
+          <dd>${escapeHtml(phase63Check?.executor?.branchName ?? "not prepared")}</dd>
+          <dt>Files</dt>
+          <dd>${escapeHtml((phase63Check?.executor?.files ?? []).length)} reviewed file(s) · writes ${escapeHtml(phase63Check?.run?.filesWritten ? "performed" : "not performed")}</dd>
+          <dt>PR</dt>
+          <dd>opened ${escapeHtml(phase63Check?.run?.pullRequestOpened ? "yes" : "no")} · auto-merge ${escapeHtml(phase63Check?.safety?.autoMergeAllowed ? "enabled" : "blocked")}</dd>
+          <dt>Safety</dt>
+          <dd>operator approval ${escapeHtml(phase63Check?.checks?.operatorApprovalRecorded ? "recorded" : "missing")} · production-driving ${escapeHtml(phase63Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")}</dd>
         </dl>
       </article>
     ` : ""}

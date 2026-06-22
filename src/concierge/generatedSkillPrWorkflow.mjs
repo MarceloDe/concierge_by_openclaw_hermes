@@ -236,7 +236,7 @@ export function buildGeneratedSkillPrWorkflow({
   };
 }
 
-export function buildPhase61GeneratedSkillPrProof() {
+export function buildPhase61GeneratedSkillPrInputs() {
   const phase60 = buildPhase60MemorySkillTreeProof();
   const candidate = buildConsolidationCandidateFromCase({
     caseState: {
@@ -269,17 +269,34 @@ export function buildPhase61GeneratedSkillPrProof() {
     allowWorktreeWrite: true,
     reviewerApproved: true
   });
+  const reviews = [
+    { reviewType: "human_review", decision: "approved", actorUserId: "reviewer_1" },
+    { reviewType: "human_review", decision: "approved", actorUserId: "reviewer_2" },
+    { reviewType: "validator_evaluation", decision: "pass", actorUserId: "validator" },
+    { reviewType: "citation_evaluation", decision: "pass", actorUserId: "citation" }
+  ];
+  return { candidate, reviews };
+}
+
+export function buildPhase61GeneratedSkillPrMaterializationPackage() {
+  const { candidate, reviews } = buildPhase61GeneratedSkillPrInputs();
+  const gate = evaluateGeneratedSkillPrGate({ candidate, reviews });
+  const artifactPackage = buildGeneratedSkillFiles({ candidate, gate });
   const workflow = buildGeneratedSkillPrWorkflow({
     candidate,
-    reviews: [
-      { reviewType: "human_review", decision: "approved", actorUserId: "reviewer_1" },
-      { reviewType: "human_review", decision: "approved", actorUserId: "reviewer_2" },
-      { reviewType: "validator_evaluation", decision: "pass", actorUserId: "validator" },
-      { reviewType: "citation_evaluation", decision: "pass", actorUserId: "citation" }
-    ],
+    reviews,
     allowWorktreeWrite: true,
     reviewerApprovedWorktreeWrite: true
   });
+  return {
+    workflow,
+    files: artifactPackage.files,
+    skillKey: artifactPackage.skillKey
+  };
+}
+
+export function buildPhase61GeneratedSkillPrProof() {
+  const { workflow } = buildPhase61GeneratedSkillPrMaterializationPackage();
   return {
     ...workflow,
     status: workflow.ok ? "phase61_generated_skill_pr_workflow_ready" : workflow.status

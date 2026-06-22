@@ -380,6 +380,25 @@ export class SqliteStore {
       );
     `);
     await this.exec(`
+      CREATE TABLE IF NOT EXISTS generated_skill_pr_executor_runs (
+        id TEXT PRIMARY KEY,
+        queue_item_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        actor_user_id TEXT NOT NULL,
+        operator_approval INTEGER NOT NULL DEFAULT 0,
+        dry_run INTEGER NOT NULL DEFAULT 1,
+        package_hash TEXT NOT NULL,
+        branch_name TEXT NOT NULL,
+        files_written INTEGER NOT NULL DEFAULT 0,
+        git_branch_created INTEGER NOT NULL DEFAULT 0,
+        pr_open_requested INTEGER NOT NULL DEFAULT 0,
+        pr_opened INTEGER NOT NULL DEFAULT 0,
+        output_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,
         actor_user_id TEXT,
