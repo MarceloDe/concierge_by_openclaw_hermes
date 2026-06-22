@@ -816,7 +816,7 @@ def chat_request_from_v1_task(request: V1TaskRequest, principal: UserPrincipal) 
         user_id=principal.user_id,
         session_id=request.session_id,
         member=member,
-        use_live_model=bool(request.use_live_model or client_context.get("useLiveModel")),
+        use_live_model=bool(request.use_live_model is not False and client_context.get("useLiveModel", True) is not False),
         payload_mode=str(client_context.get("payloadMode") or "phi_allowed_identifier_masked_reasoning"),
         execute_evidence_observation=bool(request.execute_evidence_observation or client_context.get("executeEvidenceObservation")),
         require_live_portal_proof=bool(request.require_live_portal_proof or client_context.get("requireLivePortalProof")),

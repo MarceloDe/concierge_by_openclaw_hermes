@@ -1,0 +1,11 @@
+{
+  "state": {
+    "bodyText": "PHASE 10I\n\nBrainstyworkers Concierge\nChat\nSplit\nGuided\nBento\nProof Dashboard\nReset View\n\nLOCAL AUTH\n\nSession\nName\nEmail\nPayer\nPortal URL\nSession ID\nResume latest\nLive GPT decisioning\nStart Session\n\nNot signed in\n\nBACKEND\n\nAPI Route\nRoute\nWefella FastAPI facade\nNode / LangGraph runtime (operator parity)\nFastAPI URL\nCheck Facade\nUse Facade\n\nFastAPI facade route active by default.\n\nWORKFLOW\n\nJourneys\nBenefits\nClaim Status\nPrior Auth\nAppeal\nPortal Evidence\n\nDOCUMENTS\n\nUpload Evidence\nFile\nKind\nBenefits or SBC\nClaim or EOB\nBill or statement\nInsurance ID card\nOther insurance document\nUpload + Extract\nAsk About Upload\nNo uploaded document yet.\n\nOPENCLAW\n\nWorker Scope\nRequire live portal proof\nUse official OpenClaw\nUse current OpenClaw tab\nMulti-page read-only run\nPortal Ready\nCheck Worker\n\nWorker not checked\n\nCURRENT ANSWER\n\nStart a session to test the full sequence.\nSplit mode\n\nThe existing proof dashboard stays available. This view uses the same local LangGraph, approval, OpenClaw, audit, and memory APIs.\n\nSend\n\nSEQUENCE\n\nRun State\nAuth\nwaiting\nGPT / Intent\nwaiting\nSkill\nwaiting\nApproval\nwaiting\nOpenClaw\nwaiting\nEvidence\nwaiting\nMemory\nwaiting\nAnswer\nwaiting\n\nPHASE 10I\n\nTrusted Research",
+    "errors": [],
+    "hasMvp": true,
+    "liveChecked": true,
+    "title": "Brainstyworkers Concierge MVP",
+    "url": "http://127.0.0.1:4219/mvp?phase=phase-53-intelligence-default"
+  },
+  "consoleErrors": []
+}

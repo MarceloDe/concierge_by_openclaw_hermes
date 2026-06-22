@@ -9000,3 +9000,38 @@ Verification:
 - `npm run test:local` passed with 253 tests total, 251 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-52-provider-network-cards`: after seeding a non-PHI reviewed provider-network artifact through the real research pipeline in an isolated Phase 52 SQLite profile, deterministic local chat rendered the `Provider Network` AI2UI block with 1 source-backed Midtown Imaging Center row, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
 - Visual artifacts: `artifacts/phase52/provider-network-mvp-proof.png` and `artifacts/phase52/provider-network-mvp-proof.json`.
+
+## Phase 53 Intelligence Default Inversion - 2026-06-21
+
+Goal:
+- Start the orchestration-intelligence migration with corrected numbering: migration Phase 47 is implemented as repo Phase 53; the remaining migration phases become Phase 54 and Phase 55.
+
+Implemented:
+- Added `src/concierge/modelTierPolicy.mjs` as the centralized ChatOpenAI boundary with classifier, reasoner, planner, and edge-SLM interface tiers.
+- Made `structuredIntentNode` live-first when configured and safety-allowed; deterministic structured reasoning remains the fallback and is stamped as `reasoning_source: curated_fallback`.
+- Added `reasoning_source: llm` for valid live structured-intent reasoning and routed it through the existing journey-to-workflow schema.
+- Made live orchestration decisioning default-on unless `useLiveModel === false`, while urgent handoff and policy refusal still skip external model decisioning deterministically.
+- Added `confidenceBand()` and explicit `low_confidence_clarify` route labeling for valid but weak LLM decisions.
+- Routed sourced-answer composition, the deprecated `maybeModelNode`, and the PEMS live evaluator through the shared tier policy.
+- Updated Node and FastAPI public defaults so omitted live-model flags allow live intelligence; explicit false remains the deterministic-only path.
+
+Safety:
+- Safety-invariant suites were not modified.
+- Emergency, policy refusal, credential-entry, medical-advice, and approval boundaries remain deterministic hard stops.
+- No source-pointer validation or PHI masking rails were loosened.
+- The edge-SLM tier is an explicit not-implemented contract, not a silent fallback.
+
+Verification:
+- Focused Phase 53 tests passed: `node --test src/tests/model-tier-policy.test.mjs src/tests/intelligence-default.test.mjs src/tests/llm-orchestration-decision.test.mjs` reported 12/12 passing.
+- `npm run build` passed.
+- `npm run test:journeys` passed with 14/14 tests.
+- `npm run test:phi` passed with 1/1 tests.
+- `npm run test:egress` passed with 4/4 tests.
+- `npm run test:graph:topology` passed with 2/2 tests.
+- `npm run test:execution:v2` passed with 11/11 tests.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- Safety-invariant batch passed: `policy`, `model-payload-policy`, `prompt-contracts`, `output-policy`, `approval-resume`, and `openclaw-worker-contract` reported 23/23 tests passing.
+- `npm run test:local` passed with 261 tests total, 259 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4219/api/chat` with omitted `useLiveModel`, non-PHI provider-network input, `useLive=true`, `structuredReasoningSource=llm`, `llmDecisionMode=openai_chatopenai_invoked`, and route reason `llm_orchestration_decision`.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4219/mvp?phase=phase-53-intelligence-default`: Live GPT decisioning was checked by default, the MVP loaded with no visible errors, and browser console error count was 0.
+- Visual/API artifacts: `artifacts/phase53/intelligence-default-api-proof.json`, `artifacts/phase53/intelligence-default-mvp-proof.png`, and `artifacts/phase53/intelligence-default-mvp-proof.json`.

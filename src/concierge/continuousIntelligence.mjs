@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { ChatOpenAI } from "@langchain/openai";
+import { createTieredChatModel } from "./modelTierPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 
 export const CASE_STATE_SCHEMA_VERSION = "brainstyworkers.case_state.v1";
@@ -1976,11 +1976,11 @@ export async function createLiveGatedPemsEvaluatorDraft(
     if (llmInvoker) {
       responseContent = await llmInvoker(messages, { model, baseURL, payloadObservation });
     } else {
-      const llm = new ChatOpenAI({
+      const { llm } = createTieredChatModel("pems_live_evaluator", {
         model,
+        baseURL,
         timeout: 60000,
-        maxRetries: 1,
-        configuration: { baseURL }
+        maxRetries: 1
       });
       const response = await llm.invoke(messages);
       responseContent = response.content;

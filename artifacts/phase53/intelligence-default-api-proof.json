@@ -1,0 +1,31 @@
+{
+  "phase": 53,
+  "proof": "intelligence-default-api-proof",
+  "capturedAt": "2026-06-22T02:51:40.486Z",
+  "endpoint": "POST http://127.0.0.1:4219/api/chat",
+  "requestShape": {
+    "messageClass": "non_phi_provider_network_question",
+    "useLiveModel": "omitted_default_live",
+    "executeEvidenceObservation": false
+  },
+  "observed": {
+    "workflow": "eligibility_benefits_navigation",
+    "routeReason": "llm_orchestration_decision",
+    "rawUseLiveModel": true,
+    "structuredReasoningSource": "llm",
+    "structuredPrimaryIntent": "provider_network",
+    "liveReasonerMode": "openai_chatopenai_invoked",
+    "liveReasonerValid": true,
+    "llmDecisionMode": "openai_chatopenai_invoked",
+    "llmDecisionValid": true,
+    "llmDecisionUsedByRouter": true,
+    "modelTier": "planner",
+    "sourcePointerCount": 0,
+    "finalResponsePreview": "LangGraph routed this request to eligibility_benefits_navigation, but I cannot answer the insurance question from trusted citations yet.\n\nRouting evidence: eligibility_benefits_navigation for journey coverage_understanding; executable=true; score=0; missing data pointer portal_accounts.\n\nRetrieval s"
+  },
+  "safety": {
+    "externalActionsPerformed": false,
+    "credentialEntryPerformed": false,
+    "sourcePointerClaimsInvented": false
+  }
+}

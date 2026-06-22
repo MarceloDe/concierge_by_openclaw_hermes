@@ -1,5 +1,4 @@
 import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/langgraph";
-import { ChatOpenAI } from "@langchain/openai";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
 import {
@@ -44,13 +43,19 @@ import { searchResearchEvidence } from "./researchOps.mjs";
 import { resolveDynamicSkillContext } from "./dynamicSkillServer.mjs";
 import {
   buildLlmOrchestrationDecisionMessages,
+  confidenceBand,
   normalizeLlmOrchestrationDecision,
   shouldUseLlmDecision
 } from "./llmOrchestrationDecision.mjs";
-import { buildDeterministicStructuredReasoning } from "./intelligence/structuredIntentReasoner.mjs";
+import {
+  buildDeterministicStructuredReasoning,
+  invokeLiveStructuredIntentReasoner
+} from "./intelligence/structuredIntentReasoner.mjs";
+import { createTieredChatModel, selectModelForStep } from "./modelTierPolicy.mjs";
 import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
 import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
+import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
   finalizeWorkerContinuationDispatch,
@@ -677,18 +682,59 @@ async function structuredIntentNode(state) {
     policyResult: state.policy_result,
     contextPacket: state.context_packet
   });
-  const reasoning = buildDeterministicStructuredReasoning({
+  const deterministicReasoning = buildDeterministicStructuredReasoning({
     message: state.user_input,
     policyResult: state.policy_result,
     curatedIntent,
     contextPacket: state.context_packet
   });
+  const store = activeStores.get(state.session_id);
+  const user = userFromContext(state.context_packet);
+  let liveReasoner = null;
+  let reasoning = deterministicReasoning;
+  if (state.raw_message?.useLiveModel !== false && !state.policy_result?.urgentEscalationRequired && state.policy_result?.allowed !== false) {
+    try {
+      liveReasoner = await invokeLiveStructuredIntentReasoner({
+        state: {
+          ...state,
+          structured_intent: {
+            ...curatedIntent,
+            reasoning: deterministicReasoning,
+            primary_intent: deterministicReasoning.primary_intent,
+            candidate_journeys: deterministicReasoning.candidate_journeys
+          }
+        },
+        store,
+        sessionId: state.session_id,
+        user
+      });
+      if (liveReasoner.valid && liveReasoner.reasoning) {
+        reasoning = liveReasoner.reasoning;
+      }
+    } catch (error) {
+      liveReasoner = {
+        mode: "openai_structured_intent_failed",
+        valid: false,
+        issues: [error.message]
+      };
+    }
+  } else {
+    liveReasoner = {
+      mode: state.raw_message?.useLiveModel === false ? "explicitly_disabled_by_request" : "skipped_by_deterministic_safety_gate",
+      valid: false,
+      issues: []
+    };
+  }
   const journeyPlan = planJourneyFromIntent(reasoning);
+  const workflowFromReasoning = JOURNEY_TO_WORKFLOW[reasoning.primary_intent] ?? curatedIntent.workflow;
   const structuredIntent = {
     ...curatedIntent,
+    workflow: workflowFromReasoning,
     reasoning,
     primary_intent: reasoning.primary_intent,
-    candidate_journeys: reasoning.candidate_journeys
+    candidate_journeys: reasoning.candidate_journeys,
+    reasoning_source: reasoning.reasoning_source ?? "curated_fallback",
+    liveReasoner
   };
   return {
     structured_intent: structuredIntent,
@@ -698,6 +744,8 @@ async function structuredIntentNode(state) {
       intent: structuredIntent.intent,
       workflow: structuredIntent.workflow,
       journey: reasoning.primary_intent,
+      reasoningSource: structuredIntent.reasoning_source,
+      liveReasonerMode: liveReasoner?.mode ?? null,
       confidence: structuredIntent.confidence,
       refusalOrEscalationFlag: structuredIntent.refusalOrEscalationFlag,
       missingEvidence: structuredIntent.missingEvidence
@@ -755,20 +803,23 @@ async function llmOrchestrationDecisionNode(state) {
         valid: decision.valid,
         workflow: decision.workflow,
         confidence: decision.confidence,
+        confidenceBand: confidenceBand(decision),
         issues: decision.issues
       })
     };
   }
 
-  const useLiveModel = Boolean(state.raw_message?.useLiveModel);
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
-  const baseURL = process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  const useLiveModel = state.raw_message?.useLiveModel !== false;
+  const selection = selectModelForStep("llm_orchestration_decision");
+  const { model, baseURL } = selection;
   if (!useLiveModel) {
     return {
       llm_orchestration_decision: {
         mode: "not_requested",
         provider: "openai",
         model,
+        baseURL,
+        modelTier: selection,
         valid: false,
         usedByRouter: false,
         workflow: state.structured_intent?.workflow ?? null,
@@ -787,6 +838,8 @@ async function llmOrchestrationDecisionNode(state) {
         mode: "skipped_missing_openai_api_key",
         provider: "openai",
         model,
+        baseURL,
+        modelTier: selection,
         valid: false,
         usedByRouter: false,
         workflow: state.structured_intent?.workflow ?? null,
@@ -813,12 +866,7 @@ async function llmOrchestrationDecisionNode(state) {
       })
     : null;
   try {
-    const llm = new ChatOpenAI({
-      model,
-      timeout: 60000,
-      maxRetries: 1,
-      configuration: { baseURL }
-    });
+    const { llm } = createTieredChatModel("llm_orchestration_decision", { timeout: 60000, maxRetries: 1 });
     const response = await llm.invoke(messages);
     const decision = normalizeLlmOrchestrationDecision(response.content, {
       mode: "openai_chatopenai_invoked",
@@ -830,6 +878,8 @@ async function llmOrchestrationDecisionNode(state) {
       llm_orchestration_decision: {
         ...decision,
         baseURL,
+        modelTier: selection,
+        confidenceBand: confidenceBand(decision),
         response: response.content,
         outboundPayloadObservation: payloadObservation
           ? {
@@ -847,6 +897,7 @@ async function llmOrchestrationDecisionNode(state) {
         valid: decision.valid,
         workflow: decision.workflow,
         confidence: decision.confidence,
+        confidenceBand: confidenceBand(decision),
         issues: decision.issues
       })
     };
@@ -857,6 +908,7 @@ async function llmOrchestrationDecisionNode(state) {
         provider: "openai",
         model,
         baseURL,
+        modelTier: selection,
         valid: false,
         usedByRouter: false,
         workflow: state.structured_intent?.workflow ?? null,
@@ -1013,6 +1065,10 @@ async function workflowRouterNode(state) {
     };
   }
   const llmDecisionUsed = shouldUseLlmDecision(state.llm_orchestration_decision);
+  const lowConfidenceLlmDecision =
+    state.llm_orchestration_decision?.valid &&
+    state.llm_orchestration_decision?.workflow &&
+    confidenceBand(state.llm_orchestration_decision) === "low";
   const classifierWorkflow = state.structured_intent?.workflow;
   const selectedWorkflow = llmDecisionUsed ? state.llm_orchestration_decision.workflow : classifierWorkflow;
   const route =
@@ -1025,7 +1081,9 @@ async function workflowRouterNode(state) {
     workflow_route: route,
     route_reason: llmDecisionUsed
       ? "llm_orchestration_decision"
-      : classifierWorkflow
+      : lowConfidenceLlmDecision
+        ? "low_confidence_clarify"
+        : classifierWorkflow
         ? "structured_intent_classifier"
         : route?.routeScore > 0
           ? "matched_user_input_memory_or_pointers"
@@ -1041,6 +1099,7 @@ async function workflowRouterNode(state) {
       classifierWorkflow,
       llmWorkflow: state.llm_orchestration_decision?.workflow ?? null,
       llmDecisionUsed,
+      llmConfidenceBand: state.llm_orchestration_decision ? confidenceBand(state.llm_orchestration_decision) : null,
       classifierConfidence: state.structured_intent?.confidence ?? null,
       llmConfidence: state.llm_orchestration_decision?.confidence ?? null,
       executableNow: Boolean(route?.executableNow)
@@ -2677,13 +2736,17 @@ async function maybeModelNode(state) {
       proof: appendProof(state, "model_invocation", { mode: "skipped_urgent_emergency_escalation" })
     };
   }
-  const useLiveModel = Boolean(state.raw_message?.useLiveModel);
+  const useLiveModel = state.raw_message?.useLiveModel !== false;
+  const selection = selectModelForStep("maybe_model");
   if (!useLiveModel) {
     return {
       model_invocation: {
         mode: "not_requested",
         provider: "openai",
-        model: process.env.OPENAI_MODEL || "gpt-5-mini"
+        model: selection.model,
+        baseURL: selection.baseURL,
+        modelTier: selection,
+        deprecated: true
       },
       proof: appendProof(state, "model_invocation", { mode: "not_requested" })
     };
@@ -2693,22 +2756,19 @@ async function maybeModelNode(state) {
       model_invocation: {
         mode: "skipped_missing_openai_api_key",
         provider: "openai",
-        model: process.env.OPENAI_MODEL || "gpt-5-mini"
+        model: selection.model,
+        baseURL: selection.baseURL,
+        modelTier: selection,
+        deprecated: true
       },
       proof: appendProof(state, "model_invocation", { mode: "skipped_missing_openai_api_key" })
     };
   }
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
-  const baseURL = process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  const { model, baseURL } = selection;
   const payloadSelection = selectModelPayload(state, {
     payloadMode: state.raw_message?.payloadMode ?? "phi_allowed_identifier_masked_reasoning"
   });
-  const llm = new ChatOpenAI({
-    model,
-    timeout: 60000,
-    maxRetries: 1,
-    configuration: { baseURL }
-  });
+  const { llm } = createTieredChatModel("maybe_model", { timeout: 60000, maxRetries: 1 });
   const messages = [
     {
       role: "system",
@@ -2742,6 +2802,8 @@ async function maybeModelNode(state) {
       provider: "openai",
       model,
       baseURL,
+      modelTier: selection,
+      deprecated: true,
       payloadMode: payloadSelection.mode,
       externalPhiDisclosureAllowed: payloadSelection.mode === "phi_allowed_identifier_masked_reasoning",
       outboundPayloadObservation: payloadObservation
