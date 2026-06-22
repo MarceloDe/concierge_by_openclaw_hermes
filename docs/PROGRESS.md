@@ -9195,3 +9195,34 @@ Verification:
 - API proof passed at `http://127.0.0.1:4224/api/proof/runs/local`: `phase58_trusted_answer_driving` scored `100 / 100`, promotion was `trusted_answer_driving`, citation rails passed, unsupported items were labeled, kill switch demoted, safety incident demoted, memory namespaces passed, and candidate generation stayed non-driving.
 - Dashboard visual proof passed at `http://127.0.0.1:4224/?phase=phase-58-trusted-answer-driving`: bundled Playwright captured the rendered Phase 58 card with `100 / 100`, `production-driving trusted path only`, `validated cited answer`, `unsupported items labeled`, `kill switch demotes`, `safety incident demotes`, and `procedural:skills`.
 - Artifacts: `artifacts/phase58/phase58-trusted-answer-driving-proof.json`, `artifacts/phase58/phase58-dashboard-trusted-answer-driving-card.png`, and `artifacts/phase58/phase58-dashboard-trusted-answer-driving-card.json`.
+
+## Phase 59 Pilot Readiness - 2026-06-22
+
+Goal:
+- Package the less-deterministic MVP into a pilot-readiness proof: PWA uses live reasoning by default, FastAPI/Node endpoint coverage is visible, OpenClaw is bounded and ready, DB/safety gates pass, AWS communication is tested without secrets, and Graphiti/FalkorDB status is explicit.
+
+Implemented:
+- Updated the Next mobile PWA task creation to request `use_live_model: true` and `phi_allowed_identifier_masked_reasoning` by default while still relying on deterministic fallback when the key/runtime is unavailable.
+- Fixed the v1 task continuation path by forwarding member context from the PWA and Phase 59 smoke so Node resolves the same user/session created by `/api/v1/sessions`.
+- Added `scripts/phase59-pilot-readiness-smoke.mjs` plus `npm run phase59:pilot-readiness`.
+- Added the `phase59_pilot_readiness` connector proof goal/check/score and a dashboard Phase 59 card.
+- Added focused Phase 59 contract coverage to `npm run test:local`.
+
+Safety:
+- No payer portal was used; the smoke target is `https://example.com`.
+- AWS identity proof is sanitized to hashes only; no account id, ARN, access key, token, host, IP, or secret is stored in the artifact.
+- No write, payer-contact, credential, passkey/2FA/captcha, form submission, or medical-advice authority was added.
+- Graphiti direct-identifier blocks were preserved; the live Graphiti product-memory path is not overclaimed.
+
+Verification:
+- `npm run phase59:pilot-readiness` passed and wrote `artifacts/phase59/phase59-pilot-readiness-proof.json`. The final task reached `approval_pending` with `taskHasAnswer=true`, all 79 FastAPI endpoints were OpenAPI-covered, Node/DB/PWA were live, AWS `phase30` STS was reachable with sanitized hashes, and OpenAI live reasoning was requested.
+- `npm run test:live`, `npm run test:llm:intent`, `npm run test:llm:composition`, and `npm run test:llm:journeys` all passed against the configured live OpenAI path.
+- `npm run test:openclaw:skills` passed with 14/14 tests.
+- `npm run test:facade` passed with 53 tests, 51 passing and 2 expected skips.
+- `npm run test:db:safety`, `npm run test:phi`, and `npm run test:egress` passed.
+- `npm run build` passed and reports the Phase 59 proof script.
+- `npm run test:local` passed with 279 tests total, 277 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- Visual proof passed with bundled Playwright screenshots: `artifacts/phase59/phase59-dashboard.png` and `artifacts/phase59/phase59-mobile-pwa.png`.
+
+Remaining:
+- FalkorDB is running on Docker/Colima, but `npm run test:memory:graphiti` is not green. The current live Graphiti product-memory path remains degraded/not production-ready because one graph-run retain path is disabled when no sourced memory should be retained, and one uploaded-document memory path is correctly blocked by direct-identifier policy. This needs a dedicated product-memory safety/masking slice before Graphiti can be marked fully on.

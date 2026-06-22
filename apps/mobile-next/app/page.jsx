@@ -106,8 +106,13 @@ export default function MobileMvp() {
         journey: "eligibility_benefits_navigation",
         message: nextMessage,
         session_id: session.session_id,
-        client_context: { surface: "next_mobile_pwa" },
-        use_live_model: false
+        member,
+        client_context: {
+          surface: "next_mobile_pwa",
+          useLiveModel: true,
+          payloadMode: "phi_allowed_identifier_masked_reasoning"
+        },
+        use_live_model: true
       });
       setTask({ accepted, detail: null });
       let detail = await getTask(session.access_token, accepted.task_id);

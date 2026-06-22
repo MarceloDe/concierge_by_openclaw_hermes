@@ -2822,3 +2822,17 @@ This keeps the system less deterministic and more intelligence-driven only where
 
 Consequences:
 The supervised advisory gate remains available and non-driving for untrusted candidates. The trusted path composes sourced answers from allowed source pointer IDs and labels unsupported items explicitly. A safety incident or kill switch demotes production-driving candidates. Product memory now carries semantic, episodic, procedural, and collective namespace hints, but procedural skills reject user-scoped identifiers.
+
+## 2026-06-22 - Phase 59 Packages Pilot Readiness Without Overclaiming Graphiti
+
+Problem:
+After Phase 58, the core intelligence path was less deterministic, but the regular-user PWA still explicitly sent `use_live_model: false`, and there was no one-command proof that exercised the public connector, user PWA, OpenClaw, database, AWS substrate, live LLM calls, and product memory status together.
+
+Decision:
+Make the PWA request live reasoning by default through FastAPI `/api/v1`, carry member context into v1 task creation so Node can resume the correct session, and add `npm run phase59:pilot-readiness` as a sanitized end-to-end proof runner. The runner starts isolated Node/FastAPI/PWA services, inventories all FastAPI OpenAPI endpoints, probes safe public routes, creates a non-PHI task, uploads a safe fixture document, checks OpenClaw readiness, checks AWS `phase30` STS with hashed identifiers, and reports Graphiti status honestly.
+
+Rationale:
+Pilot readiness needs real proof across the connector boundary, not another static claim. At the same time, Graphiti product memory must not be declared green merely because FalkorDB is running; direct-identifier and source-pointer safety remain more important than readiness scoring.
+
+Consequences:
+The MVP is now live-model-default when credentials exist and fallback-safe when they do not. Phase 59 can pass as `pilot_ready_with_external_degraded` while Graphiti is explicit as degraded/not production-ready. A later product-memory slice must repair Graphiti retain/recall masking and source-pointer behavior without loosening outbound payload policy.

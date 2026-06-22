@@ -3167,3 +3167,38 @@ Gates:
 - `npm run test:local`.
 - API proof at `/api/proof/runs/local`.
 - Visual dashboard proof for the Phase 58 card.
+
+## Phase 59 - Pilot Readiness And Less-Deterministic MVP Proof
+
+Goal: make the current MVP usable for a pilot-style local proof without a real payer portal. The user PWA should request live reasoning by default, the connector should prove safe task lifecycle continuity, and the operator should see a single proof gate covering API inventory, OpenClaw, DB, AWS communication, Graphiti status, and visual PWA/dashboard readiness.
+
+Build:
+
+- Change the Next mobile PWA so task creation sends `use_live_model: true` and `payloadMode: phi_allowed_identifier_masked_reasoning`.
+- Forward member context in v1 task creation requests so a session created through `/api/v1/sessions` can be continued by `/api/v1/tasks`.
+- Add `scripts/phase59-pilot-readiness-smoke.mjs` and `npm run phase59:pilot-readiness`.
+- In the smoke, start isolated Node, FastAPI, and Next PWA services on free ports with a temp SQLite database.
+- Inventory every FastAPI route through `/openapi.json`; live-probe safe endpoints only.
+- Create a non-PHI task against `https://example.com`, require it to leave queued/running, and verify a user-meaningful state/answer.
+- Check OpenClaw readiness without using the Aetna portal.
+- Check AWS communication using `aws sts get-caller-identity --profile phase30`, but store only hashes.
+- Check Graphiti/FalkorDB product memory status without treating degraded memory as green.
+- Add connector proof/dashboard visibility for `phase59_pilot_readiness`.
+
+Non-goals:
+
+- Do not use a real Aetna/payer portal.
+- Do not enter credentials, solve 2FA/captcha, submit forms, contact payers, or perform external writes.
+- Do not weaken outbound payload policy to make Graphiti pass.
+- Do not commit AWS account ids, ARNs, hostnames, IPs, tokens, keys, or BAA-sensitive identifiers.
+
+Gates:
+
+- `npm run phase59:pilot-readiness`.
+- `npm run test:live`, `npm run test:llm:intent`, `npm run test:llm:composition`, and `npm run test:llm:journeys` when credentials are present.
+- `npm run test:openclaw:skills`.
+- `npm run test:facade`.
+- `npm run test:db:safety`, `npm run test:phi`, and `npm run test:egress`.
+- `npm run build`.
+- `npm run test:local`.
+- Visual screenshots for the operator dashboard and mobile PWA.

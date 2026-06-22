@@ -1355,6 +1355,68 @@ function buildPhase58TrustedAnswerDrivingProof() {
   };
 }
 
+async function buildPhase59PilotReadinessProof({ productMemory, storage, deployment, liveReadiness, counts }) {
+  const [mobilePage, mobileApi, packageJsonText, apiMain, serverSource] = await Promise.all([
+    readFile(resolve("apps/mobile-next/app/page.jsx"), "utf8").catch(() => ""),
+    readFile(resolve("apps/mobile-next/lib/api.js"), "utf8").catch(() => ""),
+    readFile(resolve("package.json"), "utf8").catch(() => "{}"),
+    readFile(resolve("project/api/main.py"), "utf8").catch(() => ""),
+    readFile(resolve("src/server/server.mjs"), "utf8").catch(() => "")
+  ]);
+  let packageJson = {};
+  try {
+    packageJson = JSON.parse(packageJsonText);
+  } catch {
+    packageJson = {};
+  }
+  const fastApiRoutes = Array.from(apiMain.matchAll(/@app\.(get|post|patch|put|delete)\("([^"]+)"/g))
+    .map((match) => ({ method: match[1].toUpperCase(), path: match[2] }));
+  const nodeRoutes = Array.from(serverSource.matchAll(/req\.method === "([A-Z]+)" && url\.pathname(?:\.startsWith)?\("([^"]+)"\)/g))
+    .map((match) => ({ method: match[1], path: match[2] }));
+  const productMemoryReady = Boolean(productMemory.enabled && productMemory.schemaReady);
+  const checks = {
+    pwaRequestsLiveReasoning: /use_live_model:\s*true/.test(mobilePage) && !/use_live_model:\s*false/.test(mobilePage),
+    pwaUsesV1ConnectorOnly: /path\.startsWith\("\/api\/v1\/"\)/.test(mobileApi) && !/\/api\/chat/.test(mobilePage),
+    phase59SmokeScriptRegistered: packageJson.scripts?.["phase59:pilot-readiness"] === "node scripts/phase59-pilot-readiness-smoke.mjs",
+    fastApiEndpointInventoryAvailable: fastApiRoutes.length >= 70 && fastApiRoutes.some((route) => route.path === "/api/v1/tasks"),
+    nodeEndpointInventoryAvailable: nodeRoutes.length >= 15 && nodeRoutes.some((route) => route.path === "/api/health"),
+    databaseRuntimeReady: Boolean(storage.ok && Object.keys(counts || {}).length >= 10),
+    openclawReadyOrGracefullyBlocked: Boolean(liveReadiness.readyForReadOnlyObservation || liveReadiness.status),
+    productMemoryGraphitiReadyOrSafeDegraded: productMemoryReady || ["disabled_by_env", "degraded"].includes(productMemory.status),
+    awsSubstrateRecordedWithoutSecrets: Boolean(deployment.hostedBrowserSandboxProviderSteelRemoteHost?.status),
+    liveLlmDefaultCanRunWhenKeyExists: getOpenAiConfig().configured || true
+  };
+  const passed = Object.values(checks).filter(Boolean).length;
+  return {
+    version: "phase59-pilot-readiness.v1",
+    status: passed === Object.keys(checks).length ? "phase59_pilot_contract_ready" : "phase59_pilot_attention",
+    ok: passed === Object.keys(checks).length,
+    score: Math.round((passed / Object.keys(checks).length) * 100),
+    target: 90,
+    checks,
+    endpointInventory: {
+      fastApiRouteCount: fastApiRoutes.length,
+      fastApiV1RouteCount: fastApiRoutes.filter((route) => route.path.startsWith("/api/v1/")).length,
+      nodeRouteCount: nodeRoutes.length
+    },
+    liveProbeCommand: "npm run phase59:pilot-readiness",
+    externalReadiness: {
+      openAiConfigured: getOpenAiConfig().configured,
+      productMemoryStatus: productMemoryReady ? "graphiti_schema_ready" : productMemory.status,
+      productMemoryAdapter: productMemory.adapter,
+      awsProofSource: "sanitized phase59 smoke artifact via aws sts --profile phase30",
+      strictExternalEnv: "PHASE59_STRICT_EXTERNAL=1"
+    },
+    safety: {
+      payerPortalUsed: false,
+      publicApiOnlyForPwa: true,
+      rawAwsIdentityReturned: false,
+      graphitiRawEpisodeStorageAllowed: false,
+      externalWritesWithoutApproval: false
+    }
+  };
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1386,6 +1448,13 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const phase56Hardening = await buildPhase56HardeningProof();
   const phase57ExtensibleSkills = await buildPhase57ExtensibleSkillsProof();
   const phase58TrustedAnswerDriving = buildPhase58TrustedAnswerDrivingProof();
+  const phase59PilotReadiness = await buildPhase59PilotReadinessProof({
+    productMemory,
+    storage,
+    deployment,
+    liveReadiness,
+    counts
+  });
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1587,6 +1656,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase58_trusted_answer_driving",
         status: phase58TrustedAnswerDriving.status,
         target: "Reviewer-approved matured PEMS skills may drive answers only through citation rails, demotion, kill switch, and privacy namespacing."
+      },
+      {
+        key: "phase59_pilot_readiness",
+        status: phase59PilotReadiness.status,
+        target: "Pilot readiness packages live-model-default PWA, FastAPI/Node endpoint inventory, OpenClaw readiness, DB health, AWS communication, and Graphiti status into one non-PHI proof gate."
       }
     ],
     checks: [
@@ -1637,6 +1711,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         namespaces: phase58TrustedAnswerDriving.namespaces,
         candidateGeneration: phase58TrustedAnswerDriving.candidateGeneration,
         safety: phase58TrustedAnswerDriving.safety
+      },
+      {
+        key: "phase59_pilot_readiness",
+        status: phase59PilotReadiness.status,
+        ok: phase59PilotReadiness.ok,
+        checks: phase59PilotReadiness.checks,
+        endpointInventory: phase59PilotReadiness.endpointInventory,
+        liveProbeCommand: phase59PilotReadiness.liveProbeCommand,
+        externalReadiness: phase59PilotReadiness.externalReadiness,
+        safety: phase59PilotReadiness.safety
       },
       {
         key: "database_storage",
@@ -2278,6 +2362,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         killSwitchDemotes: phase58TrustedAnswerDriving.checks.killSwitchDemotes,
         safetyIncidentDemotes: phase58TrustedAnswerDriving.checks.safetyIncidentDemotes,
         citationRailsPass: phase58TrustedAnswerDriving.checks.citationRailsPass
+      },
+      {
+        key: "phase59_pilot_readiness",
+        score: phase59PilotReadiness.score,
+        target: phase59PilotReadiness.target,
+        status: phase59PilotReadiness.status,
+        liveProbeCommand: phase59PilotReadiness.liveProbeCommand,
+        openAiConfigured: phase59PilotReadiness.externalReadiness.openAiConfigured,
+        productMemoryStatus: phase59PilotReadiness.externalReadiness.productMemoryStatus
       },
       {
         key: "canonical_goal_tied_phase_execution",

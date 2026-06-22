@@ -1,0 +1,593 @@
+{
+  "version": "phase59-pilot-readiness-smoke.v1",
+  "phase": 59,
+  "startedAt": "2026-06-22T12:32:42.551Z",
+  "completedAt": "2026-06-22T12:34:14.219Z",
+  "ok": true,
+  "status": "pilot_ready_with_external_degraded",
+  "mode": "local_pilot_with_degraded_external_allowed",
+  "bases": {
+    "nodeBase": "http://127.0.0.1:55886",
+    "apiBase": "http://127.0.0.1:55887",
+    "pwaBase": "http://127.0.0.1:55888"
+  },
+  "artifactPath": "/Users/mfelix/projects/workerprototype_openclaw/artifacts/phase59/phase59-pilot-readiness-proof.json",
+  "safety": {
+    "payerPortalUsed": false,
+    "testTarget": "https://example.com",
+    "rawAwsIdentityReturned": false,
+    "rawPortalFrameStored": false,
+    "externalWritesWithoutApproval": false
+  },
+  "checks": {
+    "servers": {
+      "ok": true,
+      "status": "started",
+      "dbPath": "/var/folders/y3/d_chmnn97vnc964gcv5tvhxc0000gn/T/brainsty-phase59-SkvlFi/phase59.sqlite"
+    },
+    "fastapi": {
+      "ok": true,
+      "endpointInventory": {
+        "total": 79,
+        "coveredByOpenApiSchema": 79,
+        "endpoints": [
+          {
+            "method": "GET",
+            "path": "/api/audit",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/auth/local-session",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/chat",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/chat/status/{task_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/chat/stream/{task_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/document-candidates",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/document-candidates/propose",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/feedback",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/handoffs",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/health",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/openclaw/official/status",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/operator/assistant",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/operator/proposals",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/operator/proposals/{proposal_id}/approve",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/operator/proposals/{proposal_id}/reject",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/operator/tools",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/orchestrator/approve",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/readiness",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/analytics",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/artifacts",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/artifacts/{artifact_id}/entities/extract",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/artifacts/{artifact_id}/review",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/budget",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/budget",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/citation-closure",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/citation-closure/evaluate",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/documents",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/embeddings/reindex",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/embeddings/route",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/embeddings/status",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/entities",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/evidence",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/graph",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/graph/build",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/kpis",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/review-queues",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/runs",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/runs/{run_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/{run_id}/cancel",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/runs/{run_id}/events",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/{run_id}/execute",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/{run_id}/retry",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/scheduler/status",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/scheduler/tick",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/schedules",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/schedules/tick",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/search",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/sources",
+            "schemaPresent": true
+          },
+          {
+            "method": "PATCH",
+            "path": "/api/research/sources/{source_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/sources/{source_id}/approve",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/sources/{source_id}/reject",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/sources/propose",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/worker-status",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/runtime/events",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/runtime/events/stream",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/{session_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/{session_id}/export",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/uploads",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/uploads/{upload_id}/extraction",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/browser/sessions",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/browser/sessions/{browser_session_id}/input",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/browser/sessions/{browser_session_id}/stream",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/browser/sessions/{browser_session_id}/takeover",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/browser/sessions/{browser_session_id}/webrtc/offer",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/documents",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/health",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/openclaw/readiness",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/proof/runs/{run_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/readiness",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/sessions",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/tasks",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/tasks/{task_id}",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/tasks/{task_id}/approvals",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/tasks/{task_id}/events",
+            "schemaPresent": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/worker-continuations",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/worker-continuations",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/worker-continuations/{continuation_id}/cancel",
+            "schemaPresent": true
+          },
+          {
+            "method": "POST",
+            "path": "/api/worker-continuations/{continuation_id}/continue",
+            "schemaPresent": true
+          }
+        ]
+      },
+      "liveProbes": {
+        "health": "ok",
+        "readiness": "ready",
+        "sessionCreated": true,
+        "taskCreated": true,
+        "taskStatus": "approval_pending",
+        "taskRawStatus": "completed",
+        "taskHasAnswer": true,
+        "taskError": null,
+        "taskResultStatus": null,
+        "taskPollAttempts": 180,
+        "eventsShape": false,
+        "openclawStatus": "auth_required",
+        "proofRunStatus": "passing",
+        "documentStored": true
+      },
+      "tokenUsed": true
+    },
+    "nodeRuntime": {
+      "ok": true,
+      "health": {
+        "ok": true,
+        "databaseDriver": "sqlite",
+        "databaseAdapterVersion": "2026-06-15.node-sqlite-bound-store.v1",
+        "tableCount": 67,
+        "openAiConfigured": true,
+        "openAiModel": "gpt-5-mini"
+      },
+      "productMemory": {
+        "ok": false,
+        "status": "degraded",
+        "adapter": "graphiti",
+        "enabled": true,
+        "schemaReady": false,
+        "backend": "falkordb",
+        "rawEpisodeStorage": false,
+        "required": false
+      },
+      "openclaw": {
+        "ready": true,
+        "status": "auth_required",
+        "officialSkillCount": null,
+        "skillKeys": []
+      },
+      "promptContracts": {
+        "ok": true,
+        "count": null
+      },
+      "endpointInventory": {
+        "routeCount": 18,
+        "routes": [
+          {
+            "method": "GET",
+            "path": "/api/proof/runs/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/openclaw/skills/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/trace/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/operator/proposals/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/artifacts/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/artifacts/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/sources/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/sources/"
+          },
+          {
+            "method": "PATCH",
+            "path": "/api/research/sources/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/runs/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/research/runs/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/research/runs/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/"
+          },
+          {
+            "method": "POST",
+            "path": "/api/sessions/"
+          },
+          {
+            "method": "GET",
+            "path": "/api/sessions/"
+          }
+        ]
+      },
+      "proofScore": {
+        "key": "phase59_pilot_readiness",
+        "score": 90,
+        "target": 90,
+        "status": "phase59_pilot_attention",
+        "liveProbeCommand": "npm run phase59:pilot-readiness",
+        "openAiConfigured": true,
+        "productMemoryStatus": "degraded"
+      }
+    },
+    "pwa": {
+      "ok": true,
+      "status": "served",
+      "statusCode": 200,
+      "containsNextApp": true,
+      "apiBoundary": "NEXT_PUBLIC_BRAINSTY_CLIENT_API_BASE -> /api/v1 only"
+    },
+    "aws": {
+      "ok": true,
+      "status": "aws_phase30_profile_reachable",
+      "required": false,
+      "region": "us-east-1",
+      "identity": {
+        "ok": true,
+        "accountHash": "f01b4eee89201b2e",
+        "arnHash": "43b9a10179e0acd8",
+        "userIdHash": "0ac335289bb61647"
+      }
+    },
+    "llm": {
+      "ok": true,
+      "status": "openai_key_configured_live_path_requested",
+      "required": false,
+      "model": "gpt-5-mini",
+      "v1TaskRequestedLiveModel": true
+    }
+  }
+}
