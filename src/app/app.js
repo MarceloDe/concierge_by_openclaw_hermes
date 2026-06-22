@@ -959,6 +959,8 @@ function renderConnectorProof(payload) {
   const phase62Check = checks.find((check) => check.key === "phase62_generated_skill_review_queue") ?? null;
   const phase63Score = scores.find((score) => score.key === "phase63_generated_skill_pr_executor") ?? null;
   const phase63Check = checks.find((check) => check.key === "phase63_generated_skill_pr_executor") ?? null;
+  const phase64Score = scores.find((score) => score.key === "phase64_mvp_completion_audit") ?? null;
+  const phase64Check = checks.find((check) => check.key === "phase64_mvp_completion_audit") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1116,6 +1118,26 @@ function renderConnectorProof(payload) {
           <dt>Safety</dt>
           <dd>operator approval ${escapeHtml(phase63Check?.checks?.operatorApprovalRecorded ? "recorded" : "missing")} · production-driving ${escapeHtml(phase63Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")}</dd>
         </dl>
+      </article>
+    ` : ""}
+    ${phase64Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 64 MVP Completion Audit</h3>
+        <dl>
+          <dt>MVP Score</dt>
+          <dd>${escapeHtml(phase64Score.score)} / ${escapeHtml(phase64Score.target)} · ${escapeHtml(phase64Score.status)}</dd>
+          <dt>Production Score</dt>
+          <dd>${escapeHtml(phase64Score.productionScore)} / ${escapeHtml(phase64Score.productionTarget)} · blockers ${escapeHtml(phase64Score.blockerCount ?? phase64Check?.blockers?.length ?? 0)}</dd>
+          <dt>User MVP</dt>
+          <dd>${escapeHtml(phase64Check?.userMvp?.readyForRegularUserPilot ? "pilot-ready" : "attention")} · ${escapeHtml(phase64Check?.userMvp?.finalAnswerPosture ?? "unknown")}</dd>
+          <dt>Connector</dt>
+          <dd>FastAPI ${escapeHtml(phase64Check?.userMvp?.connector?.fastApiRouteCount ?? 0)} routes · /api/v1 ${escapeHtml(phase64Check?.userMvp?.connector?.fastApiV1RouteCount ?? 0)}</dd>
+          <dt>Memory</dt>
+          <dd>${escapeHtml(phase64Check?.memoryPosture?.adapter ?? "unknown")} · ${escapeHtml(phase64Check?.memoryPosture?.status ?? "unknown")} · advisory ${escapeHtml(phase64Check?.memoryPosture?.advisoryOnly ? "yes" : "attention")}</dd>
+          <dt>Recommendation</dt>
+          <dd>${escapeHtml(phase64Check?.recommendation ?? "not evaluated")}</dd>
+        </dl>
+        ${(phase64Check?.blockers ?? []).length ? `<ul>${phase64Check.blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}</ul>` : ""}
       </article>
     ` : ""}
     <article class="connector-card">

@@ -9376,3 +9376,30 @@ Verification:
 - API proof passed at `http://127.0.0.1:4229/api/proof/runs/local`: `phase63_generated_skill_pr_executor` scored `100 / 100`, recorded dry-run execution, preserved three reviewed generated files in the plan, wrote no files, opened no PR, blocked auto-merge, and blocked production-driving.
 - Dashboard visual proof passed at `http://127.0.0.1:4229/?phase=phase-63-generated-skill-pr-executor`: the Phase 63 card rendered `100 / 100`, dry-run recorded, writes not performed, PR opened no, auto-merge blocked, production-driving blocked, and zero console errors.
 - Artifacts: `artifacts/phase63/phase63-dashboard-generated-skill-pr-executor.png` and `artifacts/phase63/phase63-generated-skill-pr-executor-proof.json`.
+
+## Phase 64 MVP Completion Audit - 2026-06-22
+
+Goal:
+- Evaluate whether the product is ready as a regular-user pilot MVP and list remaining production blockers without overclaiming completion.
+
+Implemented:
+- Added `src/concierge/mvpCompletionAudit.mjs`.
+- Added `src/tests/mvp-completion-audit.test.mjs`.
+- Added `npm run test:mvp:audit`.
+- Added `/api/mvp/completion-audit`.
+- Added connector proof/dashboard visibility through `phase64_mvp_completion_audit`.
+- Separated regular-user MVP `score` from `productionScore`.
+- Added explicit blockers for Postgres production rollout, Graphiti/Zep schema readiness, hosted/remote browser readiness, and live authenticated OpenClaw proof.
+
+Safety:
+- Graphiti/Zep degraded status remains advisory and visible.
+- Production blockers remain visible even when the local MVP path is pilot-ready.
+- The audit does not mutate runtime state or widen OpenClaw/browser permissions.
+
+Verification:
+- Focused Phase 64 suite passed: `npm run test:mvp:audit` reported 2/2 passing.
+- `npm run build` passed and reports the Phase 64 MVP completion audit contract.
+- `npm run test:local` passed after the final audit fix with 301 tests total, 299 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4230/api/proof/runs/local` and `http://127.0.0.1:4230/api/mvp/completion-audit`: `phase64_mvp_completion_audit` scored `100 / 88`, production score was `0 / 90`, and four production blockers remained visible.
+- Dashboard visual proof passed at `http://127.0.0.1:4230/?phase=phase-64-mvp-completion-audit`: the Phase 64 card rendered MVP score, production score, pilot-ready user MVP posture, Graphiti/Zep degraded advisory memory, Postgres production blocker, and the local/pilot recommendation with zero console errors.
+- Artifacts: `artifacts/phase64/phase64-dashboard-mvp-completion-audit.png` and `artifacts/phase64/phase64-mvp-completion-audit-proof.json`.

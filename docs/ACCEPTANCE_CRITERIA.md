@@ -2660,3 +2660,13 @@ Focused proof:
 - Production-driving, credential entry, external writes, payer contact, and auto-merge remain blocked.
 - Dashboard proof exposes `phase63_generated_skill_pr_executor` with score, queue status, executor status, branch, reviewed file count, run side effects, and safety flags.
 - Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phase 64: MVP Completion Audit
+
+- The audit distinguishes regular-user MVP pilot readiness from production completeness.
+- The audit includes PWA readiness, FastAPI/Node connector readiness, DB health, OpenClaw approval boundary, Graphiti/Zep advisory status, generated-skill learning loop, dashboard proof, and production dependency posture.
+- Graphiti/Zep degraded or disabled states are allowed only as honest advisory/degraded status, not as full schema-ready memory.
+- Production blockers remain visible when Postgres rollout, hosted/remote browser readiness, live authenticated OpenClaw proof, or Graphiti schema readiness are not green.
+- Dashboard proof exposes `phase64_mvp_completion_audit` with MVP score, production score, user-MVP posture, connector route counts, memory posture, recommendation, and blockers.
+- `/api/mvp/completion-audit` returns the same audit check object.
+- Required gates: `npm run test:mvp:audit`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.

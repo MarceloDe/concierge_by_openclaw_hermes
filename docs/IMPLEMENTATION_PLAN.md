@@ -3330,3 +3330,25 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local`.
 - Visual proof through the operator dashboard Phase 63 card.
+
+## Phase 64 - MVP Completion Audit
+
+Goal: explicitly evaluate whether the product is ready as a regular-user pilot MVP while keeping production blockers visible.
+
+Build:
+
+- Add `src/concierge/mvpCompletionAudit.mjs`.
+- Add a deterministic audit that combines Phase 59 pilot readiness, storage/DB health, OpenClaw readiness, product-memory status, generated-skill loop readiness, dashboard proof, and production dependency posture.
+- Separate `score` for regular-user MVP readiness from `productionScore`.
+- Mark Graphiti/Zep degraded status honestly as advisory-only rather than silently green.
+- List production blockers such as Postgres rollout, Graphiti schema readiness, hosted/remote browser readiness, and live authenticated OpenClaw proof.
+- Add `/api/mvp/completion-audit`.
+- Add connector proof/dashboard visibility for `phase64_mvp_completion_audit`.
+
+Gates:
+
+- `npm run test:mvp:audit`.
+- `npm run build`.
+- `npm run test:local`.
+- API proof through `/api/proof/runs/local` and `/api/mvp/completion-audit`.
+- Visual proof through the operator dashboard Phase 64 card.

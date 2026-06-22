@@ -117,6 +117,7 @@ import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.m
 import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { buildPhase62GeneratedSkillReviewQueueProof, listGeneratedSkillReviewQueue } from "../concierge/generatedSkillReviewQueue.mjs";
 import { buildPhase63GeneratedSkillPrExecutorProof, listGeneratedSkillPrExecutorRuns } from "../concierge/generatedSkillPrExecutor.mjs";
+import { buildPhase64MvpCompletionAudit } from "../concierge/mvpCompletionAudit.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1463,6 +1464,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const phase61GeneratedSkillPr = buildPhase61GeneratedSkillPrProof();
   const phase62GeneratedSkillReviewQueue = await buildPhase62GeneratedSkillReviewQueueProof(store);
   const phase63GeneratedSkillPrExecutor = await buildPhase63GeneratedSkillPrExecutorProof(store);
+  const phase64MvpCompletionAudit = buildPhase64MvpCompletionAudit({
+    phase59PilotReadiness,
+    phase60MemorySkillTree,
+    phase61GeneratedSkillPr,
+    phase62GeneratedSkillReviewQueue,
+    phase63GeneratedSkillPrExecutor,
+    productMemory,
+    storage,
+    deployment,
+    liveReadiness,
+    counts
+  });
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1689,6 +1702,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase63_generated_skill_pr_executor",
         status: phase63GeneratedSkillPrExecutor.status,
         target: "Approved generated skill queue items expose a human-operated dry-run executor surface before any branch, file write, or PR action can occur."
+      },
+      {
+        key: "phase64_mvp_completion_audit",
+        status: phase64MvpCompletionAudit.status,
+        target: "Regular-user MVP readiness is separated from production completeness, with PWA, API, DB, OpenClaw, Graphiti, dashboard, and blockers visible."
       }
     ],
     checks: [
@@ -1800,6 +1818,22 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         executor: phase63GeneratedSkillPrExecutor.executor,
         run: phase63GeneratedSkillPrExecutor.run,
         safety: phase63GeneratedSkillPrExecutor.safety
+      },
+      {
+        key: "phase64_mvp_completion_audit",
+        status: phase64MvpCompletionAudit.status,
+        ok: phase64MvpCompletionAudit.ok,
+        score: phase64MvpCompletionAudit.score,
+        target: phase64MvpCompletionAudit.target,
+        productionScore: phase64MvpCompletionAudit.productionScore,
+        productionTarget: phase64MvpCompletionAudit.productionTarget,
+        checks: phase64MvpCompletionAudit.checks,
+        productionChecks: phase64MvpCompletionAudit.productionChecks,
+        userMvp: phase64MvpCompletionAudit.userMvp,
+        operatorMvp: phase64MvpCompletionAudit.operatorMvp,
+        memoryPosture: phase64MvpCompletionAudit.memoryPosture,
+        blockers: phase64MvpCompletionAudit.blockers,
+        recommendation: phase64MvpCompletionAudit.recommendation
       },
       {
         key: "database_storage",
@@ -2497,6 +2531,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingAllowed: phase63GeneratedSkillPrExecutor.safety.productionDrivingAllowed
       },
       {
+        key: "phase64_mvp_completion_audit",
+        score: phase64MvpCompletionAudit.score,
+        target: phase64MvpCompletionAudit.target,
+        status: phase64MvpCompletionAudit.status,
+        productionScore: phase64MvpCompletionAudit.productionScore,
+        productionTarget: phase64MvpCompletionAudit.productionTarget,
+        readyForRegularUserPilot: phase64MvpCompletionAudit.userMvp.readyForRegularUserPilot,
+        blockerCount: phase64MvpCompletionAudit.blockers.length
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2793,6 +2837,12 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-pr-executor") {
     sendJson(res, 200, await listGeneratedSkillPrExecutorRuns(store));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/mvp/completion-audit") {
+    const proof = await connectorProofRun("phase64-mvp-completion-audit");
+    sendJson(res, 200, proof.checks.find((check) => check.key === "phase64_mvp_completion_audit"));
     return;
   }
 
