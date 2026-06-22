@@ -1,0 +1,26 @@
+{
+  "phase": "phase-54-graceful-degradation",
+  "capturedAt": "2026-06-22T03:09:32.093Z",
+  "url": "http://127.0.0.1:4220/mvp?phase=phase-54-graceful-degradation",
+  "title": "Brainstyworkers Concierge MVP",
+  "degradedBlockVisible": true,
+  "unverifiedVisible": true,
+  "optionCards": [
+    "Verify myself no approval Use the missing evidence checklist to verify the answer in your plan, portal, document, or reviewed source.",
+    "Let concierge check approval Your data is not stored -- it runs in an isolated sandbox and is erased after use; you complete login/2FA yourself in the remote browser, and it is never stored. Task task_83ecd737-85f3-4bd7-9beb-5e34dfa4c1dd · read_only_observation",
+    "Provide more info no approval Add a plan document, claim/EOB, provider, medication, procedure, or other detail so the answer can become source-backed."
+  ],
+  "privacyCopyVisible": true,
+  "runState": [
+    "Authsigned in",
+    "GPT / Intenteligibility_benefits_navigation",
+    "Skillinsurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser",
+    "Approvalpending",
+    "OpenClawblocked_no_trusted_research_evidence",
+    "Evidenceblocked_no_trusted_research_evidence",
+    "Memorydisabled_by_env",
+    "Answerready"
+  ],
+  "consoleErrorCount": 0,
+  "screenshot": "artifacts/phase54/graceful-degradation-mvp-proof.png"
+}

@@ -1,0 +1,45 @@
+{
+  "phase": "phase-54-graceful-degradation",
+  "capturedAt": "2026-06-22T03:08:27.057Z",
+  "endpoint": "POST /api/chat",
+  "status": "passed",
+  "workflowOutcome": "best_effort_degraded",
+  "evidenceStatus": "blocked_no_trusted_research_evidence",
+  "sourcePointerCount": 0,
+  "finalResponseIncludesUnverified": true,
+  "degradedBlockPresent": true,
+  "degradedOptions": [
+    {
+      "id": "verify_myself",
+      "requiresApproval": false,
+      "taskId": null
+    },
+    {
+      "id": "let_concierge_check",
+      "requiresApproval": true,
+      "taskId": "task_8f09f69b-e428-43a3-880b-b5aed892b7db"
+    },
+    {
+      "id": "provide_more_info",
+      "requiresApproval": false,
+      "taskId": null
+    }
+  ],
+  "privacyCopyPresent": true,
+  "noConfidentUncitedClaims": true,
+  "externalActionsTaken": false,
+  "medicalAdvice": false,
+  "approvalGatePresent": true,
+  "allAi2UiTypes": [
+    "answer_markdown",
+    "cost_comparison",
+    "degraded_answer_with_options",
+    "workflow_status",
+    "approval_gate",
+    "worker_status",
+    "source_citations",
+    "memory_status",
+    "safety_notice",
+    "next_steps"
+  ]
+}

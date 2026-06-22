@@ -2752,3 +2752,17 @@ This preserves the existing safety, PHI, audit, approval, source-pointer, and ou
 
 Consequences:
 Omitted `useLiveModel` now means "use live intelligence if configured." Explicit `useLiveModel: false` remains the deterministic regression path. Phase 54 must still convert evidence-insufficiency blocks into graceful degraded answers, and Phase 55 must still replace simulated approval pause/resume with durable native LangGraph interrupt/resume.
+
+## 2026-06-22 - Phase 54 Treats Missing Evidence As Graceful Degradation
+
+Problem:
+The runtime could route and reason more intelligently after Phase 53, but missing trusted evidence still produced deterministic terminal blockers in user-facing paths. That contradicted the target reasoning-orchestrator-with-rails architecture: safety refusals should remain hard stops, while evidence insufficiency should keep the journey alive with unverified status and bounded next actions.
+
+Decision:
+Implement Phase 54 as an additive graceful-degradation layer. Add a strict best-effort answer composer, persist `degraded_answer` in graph state, and render a `degraded_answer_with_options` AI2UI card with verify-myself, approval-gated concierge check, and provide-more-info options. Keep every unsupported factual claim explicitly marked as unverified and source-less, and keep source-pointer validation, PHI masking, approval, and policy gates unchanged.
+
+Rationale:
+This makes the user experience useful without weakening healthcare safety. The system can say what is missing, offer practical next steps, and prepare an approval-gated OpenClaw observation, but it still cannot claim coverage, cost, claim, provider, pharmacy, or document facts without evidence.
+
+Consequences:
+Missing trusted evidence now yields `workflow_outcome: best_effort_degraded` instead of old terminal trusted-citation blocker copy. Tests and public chat contracts now assert the new degraded answer and AI2UI option block. Phase 55 must still make the human-in-the-loop pause durable through native LangGraph interrupt/resume.

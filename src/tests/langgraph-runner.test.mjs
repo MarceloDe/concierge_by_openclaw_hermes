@@ -104,11 +104,13 @@ test("LangGraph runner routes an insurance request and prepares OpenClaw envelop
   assert.equal(result.state.openclaw_skill_proposal.task.status, "pending_approval");
   assert.equal(result.state.model_invocation.mode, "not_requested");
   assert.equal(result.state.evidence_observation.status, "blocked_no_trusted_research_evidence");
-  assert.match(result.state.final_response, /cannot answer the insurance question from trusted citations yet/);
-  assert.match(result.state.final_response, /approve a read-only portal observation/);
+  assert.equal(result.state.workflow_outcome, "best_effort_degraded");
+  assert.match(result.state.final_response, /Unverified:/);
+  assert.ok(result.state.degraded_answer);
   assert.ok(result.state.ai2ui_blocks.length >= 8);
   assert.ok(result.state.ai2ui_blocks.some((block) => block.type === "answer_markdown"));
   assert.ok(result.state.ai2ui_blocks.some((block) => block.type === "approval_gate"));
+  assert.ok(result.state.ai2ui_blocks.some((block) => block.type === "degraded_answer_with_options"));
   assert.ok(result.state.ai2ui_blocks.some((block) => block.type === "source_citations"));
 
   const audit = await store.get("SELECT * FROM audit_events WHERE session_id = '" + session.id.replaceAll("'", "''") + "' AND event_type = 'langgraph_run_completed' LIMIT 1;");
@@ -294,7 +296,7 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
   assert.equal(messages.length, 4);
 });
 
-test("LangGraph runner composes a user-facing blocker when live portal evidence is unavailable", async () => {
+test("LangGraph runner composes a best-effort answer when live portal evidence is unavailable", async () => {
   const store = await createStore();
   const { user, session } = await enrollDefaultMember(store);
   const proposalRun = await runLangGraphOrchestration(store, {
@@ -329,8 +331,11 @@ test("LangGraph runner composes a user-facing blocker when live portal evidence 
   assert.equal(result.state.evidence_observation.status, "blocked_no_authenticated_evidence");
   assert.deepEqual(result.state.source_pointers, []);
   assert.equal(result.state.should_remember, false);
-  assert.match(result.state.final_response, /live insurance portal evidence step is blocked right now/);
-  assert.match(result.state.final_response, /No source pointers, eligibility snapshots, document candidates/);
+  assert.equal(result.state.workflow_outcome, "best_effort_degraded");
+  assert.match(result.state.final_response, /Unverified:/);
+  assert.ok(result.state.degraded_answer);
+  assert.ok(result.state.degraded_answer.answer.claims.every((claim) => claim.unsupported === true));
+  assert.ok(result.state.ai2ui_blocks.some((block) => block.type === "degraded_answer_with_options"));
   assert.doesNotMatch(result.state.final_response, /not executed in this slice/i);
 });
 
@@ -584,7 +589,7 @@ test("LangGraph answers provider network questions with sourced AI2UI provider r
   }
 });
 
-test("LangGraph refuses pending research artifacts until citation review approves them", async () => {
+test("LangGraph degrades gracefully for pending research artifacts until citation review approves them", async () => {
   const store = await createStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-research-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
@@ -617,12 +622,13 @@ test("LangGraph refuses pending research artifacts until citation review approve
     });
 
     assert.equal(result.state.evidence_observation.status, "blocked_pending_research_evidence_review");
-    assert.equal(result.state.workflow_outcome, "trusted_research_evidence_unavailable");
+    assert.equal(result.state.workflow_outcome, "best_effort_degraded");
     assert.deepEqual(result.state.source_pointers, []);
     assert.equal(result.state.research_evidence.trustedResultCount, 0);
     assert.ok(result.state.research_evidence.pendingReviewCount >= 1);
-    assert.match(result.state.final_response, /cannot answer the insurance question from trusted citations yet/);
-    assert.match(result.state.final_response, /pending operator citation review/);
+    assert.match(result.state.final_response, /Unverified:/);
+    assert.ok(result.state.degraded_answer);
+    assert.ok(result.state.degraded_answer.unverified.includes("operator-reviewed citation approval"));
     assert.doesNotMatch(result.state.final_response, /deductible evidence mentions coinsurance/);
 
     const auditRows = await store.all("SELECT event_type FROM audit_events ORDER BY rowid ASC;");

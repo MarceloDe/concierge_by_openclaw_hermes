@@ -3,13 +3,13 @@ import { mountRemoteBrowser } from "./remoteBrowser.js";
 const DEFAULT_BENEFITS_MESSAGE = "Do I still owe anything before insurance starts paying?";
 const READ_ONLY_SCOPE = "read_only_observation";
 const READ_ONLY_DOCUMENT_SCOPE = "read_only_document_observation";
-const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v1";
+const AI2UI_BLOCK_CONTRACT_VERSION = "brainstyworkers.ai2ui.blocks.v2";
 const UI_MODES = ["chat", "split", "guided", "bento"];
 const AI2UI_MODE_BLOCKS = {
-  chat: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "source_citations", "human_handoff", "next_steps"],
-  split: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"],
-  guided: ["workflow_status", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "next_steps", "safety_notice"],
-  bento: ["answer_markdown", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"]
+  chat: ["answer_markdown", "degraded_answer_with_options", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "source_citations", "human_handoff", "next_steps"],
+  split: ["answer_markdown", "degraded_answer_with_options", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"],
+  guided: ["workflow_status", "degraded_answer_with_options", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "next_steps", "safety_notice"],
+  bento: ["answer_markdown", "degraded_answer_with_options", "cost_comparison", "pharmacy_formulary", "procedure_checklist", "provider_network", "workflow_status", "approval_gate", "worker_status", "source_citations", "memory_status", "human_handoff", "safety_notice", "next_steps"]
 };
 const AI2UI_SUPPORTED_TYPES = new Set([...AI2UI_MODE_BLOCKS.bento, "unknown"]);
 
@@ -229,6 +229,9 @@ function renderAi2UiBlock(block, result) {
   if (block.type === "provider_network") {
     return renderProviderNetworkBlock(block);
   }
+  if (block.type === "degraded_answer_with_options") {
+    return renderDegradedAnswerBlock(block);
+  }
   if (block.type === "approval_gate") {
     return renderDefinitionBlock(block, [
       ["Status", payload.status],
@@ -440,6 +443,34 @@ function renderProviderNetworkBlock(block) {
               "Confirm network status with the plan and provider before scheduling or care decisions."
             ].map((item) => `<li>${escapeHtml(item)}</li>`).join("")
           : (payload.missingEvidence ?? []).slice(0, 4).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </article>
+  `;
+}
+
+function renderDegradedAnswerBlock(block) {
+  const payload = block.payload ?? {};
+  const options = Array.isArray(payload.options) ? payload.options : [];
+  const unverified = Array.isArray(payload.unverified) ? payload.unverified : [];
+  const className = `ai2ui-block block-${block.type} ${block.renderHints?.severity ?? ""}`.trim();
+  return `
+    <article class="${className}">
+      <h3>${escapeHtml(block.title)}</h3>
+      <p class="status-text">${escapeHtml(payload.status ?? "best_effort_degraded")} · ${escapeHtml(payload.reason ?? "missing evidence")}</p>
+      <div class="degraded-options-grid">
+        ${options.map((option) => `
+          <div class="degraded-option-row">
+            <strong>${escapeHtml(option.label ?? option.id ?? "Option")}</strong>
+            <b>${escapeHtml(option.requiresApproval ? "approval" : "no approval")}</b>
+            <span>${escapeHtml(option.description ?? "")}</span>
+            ${option.taskId ? `<small>Task ${escapeHtml(option.taskId)} · ${escapeHtml(option.approvalScope ?? "read_only_observation")}</small>` : ""}
+          </div>
+        `).join("")}
+      </div>
+      <ul class="ai2ui-checklist">
+        ${unverified.length
+          ? unverified.slice(0, 5).map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+          : "<li>Missing evidence is labeled as unverified instead of treated as a safety refusal.</li>"}
       </ul>
     </article>
   `;
