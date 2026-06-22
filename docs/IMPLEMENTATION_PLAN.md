@@ -3139,3 +3139,31 @@ Gates:
 - `npm run build`.
 - `npm run test:local`.
 - API and visual proof through the operator dashboard.
+
+## Phase 58 - Trusted Answer Driving And Learning Loop Closure
+
+Goal: map the next-step packet Phase 52 onto the current repo numbering. Let reviewer-approved, citation-validated PEMS candidates drive final answers only through a narrow trusted path while keeping every other memory or skill output advisory.
+
+Build:
+
+- Add a trusted answer-driving module that composes only from candidate metadata, allowed source pointer IDs, structured facts, and advisory memory fragments.
+- Add a persisted global kill switch for trusted answer-driving and demote active driving candidates when it is enabled.
+- Update the PEMS promotion gate so `productionDrivingAllowed=true` appears only after maturity score, shadow runs, reviewer approvals, validator pass, citation pass, source evidence, no safety veto, and kill switch clear.
+- Add Graphiti-style memory namespaces for semantic plan facts, user-scoped episodic facts, user-agnostic procedural skills, and collective patterns.
+- Add resolved-case and nightly-research candidate seed helpers that are candidate-only and non-driving until reviewer promotion.
+- Add connector proof and dashboard visibility for Phase 58.
+
+Non-goals:
+
+- Do not let unreviewed worker memory drive answers.
+- Do not remove deterministic safety refusals or approval gates.
+- Do not store raw PHI in procedural skill memory.
+- Do not let candidate generation from research or resolved cases bypass human review.
+
+Gates:
+
+- Focused PEMS trusted answer-driving and product-memory contract tests.
+- `npm run build`.
+- `npm run test:local`.
+- API proof at `/api/proof/runs/local`.
+- Visual dashboard proof for the Phase 58 card.

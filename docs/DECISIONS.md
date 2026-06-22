@@ -2808,3 +2808,17 @@ The worker can gain breadth only if skill selection is registry-driven and fail-
 
 Consequences:
 Dropping a valid skill folder can now participate in artifact validation and dynamic score-based selection without editing selector code. Unsafe community skills declaring credentials, write actions, external messaging, non-local OCR, or page-text-instruction behavior are rejected. Worker memory remains advisory with `productionDrivingAllowed=false`.
+
+## 2026-06-22 - Phase 58 Allows Trusted Answer Driving Only Behind Reviewer And Citation Rails
+
+Problem:
+Phase 57 gave OpenClaw broader registry-driven skill execution and started recording masked worker procedural memory, but that memory still could not safely influence production answers. The next-step packet required closing the learning loop without turning every learned procedure into answer authority.
+
+Decision:
+Implement repo Phase 58 as the packet Phase 52 slice. Introduce a distinct trusted answer-driving path that can set `productionDrivingAllowed=true` only after PEMS maturity, two human approvals, validator pass, citation pass, source evidence, no safety incident, and a clear global kill switch. Keep candidate generation from resolved cases and nightly research changes candidate-only by default.
+
+Rationale:
+This keeps the system less deterministic and more intelligence-driven only where there is real reviewer-approved evidence and strict claim/source validation. It also gives operators an immediate demotion lever and keeps procedural memory user-agnostic, so learned workflow skill does not become PHI-bearing recall.
+
+Consequences:
+The supervised advisory gate remains available and non-driving for untrusted candidates. The trusted path composes sourced answers from allowed source pointer IDs and labels unsupported items explicitly. A safety incident or kill switch demotes production-driving candidates. Product memory now carries semantic, episodic, procedural, and collective namespace hints, but procedural skills reject user-scoped identifiers.

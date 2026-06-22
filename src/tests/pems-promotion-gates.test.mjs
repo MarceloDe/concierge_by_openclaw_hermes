@@ -68,7 +68,7 @@ async function createMatureCandidate(store) {
   return { user, session, candidateId: latest.maturity.candidateId };
 }
 
-test("PEMS promotion gate requires reviewer, validator, citation, and safety checks before supervised advisory", async () => {
+test("PEMS promotion gate requires reviewer, validator, citation, and safety checks before trusted answer-driving", async () => {
   const store = await createStore();
   const { candidateId } = await createMatureCandidate(store);
   const initial = await store.findOne("pems_candidate_maturity", { candidate_id: candidateId });
@@ -113,18 +113,19 @@ test("PEMS promotion gate requires reviewer, validator, citation, and safety che
     rationale: "Cited source pointer IDs close the factual claims."
   });
   assert.equal(promoted.gate.supervisedAdvisoryAllowed, true);
-  assert.equal(promoted.productionDrivingAllowed, false);
+  assert.equal(promoted.gate.status, "trusted_answer_driving");
+  assert.equal(promoted.productionDrivingAllowed, true);
 
   const mature = await store.findOne("pems_candidate_maturity", { candidate_id: candidateId });
   assert.equal(mature.supervised_advisory_allowed, 1);
-  assert.equal(mature.promotion_status, "supervised_advisory_allowed");
-  assert.equal(mature.production_driving_allowed, 0);
+  assert.equal(mature.promotion_status, "trusted_answer_driving");
+  assert.equal(mature.production_driving_allowed, 1);
 
   const proof = buildPemsPromotionReadinessProof(await getPemsPromotionGateStatus(store));
-  assert.equal(proof.status, "phase35_supervised_promotion_gate_active");
-  assert.equal(proof.score, 80);
-  assert.equal(proof.target, 80);
-  assert.equal(proof.productionDrivingAllowed, false);
+  assert.equal(proof.status, "phase58_trusted_answer_driving_active");
+  assert.equal(proof.score, 100);
+  assert.equal(proof.target, 100);
+  assert.equal(proof.productionDrivingAllowed, true);
   assert.equal(proof.supervisedAdvisoryCandidateCount, 1);
 
   const reviews = await store.list("pems_candidate_promotion_reviews", { candidate_id: candidateId });
@@ -134,7 +135,7 @@ test("PEMS promotion gate requires reviewer, validator, citation, and safety che
   assert.equal(reviews[0].metadata_json.includes("rawRationaleStored"), true);
 });
 
-test("safety incident review vetoes a previously supervised advisory candidate without production driving", async () => {
+test("safety incident review vetoes a previously trusted answer-driving candidate", async () => {
   const store = await createStore();
   const { candidateId } = await createMatureCandidate(store);
   for (const review of [
@@ -146,7 +147,7 @@ test("safety incident review vetoes a previously supervised advisory candidate w
     await recordPemsPromotionReview(store, { candidateId, rationale: "safe review", ...review });
   }
 
-  assert.equal((await getPemsPromotionGateStatus(store)).latestGate.supervisedAdvisoryAllowed, true);
+  assert.equal((await getPemsPromotionGateStatus(store)).latestGate.trustedAnswerDrivingAllowed, true);
 
   await recordPemsPromotionReview(store, {
     candidateId,
@@ -162,4 +163,5 @@ test("safety incident review vetoes a previously supervised advisory candidate w
   assert.equal(status.latestGate.supervisedAdvisoryAllowed, false);
   assert.equal(status.latestCandidate.supervisedAdvisoryAllowed, false);
   assert.equal(status.latestCandidate.productionDrivingAllowed, false);
+  assert.equal(status.productionDrivingAllowed, false);
 });

@@ -345,6 +345,18 @@ export class SqliteStore {
       );
     `);
     await this.exec(`
+      CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls (
+        control_key TEXT PRIMARY KEY,
+        kill_switch_enabled INTEGER NOT NULL DEFAULT 0,
+        actor_user_id TEXT,
+        reason_hash TEXT NOT NULL DEFAULT '',
+        reason_preview TEXT NOT NULL DEFAULT '',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,
         actor_user_id TEXT,

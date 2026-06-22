@@ -1,0 +1,51 @@
+{
+  "capturedAt": "2026-06-22T11:54:57.084Z",
+  "url": "http://127.0.0.1:4224/?phase=phase-58-trusted-answer-driving",
+  "title": "Brainstyworkers AI Concierge",
+  "screenshot": "artifacts/phase58/phase58-dashboard-trusted-answer-driving-card.png",
+  "captureMethod": "bundled_playwright_headless_chromium",
+  "requiredText": [
+    {
+      "needle": "Phase 58 Trusted Answer Driving",
+      "present": true
+    },
+    {
+      "needle": "100 / 100",
+      "present": true
+    },
+    {
+      "needle": "phase58_trusted_answer_driving_proof_ready",
+      "present": true
+    },
+    {
+      "needle": "trusted_answer_driving",
+      "present": true
+    },
+    {
+      "needle": "trusted path only",
+      "present": true
+    },
+    {
+      "needle": "validated cited answer",
+      "present": true
+    },
+    {
+      "needle": "unsupported items labeled",
+      "present": true
+    },
+    {
+      "needle": "kill switch demotes",
+      "present": true
+    },
+    {
+      "needle": "safety incident demotes",
+      "present": true
+    },
+    {
+      "needle": "procedural:skills",
+      "present": true
+    }
+  ],
+  "passed": true,
+  "cardText": "Phase 58 Trusted Answer Driving\nScore\n100 / 100 · phase58_trusted_answer_driving_proof_ready\nPromotion\ntrusted_answer_driving · production-driving trusted path only\nCitation Rails\nvalidated cited answer · unsupported items labeled\nDemotion\nkill switch demotes · safety incident demotes\nMemory Namespaces\nprocedural:skills · episodic member scoped"
+}

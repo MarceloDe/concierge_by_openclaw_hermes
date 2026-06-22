@@ -15,6 +15,7 @@ export const PEMS_REVIEWER_CLAIM_REVISION_VERSION = "2026-06-20.phase41-reviewer
 export const PEMS_REVIEWER_FOLLOW_UP_VERSION = "2026-06-20.phase42-reviewer-follow-up-workflows.v1";
 export const PEMS_REVIEWER_HISTORY_EXPORT_VERSION = "2026-06-20.phase43-reviewer-history-audit-exports.v1";
 export const PEMS_REVIEWER_HISTORY_REVIEW_VERSION = "2026-06-21.phase44-reviewer-history-review-refinement.v1";
+export const PEMS_TRUSTED_ANSWER_DRIVING_VERSION = "2026-06-22.phase58-trusted-answer-driving.v1";
 
 export const UNIVERSAL_CASE_GATES = Object.freeze([
   { id: "G0", key: "intake", title: "Intake Bound" },
@@ -33,6 +34,7 @@ const PEMS_MIN_SHADOW_RUNS = 10;
 const PEMS_MIN_REVIEWER_APPROVALS = 2;
 const PEMS_MIN_VALIDATOR_EVALUATIONS = 1;
 const PEMS_MIN_CITATION_EVALUATIONS = 1;
+const PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY = "trusted_answer_driving_global";
 
 function hashText(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -866,8 +868,13 @@ export function evaluatePemsPromotionGate(maturity = {}, reviews = []) {
   const latestScore = maturityValue(maturity, "latest_score", "latestScore");
   const shadowRunCount = maturityValue(maturity, "shadow_run_count", "shadowRunCount");
   const evidenceRefCount = maturityValue(maturity, "evidence_ref_count", "evidenceRefCount");
-  const productionDrivingAllowed =
+  const currentProductionDrivingAllowed =
     maturity?.production_driving_allowed === 1 || maturity?.productionDrivingAllowed === true || maturity?.productionDrivingAllowed === "true";
+  const killSwitchEnabled =
+    maturity?.trusted_answer_driving_kill_switch_enabled === 1 ||
+    maturity?.trustedAnswerDrivingKillSwitchEnabled === true ||
+    maturity?.kill_switch_enabled === 1 ||
+    maturity?.killSwitchEnabled === true;
   const requirements = [
     { key: "maturity_score", ok: latestScore >= PEMS_TRUST_THRESHOLD, actual: latestScore, target: PEMS_TRUST_THRESHOLD },
     { key: "shadow_runs", ok: shadowRunCount >= PEMS_MIN_SHADOW_RUNS, actual: shadowRunCount, target: PEMS_MIN_SHADOW_RUNS },
@@ -875,16 +882,30 @@ export function evaluatePemsPromotionGate(maturity = {}, reviews = []) {
     { key: "validator_evaluation_passes", ok: validatorPasses >= PEMS_MIN_VALIDATOR_EVALUATIONS && validatorFailures === 0, actual: validatorPasses, target: PEMS_MIN_VALIDATOR_EVALUATIONS },
     { key: "citation_evaluation_passes", ok: citationPasses >= PEMS_MIN_CITATION_EVALUATIONS && citationFailures === 0, actual: citationPasses, target: PEMS_MIN_CITATION_EVALUATIONS },
     { key: "citation_evidence_refs", ok: citationEvidenceRefCount > 0 || evidenceRefCount > 0, actual: Math.max(citationEvidenceRefCount, evidenceRefCount), target: 1 },
-    { key: "safety_incidents", ok: safetyIncidentCount === 0 && humanRejections === 0, actual: safetyIncidentCount + humanRejections, target: 0 },
-    { key: "production_driving_disabled", ok: !productionDrivingAllowed, actual: productionDrivingAllowed ? 1 : 0, target: 0 }
+    { key: "safety_incidents", ok: safetyIncidentCount === 0 && humanRejections === 0, actual: safetyIncidentCount + humanRejections, target: 0 }
   ];
   const supervisedAdvisoryAllowed = requirements.every((requirement) => requirement.ok);
+  const trustedAnswerDrivingRequirements = [
+    ...requirements,
+    { key: "trusted_answer_driving_kill_switch", ok: !killSwitchEnabled, actual: killSwitchEnabled ? 1 : 0, target: 0 }
+  ];
+  const trustedAnswerDrivingAllowed = supervisedAdvisoryAllowed && !killSwitchEnabled;
   return {
-    version: PEMS_PROMOTION_GATE_VERSION,
-    status: supervisedAdvisoryAllowed ? "supervised_advisory_allowed" : safetyIncidentCount > 0 ? "safety_veto" : "shadow_review_required",
+    version: PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
+    baseGateVersion: PEMS_PROMOTION_GATE_VERSION,
+    status: trustedAnswerDrivingAllowed
+      ? "trusted_answer_driving"
+      : safetyIncidentCount > 0 || humanRejections > 0
+        ? "safety_veto"
+        : killSwitchEnabled
+          ? "trusted_answer_driving_kill_switch"
+          : supervisedAdvisoryAllowed
+            ? "supervised_advisory_allowed"
+            : "shadow_review_required",
     ok: supervisedAdvisoryAllowed,
     supervisedAdvisoryAllowed,
-    productionDrivingAllowed: false,
+    trustedAnswerDrivingAllowed,
+    productionDrivingAllowed: trustedAnswerDrivingAllowed,
     candidateId: maturity?.candidate_id ?? maturity?.candidateId ?? null,
     counts: {
       humanApprovals,
@@ -898,13 +919,99 @@ export function evaluatePemsPromotionGate(maturity = {}, reviews = []) {
       reviewCount: normalizedReviews.length
     },
     requirements,
+    trustedAnswerDrivingRequirements,
     safety: {
       rawRationaleStored: false,
       rawSourceStored: false,
-      supervisedAdvisoryOnly: true,
-      productionDrivingAllowed: false
+      supervisedAdvisoryOnly: !trustedAnswerDrivingAllowed,
+      reviewerApprovalRequired: true,
+      citationRailsRequired: true,
+      killSwitchEnabled,
+      currentProductionDrivingAllowed,
+      productionDrivingAllowed: trustedAnswerDrivingAllowed
     }
   };
+}
+
+export async function getPemsTrustedAnswerDrivingControl(store) {
+  if (!store) {
+    return {
+      version: PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
+      controlKey: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY,
+      killSwitchEnabled: true,
+      status: "store_unavailable_fail_closed"
+    };
+  }
+  const row = await store.findOne("pems_trusted_answer_driving_controls", {
+    control_key: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY
+  });
+  return {
+    version: PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
+    controlKey: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY,
+    killSwitchEnabled: row ? row.kill_switch_enabled === 1 : false,
+    status: row?.kill_switch_enabled === 1 ? "trusted_answer_driving_kill_switch_enabled" : "trusted_answer_driving_kill_switch_clear",
+    actorUserId: row?.actor_user_id ?? null,
+    reasonPreview: row?.reason_preview ?? "",
+    updatedAt: row?.updated_at ?? null,
+    rawReasonStored: false
+  };
+}
+
+export async function setPemsTrustedAnswerDrivingKillSwitch(
+  store,
+  { enabled = true, actorUserId = "operator", reason = "", metadata = {}, updatedAt = new Date().toISOString() } = {}
+) {
+  if (!store) throw new Error("A store is required to set the PEMS trusted answer-driving kill switch.");
+  return store.transaction(async (tx) => {
+    const existing = await tx.findOne("pems_trusted_answer_driving_controls", {
+      control_key: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY
+    });
+    const record = {
+      control_key: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY,
+      kill_switch_enabled: enabled ? 1 : 0,
+      actor_user_id: actorUserId ? String(actorUserId) : null,
+      reason_hash: hashText(reason),
+      reason_preview: safePreview(reason),
+      metadata_json: JSON.stringify({
+        ...jsonValue(metadata, {}),
+        rawReasonStored: false,
+        productionDrivingAllowed: false
+      }),
+      updated_at: updatedAt
+    };
+    if (existing) {
+      await tx.update("pems_trusted_answer_driving_controls", record, {
+        control_key: PEMS_TRUSTED_ANSWER_DRIVING_CONTROL_KEY
+      });
+    } else {
+      await tx.insert("pems_trusted_answer_driving_controls", {
+        ...record,
+        created_at: updatedAt
+      });
+    }
+    let demotedCount = 0;
+    if (enabled) {
+      const active = await tx.get("SELECT COUNT(*) AS count FROM pems_candidate_maturity WHERE production_driving_allowed = 1;");
+      demotedCount = rowNumber(active?.count);
+      await tx.update(
+        "pems_candidate_maturity",
+        {
+          production_driving_allowed: 0,
+          promotion_status: "trusted_answer_driving_kill_switch_demoted",
+          updated_at: updatedAt
+        },
+        { production_driving_allowed: 1 }
+      );
+    }
+    return {
+      version: PEMS_TRUSTED_ANSWER_DRIVING_VERSION,
+      status: enabled ? "trusted_answer_driving_kill_switch_enabled" : "trusted_answer_driving_kill_switch_clear",
+      killSwitchEnabled: Boolean(enabled),
+      demotedCount,
+      rawReasonStored: false,
+      productionDrivingAllowed: false
+    };
+  });
 }
 
 async function listPemsPromotionReviewsForCandidate(store, candidateId) {
@@ -988,7 +1095,16 @@ export async function recordPemsPromotionReview(
       safetyIncidentCount: rowNumber(existing.safety_incident_count)
     };
     const maturity = scorePemsMaturity(pemsInputsFromAggregate(aggregate));
-    const gate = evaluatePemsPromotionGate({ ...existing, latest_score: maturity.score, reviewer_approval_count: reviewerApprovalCount }, reviews);
+    const trustedControl = await getPemsTrustedAnswerDrivingControl(tx);
+    const gate = evaluatePemsPromotionGate(
+      {
+        ...existing,
+        latest_score: maturity.score,
+        reviewer_approval_count: reviewerApprovalCount,
+        trustedAnswerDrivingKillSwitchEnabled: trustedControl.killSwitchEnabled
+      },
+      reviews
+    );
     await tx.update(
       "pems_candidate_maturity",
       {
@@ -996,14 +1112,15 @@ export async function recordPemsPromotionReview(
         latest_score: maturity.score,
         trusted: maturity.trusted ? 1 : 0,
         supervised_advisory_allowed: gate.supervisedAdvisoryAllowed ? 1 : 0,
+        production_driving_allowed: gate.trustedAnswerDrivingAllowed ? 1 : 0,
         promotion_status: gate.status,
         last_reviewed_at: createdAt,
-        production_driving_allowed: 0,
         maturity_json: JSON.stringify({
           version: CONTINUOUS_INTELLIGENCE_PERSISTENCE_VERSION,
           pems: maturity,
           aggregate,
-          productionDrivingAllowed: false
+          productionDrivingAllowed: gate.trustedAnswerDrivingAllowed,
+          trustedAnswerDrivingStatus: gate.status
         }),
         promotion_json: JSON.stringify(gate),
         updated_at: createdAt
@@ -1019,7 +1136,8 @@ export async function recordPemsPromotionReview(
       },
       gate,
       maturity,
-      productionDrivingAllowed: false
+      trustedControl,
+      productionDrivingAllowed: gate.productionDrivingAllowed
     };
   });
 }
@@ -2389,6 +2507,7 @@ export async function getPemsPromotionGateStatus(store) {
        COALESCE(SUM(CASE WHEN production_driving_allowed = 1 THEN 1 ELSE 0 END), 0) AS productionDrivingCandidateCount
      FROM pems_candidate_maturity;`
   );
+  const trustedControl = await getPemsTrustedAnswerDrivingControl(store);
   const reviewCounts = await store.get(
     `SELECT
        COUNT(*) AS reviewCount,
@@ -2409,7 +2528,15 @@ export async function getPemsPromotionGateStatus(store) {
       LIMIT 1;`
   );
   const latestReviews = latestCandidate?.candidate_id ? await listPemsPromotionReviewsForCandidate(store, latestCandidate.candidate_id) : [];
-  const latestGate = latestCandidate ? evaluatePemsPromotionGate(latestCandidate, latestReviews) : null;
+  const latestGate = latestCandidate
+    ? evaluatePemsPromotionGate(
+        {
+          ...latestCandidate,
+          trustedAnswerDrivingKillSwitchEnabled: trustedControl.killSwitchEnabled
+        },
+        latestReviews
+      )
+    : null;
   const reviewCountValue = rowNumber(reviewCounts?.reviewCount);
   const status =
     rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount) > 0
@@ -2429,7 +2556,9 @@ export async function getPemsPromotionGateStatus(store) {
     reviewSafetyIncidentCount: rowNumber(reviewCounts?.reviewSafetyIncidentCount),
     supervisedAdvisoryCandidateCount: rowNumber(candidateCounts?.supervisedAdvisoryCandidateCount),
     productionDrivingCandidateCount: rowNumber(candidateCounts?.productionDrivingCandidateCount),
-    productionDrivingAllowed: false,
+    trustedAnswerDrivingCandidateCount: rowNumber(candidateCounts?.productionDrivingCandidateCount),
+    trustedAnswerDrivingControl: trustedControl,
+    productionDrivingAllowed: rowNumber(candidateCounts?.productionDrivingCandidateCount) > 0 && !trustedControl.killSwitchEnabled,
     latestCandidate: latestCandidate
       ? {
           candidateId: latestCandidate.candidate_id,
@@ -2447,7 +2576,7 @@ export async function getPemsPromotionGateStatus(store) {
           supervisedAdvisoryAllowed: latestCandidate.supervised_advisory_allowed === 1,
           promotionStatus: latestCandidate.promotion_status,
           lastReviewedAt: latestCandidate.last_reviewed_at,
-          productionDrivingAllowed: false,
+          productionDrivingAllowed: latestCandidate.production_driving_allowed === 1 && !trustedControl.killSwitchEnabled,
           promotion: parseJson(latestCandidate.promotion_json, {})
         }
       : null,
@@ -2455,40 +2584,46 @@ export async function getPemsPromotionGateStatus(store) {
     safety: {
       rawRationaleStored: false,
       rawSourceStored: false,
-      supervisedAdvisoryOnly: true,
-      productionDrivingAllowed: false
+      supervisedAdvisoryOnly: rowNumber(candidateCounts?.productionDrivingCandidateCount) === 0,
+      killSwitchEnabled: trustedControl.killSwitchEnabled,
+      productionDrivingAllowed: rowNumber(candidateCounts?.productionDrivingCandidateCount) > 0 && !trustedControl.killSwitchEnabled
     }
   };
 }
 
 export function buildPemsPromotionReadinessProof(status = {}) {
+  const trustedActive = (status.trustedAnswerDrivingCandidateCount ?? status.productionDrivingCandidateCount ?? 0) > 0 && status.trustedAnswerDrivingControl?.killSwitchEnabled !== true;
   const active = (status.supervisedAdvisoryCandidateCount ?? 0) > 0;
   const reviewing = (status.reviewCount ?? 0) > 0;
   return {
-    version: PEMS_PROMOTION_GATE_VERSION,
-    status: active
-      ? "phase35_supervised_promotion_gate_active"
-      : reviewing
-        ? "phase35_supervised_promotion_gate_reviewing"
-        : "phase35_supervised_promotion_gate_ready_no_reviews",
+    version: trustedActive ? PEMS_TRUSTED_ANSWER_DRIVING_VERSION : PEMS_PROMOTION_GATE_VERSION,
+    status: trustedActive
+      ? "phase58_trusted_answer_driving_active"
+      : active
+        ? "phase35_supervised_promotion_gate_active"
+        : reviewing
+          ? "phase35_supervised_promotion_gate_reviewing"
+          : "phase35_supervised_promotion_gate_ready_no_reviews",
     ok: status.ok !== false,
-    mode: "supervised_advisory_gate_only",
-    score: active ? 80 : reviewing ? 78 : 75,
-    target: 80,
+    mode: trustedActive ? "trusted_answer_driving_gate" : "supervised_advisory_gate_only",
+    score: trustedActive ? 100 : active ? 80 : reviewing ? 78 : 75,
+    target: trustedActive ? 100 : 80,
     candidateCount: status.candidateCount ?? 0,
     reviewCount: status.reviewCount ?? 0,
     humanApprovalCount: status.humanApprovalCount ?? 0,
     validatorPassCount: status.validatorPassCount ?? 0,
     citationPassCount: status.citationPassCount ?? 0,
     supervisedAdvisoryCandidateCount: status.supervisedAdvisoryCandidateCount ?? 0,
-    productionDrivingAllowed: false,
+    trustedAnswerDrivingCandidateCount: status.trustedAnswerDrivingCandidateCount ?? status.productionDrivingCandidateCount ?? 0,
+    trustedAnswerDrivingControl: status.trustedAnswerDrivingControl ?? null,
+    productionDrivingAllowed: trustedActive,
     latestCandidate: status.latestCandidate ?? null,
     latestGate: status.latestGate ?? null,
     safety: status.safety ?? {
       rawRationaleStored: false,
       rawSourceStored: false,
-      supervisedAdvisoryOnly: true,
-      productionDrivingAllowed: false
+      supervisedAdvisoryOnly: !trustedActive,
+      productionDrivingAllowed: trustedActive
     }
   };
 }

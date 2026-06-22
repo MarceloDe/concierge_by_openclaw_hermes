@@ -947,6 +947,8 @@ function renderConnectorProof(payload) {
   const phase56Check = checks.find((check) => check.key === "phase56_p0_hardening") ?? null;
   const phase57Score = scores.find((score) => score.key === "phase57_extensible_skills_worker_breadth") ?? null;
   const phase57Check = checks.find((check) => check.key === "phase57_extensible_skills_worker_breadth") ?? null;
+  const phase58Score = scores.find((score) => score.key === "phase58_trusted_answer_driving") ?? null;
+  const phase58Check = checks.find((check) => check.key === "phase58_trusted_answer_driving") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -991,6 +993,23 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase57Check?.proposal?.openClawMayChooseJourney ? "attention: workflow choice widened" : "LangGraph owns workflow")} · writes ${escapeHtml(phase57Check?.proposal?.openClawMayExecuteWriteActions ? "enabled" : "blocked")}</dd>
           <dt>Worker Memory</dt>
           <dd>${escapeHtml(phase57Check?.workerMemory?.status ?? phase57Score.workerMemoryStatus ?? "contract")} · answer-driving ${escapeHtml(phase57Check?.workerMemory?.safety?.answerDriving ? "enabled" : "disabled")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase58Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 58 Trusted Answer Driving</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase58Score.score)} / ${escapeHtml(phase58Score.target)} · ${escapeHtml(phase58Score.status)}</dd>
+          <dt>Promotion</dt>
+          <dd>${escapeHtml(phase58Check?.promotionGate?.status ?? "not evaluated")} · production-driving ${escapeHtml(phase58Check?.promotionGate?.productionDrivingAllowed ? "trusted path only" : "blocked")}</dd>
+          <dt>Citation Rails</dt>
+          <dd>${escapeHtml(phase58Check?.drivenAnswer?.validation?.valid ? "validated cited answer" : "not validated")} · unsupported items ${escapeHtml(phase58Check?.drivenAnswer?.unsupportedItemsLabeled ? "labeled" : "attention")}</dd>
+          <dt>Demotion</dt>
+          <dd>kill switch ${escapeHtml(phase58Check?.checks?.killSwitchDemotes ? "demotes" : "attention")} · safety incident ${escapeHtml(phase58Check?.checks?.safetyIncidentDemotes ? "demotes" : "attention")}</dd>
+          <dt>Memory Namespaces</dt>
+          <dd>${escapeHtml(phase58Check?.namespaces?.proceduralSkills ?? "procedural:skills")} · episodic member scoped</dd>
         </dl>
       </article>
     ` : ""}

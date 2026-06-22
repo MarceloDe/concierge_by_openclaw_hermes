@@ -5,6 +5,7 @@ import { nowIso } from "./database.mjs";
 import { maskDirectIdentifiers } from "./modelPayloadPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 import { loadLocalEnvOnce } from "./secrets.mjs";
+import { buildGraphitiMemoryNamespaces } from "./trustedAnswerDriving.mjs";
 
 export const PRODUCT_MEMORY_CONTRACT_VERSION = "2026-05-27.graphiti-product-memory.v1";
 export const PRODUCT_MEMORY_REPLAY_QUEUE_VERSION = "2026-06-15.product-memory-replay-queue.v1";
@@ -544,6 +545,11 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
     evidenceFields: sanitizeEvidenceFields(pointer.evidenceFields ?? [], stateForMasking),
     citation: sanitizeCitation(pointer.citation, stateForMasking)
   }));
+  const memoryNamespaces = buildGraphitiMemoryNamespaces({
+    userId: user.id,
+    planId: state.context_packet?.portalAccount?.payer ?? state.workflow ?? "plan",
+    scenarioKey: state.workflow ?? "general"
+  });
   return {
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
     memoryKind: "safe_healthcare_workflow_summary",
@@ -560,6 +566,7 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
         ? `BrainstyMember answer must cite stored source pointers ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`
         : "BrainstyMember answer has no healthcare evidence source pointer yet."
     ].join(" "),
+    memoryNamespaces,
     sourcePointers,
     summary: maskProductMemoryText(state.memory_summary ?? state.final_response ?? "", stateForMasking),
     localMemoryItemPointers: localMemoryItems.map((item) => ({
@@ -572,6 +579,7 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
       rawPortalTextStored: false,
       directIdentifiersMasked: true,
       cortexProductMemory: false,
+      graphitiNamespaces: memoryNamespaces.safety,
       credentialStorage: "not_allowed",
       irreversiblePortalActions: "not_allowed"
     }

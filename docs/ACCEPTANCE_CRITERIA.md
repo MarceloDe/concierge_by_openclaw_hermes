@@ -2571,3 +2571,19 @@ Focused proof:
 - Successful worker procedural memory records store masked previews, source pointer IDs, procedure hashes, and PEMS candidate refs only; they keep `cortexProductMemory=false` and `productionDrivingAllowed=false`.
 - The connector proof exposes `phase57_extensible_skills_worker_breadth`, and the dashboard renders the Phase 57 card.
 - Required gates: `npm run test:openclaw:skills`, focused dynamic/worker-memory tests, `npm run build`, `npm run test:local`, API proof, and visual proof.
+
+## Phase 58: Trusted Answer Driving And Learning Loop Closure
+
+- `PEMS_TRUSTED_ANSWER_DRIVING_VERSION` is defined.
+- `pems_trusted_answer_driving_controls` exists in schema and migrations.
+- PEMS trusted answer-driving requires maturity score, shadow-run count, evidence refs, two human approvals, validator pass, citation pass, no safety incidents, and kill switch clear.
+- `productionDrivingAllowed=true` appears only for the trusted answer-driving path.
+- The old supervised advisory gate remains non-driving when no trusted production-driving candidate exists.
+- Safety incident review vetoes and demotes a previously trusted answer-driving candidate.
+- Global kill switch demotes active production-driving candidates and fails closed.
+- Trusted answer composition accepts only allowed source pointer IDs, validates every supported claim, labels unsupported items, and returns no raw identifiers.
+- Resolved-case and nightly research candidate generation stays candidate-only and non-driving until reviewer promotion.
+- Product-memory episodes carry semantic, episodic, procedural, and collective namespaces without putting raw user/member IDs in procedural memory.
+- User-scoped procedural skill records are rejected.
+- The connector proof exposes `phase58_trusted_answer_driving`, and the dashboard renders the Phase 58 card.
+- Required gates: focused trusted answer-driving tests, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
