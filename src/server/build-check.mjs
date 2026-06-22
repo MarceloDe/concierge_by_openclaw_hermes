@@ -101,6 +101,7 @@ const requiredFiles = [
   "project/deployment/secrets/README.md",
   "project/deployment/secrets/database-url.example",
   "scripts/compose-memory-smoke.mjs",
+  "scripts/phase59-pilot-readiness-smoke.mjs",
   "project/db/postgres-init/001_storage_readiness.sql",
   "src/concierge/databaseFactory.mjs",
   "src/concierge/databaseSecretProfile.mjs",

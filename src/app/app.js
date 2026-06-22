@@ -949,6 +949,8 @@ function renderConnectorProof(payload) {
   const phase57Check = checks.find((check) => check.key === "phase57_extensible_skills_worker_breadth") ?? null;
   const phase58Score = scores.find((score) => score.key === "phase58_trusted_answer_driving") ?? null;
   const phase58Check = checks.find((check) => check.key === "phase58_trusted_answer_driving") ?? null;
+  const phase59Score = scores.find((score) => score.key === "phase59_pilot_readiness") ?? null;
+  const phase59Check = checks.find((check) => check.key === "phase59_pilot_readiness") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1010,6 +1012,23 @@ function renderConnectorProof(payload) {
           <dd>kill switch ${escapeHtml(phase58Check?.checks?.killSwitchDemotes ? "demotes" : "attention")} · safety incident ${escapeHtml(phase58Check?.checks?.safetyIncidentDemotes ? "demotes" : "attention")}</dd>
           <dt>Memory Namespaces</dt>
           <dd>${escapeHtml(phase58Check?.namespaces?.proceduralSkills ?? "procedural:skills")} · episodic member scoped</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase59Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 59 Pilot Readiness</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase59Score.score)} / ${escapeHtml(phase59Score.target)} · ${escapeHtml(phase59Score.status)}</dd>
+          <dt>Proof Command</dt>
+          <dd>${escapeHtml(phase59Check?.liveProbeCommand ?? phase59Score.liveProbeCommand ?? "npm run phase59:pilot-readiness")}</dd>
+          <dt>API Inventory</dt>
+          <dd>FastAPI ${escapeHtml(phase59Check?.endpointInventory?.fastApiRouteCount ?? 0)} routes · /api/v1 ${escapeHtml(phase59Check?.endpointInventory?.fastApiV1RouteCount ?? 0)} · Node ${escapeHtml(phase59Check?.endpointInventory?.nodeRouteCount ?? 0)}</dd>
+          <dt>LLM Default</dt>
+          <dd>${escapeHtml(phase59Check?.checks?.pwaRequestsLiveReasoning ? "PWA requests live reasoning" : "attention: PWA deterministic default")} · OpenAI ${escapeHtml(phase59Check?.externalReadiness?.openAiConfigured ? "configured" : "not configured")}</dd>
+          <dt>Memory / AWS</dt>
+          <dd>${escapeHtml(phase59Check?.externalReadiness?.productMemoryStatus ?? "unknown")} · AWS checked by sanitized smoke artifact</dd>
         </dl>
       </article>
     ` : ""}

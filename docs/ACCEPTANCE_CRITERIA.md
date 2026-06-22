@@ -2587,3 +2587,19 @@ Focused proof:
 - User-scoped procedural skill records are rejected.
 - The connector proof exposes `phase58_trusted_answer_driving`, and the dashboard renders the Phase 58 card.
 - Required gates: focused trusted answer-driving tests, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phase 59: Pilot Readiness And Less-Deterministic MVP Proof
+
+- The Next mobile PWA sends `use_live_model: true` by default and uses the `phi_allowed_identifier_masked_reasoning` payload mode.
+- The Next mobile PWA calls only FastAPI `/api/v1/*` endpoints and never calls Node internals directly.
+- Public v1 task creation includes enough member/session context for Node to continue the session created by `/api/v1/sessions`.
+- `npm run phase59:pilot-readiness` starts isolated local Node, FastAPI, and Next PWA services on free ports and writes `artifacts/phase59/phase59-pilot-readiness-proof.json`.
+- The Phase 59 smoke inventories every FastAPI OpenAPI endpoint and live-probes safe endpoints only.
+- The smoke creates a safe non-PHI task, requests live reasoning, and reaches a user-meaningful final state such as `approval_pending`, `evidence_blocked`, `completed`, or `refused`; `queued`, `running`, and `failed` are not accepted.
+- The smoke verifies a safe document upload, OpenClaw readiness, DB health, and the operator proof route.
+- The smoke verifies AWS communication through the private `phase30` profile and stores only hashed identifiers.
+- The smoke reports Graphiti/FalkorDB status honestly. FalkorDB being reachable is not enough to mark product memory production-ready.
+- Dashboard proof exposes `phase59_pilot_readiness` with score, proof command, API inventory, live-model default, product-memory status, and AWS proof posture.
+- Visual proof includes screenshots for the operator dashboard and mobile PWA under `artifacts/phase59/`.
+- Required gates: `npm run phase59:pilot-readiness`, live LLM tests when credentials are present, `npm run test:openclaw:skills`, `npm run test:facade`, `npm run test:db:safety`, `npm run test:phi`, `npm run test:egress`, `npm run build`, and `npm run test:local`.
+- Remaining blocker before declaring Graphiti fully on: `npm run test:memory:graphiti` must pass without loosening outbound direct-identifier policy or storing raw PHI.
