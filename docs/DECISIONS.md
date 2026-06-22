@@ -2906,3 +2906,17 @@ This keeps momentum toward a usable MVP without overclaiming production readines
 
 Consequences:
 The product may be considered pilot-ready for local/non-PHI regular-user testing only if the regular-user MVP score passes. Production launch remains blocked until the production score and listed blockers are resolved.
+
+## 2026-06-22 - Phase 65 Declares Local/Pilot MVP Achieved And Production Not Complete
+
+Problem:
+The Phase 64 audit produced the readiness facts, but the project still needed a durable final decision record answering the user's question: have the MVP goals been finished?
+
+Decision:
+Add a final MVP goal evaluation that consumes the Phase 64 audit. It declares the local/pilot regular-user MVP achieved when Phase 64 passes, declares production launch not achieved while blockers remain, preserves the blocker list, and exposes the decision through the dashboard and `/api/mvp/final-goal-evaluation`.
+
+Rationale:
+A final decision should not be inferred from scattered scores. It should be explicit, testable, visible in the operator dashboard, and honest about the difference between MVP usability and production launch.
+
+Consequences:
+The project can now move from feature-building into production-blocker resolution. The next recommended phase is to fix production blockers rather than add new breadth.

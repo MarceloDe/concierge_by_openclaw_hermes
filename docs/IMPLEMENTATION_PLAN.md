@@ -3352,3 +3352,25 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local` and `/api/mvp/completion-audit`.
 - Visual proof through the operator dashboard Phase 64 card.
+
+## Phase 65 - Final MVP Goal Evaluation
+
+Goal: record the final MVP decision after Phase 64, without hiding production blockers.
+
+Build:
+
+- Add `src/concierge/finalMvpGoalEvaluation.mjs`.
+- Add deterministic final evaluation over the Phase 64 audit.
+- State whether local/pilot MVP is achieved.
+- State whether production launch is achieved.
+- Preserve the production blocker list from Phase 64.
+- Add `/api/mvp/final-goal-evaluation`.
+- Add connector proof/dashboard visibility for `phase65_final_mvp_goal_evaluation`.
+
+Gates:
+
+- `npm run test:mvp:final`.
+- `npm run build`.
+- `npm run test:local`.
+- API proof through `/api/proof/runs/local` and `/api/mvp/final-goal-evaluation`.
+- Visual proof through the operator dashboard Phase 65 card.

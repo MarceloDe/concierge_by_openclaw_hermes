@@ -118,6 +118,7 @@ import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPr
 import { buildPhase62GeneratedSkillReviewQueueProof, listGeneratedSkillReviewQueue } from "../concierge/generatedSkillReviewQueue.mjs";
 import { buildPhase63GeneratedSkillPrExecutorProof, listGeneratedSkillPrExecutorRuns } from "../concierge/generatedSkillPrExecutor.mjs";
 import { buildPhase64MvpCompletionAudit } from "../concierge/mvpCompletionAudit.mjs";
+import { buildPhase65FinalMvpGoalEvaluation } from "../concierge/finalMvpGoalEvaluation.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1476,6 +1477,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     liveReadiness,
     counts
   });
+  const phase65FinalMvpGoalEvaluation = buildPhase65FinalMvpGoalEvaluation({ phase64MvpCompletionAudit });
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1707,6 +1709,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase64_mvp_completion_audit",
         status: phase64MvpCompletionAudit.status,
         target: "Regular-user MVP readiness is separated from production completeness, with PWA, API, DB, OpenClaw, Graphiti, dashboard, and blockers visible."
+      },
+      {
+        key: "phase65_final_mvp_goal_evaluation",
+        status: phase65FinalMvpGoalEvaluation.status,
+        target: "Final MVP decision record declares local/pilot MVP achieved while keeping production launch blockers explicit."
       }
     ],
     checks: [
@@ -1834,6 +1841,18 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         memoryPosture: phase64MvpCompletionAudit.memoryPosture,
         blockers: phase64MvpCompletionAudit.blockers,
         recommendation: phase64MvpCompletionAudit.recommendation
+      },
+      {
+        key: "phase65_final_mvp_goal_evaluation",
+        status: phase65FinalMvpGoalEvaluation.status,
+        ok: phase65FinalMvpGoalEvaluation.ok,
+        score: phase65FinalMvpGoalEvaluation.score,
+        target: phase65FinalMvpGoalEvaluation.target,
+        decision: phase65FinalMvpGoalEvaluation.decision,
+        goals: phase65FinalMvpGoalEvaluation.goals,
+        proof: phase65FinalMvpGoalEvaluation.proof,
+        finalAnswer: phase65FinalMvpGoalEvaluation.finalAnswer,
+        nextRecommendedPhase: phase65FinalMvpGoalEvaluation.nextRecommendedPhase
       },
       {
         key: "database_storage",
@@ -2541,6 +2560,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         blockerCount: phase64MvpCompletionAudit.blockers.length
       },
       {
+        key: "phase65_final_mvp_goal_evaluation",
+        score: phase65FinalMvpGoalEvaluation.score,
+        target: phase65FinalMvpGoalEvaluation.target,
+        status: phase65FinalMvpGoalEvaluation.status,
+        localPilotMvp: phase65FinalMvpGoalEvaluation.decision.localPilotMvp,
+        productionLaunch: phase65FinalMvpGoalEvaluation.decision.productionLaunch,
+        blockerCount: phase65FinalMvpGoalEvaluation.decision.productionLaunchBlockedBy.length
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2843,6 +2871,12 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/mvp/completion-audit") {
     const proof = await connectorProofRun("phase64-mvp-completion-audit");
     sendJson(res, 200, proof.checks.find((check) => check.key === "phase64_mvp_completion_audit"));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/mvp/final-goal-evaluation") {
+    const proof = await connectorProofRun("phase65-final-mvp-goal-evaluation");
+    sendJson(res, 200, proof.checks.find((check) => check.key === "phase65_final_mvp_goal_evaluation"));
     return;
   }
 
