@@ -8973,3 +8973,30 @@ Verification:
 - `npm run test:local` passed with 250 tests total, 248 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-51-procedure-prep-checklist-journey`: after seeding a non-PHI reviewed procedure-prep artifact through the real research pipeline, deterministic local chat rendered the `Procedure Checklist` AI2UI block with 2 source-backed rows, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
 - Visual artifacts: `artifacts/phase51/procedure-checklist-mvp-proof.png` and `artifacts/phase51/procedure-checklist-mvp-proof.json`.
+
+## Phase 52 Provider Network Cards Journey - 2026-06-22
+
+Goal:
+- Close final verification row `A13`.
+
+Implemented:
+- Added a source-pointer-grounded `provider_network` AI2UI block to the `brainstyworkers.ai2ui.blocks.v1` contract.
+- The block builds provider/facility rows only from stored source pointers whose evidence carries network signals such as in-network, out-of-network, participating, provider directory, NPI, facility type, accepting new patients, referral, authorization, or location evidence.
+- Missing-evidence provider/network prompts fail closed with `blocked_missing_source_pointers` and no provider/facility rows.
+- `/mvp` now renders the block in Chat, Split, Guided, and Bento modes with compact provider/facility option cards.
+- Updated the final verification report so `A13` is now `PASSING`, leaving only externally gated rows `F2` and `F3`.
+
+Safety:
+- Every provider/facility row must include at least one source pointer id.
+- The UI labels the card as evidence navigation, not a live network guarantee.
+- The block explicitly forbids provider contact, scheduling actions, and external actions.
+- Missing evidence asks for a cited provider directory, member plan/network context, uploaded referral/provider/facility document, or approved portal/reviewed research source pointer instead of inventing network status.
+
+Verification:
+- Focused syntax checks passed for `src/concierge/ai2uiBlocks.mjs`, `src/app/mvp.js`, and `src/server/build-check.mjs`.
+- Focused tests passed: `node --test src/tests/ai2ui-blocks.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/langgraph-runner.test.mjs src/tests/final-system-verification-report.test.mjs` reported 44/44 passing.
+- `npm run build` passed.
+- `npm run test:facade` passed with 53 tests and 2 expected skips.
+- `npm run test:local` passed with 253 tests total, 251 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4218/mvp?phase=phase-52-provider-network-cards`: after seeding a non-PHI reviewed provider-network artifact through the real research pipeline in an isolated Phase 52 SQLite profile, deterministic local chat rendered the `Provider Network` AI2UI block with 1 source-backed Midtown Imaging Center row, source pointer count 1, `captured_trusted_research_evidence`, all Chat/Split/Guided/Bento modes preserved the card, no busy state, and 0 console errors.
+- Visual artifacts: `artifacts/phase52/provider-network-mvp-proof.png` and `artifacts/phase52/provider-network-mvp-proof.json`.

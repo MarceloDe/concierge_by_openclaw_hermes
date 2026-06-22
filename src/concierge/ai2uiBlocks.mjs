@@ -6,6 +6,7 @@ export const AI2UI_BLOCK_TYPES = Object.freeze({
   COST_COMPARISON: "cost_comparison",
   PHARMACY_FORMULARY: "pharmacy_formulary",
   PROCEDURE_CHECKLIST: "procedure_checklist",
+  PROVIDER_NETWORK: "provider_network",
   APPROVAL_GATE: "approval_gate",
   WORKER_STATUS: "worker_status",
   SOURCE_CITATIONS: "source_citations",
@@ -106,6 +107,11 @@ function pharmacyFormularyRequested(state = {}) {
 function procedureChecklistRequested(state = {}) {
   const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.structured_intent?.intent ?? ""} ${state.structured_intent?.reasoning?.primary_intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
   return /\b(procedure prep|procedure checklist|prep checklist|administrative checklist|pre[- ]op|preop|surgery prep|colonoscopy prep|appointment prep|before (?:my|the) (?:procedure|surgery|appointment)|bring.*(?:id|insurance card)|referral|order|pre[- ]register|registration|arrival time|arrive|driver|transportation|facility instructions|procedure instructions)\b/.test(text);
+}
+
+function providerNetworkRequested(state = {}) {
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.structured_intent?.intent ?? ""} ${state.structured_intent?.reasoning?.primary_intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  return /\b(provider|doctor|clinician|facility|hospital|clinic|lab|imaging center|specialist|directory|network|in[- ]network|out[- ]of[- ]network|participating|non[- ]participating|accepting new patients|npi)\b/.test(text);
 }
 
 function costText(value) {
@@ -454,6 +460,112 @@ function buildProcedureChecklistPayload(state = {}) {
   };
 }
 
+function providerNetworkEvidenceText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function providerNetworkSignalFromText(text) {
+  const lower = providerNetworkEvidenceText(text).toLowerCase();
+  if (/\b(out[- ]of[- ]network|non[- ]participating|not participating|not in network|excluded from network)\b/.test(lower)) return "out_of_network_signal";
+  if (/\b(in[- ]network|participating|network provider|network facility|listed in (?:the )?(?:network|directory)|directory lists|covered provider)\b/.test(lower)) return "in_network_signal";
+  if (/\baccepting new patients\b/.test(lower)) return "accepting_new_patients_signal";
+  if (/\b(provider directory|network directory|directory evidence|plan directory)\b/.test(lower)) return "network_directory_signal";
+  return null;
+}
+
+function providerNetworkDetailsFromText(text) {
+  const lower = providerNetworkEvidenceText(text).toLowerCase();
+  return [
+    /\bnpi\b|\bnational provider identifier\b/.test(lower) ? "npi_signal" : null,
+    /\b(specialty|specialist|cardiology|orthopedics|dermatology|imaging|radiology|laboratory|lab)\b/.test(lower) ? "specialty_or_service_signal" : null,
+    /\b(facility|hospital|clinic|imaging center|lab|laboratory)\b/.test(lower) ? "facility_signal" : null,
+    /\baccepting new patients\b/.test(lower) ? "accepting_new_patients_signal" : null,
+    /\b(referral required|referral may be required|referral requirement|requires referral)\b/.test(lower) ? "referral_signal" : null,
+    /\b(prior auth|prior authorization|authorization|precert|precertification)\b/.test(lower) ? "authorization_signal" : null,
+    /\b(address|location|distance|miles|nearby|zip|city|state)\b/.test(lower) ? "location_signal" : null
+  ].filter(Boolean);
+}
+
+function providerLabelFromText(text) {
+  const cleaned = providerNetworkEvidenceText(text);
+  const quoted = cleaned.match(/["“]([^"”]{3,90})["”]/);
+  if (quoted?.[1]) return quoted[1].trim();
+  const facilitySuffix = cleaned.match(/\b([A-Z][A-Za-z0-9&'.-]+(?:\s+[A-Z][A-Za-z0-9&'.-]+){0,6}\s+(?:Imaging Center|Medical Center|Health Center|Surgery Center|Hospital|Clinic|Laboratory|Lab|Facility|Group|Practice))\b/);
+  if (facilitySuffix?.[1]) return facilitySuffix[1].trim();
+  const leading = cleaned.match(/^([A-Z][A-Za-z0-9&'. -]{3,90}?)\s+(?:is|appears|was|shows|lists|listed)\b/);
+  if (leading?.[1]) return leading[1].trim();
+  const inlineListed = cleaned.match(/\b([A-Z][A-Za-z0-9&'. -]{3,90}?)\s+(?:is|appears|was)\s+(?:listed|shown|marked|identified)\b/);
+  if (inlineListed?.[1]) return inlineListed[1].trim();
+  const named = cleaned.match(/\b(?:provider|doctor|clinician|facility|hospital|clinic|lab|imaging center|specialist)\s*(?:name|for|:)?\s+([A-Z][A-Za-z0-9&'. -]{3,90})/);
+  if (named?.[1]) return named[1].replace(/\s+(?:is|appears|was|shows|lists|listed)\b.*$/i, "").trim();
+  const query = cleaned.match(/\b(?:is|does|can)\s+([A-Z][A-Za-z0-9&'. -]{3,90}?)\s+(?:in[- ]network|out[- ]of[- ]network|accepting|participating|covered|listed)\b/);
+  if (query?.[1]) return query[1].trim();
+  return null;
+}
+
+function buildProviderNetworkRowsFromPointer(pointer = {}, queryText = "") {
+  const ref = sourcePointerRef(pointer);
+  const fields = Array.isArray(pointer.evidenceFields) ? pointer.evidenceFields : [];
+  const primaryEvidenceText = providerNetworkEvidenceText(fields[0]?.value ?? fields[0]?.text ?? fields[0]?.summary ?? pointer.summary ?? "");
+  const combinedText = providerNetworkEvidenceText(
+    [
+      pointer.summary,
+      pointer.displayLabel,
+      ...fields.map((field) => `${field.label ?? "Evidence field"} ${field.value ?? field.text ?? field.summary ?? ""}`)
+    ].filter(Boolean).join(" ")
+  );
+  const signal = providerNetworkSignalFromText(combinedText);
+  const details = providerNetworkDetailsFromText(combinedText);
+  const providerSpecificDetails = details.filter((detail) =>
+    ["npi_signal", "accepting_new_patients_signal", "location_signal"].includes(detail)
+  );
+  if (!signal && !providerSpecificDetails.length) return [];
+  return [
+    {
+      providerLabel: providerLabelFromText(primaryEvidenceText) ?? providerLabelFromText(combinedText) ?? providerLabelFromText(queryText) ?? "Provider or facility option",
+      networkSignal: signal ?? "network_evidence_signal_found",
+      details,
+      evidenceSummary: providerNetworkEvidenceText(primaryEvidenceText || pointer.summary || combinedText).slice(0, 280),
+      sourcePointerIds: [ref],
+      confidence: fields[0]?.confidence ?? pointer.confidence ?? pointer.citation?.confidence ?? "source_backed",
+      userAction: "Use the cited directory, plan, portal, or document pointer to confirm status before scheduling or care decisions."
+    }
+  ];
+}
+
+function buildProviderNetworkPayload(state = {}) {
+  const requested = providerNetworkRequested(state);
+  const rows = (state.source_pointers ?? [])
+    .flatMap((pointer) => buildProviderNetworkRowsFromPointer(pointer, state.user_input ?? ""))
+    .filter((row) => row.sourcePointerIds.length > 0)
+    .slice(0, 8);
+  if (!requested && !rows.length) return null;
+  const sourcePointerIds = [...new Set(rows.flatMap((row) => row.sourcePointerIds))];
+  return {
+    status: rows.length ? "source_backed_provider_network_ready" : "blocked_missing_source_pointers",
+    requested,
+    rows,
+    rowCount: rows.length,
+    sourcePointerIds,
+    missingEvidence: rows.length
+      ? []
+      : [
+          "cited provider directory or network directory evidence",
+          "member plan/network context",
+          "uploaded referral, provider, or facility document",
+          "approved read-only portal or reviewed research source pointer"
+        ],
+    safety: {
+      evidenceNavigationOnly: true,
+      noNetworkGuarantee: true,
+      noProviderContact: true,
+      noSchedulingAction: true,
+      everyRowHasSourcePointer: rows.every((row) => row.sourcePointerIds.length > 0),
+      externalActionsTaken: false
+    }
+  };
+}
+
 function approvalPayload(state = {}) {
   const proposal = state.openclaw_skill_proposal ?? {};
   const evidence = state.evidence_observation ?? {};
@@ -551,6 +663,7 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
   const costComparison = buildCostComparisonPayload(state);
   const pharmacyFormulary = buildPharmacyFormularyPayload(state);
   const procedureChecklist = buildProcedureChecklistPayload(state);
+  const providerNetwork = buildProviderNetworkPayload(state);
   const blocks = [
     {
       id: blockId(state, AI2UI_BLOCK_TYPES.ANSWER_MARKDOWN, 0),
@@ -593,6 +706,17 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
             title: "Procedure Checklist",
             payload: procedureChecklist,
             renderHints: { severity: procedureChecklist.rows.length ? "info" : "warning" }
+          }
+        ]
+      : []),
+    ...(providerNetwork
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.PROVIDER_NETWORK, 1),
+            type: AI2UI_BLOCK_TYPES.PROVIDER_NETWORK,
+            title: "Provider Network",
+            payload: providerNetwork,
+            renderHints: { severity: providerNetwork.rows.length ? "info" : "warning" }
           }
         ]
       : []),

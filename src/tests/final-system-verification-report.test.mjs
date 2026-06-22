@@ -68,8 +68,10 @@ test("final system verification report keeps failures, blockers, and next-phase 
   }, {});
 
   assert.ok(statusCounts.PASSING > 75, "Most of the local MVP contract should be passing by Phase 10Q");
-  assert.ok(statusCounts["FAILING / NEEDS FIX"] > 0, "Known remaining gaps must not be hidden");
+  assert.equal(statusCounts["FAILING / NEEDS FIX"] ?? 0, 0, "Phase 52 should leave no local final-system rows failing");
   assert.ok(statusCounts["BLOCKED BY EXTERNAL DEPENDENCY"] > 0, "Live worker/provider blockers must stay explicit");
+  assert.match(reportText, /Live authenticated OpenClaw sourced-result proof/);
+  assert.match(reportText, /Live Hermes proof/);
   assert.match(reportText, /Urgent\/emergency safe escalation/);
   assert.match(reportText, /Chat\/Split\/Guided\/Bento/);
   assert.match(reportText, /research knowledge-base PDF upload/i);
