@@ -43,6 +43,7 @@ import { RETENTION_SCHEDULER_VERSION } from "../concierge/retentionScheduler.mjs
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
 import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
 import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
+import { GENERATED_SKILL_REVIEW_QUEUE_VERSION } from "../concierge/generatedSkillReviewQueue.mjs";
 import { WORKER_MEMORY_VERSION } from "../concierge/workerMemory.mjs";
 
 const requiredFiles = [
@@ -142,12 +143,14 @@ const requiredFiles = [
   "src/concierge/dynamicSkillServer.mjs",
   "src/concierge/memorySkillTree.mjs",
   "src/concierge/generatedSkillPrWorkflow.mjs",
+  "src/concierge/generatedSkillReviewQueue.mjs",
   "src/concierge/workerMemory.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
   "src/tests/research-scheduler.test.mjs",
   "src/tests/memory-skill-tree.test.mjs",
   "src/tests/generated-skill-pr-workflow.test.mjs",
+  "src/tests/generated-skill-review-queue.test.mjs",
   "src/tests/final-system-verification-report.test.mjs",
   "docs/FINAL_SYSTEM_VERIFICATION_REPORT.md",
   "docs/goal_final_system.md",
@@ -259,6 +262,7 @@ if (
   !TABLES.includes("pems_candidate_review_followups") ||
   !TABLES.includes("pems_candidate_review_history_exports") ||
   !TABLES.includes("pems_trusted_answer_driving_controls") ||
+  !TABLES.includes("generated_skill_review_queue") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS continuous_intelligence_shadow_runs") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_maturity") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_promotion_reviews") ||
@@ -266,9 +270,10 @@ if (
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_claim_revisions") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_followups") ||
   !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_candidate_review_history_exports") ||
-  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls")
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls") ||
+  !SCHEMA_SQL.includes("CREATE TABLE IF NOT EXISTS generated_skill_review_queue")
 ) {
-  throw new Error("Database schema is missing Phase 58 continuous-intelligence review/trusted answer-driving tables");
+  throw new Error("Database schema is missing continuous-intelligence review/trusted/generated-skill tables");
 }
 
 const pemsPromotionProof = buildPemsPromotionReadinessProof({
@@ -353,6 +358,9 @@ if (
   phase61GeneratedSkillPrProof.safety.productionDrivingAllowed !== false
 ) {
   throw new Error("Phase 61 generated-skill PR workflow proof contract is incomplete.");
+}
+if (!GENERATED_SKILL_REVIEW_QUEUE_VERSION.includes("phase62-generated-skill-reviewer-queue")) {
+  throw new Error("Phase 62 generated-skill reviewer queue version is missing.");
 }
 
 const pemsWorkbenchProof = buildPemsReviewerWorkbenchReadinessProof({
@@ -976,4 +984,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, Phase 61 generated-skill PR workflow, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, Phase 61 generated-skill PR workflow, Phase 62 generated-skill reviewer queue, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

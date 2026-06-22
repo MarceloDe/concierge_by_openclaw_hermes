@@ -357,6 +357,29 @@ export class SqliteStore {
       );
     `);
     await this.exec(`
+      CREATE TABLE IF NOT EXISTS generated_skill_review_queue (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        skill_key TEXT NOT NULL,
+        package_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        requested_action TEXT NOT NULL,
+        gate_status TEXT NOT NULL,
+        reviewer_user_id TEXT,
+        review_decision TEXT,
+        review_rationale_hash TEXT NOT NULL DEFAULT '',
+        review_rationale_preview TEXT NOT NULL DEFAULT '',
+        pr_branch_name TEXT NOT NULL,
+        pr_title TEXT NOT NULL,
+        package_json TEXT NOT NULL DEFAULT '{}',
+        executor_json TEXT NOT NULL DEFAULT '{}',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        reviewed_at TEXT
+      );
+    `);
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,
         actor_user_id TEXT,

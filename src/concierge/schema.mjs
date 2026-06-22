@@ -46,6 +46,7 @@ export const TABLES = [
   "pems_candidate_review_followups",
   "pems_candidate_review_history_exports",
   "pems_trusted_answer_driving_controls",
+  "generated_skill_review_queue",
   "worker_procedural_memory",
   "operator_tool_proposals",
   "openclaw_skills",
@@ -877,6 +878,28 @@ CREATE TABLE IF NOT EXISTS pems_trusted_answer_driving_controls (
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS generated_skill_review_queue (
+  id TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL,
+  skill_key TEXT NOT NULL,
+  package_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  requested_action TEXT NOT NULL,
+  gate_status TEXT NOT NULL,
+  reviewer_user_id TEXT,
+  review_decision TEXT,
+  review_rationale_hash TEXT NOT NULL DEFAULT '',
+  review_rationale_preview TEXT NOT NULL DEFAULT '',
+  pr_branch_name TEXT NOT NULL,
+  pr_title TEXT NOT NULL,
+  package_json TEXT NOT NULL DEFAULT '{}',
+  executor_json TEXT NOT NULL DEFAULT '{}',
+  safety_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  reviewed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS worker_procedural_memory (
