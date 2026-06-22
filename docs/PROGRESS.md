@@ -9226,3 +9226,49 @@ Verification:
 
 Remaining:
 - FalkorDB is running on Docker/Colima, but `npm run test:memory:graphiti` is not green. The current live Graphiti product-memory path remains degraded/not production-ready because one graph-run retain path is disabled when no sourced memory should be retained, and one uploaded-document memory path is correctly blocked by direct-identifier policy. This needs a dedicated product-memory safety/masking slice before Graphiti can be marked fully on.
+
+## Phase 60 Memory Skill Tree And Graphiti Consolidation Loop - 2026-06-22
+
+Goal:
+- Turn product memory into a mature advisory learning/consolidation layer while keeping deterministic DB state authoritative for users, sessions, tasks, approvals, audit, source pointers, and runtime control.
+- Use Graphiti/Zep memory when the demand is new, the plan/journey is non-standard, or the skill pool has a gap, then bind the result to a RALPH-style procedure loop and reviewer-gated skill candidate.
+
+Implemented:
+- Added `src/concierge/memorySkillTree.mjs`.
+- Added a memory skill-tree selector that combines DB authority, Graphiti advisory facts, dynamic skill matches, source pointers, procedure loop tools/extractors/verifiers/sensors/controllers, and consolidation readiness.
+- Added a RALPH-style loop contract:
+  - requirements/current-state evaluation,
+  - target planning,
+  - implementation,
+  - testing,
+  - dashboard/MVP/visual-OCR sensor proof,
+  - separated goal evaluation score,
+  - pass/fail restart or reviewer-promotion decision.
+- Added reviewer-gated consolidation candidate generation. A mature pattern can propose a `skill-server.json` draft, but `worktreeWriteAllowed=false` and `productionDrivingAllowed=false` unless existing human-review and trusted-answer gates approve it.
+- Added `memory_skill_tree` to LangGraph state and included bounded memory skill-tree guidance in the LLM orchestration decision payload.
+- Added connector proof/dashboard visibility through `phase60_memory_skill_tree`.
+- Fixed the Phase 59 Graphiti carry-forward blocker without loosening policy:
+  - enabled Graphiti graph runs with no sourced memory now report `skipped_no_sourced_memory` rather than looking disabled;
+  - outbound payload observability recognizes `uploaded_document_extractions/...` as source pointers;
+  - hashed `episodic:member:<hash>` Graphiti namespaces no longer trigger direct-identifier blocking;
+  - real member/subscriber identifiers remain blocked.
+- Updated `npm run test:memory:graphiti` to run the synthetic live memory gate with explicit `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1` while committed runtime defaults remain disabled/fail-soft.
+
+Safety:
+- DB remains the source of truth; Graphiti cannot override sessions, users, approvals, tasks, or audit.
+- No raw PHI, raw OCR/frame text, raw portal text, credentials, payer contact, external writes, form submission, or medical advice authority was added.
+- Generated skills are candidates only until reviewer approval and PR promotion.
+- The memory skill-tree can advise orchestration and skill selection, but production answer driving remains restricted to the existing Phase 58 trusted path.
+
+Literature alignment:
+- Reflexion: episodic feedback improves later trials.
+- Generative Agents: memory streams can be reflected into plans.
+- Voyager: repeated verified behaviors can become a skill library.
+- CoALA: memory layers and action spaces should stay modular.
+
+Verification:
+- Focused Phase 60 suite passed: `node --test src/tests/memory-skill-tree.test.mjs` reported 5/5 passing.
+- Focused product-memory/policy suite passed: `node --test src/tests/outbound-payload-observability.test.mjs src/tests/product-memory-contract.test.mjs src/tests/memory-skill-tree.test.mjs` reported 12/12 passing.
+- `npm run test:memory:graphiti` passed with real Graphiti/FalkorDB: 2/2 passing.
+- `npm run build` passed and reports the Phase 60 memory skill-tree contract.
+- `npm run test:local` passed with 284 tests total, 282 passing, 2 expected live-gated OpenClaw skips, and 0 failures.

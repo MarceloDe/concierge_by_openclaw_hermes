@@ -113,6 +113,7 @@ import {
   buildResolvedCaseCandidateSeed,
   composeTrustedSkillDrivenAnswer
 } from "../concierge/trustedAnswerDriving.mjs";
+import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1455,6 +1456,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     liveReadiness,
     counts
   });
+  const phase60MemorySkillTree = buildPhase60MemorySkillTreeProof();
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1661,6 +1663,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase59_pilot_readiness",
         status: phase59PilotReadiness.status,
         target: "Pilot readiness packages live-model-default PWA, FastAPI/Node endpoint inventory, OpenClaw readiness, DB health, AWS communication, and Graphiti status into one non-PHI proof gate."
+      },
+      {
+        key: "phase60_memory_skill_tree",
+        status: phase60MemorySkillTree.status,
+        target: "Memory skill-tree selector keeps DB authoritative while Graphiti/Zep supports non-standard journeys, procedural loops, and reviewer-gated skill consolidation."
       }
     ],
     checks: [
@@ -1721,6 +1728,21 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         liveProbeCommand: phase59PilotReadiness.liveProbeCommand,
         externalReadiness: phase59PilotReadiness.externalReadiness,
         safety: phase59PilotReadiness.safety
+      },
+      {
+        key: "phase60_memory_skill_tree",
+        status: phase60MemorySkillTree.status,
+        ok: phase60MemorySkillTree.ok,
+        score: phase60MemorySkillTree.score,
+        target: phase60MemorySkillTree.target,
+        checks: phase60MemorySkillTree.checks,
+        dbAuthority: phase60MemorySkillTree.dbAuthority,
+        memoryUsePolicy: phase60MemorySkillTree.memoryUsePolicy,
+        selectedProcedureMemory: phase60MemorySkillTree.selectedProcedureMemory,
+        skillTree: phase60MemorySkillTree.skillTree,
+        consolidationCandidate: phase60MemorySkillTree.consolidationCandidate,
+        literatureAlignment: phase60MemorySkillTree.literatureAlignment,
+        safety: phase60MemorySkillTree.safety
       },
       {
         key: "database_storage",
@@ -2371,6 +2393,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         liveProbeCommand: phase59PilotReadiness.liveProbeCommand,
         openAiConfigured: phase59PilotReadiness.externalReadiness.openAiConfigured,
         productMemoryStatus: phase59PilotReadiness.externalReadiness.productMemoryStatus
+      },
+      {
+        key: "phase60_memory_skill_tree",
+        score: phase60MemorySkillTree.score,
+        target: phase60MemorySkillTree.target,
+        status: phase60MemorySkillTree.status,
+        dbAuthoritative: phase60MemorySkillTree.checks.dbAuthoritative,
+        graphitiAdvisory: phase60MemorySkillTree.checks.graphitiAdvisory,
+        nonStandardSelector: phase60MemorySkillTree.checks.nonStandardSelector,
+        candidateGeneratedButNotWritten: phase60MemorySkillTree.checks.candidateGeneratedButNotWritten,
+        productionDrivingBlocked: phase60MemorySkillTree.checks.productionDrivingBlocked
       },
       {
         key: "canonical_goal_tied_phase_execution",

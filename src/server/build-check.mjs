@@ -41,6 +41,7 @@ import { getResearchWorkerStatus } from "../concierge/researchOps.mjs";
 import { RESEARCH_SCHEDULER_DAEMON_VERSION } from "../concierge/researchScheduler.mjs";
 import { RETENTION_SCHEDULER_VERSION } from "../concierge/retentionScheduler.mjs";
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
+import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
 import { WORKER_MEMORY_VERSION } from "../concierge/workerMemory.mjs";
 
 const requiredFiles = [
@@ -138,10 +139,12 @@ const requiredFiles = [
   "src/concierge/researchScheduler.mjs",
   "src/concierge/retentionScheduler.mjs",
   "src/concierge/dynamicSkillServer.mjs",
+  "src/concierge/memorySkillTree.mjs",
   "src/concierge/workerMemory.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
   "src/tests/research-scheduler.test.mjs",
+  "src/tests/memory-skill-tree.test.mjs",
   "src/tests/final-system-verification-report.test.mjs",
   "docs/FINAL_SYSTEM_VERIFICATION_REPORT.md",
   "docs/goal_final_system.md",
@@ -322,6 +325,18 @@ if (
   pemsTrustedAnswer.safety.unsupportedItemsLabeled !== true
 ) {
   throw new Error("Phase 58 trusted answer-driving proof contract is incomplete.");
+}
+
+const phase60MemorySkillTreeProof = buildPhase60MemorySkillTreeProof();
+if (
+  phase60MemorySkillTreeProof.status !== "phase60_memory_skill_tree_ready" ||
+  phase60MemorySkillTreeProof.score !== 100 ||
+  phase60MemorySkillTreeProof.dbAuthority.graphitiMayOverrideDb !== false ||
+  phase60MemorySkillTreeProof.selectedProcedureMemory.nonStandardDemand !== true ||
+  phase60MemorySkillTreeProof.consolidationCandidate.worktreeWriteAllowed !== false ||
+  phase60MemorySkillTreeProof.safety.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 60 memory skill-tree selector proof contract is incomplete.");
 }
 
 const pemsWorkbenchProof = buildPemsReviewerWorkbenchReadinessProof({
@@ -945,4 +960,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

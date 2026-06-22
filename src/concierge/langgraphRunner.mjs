@@ -16,6 +16,7 @@ import {
   approvalMetadataForDocumentCandidateTask
 } from "./documentCandidateApproval.mjs";
 import { buildContextPacket, retainMemoryFromSession } from "./memoryHarness.mjs";
+import { selectMemorySkillTree } from "./memorySkillTree.mjs";
 import { composeResponse } from "./outputPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 import { evaluateInputPolicy } from "./policy.mjs";
@@ -113,6 +114,7 @@ const BrainstyState = Annotation.Root({
   structured_intent: field(null),
   llm_orchestration_decision: field(null),
   dynamic_skill_context: field(null),
+  memory_skill_tree: field(null),
   workflow: field(null),
   workflow_route: field(null),
   route_reason: field(null),
@@ -655,12 +657,22 @@ async function recallContextNode(state) {
   });
   const store = activeStores.get(state.session_id);
   const skillHints = await resolveDynamicSkillContext(store, state);
+  const memorySkillTree = selectMemorySkillTree({
+    state,
+    dynamicSkillContext: skillHints,
+    productMemoryRecall: state.product_memory_recall,
+    user: state.context_packet?.user ?? userFromContext(state.context_packet)
+  });
   return {
     runtime_bundle: bundle,
     dynamic_skill_context: skillHints,
+    memory_skill_tree: memorySkillTree,
     memory_context: [
       bundle.langgraph.state.memory_context,
-      ...(state.product_memory_recall?.facts ?? []).map((item) => `Graphiti memory fact: ${item.fact ?? item.name ?? item.uuid}`)
+      ...(state.product_memory_recall?.facts ?? []).map((item) => `Graphiti memory fact: ${item.fact ?? item.name ?? item.uuid}`),
+      memorySkillTree.selectedProcedureMemory?.nonStandardDemand
+        ? `Memory skill tree: non-standard demand; use ${memorySkillTree.selectedProcedureMemory.selectedSkillKey ?? "memory-assisted skill route"} with reviewer-gated consolidation.`
+        : ""
     ]
       .filter(Boolean)
       .join("\n"),
@@ -675,7 +687,9 @@ async function recallContextNode(state) {
           skillKey: item.skillKey,
           kind: item.skillKind,
           score: item.fit?.score ?? 0
-        })) ?? []
+        })) ?? [],
+      memorySkillTreeStatus: memorySkillTree.status,
+      memorySkillTreeNonStandardDemand: memorySkillTree.selectedProcedureMemory.nonStandardDemand
     })
   };
 }
@@ -1231,15 +1245,28 @@ async function skillResolverNode(state) {
   }
   const store = activeStores.get(state.session_id);
   const dynamicSkillContext = await resolveDynamicSkillContext(store, state);
+  const memorySkillTree = selectMemorySkillTree({
+    state,
+    dynamicSkillContext,
+    productMemoryRecall: state.product_memory_recall,
+    user: state.context_packet?.user ?? userFromContext(state.context_packet)
+  });
   return {
     dynamic_skill_context: dynamicSkillContext,
+    memory_skill_tree: memorySkillTree,
     proof: appendProof(state, "skill_resolver", {
       selected: dynamicSkillContext.selected,
       matchCount: dynamicSkillContext.matches.length,
       requiredOpenClawTasks: dynamicSkillContext.requiredOpenClawTasks,
       requiredSearch: dynamicSkillContext.requiredSearch,
       requiredApis: dynamicSkillContext.requiredApis,
-      successEstimate: dynamicSkillContext.successEstimate
+      successEstimate: dynamicSkillContext.successEstimate,
+      memorySkillTree: {
+        status: memorySkillTree.status,
+        nonStandardDemand: memorySkillTree.selectedProcedureMemory.nonStandardDemand,
+        candidateStatus: memorySkillTree.consolidationCandidate.status,
+        productionDrivingAllowed: memorySkillTree.safety.productionDrivingAllowed
+      }
     })
   };
 }
@@ -1284,6 +1311,14 @@ async function workflowExecutorNode(state) {
           selected: state.dynamic_skill_context.selected,
           successEstimate: state.dynamic_skill_context.successEstimate,
           requiredOpenClawTasks: state.dynamic_skill_context.requiredOpenClawTasks
+        }
+      : null,
+    memorySkillTree: state.memory_skill_tree
+      ? {
+          status: state.memory_skill_tree.status,
+          nonStandardDemand: state.memory_skill_tree.selectedProcedureMemory?.nonStandardDemand,
+          procedureLoopStyle: state.memory_skill_tree.skillTree?.loop?.loopStyle,
+          productionDrivingAllowed: state.memory_skill_tree.safety?.productionDrivingAllowed
         }
       : null,
     workerPlanId: workerPlan.planId,

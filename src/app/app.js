@@ -951,6 +951,8 @@ function renderConnectorProof(payload) {
   const phase58Check = checks.find((check) => check.key === "phase58_trusted_answer_driving") ?? null;
   const phase59Score = scores.find((score) => score.key === "phase59_pilot_readiness") ?? null;
   const phase59Check = checks.find((check) => check.key === "phase59_pilot_readiness") ?? null;
+  const phase60Score = scores.find((score) => score.key === "phase60_memory_skill_tree") ?? null;
+  const phase60Check = checks.find((check) => check.key === "phase60_memory_skill_tree") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1029,6 +1031,25 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase59Check?.checks?.pwaRequestsLiveReasoning ? "PWA requests live reasoning" : "attention: PWA deterministic default")} · OpenAI ${escapeHtml(phase59Check?.externalReadiness?.openAiConfigured ? "configured" : "not configured")}</dd>
           <dt>Memory / AWS</dt>
           <dd>${escapeHtml(phase59Check?.externalReadiness?.productMemoryStatus ?? "unknown")} · AWS checked by sanitized smoke artifact</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase60Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 60 Memory Skill Tree</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase60Score.score)} / ${escapeHtml(phase60Score.target)} · ${escapeHtml(phase60Score.status)}</dd>
+          <dt>Authority</dt>
+          <dd>${escapeHtml(phase60Check?.checks?.dbAuthoritative ? "DB authoritative" : "attention")} · Graphiti ${escapeHtml(phase60Check?.checks?.graphitiAdvisory ? "advisory" : "attention")}</dd>
+          <dt>Selector</dt>
+          <dd>${escapeHtml(phase60Check?.selectedProcedureMemory?.nonStandardDemand ? "non-standard demand route" : "standard route")} · ${escapeHtml(phase60Check?.selectedProcedureMemory?.selectedSkillKey ?? "memory-assisted route")}</dd>
+          <dt>Loop</dt>
+          <dd>${escapeHtml(phase60Check?.skillTree?.loop?.loopStyle ?? "ralph_rigg_sequential_goal_loop")} · ${escapeHtml(phase60Check?.skillTree?.loop?.steps?.length ?? 0)} gates</dd>
+          <dt>Consolidation</dt>
+          <dd>${escapeHtml(phase60Check?.consolidationCandidate?.status ?? "not evaluated")} · worktree write ${escapeHtml(phase60Check?.consolidationCandidate?.worktreeWriteAllowed ? "allowed" : "review-gated")}</dd>
+          <dt>Safety</dt>
+          <dd>production-driving ${escapeHtml(phase60Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")} · raw PHI ${escapeHtml(phase60Check?.safety?.noRawPhiReturned ? "hidden" : "attention")}</dd>
         </dl>
       </article>
     ` : ""}
