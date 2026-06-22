@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createId, nowIso, SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
-import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
+import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
 import { getMemoryContextForUser, listHarnessState, planTaskFollowups, runUserHeartbeat } from "../concierge/memoryHarness.mjs";
 
 async function createStore() {

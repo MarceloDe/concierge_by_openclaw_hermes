@@ -17,8 +17,7 @@ const STEP_TIERS = Object.freeze({
   sourced_answer: "reasoner",
   answer_composer: "reasoner",
   final_response: "reasoner",
-  pems_live_evaluator: "reasoner",
-  maybe_model: "reasoner"
+  pems_live_evaluator: "reasoner"
 });
 
 let testChatModelFactory = null;

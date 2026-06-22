@@ -35,22 +35,22 @@ test("live OpenAI smoke test uses PHI-allowed identifier-masked reasoning payloa
   assert.equal(result.state.llm_orchestration_decision.mode, "openai_chatopenai_invoked");
   assert.equal(result.state.llm_orchestration_decision.valid, true);
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
-  assert.equal(result.state.model_invocation.mode, "openai_chatopenai_invoked");
-  assert.equal(result.state.model_invocation.payloadMode, "phi_allowed_identifier_masked_reasoning");
-  assert.equal(result.state.model_invocation.externalPhiDisclosureAllowed, true);
-  assert.equal(result.state.model_invocation.outboundPayloadObservation?.eventType, "outbound_payload_observed");
-  assert.equal(result.state.model_invocation.outboundPayloadObservation?.containsDirectIdentifier, false);
-  assert.equal(result.state.model_invocation.outboundPayloadObservation?.containsSourcePointers, true);
-  assert.equal(result.state.model_invocation.outboundPayloadObservation?.enforcementMode, "enforced");
-  assert.ok(result.state.model_invocation.response);
-  assert.ok(!JSON.stringify(result.state.model_invocation).includes("sk-"));
+  assert.equal(result.state.model_invocation, null);
+  assert.equal(result.state.llm_orchestration_decision.outboundPayloadObservation?.eventType, "outbound_payload_observed");
+  assert.equal(result.state.llm_orchestration_decision.outboundPayloadObservation?.containsDirectIdentifier, false);
+  assert.equal(result.state.llm_orchestration_decision.outboundPayloadObservation?.containsSourcePointers, true);
+  assert.equal(result.state.llm_orchestration_decision.outboundPayloadObservation?.enforcementMode, "enforced");
+  assert.ok(result.state.llm_orchestration_decision.response);
+  assert.ok(!JSON.stringify(result.state.llm_orchestration_decision).includes("sk-"));
 
   const payloadAudits = await store.all(
     `SELECT * FROM audit_events WHERE session_id = '${session.id.replaceAll("'", "''")}' AND event_type = 'outbound_payload_observed';`
   );
-  const openAiAudit = payloadAudits.map((row) => JSON.parse(row.details)).find((details) => details.payloadType === "openai_chat_messages");
+  const openAiAudit = payloadAudits
+    .map((row) => JSON.parse(row.details))
+    .find((details) => details.payloadType === "openai_orchestration_decision_messages");
   assert.ok(openAiAudit, "OpenAI invocation should record an outbound payload audit event.");
-  assert.equal(openAiAudit.payloadType, "openai_chat_messages");
+  assert.equal(openAiAudit.payloadType, "openai_orchestration_decision_messages");
   assert.equal(openAiAudit.policyMode, "phi_allowed_identifier_masked_reasoning");
   assert.equal(openAiAudit.allowedByCurrentPrototypePolicy, true);
   assert.deepEqual(openAiAudit.policyIssues, []);

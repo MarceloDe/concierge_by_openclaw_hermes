@@ -1,0 +1,23 @@
+{
+  "url": "http://127.0.0.1:4221/mvp?phase=phase-55-native-hitl",
+  "title": "Brainstyworkers Concierge MVP",
+  "mvp": {
+    "hasCurrentAnswer": true,
+    "hasOpenClaw": true,
+    "hasProofDashboard": true,
+    "hasResetView": true,
+    "hasRunState": true,
+    "textPreview": "PHASE 10I\n\nBrainstyworkers Concierge\nChat\nSplit\nGuided\nBento\nProof Dashboard\nReset View\n\nLOCAL AUTH\n\nSession\nName\nEmail\nPayer\nPortal URL\nSession ID\nResume latest\nLive GPT decisioning\nStart Session\n\nNot signed in\n\nBACKEND\n\nAPI Route\nRoute\nWefella FastAPI facade\nNode / LangGraph runtime (operator parity)\nFastAPI URL\nCheck Facade\nUse Facade\n\nFastAPI facade route active by default.\n\nWORKFLOW\n\nJourneys\nBenefits\nClaim Status\nPrior Auth\nAppeal\nPortal Evidence\n\nDOCUMENTS\n\nUpload Evidence\nFile\nKind\nBenefits or SBC\nClaim or EOB\nBill or statement\nInsurance ID card\nOther insurance document\nUpload + Extract\nAsk About Upload\nNo uploaded document yet.\n\nOPENCLAW\n\nWorker Scope\nRequire live portal proof\nUse official OpenClaw\nUse current OpenClaw tab\nMulti-page read-only run\nPortal Ready\nCheck Worker\n\nWorker",
+    "title": "Brainstyworkers Concierge MVP",
+    "url": "http://127.0.0.1:4221/mvp?phase=phase-55-native-hitl"
+  },
+  "afterStart": {
+    "hasFailedFetch": true,
+    "hasSessionId": true,
+    "hasWaiting": true,
+    "preview": "PHASE 10I\n\nBrainstyworkers Concierge\nChat\nSplit\nGuided\nBento\nProof Dashboard\nReset View\n\nLOCAL AUTH\n\nSession\nName\nEmail\nPayer\nPortal URL\nSession ID\nResume latest\nLive GPT decisioning\nStart Session\n\nSigned in · session_f3ca6a9b-b7c8-4693-9620-1bffd8e64d1b\n\nBACKEND\n\nAPI Route\nRoute\nWefella FastAPI facade\nNode / LangGraph runtime (operator parity)\nFastAPI URL\nCheck Facade\nUse Facade\n\nFastAPI facade unavailable; using same-origin Node / LangGraph runtime.\n\nWORKFLOW\n\nJourneys\nBenefits\nClaim Status\nPrior Auth\nAppeal\nPortal Evidence\n\nDOCUMENTS\n\nUpload Evidence\nFile\nKind\nBenefits or SBC\nClaim or EOB\nBill or statement\nInsurance ID card\nOther insurance document\nUpload + Extract\nAsk About Upload\nNo uploaded document yet.\n\nOPENCLAW\n\nWorker Scope\nRequire live portal proof\nUse official OpenClaw\nUse current OpenClaw tab\nMulti-page read-only run\nPortal Ready\nCheck Worker\n\nWorker not checked\n\nCURRENT ANSWER\n\nStart a session to test the full sequence.\nSplit mode\n\nThe existing proof dashboard stays avail",
+    "signedIn": true
+  },
+  "consoleErrorCount": 0,
+  "note": "Fresh Phase 55 UI on port 4221 used same-origin Node. Existing FastAPI on 8000 is healthy but configured for older allowed origins/node runtime, so the MVP fallback banner is expected in this local proof."
+}

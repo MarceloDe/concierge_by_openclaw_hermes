@@ -6,7 +6,7 @@ import { createDatabaseStore } from "../concierge/databaseFactory.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { normalizeWebChat } from "../concierge/channelAdapter.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
-import { traceForSession } from "../concierge/engine.mjs";
+import { traceForSession } from "../concierge/traceSession.mjs";
 import { describeLangGraphScope } from "../concierge/langgraphScope.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { probeChrome } from "../concierge/browserAutomation.mjs";
