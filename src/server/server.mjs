@@ -114,6 +114,7 @@ import {
   composeTrustedSkillDrivenAnswer
 } from "../concierge/trustedAnswerDriving.mjs";
 import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
+import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1457,6 +1458,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     counts
   });
   const phase60MemorySkillTree = buildPhase60MemorySkillTreeProof();
+  const phase61GeneratedSkillPr = buildPhase61GeneratedSkillPrProof();
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1668,6 +1670,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase60_memory_skill_tree",
         status: phase60MemorySkillTree.status,
         target: "Memory skill-tree selector keeps DB authoritative while Graphiti/Zep supports non-standard journeys, procedural loops, and reviewer-gated skill consolidation."
+      },
+      {
+        key: "phase61_generated_skill_pr_workflow",
+        status: phase61GeneratedSkillPr.status,
+        target: "Reviewer-approved mature memory candidates become PR-ready generated skill packages without auto-merge or production-driving authority."
       }
     ],
     checks: [
@@ -1743,6 +1750,19 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         consolidationCandidate: phase60MemorySkillTree.consolidationCandidate,
         literatureAlignment: phase60MemorySkillTree.literatureAlignment,
         safety: phase60MemorySkillTree.safety
+      },
+      {
+        key: "phase61_generated_skill_pr_workflow",
+        status: phase61GeneratedSkillPr.status,
+        ok: phase61GeneratedSkillPr.ok,
+        score: phase61GeneratedSkillPr.score,
+        target: phase61GeneratedSkillPr.target,
+        checks: phase61GeneratedSkillPr.checks,
+        gate: phase61GeneratedSkillPr.gate,
+        artifactPackage: phase61GeneratedSkillPr.artifactPackage,
+        pullRequest: phase61GeneratedSkillPr.pullRequest,
+        sideEffects: phase61GeneratedSkillPr.sideEffects,
+        safety: phase61GeneratedSkillPr.safety
       },
       {
         key: "database_storage",
@@ -2406,6 +2426,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         productionDrivingBlocked: phase60MemorySkillTree.checks.productionDrivingBlocked
       },
       {
+        key: "phase61_generated_skill_pr_workflow",
+        score: phase61GeneratedSkillPr.score,
+        target: phase61GeneratedSkillPr.target,
+        status: phase61GeneratedSkillPr.status,
+        gatePassed: phase61GeneratedSkillPr.checks.gatePassed,
+        artifactValid: phase61GeneratedSkillPr.checks.artifactValid,
+        worktreeWriteAllowed: phase61GeneratedSkillPr.sideEffects.worktreeWriteAllowed,
+        autoMergeAllowed: phase61GeneratedSkillPr.pullRequest.autoMergeAllowed,
+        productionDrivingAllowed: phase61GeneratedSkillPr.safety.productionDrivingAllowed
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2687,6 +2718,11 @@ async function handleApi(req, res, url) {
       reviewerHistoryExports: buildPemsReviewerHistoryAuditExportProof(status),
       reviewerHistoryReview: buildPemsReviewerHistoryReviewRefinementProof(status)
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/continuous-intelligence/pems/generated-skill-pr") {
+    sendJson(res, 200, buildPhase61GeneratedSkillPrProof());
     return;
   }
 

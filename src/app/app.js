@@ -953,6 +953,8 @@ function renderConnectorProof(payload) {
   const phase59Check = checks.find((check) => check.key === "phase59_pilot_readiness") ?? null;
   const phase60Score = scores.find((score) => score.key === "phase60_memory_skill_tree") ?? null;
   const phase60Check = checks.find((check) => check.key === "phase60_memory_skill_tree") ?? null;
+  const phase61Score = scores.find((score) => score.key === "phase61_generated_skill_pr_workflow") ?? null;
+  const phase61Check = checks.find((check) => check.key === "phase61_generated_skill_pr_workflow") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1050,6 +1052,25 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase60Check?.consolidationCandidate?.status ?? "not evaluated")} · worktree write ${escapeHtml(phase60Check?.consolidationCandidate?.worktreeWriteAllowed ? "allowed" : "review-gated")}</dd>
           <dt>Safety</dt>
           <dd>production-driving ${escapeHtml(phase60Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")} · raw PHI ${escapeHtml(phase60Check?.safety?.noRawPhiReturned ? "hidden" : "attention")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase61Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 61 Generated Skill PR</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase61Score.score)} / ${escapeHtml(phase61Score.target)} · ${escapeHtml(phase61Score.status)}</dd>
+          <dt>Gate</dt>
+          <dd>${escapeHtml(phase61Check?.gate?.status ?? "not evaluated")} · reviewers ${escapeHtml(phase61Check?.gate?.reviewCounts?.humanApprovals ?? 0)}/${escapeHtml(phase61Check?.gate?.requirements?.humanApprovals ?? 2)}</dd>
+          <dt>Package</dt>
+          <dd>${escapeHtml(phase61Check?.artifactPackage?.skillKey ?? "no package")} · files ${escapeHtml(phase61Check?.artifactPackage?.fileCount ?? 0)} · artifact ${escapeHtml(phase61Check?.artifactPackage?.validation?.valid ? "valid" : "attention")}</dd>
+          <dt>PR</dt>
+          <dd>${escapeHtml(phase61Check?.pullRequest?.branchName ?? "not prepared")} · auto-merge ${escapeHtml(phase61Check?.pullRequest?.autoMergeAllowed ? "allowed" : "blocked")}</dd>
+          <dt>Side Effects</dt>
+          <dd>files written ${escapeHtml(phase61Check?.sideEffects?.filesWritten ? "yes" : "no")} · worktree write ${escapeHtml(phase61Check?.sideEffects?.worktreeWriteAllowed ? "reviewer-approved" : "blocked")}</dd>
+          <dt>Safety</dt>
+          <dd>production-driving ${escapeHtml(phase61Check?.safety?.productionDrivingAllowed ? "enabled" : "blocked")} · raw PHI ${escapeHtml(phase61Check?.safety?.rawPhiStored ? "attention" : "hidden")}</dd>
         </dl>
       </article>
     ` : ""}

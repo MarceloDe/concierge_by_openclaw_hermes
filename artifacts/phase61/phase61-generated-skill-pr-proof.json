@@ -1,0 +1,134 @@
+{
+  "score": {
+    "key": "phase61_generated_skill_pr_workflow",
+    "score": 100,
+    "target": 100,
+    "status": "phase61_generated_skill_pr_workflow_ready",
+    "gatePassed": true,
+    "artifactValid": true,
+    "worktreeWriteAllowed": true,
+    "autoMergeAllowed": false,
+    "productionDrivingAllowed": false
+  },
+  "check": {
+    "key": "phase61_generated_skill_pr_workflow",
+    "status": "phase61_generated_skill_pr_workflow_ready",
+    "ok": true,
+    "score": 100,
+    "target": 100,
+    "checks": {
+      "gatePassed": true,
+      "artifactValid": true,
+      "proceduralUserAgnostic": true,
+      "worktreeWriteRequiresReviewerApproval": true,
+      "autoMergeBlocked": true,
+      "productionDrivingBlocked": true
+    },
+    "gate": {
+      "version": "2026-06-22.phase61-generated-skill-pr-workflow.v1",
+      "status": "generated_skill_pr_gate_passed",
+      "ok": true,
+      "score": 100,
+      "target": 100,
+      "checks": {
+        "matureMemoryCandidate": true,
+        "humanReviewerApproved": true,
+        "validatorPassed": true,
+        "citationsPassed": true,
+        "noSafetyVeto": true,
+        "rawPhiBlocked": true,
+        "productionDrivingBlocked": true
+      },
+      "reviewCounts": {
+        "humanApprovals": 2,
+        "validatorPasses": 1,
+        "citationPasses": 1,
+        "safetyFailures": 0,
+        "total": 4
+      },
+      "sourcePointerCount": 1,
+      "requirements": {
+        "humanApprovals": 2,
+        "validatorPasses": 1,
+        "citationPasses": 1,
+        "sourcePointers": 1,
+        "safetyFailures": 0
+      }
+    },
+    "artifactPackage": {
+      "skillKey": "generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045",
+      "fileCount": 3,
+      "files": [
+        {
+          "path": "openclaw/skills/generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045/skill-server.json",
+          "hash": "b88a97074d208a4502947ff41d3a4801b8648e0d94eaa9a85d1e3cd15b3c6ad3"
+        },
+        {
+          "path": "openclaw/skills/generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045/SKILL.md",
+          "hash": "2453fc03fa81430d0960a55d5d2d044ea06f95d62aecfe191c6b44c7a4c86dd1"
+        },
+        {
+          "path": "openclaw/skills/generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045/README.md",
+          "hash": "a39a4c0173f3f4f493c86e67763dc037de021f0f5042d9cf499d614aa9520497"
+        }
+      ],
+      "validation": {
+        "valid": true,
+        "issues": [],
+        "warnings": [],
+        "checked": {
+          "manifest": true,
+          "skillMd": true,
+          "skillKey": "generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045",
+          "genericContract": true,
+          "artifactHash": "3971c84526429d01432a1394420cefdb7b747bd5ff1d23f66b896e12eafe9e0b",
+          "sourcePointersRequired": true,
+          "credentialBoundary": true,
+          "executionGated": true,
+          "browserAutomationRequired": false,
+          "ocrLocalRequired": false,
+          "adaptiveWorkerAllowed": false,
+          "structuredAnswerSchema": false,
+          "portalSectionStrategy": false,
+          "progressProtocolSeconds": null
+        }
+      },
+      "proceduralSafety": {
+        "ok": true,
+        "issues": [],
+        "proceduralUserAgnostic": true
+      }
+    },
+    "pullRequest": {
+      "branchName": "generated-skill/generated-acme-new-plan-non-standard-plan-document-review-1d5dfa8045",
+      "base": "main",
+      "title": "generated skill: generated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045",
+      "bodySections": [
+        "source pointers",
+        "review gate",
+        "validation",
+        "safety boundary"
+      ],
+      "autoMergeAllowed": false,
+      "requiresHumanReviewer": true
+    },
+    "sideEffects": {
+      "filesWritten": false,
+      "gitBranchCreated": false,
+      "pullRequestOpened": false,
+      "worktreeWriteAllowed": true,
+      "worktreeWriteReason": "reviewer_approved_phase61_pr_package"
+    },
+    "safety": {
+      "productionDrivingAllowed": false,
+      "autoMergeAllowed": false,
+      "rawPhiStored": false,
+      "credentialEntryAllowed": false,
+      "externalWriteAllowed": false
+    }
+  },
+  "visual": {
+    "cardText": "Phase 61 Generated Skill PR\nScore\n100 / 100 · phase61_generated_skill_pr_workflow_ready\nGate\ngenerated_skill_pr_gate_passed · reviewers 2/2\nPackage\ngenerated_acme_new_plan_non_standard_plan_document_review_1d5dfa8045 · files 3 · artifact valid\nPR\ngenerated-skill/generated-acme-new-plan-non-standard-plan-document-review-1d5dfa8045 · auto-merge blocked\nSide Effects\nfiles written no · worktree write reviewer-approved\nSafety\nproduction-driving blocked · raw PHI hidden",
+    "consoleErrors": []
+  }
+}

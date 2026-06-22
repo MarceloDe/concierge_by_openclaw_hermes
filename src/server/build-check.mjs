@@ -42,6 +42,7 @@ import { RESEARCH_SCHEDULER_DAEMON_VERSION } from "../concierge/researchSchedule
 import { RETENTION_SCHEDULER_VERSION } from "../concierge/retentionScheduler.mjs";
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
 import { buildPhase60MemorySkillTreeProof } from "../concierge/memorySkillTree.mjs";
+import { buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { WORKER_MEMORY_VERSION } from "../concierge/workerMemory.mjs";
 
 const requiredFiles = [
@@ -140,11 +141,13 @@ const requiredFiles = [
   "src/concierge/retentionScheduler.mjs",
   "src/concierge/dynamicSkillServer.mjs",
   "src/concierge/memorySkillTree.mjs",
+  "src/concierge/generatedSkillPrWorkflow.mjs",
   "src/concierge/workerMemory.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
   "src/tests/research-scheduler.test.mjs",
   "src/tests/memory-skill-tree.test.mjs",
+  "src/tests/generated-skill-pr-workflow.test.mjs",
   "src/tests/final-system-verification-report.test.mjs",
   "docs/FINAL_SYSTEM_VERIFICATION_REPORT.md",
   "docs/goal_final_system.md",
@@ -337,6 +340,19 @@ if (
   phase60MemorySkillTreeProof.safety.productionDrivingAllowed !== false
 ) {
   throw new Error("Phase 60 memory skill-tree selector proof contract is incomplete.");
+}
+
+const phase61GeneratedSkillPrProof = buildPhase61GeneratedSkillPrProof();
+if (
+  phase61GeneratedSkillPrProof.status !== "phase61_generated_skill_pr_workflow_ready" ||
+  phase61GeneratedSkillPrProof.score !== 100 ||
+  phase61GeneratedSkillPrProof.gate.ok !== true ||
+  phase61GeneratedSkillPrProof.artifactPackage.validation.valid !== true ||
+  phase61GeneratedSkillPrProof.sideEffects.filesWritten !== false ||
+  phase61GeneratedSkillPrProof.pullRequest.autoMergeAllowed !== false ||
+  phase61GeneratedSkillPrProof.safety.productionDrivingAllowed !== false
+) {
+  throw new Error("Phase 61 generated-skill PR workflow proof contract is incomplete.");
 }
 
 const pemsWorkbenchProof = buildPemsReviewerWorkbenchReadinessProof({
@@ -960,4 +976,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, Phase 58 trusted answer-driving, Phase 60 memory skill tree, Phase 61 generated-skill PR workflow, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

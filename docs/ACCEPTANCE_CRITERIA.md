@@ -2624,3 +2624,15 @@ Focused proof:
 - Hashed Graphiti namespace refs such as `episodic:member:<hash>` are allowed and do not count as direct identifiers.
 - Uploaded-document source pointers are recognized as allowed source-pointer contracts.
 - Dashboard proof exposes `phase60_memory_skill_tree` with score, DB authority, Graphiti advisory posture, selector route, loop, consolidation status, and safety flags.
+
+## Phase 61: Generated Skill PR Workflow
+
+- A mature Phase 60 consolidation candidate is not PR-ready until explicit review gates pass.
+- The gate requires two human approvals, one validator pass, one citation pass, at least one source pointer, no safety veto, raw PHI blocked, and production-driving blocked.
+- The generated package includes proposed `skill-server.json`, `SKILL.md`, and `README.md` entries under `openclaw/skills/<skill>/` with stable hashes.
+- The generated `skill-server.json` passes the existing OpenClaw skill artifact validator.
+- The generated procedural content passes the user-agnostic procedural-memory guard.
+- The workflow exposes PR metadata but does not create a branch, write files, open a PR, auto-merge, or enable production-driving in proof mode.
+- Worktree write permission is true only when the gate passes and an explicit reviewer worktree-write approval is present.
+- Dashboard proof exposes `phase61_generated_skill_pr_workflow` with score, gate, package, PR branch, side effects, and safety flags.
+- Required gates: `npm run test:generated-skills`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
