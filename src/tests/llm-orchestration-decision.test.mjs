@@ -7,6 +7,7 @@ import { SqliteStore } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildLlmOrchestrationDecisionMessages,
+  confidenceBand,
   normalizeLlmOrchestrationDecision,
   shouldUseLlmDecision
 } from "../concierge/llmOrchestrationDecision.mjs";
@@ -35,6 +36,7 @@ test("LLM orchestration decision parser accepts strict workflow JSON", () => {
   assert.equal(decision.valid, true);
   assert.equal(decision.workflow, "document_or_trace_review");
   assert.equal(shouldUseLlmDecision(decision), true);
+  assert.equal(confidenceBand(decision), "high");
 });
 
 test("LLM orchestration decision parser rejects unknown workflows", () => {
@@ -48,6 +50,29 @@ test("LLM orchestration decision parser rejects unknown workflows", () => {
   assert.equal(decision.valid, false);
   assert.ok(decision.issues.some((issue) => issue.includes("workflow_not_allowed")));
   assert.equal(shouldUseLlmDecision(decision), false);
+});
+
+test("LLM orchestration decision confidence bands keep weak decisions from being adopted", () => {
+  const low = normalizeLlmOrchestrationDecision({
+    workflow: "eligibility_benefits_navigation",
+    intent: "ambiguous_benefit_question",
+    confidence: 0.49,
+    rationale: "The request is too ambiguous to route confidently.",
+    workerGoal: "Ask a clarifying question."
+  });
+  const medium = normalizeLlmOrchestrationDecision({
+    workflow: "eligibility_benefits_navigation",
+    intent: "benefit_question",
+    confidence: 0.62,
+    rationale: "The request appears to be about eligibility.",
+    workerGoal: "Check eligibility evidence."
+  });
+
+  assert.equal(low.valid, true);
+  assert.equal(confidenceBand(low), "low");
+  assert.equal(shouldUseLlmDecision(low), false);
+  assert.equal(confidenceBand(medium), "medium");
+  assert.equal(shouldUseLlmDecision(medium), true);
 });
 
 test("LLM orchestration decision messages mask direct identifiers", async () => {
@@ -104,4 +129,36 @@ test("LangGraph can route from a replayed live LLM decision instead of curated c
   assert.equal(result.state.workflow, "document_or_trace_review");
   assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
+});
+
+test("LangGraph labels valid low-confidence LLM decisions as clarify instead of silently adopting them", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store);
+  const result = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Can you help with this insurance thing?",
+    rawMessage: {
+      source: "low_confidence_llm_decision_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "eligibility_benefits_navigation",
+        intent: "ambiguous_insurance_request",
+        confidence: 0.42,
+        rationale: "The user did not provide enough journey-specific context.",
+        requiredEvidence: ["member_plan_context"],
+        missingEvidence: ["specific_question"],
+        approvalRequired: false,
+        approvalScope: "read_only_observation",
+        workerGoal: "Ask a clarifying question before worker dispatch.",
+        responseStrategy: "Clarify which insurance journey the user means.",
+        userFacingNextQuestion: "What insurance question should I help with first?"
+      }
+    }
+  });
+
+  assert.equal(result.state.route_reason, "low_confidence_clarify");
+  assert.equal(result.state.llm_orchestration_decision.usedByRouter, false);
 });

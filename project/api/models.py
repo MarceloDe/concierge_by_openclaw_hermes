@@ -8,7 +8,7 @@ class ChatRequest(BaseModel):
     user_id: str = Field(min_length=1)
     session_id: str | None = None
     member: dict[str, Any] | None = None
-    use_live_model: bool = False
+    use_live_model: bool = True
     resume_latest_session: bool = False
     payload_mode: str = "phi_allowed_identifier_masked_reasoning"
     execute_evidence_observation: bool = False
@@ -90,7 +90,7 @@ class V1TaskRequest(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list, max_length=5)
     client_context: dict[str, Any] = Field(default_factory=dict)
     member: dict[str, Any] | None = None
-    use_live_model: bool = False
+    use_live_model: bool = True
     execute_evidence_observation: bool = False
     require_live_portal_proof: bool = False
     use_official_openclaw_worker: bool = False

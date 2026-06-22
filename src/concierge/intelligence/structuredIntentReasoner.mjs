@@ -1,5 +1,5 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { maskDirectIdentifiers } from "../modelPayloadPolicy.mjs";
+import { createTieredChatModel, selectModelForStep } from "../modelTierPolicy.mjs";
 import { recordOutboundPayloadObservation } from "../outboundPayloadObservability.mjs";
 import {
   evidenceForJourney,
@@ -87,7 +87,8 @@ export function buildDeterministicStructuredReasoning({ message, policyResult, c
       ...(urgent ? ["urgent_emergency_escalation"] : []),
       ...(blocked ? ["input_policy_refusal"] : [])
     ],
-    unsafe_action_requested: false
+    unsafe_action_requested: false,
+    reasoning_source: "curated_fallback"
   };
 }
 
@@ -141,10 +142,17 @@ export function buildStructuredIntentReasoningMessages(state) {
 }
 
 export async function invokeLiveStructuredIntentReasoner({ state, store = null, sessionId = null, user = null }) {
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
-  const baseURL = process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  const selection = selectModelForStep("structured_intent");
+  const { model, baseURL } = selection;
   if (!process.env.OPENAI_API_KEY) {
-    return { mode: "skipped_missing_openai_api_key", valid: false, issues: ["missing_openai_api_key"] };
+    return {
+      mode: "skipped_missing_openai_api_key",
+      valid: false,
+      issues: ["missing_openai_api_key"],
+      model,
+      baseURL,
+      modelTier: selection
+    };
   }
   const messages = buildStructuredIntentReasoningMessages(state);
   const observation = store
@@ -158,16 +166,18 @@ export async function invokeLiveStructuredIntentReasoner({ state, store = null, 
         requireSourcePointers: false
       })
     : null;
-  const llm = new ChatOpenAI({ model, timeout: 60000, maxRetries: 1, configuration: { baseURL } });
+  const { llm } = createTieredChatModel("structured_intent", { timeout: 60000, maxRetries: 1 });
   const response = await llm.invoke(messages);
   const validation = validateStructuredIntentReasoning(response.content);
+  const reasoning = validation.valid ? { ...validation.value, reasoning_source: "llm" } : validation.value;
   return {
     mode: "openai_chatopenai_invoked",
     model,
     baseURL,
+    modelTier: selection,
     valid: validation.valid,
     issues: validation.issues,
-    reasoning: validation.value,
+    reasoning,
     response: response.content,
     outboundPayloadObservation: observation
       ? {

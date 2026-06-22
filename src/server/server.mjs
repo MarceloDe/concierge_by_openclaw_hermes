@@ -3060,7 +3060,7 @@ async function handleApi(req, res, url) {
         ...envelope,
         source: "api_chat",
         executeEvidenceObservation: body.executeEvidenceObservation !== false,
-        useLiveModel: Boolean(body.useLiveModel),
+        useLiveModel: body.useLiveModel !== false,
         payloadMode: body.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
         requestedAt: new Date().toISOString()
       }
@@ -3144,7 +3144,7 @@ async function handleApi(req, res, url) {
         ...body,
         source: "api_langgraph_run",
         executeEvidenceObservation: body.executeEvidenceObservation !== false,
-        useLiveModel: Boolean(body.useLiveModel),
+        useLiveModel: body.useLiveModel !== false,
         payloadMode: body.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
         requestedAt: new Date().toISOString()
       }

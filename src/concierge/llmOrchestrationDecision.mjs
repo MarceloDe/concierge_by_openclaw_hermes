@@ -225,3 +225,10 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
 export function shouldUseLlmDecision(decision) {
   return Boolean(decision?.valid && decision.workflow && Number(decision.confidence ?? 0) >= 0.5);
 }
+
+export function confidenceBand(decision) {
+  const confidence = clampConfidence(decision?.confidence);
+  if (confidence >= 0.75) return "high";
+  if (confidence >= 0.5) return "medium";
+  return "low";
+}

@@ -1,5 +1,5 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { maskDirectIdentifiers } from "../modelPayloadPolicy.mjs";
+import { createTieredChatModel, selectModelForStep } from "../modelTierPolicy.mjs";
 import { recordOutboundPayloadObservation } from "../outboundPayloadObservability.mjs";
 import { validateSourcedAnswer } from "./reasoningValidators.mjs";
 
@@ -84,8 +84,8 @@ export async function composeSourcedAnswerWithOpenAI({ state, deterministicAnswe
   const sourcePointers = state.source_pointers ?? [];
   if (!sourcePointers.length) return { mode: "skipped_no_source_pointers", valid: false, issues: ["source_pointers_required"] };
   if (!process.env.OPENAI_API_KEY) return { mode: "skipped_missing_openai_api_key", valid: false, issues: ["missing_openai_api_key"] };
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
-  const baseURL = process.env.BRAINSTY_OPENAI_BASE_URL || "https://api.openai.com/v1";
+  const selection = selectModelForStep("sourced_answer");
+  const { model, baseURL } = selection;
   const messages = buildSourcedAnswerMessages(state, { deterministicAnswer });
   const observation = store
     ? await recordOutboundPayloadObservation(store, {
@@ -98,13 +98,14 @@ export async function composeSourcedAnswerWithOpenAI({ state, deterministicAnswe
         requireSourcePointers: true
       })
     : null;
-  const llm = new ChatOpenAI({ model, timeout: 60000, maxRetries: 1, configuration: { baseURL } });
+  const { llm } = createTieredChatModel("sourced_answer", { timeout: 60000, maxRetries: 1 });
   const response = await llm.invoke(messages);
   const validation = validateSourcedAnswer(response.content);
   return {
     mode: "openai_chatopenai_invoked",
     model,
     baseURL,
+    modelTier: selection,
     valid: validation.valid,
     issues: validation.issues,
     answer: validation.value,
@@ -121,4 +122,3 @@ export async function composeSourcedAnswerWithOpenAI({ state, deterministicAnswe
       : null
   };
 }
-

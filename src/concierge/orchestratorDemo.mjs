@@ -219,7 +219,7 @@ export async function runOrchestratorChat(store, options = {}) {
     rawMessage: {
       source: "api_orchestrator_chat",
       authStatus: auth.auth.status,
-      useLiveModel: Boolean(useLiveModel),
+      useLiveModel: useLiveModel !== false,
       payloadMode: options.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
       requestedAt: new Date().toISOString()
     }
@@ -266,7 +266,7 @@ export async function runOrchestratorFlowCases(store, options = {}) {
         source: "api_orchestrator_flow_cases",
         caseId: caseSpec.id,
         authStatus: auth.auth.status,
-        useLiveModel: Boolean(useLiveModel),
+        useLiveModel: useLiveModel !== false,
         payloadMode: options.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
         requestedAt: new Date().toISOString()
       }

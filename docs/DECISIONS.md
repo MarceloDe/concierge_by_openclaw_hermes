@@ -2738,3 +2738,17 @@ Research operations can grow into costly or unsafe loops if budget state only li
 
 Consequences:
 Operators can see analytics, daily usage, blocked attempts, and kill-switch state from `/`. The kill switch and limits block queue/execution paths fail-closed and audit `research_budget_blocked`. Broader review queues and user-facing journey breadth remain separate future phases.
+
+## 2026-06-21 - Phase 53 Starts The Reasoning-Orchestrator Migration
+
+Problem:
+The migration package labeled the next intelligence track as Phases 47-49, but the local repository had already landed through Phase 52. The runtime also remained partly deterministic-first: live structured intent and orchestration required explicit enablement in some public paths, and direct ChatOpenAI constructors were scattered across runtime modules.
+
+Decision:
+Map the migration track to real repo phases 53-55. Implement Phase 53 as the intelligence-default inversion: centralize model construction in `modelTierPolicy.mjs`, make live reasoning default-on unless explicitly disabled, keep deterministic fallback and safety refusals authoritative, and expose low-confidence LLM decisions as `low_confidence_clarify`.
+
+Rationale:
+This preserves the existing safety, PHI, audit, approval, source-pointer, and output-policy rails while moving reasoning toward the founder-level target: LLM-primary orchestration with deterministic validation and fallback. Central model tiering also gives future phases one controlled place to change classifier/reasoner/planner model choices.
+
+Consequences:
+Omitted `useLiveModel` now means "use live intelligence if configured." Explicit `useLiveModel: false` remains the deterministic regression path. Phase 54 must still convert evidence-insufficiency blocks into graceful degraded answers, and Phase 55 must still replace simulated approval pause/resume with durable native LangGraph interrupt/resume.
