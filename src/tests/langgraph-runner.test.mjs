@@ -36,7 +36,7 @@ async function createResearchFixtureArtifact(store, { actorUserId, url, title, h
     actorUserId,
     url,
     title,
-    workflowKeys: ["general_rag", "eligibility_benefits_navigation", "pharmacy_formulary", "procedure_admin_checklist"],
+    workflowKeys: ["general_rag", "eligibility_benefits_navigation", "pharmacy_formulary", "procedure_admin_checklist", "provider_network"],
     reason: "LangGraph trusted research evidence fixture."
   });
   await reviewResearchSource(store, {
@@ -516,6 +516,68 @@ test("LangGraph answers procedure prep questions with sourced AI2UI checklist ro
     const auditText = JSON.stringify(auditRows);
     assert.match(auditText, /trusted_research_evidence_retrieved/);
     assert.doesNotMatch(auditText, /procedure-pii@example\.com/);
+  } finally {
+    if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+    else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;
+  }
+});
+
+test("LangGraph answers provider network questions with sourced AI2UI provider rows", async () => {
+  const store = await createStore();
+  const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-provider-artifacts-"));
+  const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
+  process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
+
+  try {
+    const { user, session } = await enrollDefaultMember(store);
+    const artifact = await createResearchFixtureArtifact(store, {
+      actorUserId: "operator_langgraph_provider_research",
+      url: "https://fixture.brainstyworkers.local/reviewed-provider-network",
+      title: "Reviewed Provider Network Research",
+      approveArtifact: true,
+      html: `
+          <html>
+            <head><title>Reviewed Provider Network Research</title></head>
+            <body>
+              <h1>Reviewed provider network evidence</h1>
+              <p>Midtown Imaging Center is listed in the reviewed provider directory as an in-network participating imaging facility for the plan.</p>
+              <p>The reviewed directory snippet includes NPI 1234567890, accepting new patients, and notes that referral may be required.</p>
+              <p>Network status can change, so the member should confirm with the plan and provider before scheduling.</p>
+              <p>Fixture email provider-pii@example.com must stay out of audit rows.</p>
+            </body>
+          </html>
+        `
+    });
+
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Is Midtown Imaging Center in network and accepting new patients?",
+      rawMessage: { source: "phase52_provider_network_test", useLiveModel: false, executeEvidenceObservation: false }
+    });
+
+    assert.equal(result.state.structured_intent.primary_intent, "provider_network");
+    assert.equal(result.state.workflow, "eligibility_benefits_navigation");
+    assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
+    assert.equal(result.state.workflow_outcome, "trusted_research_answered");
+    assert.equal(result.state.source_pointers.length, 1);
+    assert.equal(result.state.source_pointers[0].table, "research_artifacts");
+    assert.equal(result.state.source_pointers[0].id, artifact.id);
+    assert.match(result.state.final_response, /Midtown Imaging Center is listed/);
+    const providerNetworkBlock = result.state.ai2ui_blocks.find((block) => block.type === "provider_network");
+    assert.ok(providerNetworkBlock);
+    assert.equal(providerNetworkBlock.payload.status, "source_backed_provider_network_ready");
+    assert.equal(providerNetworkBlock.payload.safety.noNetworkGuarantee, true);
+    assert.equal(providerNetworkBlock.payload.safety.noProviderContact, true);
+    assert.equal(providerNetworkBlock.payload.safety.noSchedulingAction, true);
+    assert.ok(providerNetworkBlock.payload.rows.length >= 1);
+    assert.ok(providerNetworkBlock.payload.rows.every((row) => row.sourcePointerIds.includes(`research_artifacts/${artifact.id}`)));
+
+    const auditRows = await store.all("SELECT event_type, details FROM audit_events ORDER BY rowid ASC;");
+    const auditText = JSON.stringify(auditRows);
+    assert.match(auditText, /trusted_research_evidence_retrieved/);
+    assert.doesNotMatch(auditText, /provider-pii@example\.com/);
   } finally {
     if (previousArtifactDir === undefined) delete process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
     else process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = previousArtifactDir;

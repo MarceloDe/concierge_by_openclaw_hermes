@@ -1,0 +1,76 @@
+{
+  "phase": "phase-52-provider-network-cards",
+  "method": "in-app-browser-real-ui-node-route-clean-sqlite-visual-proof",
+  "databaseProfile": "artifacts/phase52/provider-network-proof.sqlite",
+  "modeProof": [
+    {
+      "blockCount": 5,
+      "label": "Chat",
+      "mode": "chat",
+      "providerCards": 1,
+      "providerText": "Provider Network\n\nsource_backed_provider_network_ready · 1 source-backed option(s)\n\nMidtown Imaging Center\nin_network_signal\nnpi_signal, specialty_or_service_signal, facility_signal, accepting_new_patients_signal, referral_signal\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\nThis card is evidence navigation, not a live network guarantee.\nConfirm network status with the plan and provider before scheduling or care decisions.",
+      "rows": 1
+    },
+    {
+      "blockCount": 10,
+      "label": "Split",
+      "mode": "split",
+      "providerCards": 1,
+      "providerText": "Provider Network\n\nsource_backed_provider_network_ready · 1 source-backed option(s)\n\nMidtown Imaging Center\nin_network_signal\nnpi_signal, specialty_or_service_signal, facility_signal, accepting_new_patients_signal, referral_signal\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\nThis card is evidence navigation, not a live network guarantee.\nConfirm network status with the plan and provider before scheduling or care decisions.",
+      "rows": 1
+    },
+    {
+      "blockCount": 9,
+      "label": "Guided",
+      "mode": "guided",
+      "providerCards": 1,
+      "providerText": "Provider Network\n\nsource_backed_provider_network_ready · 1 source-backed option(s)\n\nMidtown Imaging Center\nin_network_signal\nnpi_signal, specialty_or_service_signal, facility_signal, accepting_new_patients_signal, referral_signal\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\nThis card is evidence navigation, not a live network guarantee.\nConfirm network status with the plan and provider before scheduling or care decisions.",
+      "rows": 1
+    },
+    {
+      "blockCount": 10,
+      "label": "Bento",
+      "mode": "bento",
+      "providerCards": 1,
+      "providerText": "Provider Network\n\nsource_backed_provider_network_ready · 1 source-backed option(s)\n\nMidtown Imaging Center\nin_network_signal\nnpi_signal, specialty_or_service_signal, facility_signal, accepting_new_patients_signal, referral_signal\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\nThis card is evidence navigation, not a live network guarantee.\nConfirm network status with the plan and provider before scheduling or care decisions.",
+      "rows": 1
+    }
+  ],
+  "proof": {
+    "activeMode": "bento",
+    "providerCardCount": 1,
+    "providerCardText": "Provider Network\n\nsource_backed_provider_network_ready · 1 source-backed option(s)\n\nMidtown Imaging Center\nin_network_signal\nnpi_signal, specialty_or_service_signal, facility_signal, accepting_new_patients_signal, referral_signal\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\nThis card is evidence navigation, not a live network guarantee.\nConfirm network status with the plan and provider before scheduling or care decisions.",
+    "providerRowCount": 1,
+    "rawSensitiveFixturePresent": false,
+    "sendDisabled": false,
+    "sequenceText": [
+      "Auth\nsigned in",
+      "GPT / Intent\neligibility_benefits_navigation",
+      "Skill\ninsurance=insurance_plan_aetna_temporary · journey=claim_journey_temporary · execution=insurance_portal_browser",
+      "Approval\napproved_consumed",
+      "OpenClaw\ncaptured_trusted_research_evidence",
+      "Evidence\n1 pointers",
+      "Memory\ndegraded",
+      "Answer\nready"
+    ],
+    "sourceCitationText": "Citations\n\n1 stored source pointer(s) · captured_trusted_research_evidence\n\nPhase 52 Provider Network Evidence\nresearch_artifacts/research_artifact_d91a439b-f7d9-432b-8ec7-2414b67e555d\n813ee27c5f63b8fd83df6ff42c03917ef71a40538a9b714d770474215b8a530e",
+    "title": "Brainstyworkers Concierge MVP",
+    "trustedResearchCaptured": true,
+    "url": "http://127.0.0.1:4218/mvp?phase=phase-52-provider-network-cards"
+  },
+  "consoleErrors": [],
+  "consoleErrorCount": 0,
+  "assertions": {
+    "providerCardVisible": true,
+    "sourceBackedRowsVisible": true,
+    "allModesPreserveProviderCard": true,
+    "sourcePointerVisible": true,
+    "trustedResearchCaptured": true,
+    "noBusyState": true,
+    "noConsoleErrors": true,
+    "noRawSensitiveFixture": true,
+    "noNetworkGuaranteeLabel": true,
+    "providerNameVisible": true,
+    "singleCitationSource": true
+  }
+}

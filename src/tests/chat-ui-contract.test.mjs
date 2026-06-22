@@ -695,12 +695,14 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpJs, /cost_comparison/);
   assert.match(mvpJs, /pharmacy_formulary/);
   assert.match(mvpJs, /procedure_checklist/);
+  assert.match(mvpJs, /provider_network/);
   assert.match(mvpJs, /setUiMode/);
   assert.match(mvpJs, /localStorage\.setItem\("brainstyworkers\.mvp\.uiMode"/);
   assert.match(mvpJs, /ai2uiBlocks/);
   assert.match(mvpJs, /renderAi2UiBlocks/);
   assert.match(mvpJs, /renderCostComparisonBlock/);
   assert.match(mvpJs, /renderPharmacyFormularyBlock/);
+  assert.match(mvpJs, /renderProviderNetworkBlock/);
   assert.match(mvpJs, /renderUnknownAi2UiBlock/);
   assert.match(mvpJs, /Unsupported UI block/);
   assert.match(mvpJs, /uploaded_document_context/);
@@ -718,6 +720,8 @@ test("user-friendly MVP app is a separate auth plus chat surface wired to real A
   assert.match(mvpCss, /pharmacy-formulary-row/);
   assert.match(mvpCss, /procedure-checklist-grid/);
   assert.match(mvpCss, /procedure-checklist-row/);
+  assert.match(mvpCss, /provider-network-grid/);
+  assert.match(mvpCss, /provider-network-row/);
   assert.match(mvpCss, /body\[data-ui-mode="chat"\]/);
   assert.match(mvpCss, /body\[data-ui-mode="guided"\]/);
   assert.match(mvpCss, /body\[data-ui-mode="bento"\]/);

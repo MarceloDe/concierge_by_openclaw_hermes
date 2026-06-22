@@ -223,6 +223,67 @@ test("AI2UI procedure checklist fails closed when a procedure prep ask has no so
   assert.ok(checklist.payload.missingEvidence.includes("cited procedure or facility instruction"));
 });
 
+test("AI2UI builder returns source-backed provider network rows for provider/facility questions", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_provider_network",
+    workflow: "eligibility_benefits_navigation",
+    structured_intent: { reasoning: { primary_intent: "provider_network" } },
+    user_input: "Is Midtown Imaging Center in network and accepting new patients?",
+    final_response: "A sourced provider network answer.",
+    source_pointers: [
+      {
+        table: "research_artifacts",
+        id: "artifact_provider_1",
+        displayLabel: "Reviewed provider directory evidence",
+        evidenceFields: [
+          {
+            label: "Provider directory network status",
+            value: "Midtown Imaging Center is listed in the provider directory as an in-network participating imaging facility for the plan. NPI 1234567890 is shown, accepting new patients, and referral may be required.",
+            confidence: "high"
+          }
+        ],
+        citation: { confidence: "high" }
+      }
+    ],
+    evidence_observation: { status: "captured_trusted_research_evidence", actionsTaken: ["trusted_research_evidence_search"] }
+  });
+
+  const providerNetwork = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PROVIDER_NETWORK);
+  assert.ok(providerNetwork);
+  assert.equal(providerNetwork.payload.status, "source_backed_provider_network_ready");
+  assert.equal(providerNetwork.payload.safety.evidenceNavigationOnly, true);
+  assert.equal(providerNetwork.payload.safety.noNetworkGuarantee, true);
+  assert.equal(providerNetwork.payload.safety.noProviderContact, true);
+  assert.equal(providerNetwork.payload.safety.noSchedulingAction, true);
+  assert.equal(providerNetwork.payload.safety.everyRowHasSourcePointer, true);
+  assert.ok(providerNetwork.payload.rows.length >= 1);
+  assert.ok(providerNetwork.payload.rows.some((row) => row.providerLabel.includes("Midtown Imaging Center")));
+  assert.ok(providerNetwork.payload.rows.some((row) => row.networkSignal === "in_network_signal"));
+  assert.ok(providerNetwork.payload.rows.some((row) => row.details.includes("npi_signal")));
+  assert.ok(providerNetwork.payload.rows.some((row) => row.details.includes("accepting_new_patients_signal")));
+  assert.ok(providerNetwork.payload.rows.every((row) => row.sourcePointerIds.includes("research_artifacts/artifact_provider_1")));
+});
+
+test("AI2UI provider network card fails closed when provider ask has no source pointers", () => {
+  const blocks = buildAi2UiBlocksFromState({
+    graph_trace_id: "lgtrace_provider_missing",
+    workflow: "eligibility_benefits_navigation",
+    structured_intent: { reasoning: { primary_intent: "provider_network" } },
+    user_input: "Is this doctor in network?",
+    final_response: "I cannot verify network status without evidence.",
+    source_pointers: [],
+    evidence_observation: { status: "blocked_no_trusted_research_evidence", actionsTaken: [] }
+  });
+
+  const providerNetwork = blocks.find((block) => block.type === AI2UI_BLOCK_TYPES.PROVIDER_NETWORK);
+  assert.ok(providerNetwork);
+  assert.equal(providerNetwork.payload.status, "blocked_missing_source_pointers");
+  assert.equal(providerNetwork.payload.rowCount, 0);
+  assert.deepEqual(providerNetwork.payload.rows, []);
+  assert.equal(providerNetwork.payload.safety.noNetworkGuarantee, true);
+  assert.ok(providerNetwork.payload.missingEvidence.includes("cited provider directory or network directory evidence"));
+});
+
 test("AI2UI normalizer converts unknown block types into safe fallback cards", () => {
   const blocks = normalizeAi2UiBlocks([
     {

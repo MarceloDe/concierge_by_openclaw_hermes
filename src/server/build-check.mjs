@@ -176,7 +176,9 @@ for (const requiredFragment of [
   "research_entities",
   "pharmacy_formulary",
   "procedure_checklist",
-  "Phase 51 procedure prep checklist journey"
+  "provider_network",
+  "Phase 51 procedure prep checklist journey",
+  "Phase 52 provider network cards journey"
 ]) {
   if (!finalVerificationReport.includes(requiredFragment)) {
     throw new Error(`Final system verification report is missing required fragment: ${requiredFragment}`);
@@ -809,6 +811,17 @@ const ai2uiBlocks = buildAi2UiBlocksFromState({
           value: "Before the procedure, confirm prior authorization, bring photo ID and insurance card, and arrange a driver."
         }
       ]
+    },
+    {
+      table: "research_artifacts",
+      id: "provider_build_check",
+      displayLabel: "Reviewed provider network evidence",
+      evidenceFields: [
+        {
+          label: "Provider network status",
+          value: "Midtown Imaging Center is listed as an in-network participating imaging facility, NPI 1234567890, accepting new patients."
+        }
+      ]
     }
   ],
   evidence_observation: { status: "waiting_for_approval", actionsTaken: [] },
@@ -819,6 +832,7 @@ if (
   !ai2uiBlocks.some((block) => block.type === "answer_markdown") ||
   !ai2uiBlocks.some((block) => block.type === "cost_comparison" && block.payload?.safety?.noFabricatedExactPrices === true) ||
   !ai2uiBlocks.some((block) => block.type === "procedure_checklist" && block.payload?.safety?.administrativeSupportOnly === true) ||
+  !ai2uiBlocks.some((block) => block.type === "provider_network" && block.payload?.safety?.noNetworkGuarantee === true) ||
   unknownAi2ui[0]?.type !== "unknown"
 ) {
   throw new Error("AI2UI block contract or unknown-block fallback is incomplete.");
