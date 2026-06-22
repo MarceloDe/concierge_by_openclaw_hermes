@@ -9137,3 +9137,32 @@ Verification:
 - API proof passed after `POST /api/retention/sweeper/tick`: `phase56_p0_hardening` scored `100 / 100`, retention `tick_completed`, encrypted checkpoint required/configured, egress `enforced`, DB `node:sqlite`, and sqlite shell-out absent.
 - In-app browser dashboard proof passed at `http://127.0.0.1:4222/?phase=phase-56-p0-hardening&v=2`: Phase 56 P0 Hardening card rendered `100 / 100`, `encrypted-at-rest configured`, `tick_completed`, `enforced by default`, `node:sqlite`, and browser console error count was 0.
 - Artifacts: `artifacts/phase56/phase56-p0-hardening-proof.json`, `artifacts/phase56/retention-sweeper-tick-proof.json`, `artifacts/phase56/phase56-dashboard-hardening-card.png`, and `artifacts/phase56/phase56-dashboard-hardening-card.json`.
+
+## Phase 57 Extensible Skills And Worker Breadth - 2026-06-22
+
+Goal:
+- Implement the next migration wave's extensible-skill slice as repo Phase 57. This maps to the packet's Phase 51 because repo Phase 56 already completed the packet's Phase 50/P0 hardening target.
+
+Implemented:
+- Made `validateOpenClawSkillArtifact` generic across skill artifacts instead of requiring the `insurance_portal_browser` literal. The insurance portal artifact still receives deeper domain-contract checks when that skill is loaded.
+- Added generic blocked-capability detection for skill-declared credentials/auth secrets, write/submit/send/pay actions, external messaging, non-local OCR, and page-text-as-instructions patterns.
+- Added `openclaw/skills/insurance-portal-browser/skill-server.json` so the portal browser advertises itself as an `execution_specific` skill through the same dynamic skill metadata path as other skills.
+- Removed the dynamic selector's hardcoded execution fallback and removed the worker-policy browser-like fallback. Missing execution skills now fail closed instead of silently selecting a default browser skill.
+- Hardened executor selection so a missing skill returns `skill_missing` rather than choosing a planner or crashing.
+- Added `src/concierge/workerMemory.mjs` plus `worker_procedural_memory` storage for masked, source-pointered procedure traces that feed PEMS candidates while keeping `cortexProductMemory=false` and `productionDrivingAllowed=false`.
+- Added a `phase57_extensible_skills_worker_breadth` connector proof goal/check/score and operator dashboard card.
+
+Safety:
+- Safety-invariant suites were not loosened.
+- `workerMayChooseWorkflow=false` remains enforced and OpenClaw remains bounded by LangGraph-assigned tasks.
+- No write, payer-contact, external messaging, credential, passkey/2FA/captcha, form submission, or medical-advice authority was added.
+- Worker procedural memory is advisory only and does not drive answers.
+
+Verification:
+- `npm run test:openclaw:skills` passed with 14/14 tests.
+- Focused Phase 57 suite passed: `node --test src/tests/dynamic-skill-server.test.mjs src/tests/openclaw-worker-contract.test.mjs src/tests/worker-memory.test.mjs` reported 13/13 tests passing.
+- `npm run build` passed and reports the Phase 57 extensible skills and worker memory contract.
+- `npm run test:local` passed with 272 tests total, 270 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed at `http://127.0.0.1:4223/api/proof/runs/local`: `phase57_extensible_skills_worker_breadth` scored `100 / 100`, loaded 3 required skills, selected `insurance_portal_browser` through dynamic scoring, kept fallback literals unused, and reported `worker_procedural_memory_contract_ready`.
+- Dashboard visual proof passed at `http://127.0.0.1:4223/?phase=phase-57-extensible-skills`: Chrome DevTools Protocol scrolled to the connector proof panel and asserted the Phase 57 card text for `100 / 100`, `insurance_portal_browser`, `fallback literal not used`, `LangGraph owns workflow`, `writes blocked`, and `answer-driving disabled`.
+- Artifacts: `artifacts/phase57/phase57-extensible-skills-proof.json`, `artifacts/phase57/phase57-dashboard-extensible-skills-card.png`, and `artifacts/phase57/phase57-dashboard-extensible-skills-card.json`.

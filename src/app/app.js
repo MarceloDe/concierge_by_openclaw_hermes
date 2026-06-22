@@ -945,6 +945,8 @@ function renderConnectorProof(payload) {
   const visuals = payload.visualArtifacts ?? payload.visual_artifacts ?? [];
   const phase56Score = scores.find((score) => score.key === "phase56_p0_hardening") ?? null;
   const phase56Check = checks.find((check) => check.key === "phase56_p0_hardening") ?? null;
+  const phase57Score = scores.find((score) => score.key === "phase57_extensible_skills_worker_breadth") ?? null;
+  const phase57Check = checks.find((check) => check.key === "phase57_extensible_skills_worker_breadth") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -972,6 +974,23 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase56Check?.egress?.defaultEnforcementMode ?? "enforced")} by default</dd>
           <dt>Database</dt>
           <dd>${escapeHtml(phase56Check?.database?.sqliteAdapter ?? "node:sqlite")} · shell-out sqlite3 ${escapeHtml(phase56Check?.database?.shellOutSqlite3 ? "present" : "absent")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase57Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 57 Extensible Skills</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase57Score.score)} / ${escapeHtml(phase57Score.target)} · ${escapeHtml(phase57Score.status)}</dd>
+          <dt>Skills</dt>
+          <dd>${escapeHtml(phase57Check?.registry?.skillCount ?? phase57Score.skillCount ?? 0)} loaded · ${escapeHtml((phase57Check?.registry?.requiredSkillKeys ?? []).join(", "))}</dd>
+          <dt>Selection</dt>
+          <dd>${escapeHtml(phase57Check?.dynamicSelection?.selected?.executionSkillKey ?? phase57Score.selectedExecutionSkillKey ?? "not selected")} · fallback literal ${escapeHtml(phase57Check?.dynamicSelection?.fallbackLiteralUsed ? "used" : "not used")}</dd>
+          <dt>Envelope</dt>
+          <dd>${escapeHtml(phase57Check?.proposal?.openClawMayChooseJourney ? "attention: workflow choice widened" : "LangGraph owns workflow")} · writes ${escapeHtml(phase57Check?.proposal?.openClawMayExecuteWriteActions ? "enabled" : "blocked")}</dd>
+          <dt>Worker Memory</dt>
+          <dd>${escapeHtml(phase57Check?.workerMemory?.status ?? phase57Score.workerMemoryStatus ?? "contract")} · answer-driving ${escapeHtml(phase57Check?.workerMemory?.safety?.answerDriving ? "enabled" : "disabled")}</dd>
         </dl>
       </article>
     ` : ""}

@@ -27,7 +27,6 @@ function selectedExecutionSkill(registry, routedSkills, executionSkillKey) {
   return (
     (registry?.skills ?? []).find((skill) => skill.skillKey === executionSkillKey) ??
     (registry?.skills ?? []).find((skill) => routedSkills.some((item) => item.skillKey === skill.skillKey && item.role === "execution")) ??
-    (registry?.skills ?? []).find((skill) => /browser|portal|ocr/i.test(JSON.stringify(skill.capabilities?.tools ?? []))) ??
     null
   );
 }

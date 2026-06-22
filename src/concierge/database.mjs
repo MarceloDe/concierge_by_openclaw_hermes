@@ -321,6 +321,30 @@ export class SqliteStore {
       );
     `);
     await this.exec(`
+      CREATE TABLE IF NOT EXISTS worker_procedural_memory (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        workflow TEXT,
+        selected_skill_key TEXT,
+        selected_executor_key TEXT,
+        terminal_outcome TEXT NOT NULL,
+        procedure_ref TEXT NOT NULL,
+        procedure_hash TEXT NOT NULL,
+        sequence_json TEXT NOT NULL DEFAULT '[]',
+        source_pointer_ids_json TEXT NOT NULL DEFAULT '[]',
+        pems_candidate_id TEXT NOT NULL,
+        cortex_product_memory INTEGER NOT NULL DEFAULT 0,
+        production_driving_allowed INTEGER NOT NULL DEFAULT 0,
+        masked_preview TEXT NOT NULL DEFAULT '',
+        safety_json TEXT NOT NULL DEFAULT '{}',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+      );
+    `);
+    await this.exec(`
       CREATE TABLE IF NOT EXISTS research_graph_builds (
         id TEXT PRIMARY KEY,
         actor_user_id TEXT,

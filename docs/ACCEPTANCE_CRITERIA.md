@@ -2562,3 +2562,12 @@ Focused proof:
 - Blocked attempts create budget events and hash-chained audit proof.
 - `/` exposes analytics and budget controls, including daily run limit, daily cost limit, kill switch, and reason fields.
 - The final verification report moves `C26`, `C27`, and `D19` to `PASSING`.
+
+## Phase 57: Extensible Skills And Worker Breadth
+
+- Generic OpenClaw artifact validation accepts multiple valid skill artifacts and rejects a community skill that declares blocked capabilities such as credential entry, write/submit/send/pay actions, external messaging, non-local OCR, or treating page text as instructions.
+- Dynamic execution-skill selection is score-only. If no execution skill matches, routing fails closed instead of falling back to `insurance_portal_browser`.
+- The bounded worker proposal keeps `workerMayChooseWorkflow=false`, `openClawMayExecuteWriteActions=false`, approval required where appropriate, and `actionsTaken=[]` before execution.
+- Successful worker procedural memory records store masked previews, source pointer IDs, procedure hashes, and PEMS candidate refs only; they keep `cortexProductMemory=false` and `productionDrivingAllowed=false`.
+- The connector proof exposes `phase57_extensible_skills_worker_breadth`, and the dashboard renders the Phase 57 card.
+- Required gates: `npm run test:openclaw:skills`, focused dynamic/worker-memory tests, `npm run build`, `npm run test:local`, API proof, and visual proof.

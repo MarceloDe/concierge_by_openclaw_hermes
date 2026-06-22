@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { nowIso } from "./database.mjs";
 
-export const DYNAMIC_SKILL_SERVER_VERSION = "2026-06-02.dynamic-skill-server.phase10u.v1";
+export const DYNAMIC_SKILL_SERVER_VERSION = "2026-06-22.phase57-dynamic-skill-server.registry-selected.v2";
 
 const DEFAULT_SKILL_ROOT = resolve("openclaw/skills");
 const SKILL_SERVER_FILE = "skill-server.json";
@@ -297,12 +297,13 @@ export async function resolveDynamicSkillContext(store, state, options = {}) {
     selected: {
       insuranceSkillKey: selectedInsuranceSkill?.skillKey ?? null,
       journeySkillKey: selectedJourneySkill?.skillKey ?? null,
-      executionSkillKey: selectedExecutionSkill?.skillKey ?? (requiresPortalObservation ? "insurance_portal_browser" : null)
+      executionSkillKey: selectedExecutionSkill?.skillKey ?? null
     },
     matches,
     requiredOpenClawTasks: [
       ...asArray(selectedJourneySkill?.requiredWorkers?.openclaw_tasks),
-      ...(requiresPortalObservation ? ["insurance_portal_browser.read_only_observation"] : [])
+      ...asArray(selectedExecutionSkill?.requiredWorkers?.openclaw_tasks),
+      ...(requiresPortalObservation && selectedExecutionSkill?.skillKey ? [`${selectedExecutionSkill.skillKey}.read_only_observation`] : [])
     ].filter((item, index, list) => list.indexOf(item) === index),
     requiredSearch: [
       ...asArray(selectedInsuranceSkill?.requiredSearch?.engines),

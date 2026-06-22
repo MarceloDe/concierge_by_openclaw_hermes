@@ -1,0 +1,18 @@
+{
+  "phase": 57,
+  "url": "http://127.0.0.1:4223/?phase=phase-57-extensible-skills",
+  "method": "chrome_devtools_protocol_scrolled_viewport_text_assertion",
+  "screenshot": "artifacts/phase57/phase57-dashboard-extensible-skills-card.png",
+  "requiredText": {
+    "Phase 57 Extensible Skills": true,
+    "100 / 100": true,
+    "insurance_portal_browser": true,
+    "fallback literal not used": true,
+    "LangGraph owns workflow": true,
+    "writes blocked": true,
+    "answer-driving disabled": true
+  },
+  "pass": true,
+  "missing": [],
+  "checkedAt": "2026-06-22T04:25:57.988Z"
+}

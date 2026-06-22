@@ -39,6 +39,7 @@ import { getResearchWorkerStatus } from "../concierge/researchOps.mjs";
 import { RESEARCH_SCHEDULER_DAEMON_VERSION } from "../concierge/researchScheduler.mjs";
 import { RETENTION_SCHEDULER_VERSION } from "../concierge/retentionScheduler.mjs";
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
+import { WORKER_MEMORY_VERSION } from "../concierge/workerMemory.mjs";
 
 const requiredFiles = [
   "src/app/index.html",
@@ -132,6 +133,7 @@ const requiredFiles = [
   "src/concierge/researchScheduler.mjs",
   "src/concierge/retentionScheduler.mjs",
   "src/concierge/dynamicSkillServer.mjs",
+  "src/concierge/workerMemory.mjs",
   "src/concierge/operatorAssistant.mjs",
   "src/concierge/humanHandoffs.mjs",
   "src/tests/research-scheduler.test.mjs",
@@ -148,6 +150,7 @@ const requiredFiles = [
   "vendor/getzep-graphiti/pyproject.toml",
   "openclaw/skills/insurance-portal-browser/SKILL.md",
   "openclaw/skills/insurance-portal-browser/skill.json",
+  "openclaw/skills/insurance-portal-browser/skill-server.json",
   "openclaw/skills/insurance-plan-aetna-temporary/SKILL.md",
   "openclaw/skills/insurance-plan-aetna-temporary/skill-server.json",
   "openclaw/skills/claim-journey-temporary/SKILL.md",
@@ -873,6 +876,9 @@ if (!RESEARCH_SCHEDULER_DAEMON_VERSION.includes("phase10t-research-scheduler-dae
 if (!RETENTION_SCHEDULER_VERSION.includes("phase56-retention-scheduler")) {
   throw new Error("Retention scheduler daemon version is not the Phase 56 contract.");
 }
+if (!WORKER_MEMORY_VERSION.includes("phase57-worker-procedural-memory") || !TABLES.includes("worker_procedural_memory") || !SCHEMA_SQL.includes("worker_procedural_memory")) {
+  throw new Error("Phase 57 worker procedural memory schema or version is missing.");
+}
 if (
   !OPERATOR_ASSISTANT_VERSION.includes("claim-citation-closure-proposals") ||
   !operatorTools.tools.some((tool) => tool.key === "research.searchEvidence" && tool.type === "read" && tool.approvalRequired === false) ||
@@ -891,4 +897,4 @@ if (
   throw new Error("Operator assistant registry-bound tool/proposal contract is incomplete.");
 }
 
-console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");
+console.log("Build check passed: files, schema, LangGraph scope, Graphiti memory, Phase 33 continuous-intelligence shadow scaffold, Phase 34 shadow persistence, Phase 35 PEMS supervised promotion gate, Phase 36 reviewer/evaluator workbench, Phase 37 PEMS reviewer UI, Phase 38 reviewer comparison/provenance, Phase 39 live evaluator/filtering, Phase 40 live claim citation closure, Phase 41 reviewer claim revisions, Phase 42 reviewer follow-up workflows, Phase 43 reviewer history audit exports, Phase 44 reviewer history review refinement, Phase 56 P0 hardening, Phase 57 extensible skills and worker memory, urgent human handoff, operator research execution/citation-review/claim-citation-closure/grounded-answer/proposal-gate/scheduler daemon/audit API/embedding route/adaptive worker dispatch/research graph, outbound payload policy, and audit integrity are present.");

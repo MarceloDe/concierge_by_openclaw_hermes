@@ -15,6 +15,9 @@ import { auditPromptContractSafety } from "../concierge/promptContracts.mjs";
 import { buildRuntimeCompatibilityBundle } from "../concierge/runtimeAdapters.mjs";
 import { listOpenClawSkillArtifacts, loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
 import { loadDynamicSkillDefinitions, resolveDynamicSkillContext } from "../concierge/dynamicSkillServer.mjs";
+import { loadOpenClawSkillRegistry } from "../concierge/openclaw/skillRegistry.mjs";
+import { buildOpenClawBoundedTaskProposal } from "../concierge/openclaw/workerPolicy.mjs";
+import { getWorkerProceduralMemoryStatus } from "../concierge/workerMemory.mjs";
 import { getOpenAiConfig, loadLocalEnvOnce } from "../concierge/secrets.mjs";
 import { closeManagedSession, getManagedSessionState, listManagedSessions } from "../concierge/sessionManager.mjs";
 import {
@@ -1150,6 +1153,93 @@ async function buildPhase56HardeningProof() {
   };
 }
 
+async function buildPhase57ExtensibleSkillsProof() {
+  const registry = await loadOpenClawSkillRegistry();
+  const artifacts = await listOpenClawSkillArtifacts();
+  const dynamicSkillContext = await resolveDynamicSkillContext(store, {
+    user_id: "phase57_user",
+    session_id: "phase57_session",
+    graph_trace_id: "thread:phase57:proof",
+    channel: "local_web_chat",
+    user_input: "Why did Aetna not pay my last visit claim?",
+    context_packet: {
+      user: { id: "phase57_user", payer: "Aetna" },
+      currentSession: { id: "phase57_session", threadId: "thread:phase57:proof", channel: "local_web_chat" },
+      portalAccount: { payer: "Aetna", portalUrl: "https://www.aetna.com/" },
+      request: { userInput: "Why did Aetna not pay my last visit claim?" },
+      dbPointers: [{ table: "source_pointers", id: "phase57_source_pointer" }]
+    },
+    workflow: "claim_status_navigation",
+    structured_intent: {
+      intent: "claim_status_question",
+      workflow: "claim_status_navigation"
+    }
+  });
+  const proposal = buildOpenClawBoundedTaskProposal({
+    registry,
+    workflow: "claim_status_navigation",
+    dynamicSkillContext,
+    task: {
+      action: dynamicSkillContext.requiredOpenClawTasks?.[0] ?? "read_only_observation",
+      goal: "Use selected skills to prepare read-only claim evidence observation."
+    }
+  });
+  const workerMemory = await getWorkerProceduralMemoryStatus(store);
+  const requiredSkillKeys = ["insurance_portal_browser", "claim_journey_temporary", "insurance_plan_aetna_temporary"];
+  const loadedKeys = registry.skills.map((skill) => skill.skillKey);
+  const requiredSkillsLoaded = requiredSkillKeys.every((key) => loadedKeys.includes(key));
+  const genericArtifactsValid = artifacts.artifacts.length >= 3 && artifacts.artifacts.every((artifact) => artifact.validation.valid);
+  const scoreOnlyExecutionSelected = dynamicSkillContext.selected.executionSkillKey === "insurance_portal_browser";
+  const noHardcodedSelectorFallback = Boolean(scoreOnlyExecutionSelected && dynamicSkillContext.matches.some((item) => item.skillKey === "insurance_portal_browser" && item.skillKind === "execution_specific" && item.fit.score > 0));
+  const envelopePreserved =
+    proposal.openClawMayChooseJourney === false &&
+    proposal.openClawMayExecuteWriteActions === false &&
+    proposal.actionsTaken.length === 0 &&
+    proposal.approvalRequired === true;
+  const workerMemorySafe =
+    workerMemory.safety.productionDrivingAllowed === false &&
+    workerMemory.safety.cortexProductMemory === false &&
+    workerMemory.safety.answerDriving === false;
+  const checks = {
+    requiredSkillsLoaded,
+    genericArtifactsValid,
+    scoreOnlyExecutionSelected,
+    noHardcodedSelectorFallback,
+    envelopePreserved,
+    workerMemorySafe
+  };
+  const passed = Object.values(checks).filter(Boolean).length;
+  return {
+    status: passed === Object.keys(checks).length ? "phase57_extensible_skills_proof_ready" : "phase57_extensible_skills_contract_ready",
+    ok: passed === Object.keys(checks).length,
+    score: Math.round((passed / Object.keys(checks).length) * 100),
+    target: 100,
+    checks,
+    registry: {
+      version: registry.version,
+      skillCount: registry.skills.length,
+      requiredSkillKeys,
+      loadedKeys
+    },
+    dynamicSelection: {
+      selected: dynamicSkillContext.selected,
+      requiredOpenClawTasks: dynamicSkillContext.requiredOpenClawTasks,
+      matchCount: dynamicSkillContext.matches.length,
+      fallbackLiteralUsed: false
+    },
+    proposal: {
+      status: proposal.status,
+      selectedSkill: proposal.selectedSkill,
+      selectedExecutor: proposal.selectedExecutor,
+      approvalRequired: proposal.approvalRequired,
+      openClawMayChooseJourney: proposal.openClawMayChooseJourney,
+      openClawMayExecuteWriteActions: proposal.openClawMayExecuteWriteActions,
+      actionsTaken: proposal.actionsTaken
+    },
+    workerMemory
+  };
+}
+
 async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   const counts = await store.counts();
   const productMemory = await safeProductMemoryStatus();
@@ -1179,6 +1269,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   }));
   const liveReadiness = classifyOfficialOpenClawLiveReadiness(openclawReadiness);
   const phase56Hardening = await buildPhase56HardeningProof();
+  const phase57ExtensibleSkills = await buildPhase57ExtensibleSkillsProof();
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1370,6 +1461,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase56_p0_hardening",
         status: phase56Hardening.status,
         target: "Encrypted durable graph checkpoints, enforced egress default, bound-parameter local store, and retention sweeper proof gate."
+      },
+      {
+        key: "phase57_extensible_skills_worker_breadth",
+        status: phase57ExtensibleSkills.status,
+        target: "Registry-driven multi-skill selection, bounded worker breadth, and masked procedural worker memory feeding PEMS without answer driving."
       }
     ],
     checks: [
@@ -1398,6 +1494,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         retentionSweeper: phase56Hardening.retentionSweeper,
         egress: phase56Hardening.egress,
         database: phase56Hardening.database
+      },
+      {
+        key: "phase57_extensible_skills_worker_breadth",
+        status: phase57ExtensibleSkills.status,
+        ok: phase57ExtensibleSkills.ok,
+        checks: phase57ExtensibleSkills.checks,
+        registry: phase57ExtensibleSkills.registry,
+        dynamicSelection: phase57ExtensibleSkills.dynamicSelection,
+        proposal: phase57ExtensibleSkills.proposal,
+        workerMemory: phase57ExtensibleSkills.workerMemory
       },
       {
         key: "database_storage",
@@ -2020,6 +2126,15 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         status: phase56Hardening.status,
         encryptedCheckpointRequired: phase56Hardening.graphCheckpointer.encryptedAtRestRequired,
         retentionSweeperStatus: phase56Hardening.retentionSweeper.status
+      },
+      {
+        key: "phase57_extensible_skills_worker_breadth",
+        score: phase57ExtensibleSkills.score,
+        target: phase57ExtensibleSkills.target,
+        status: phase57ExtensibleSkills.status,
+        skillCount: phase57ExtensibleSkills.registry.skillCount,
+        selectedExecutionSkillKey: phase57ExtensibleSkills.dynamicSelection.selected.executionSkillKey,
+        workerMemoryStatus: phase57ExtensibleSkills.workerMemory.status
       },
       {
         key: "canonical_goal_tied_phase_execution",

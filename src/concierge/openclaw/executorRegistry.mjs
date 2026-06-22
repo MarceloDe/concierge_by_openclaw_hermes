@@ -22,6 +22,18 @@ export const DEFAULT_EXECUTORS = Object.freeze({
 });
 
 export function selectExecutorForSkill(skill, options = {}) {
+  if (!skill?.skillKey) {
+    return {
+      ok: false,
+      status: "skill_missing",
+      version: OPENCLAW_EXECUTOR_REGISTRY_VERSION,
+      skillKey: null,
+      executorKey: null,
+      approvalRequired: true,
+      writeActionsEnabled: false,
+      supportedTools: []
+    };
+  }
   const executors = options.executors ?? DEFAULT_EXECUTORS;
   const toolText = JSON.stringify(skill?.capabilities?.tools ?? []).toLowerCase();
   const key = /browser|portal|ocr/.test(toolText)
