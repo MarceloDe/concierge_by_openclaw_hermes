@@ -4,7 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
-import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
+import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
 import { WORKFLOWS } from "../concierge/types.mjs";
 
 async function testStore() {
@@ -12,7 +12,7 @@ async function testStore() {
   return new SqliteStore(join(dir, "test.sqlite")).initialize();
 }
 
-test("workflow enrolls the member and records pending browser extraction when Chrome debugger is unavailable", async () => {
+test("workflow gives safe guidance instead of probing Chrome when no evidence or approval is supplied", async () => {
   const store = await testStore();
   const result = await runConciergeSlice(store, {
     message:
@@ -22,10 +22,11 @@ test("workflow enrolls the member and records pending browser extraction when Ch
 
   assert.equal(result.intent, WORKFLOWS.ENROLLMENT_PORTAL_DEPURATION);
   assert.equal(result.user.email, "mocfelix@gmail.com");
-  assert.match(result.finalResponse, /Enrollment complete/);
-  assert.ok(trace.browserRuns.length >= 1);
-  assert.ok(trace.snapshots.length >= 1);
-  assert.ok(trace.auditEvents.some((event) => event.event_type === "browser_probe_failed" || event.event_type === "browser_extraction_completed"));
+  assert.match(result.finalResponse, /upload|screenshots|portal/i);
+  assert.equal(result.browserResult, null);
+  assert.equal(trace.browserRuns.length, 0);
+  assert.equal(trace.snapshots.length, 0);
+  assert.ok(trace.auditEvents.some((event) => event.event_type === "langgraph_run_completed"));
 });
 
 test("workflow refuses credential handling before browser automation", async () => {
@@ -75,7 +76,7 @@ test("workflow can persist an already-open claimed Chrome Aetna snapshot", async
 
   assert.equal(result.browserResult.status, "extracted_visible_page");
   assert.equal(result.browserResult.page.title, "Home - Aetna");
-  assert.match(result.finalResponse, /Chrome remote debugger connected|Current portal page: Home - Aetna/);
+  assert.match(result.finalResponse, /captured approved read-only portal evidence|Source pointers:|eligibility_snapshots\//i);
   assert.ok(trace.browserRuns.some((run) => run.remote_debugger_url === "codex_chrome_extension_claimed_tab"));
   assert.ok(trace.auditEvents.some((event) => event.event_type === "browser_extraction_completed"));
 });

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
-import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
+import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
 import { getManagedSessionState, listManagedSessions, resolveManagedSession } from "../concierge/sessionManager.mjs";
 
 async function testStore() {
@@ -29,9 +29,9 @@ test("chat runs create LangChain-ready session state and checkpoints", async () 
   assert.equal(managed.session.id, result.session.id);
   assert.equal(managed.state.state.langchain.configurable.thread_id, result.session.langgraph_thread_id);
   assert.equal(managed.state.state.langchain.configurable.checkpoint_ns, "brainstyworkers");
-  assert.ok(managed.checkpoints.length >= 3);
-  assert.ok(managed.checkpoints.some((checkpoint) => checkpoint.step_name === "intent_classified"));
-  assert.equal(managed.session.current_step, "response_composed");
+  assert.ok(managed.checkpoints.length >= 1);
+  assert.ok(managed.checkpoints.some((checkpoint) => checkpoint.step_name === "langgraph_run_completed"));
+  assert.equal(managed.session.current_step, "langgraph_run_completed");
 });
 
 test("chat can resume an existing managed session by session id", async () => {
@@ -60,7 +60,8 @@ test("chat can resume an existing managed session by session id", async () => {
   assert.equal(second.session.id, first.session.id);
   assert.equal(second.session.langgraph_thread_id, first.session.langgraph_thread_id);
   assert.ok(trace.messages.length >= 4);
-  assert.ok(trace.managedSession.checkpoints.length >= 6);
+  assert.ok(trace.managedSession.checkpoints.length >= 2);
+  assert.ok(trace.managedSession.checkpoints.every((checkpoint) => checkpoint.step_name === "langgraph_run_completed"));
 });
 
 test("session list returns active sessions for a member", async () => {

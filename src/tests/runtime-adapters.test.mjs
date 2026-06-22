@@ -4,7 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
-import { runConciergeSlice } from "../concierge/engine.mjs";
+import { runConciergeSlice } from "../concierge/langgraphCompatibility.mjs";
 import { getMemoryContextForUser } from "../concierge/memoryHarness.mjs";
 import {
   buildRuntimeCompatibilityBundle,

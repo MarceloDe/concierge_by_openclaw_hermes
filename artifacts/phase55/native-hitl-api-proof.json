@@ -1,0 +1,35 @@
+{
+  "phase": 55,
+  "status": "pass",
+  "sessionId": "session_46871802-83e0-46f5-be57-e65370bf5ca8",
+  "threadId": "thread:user_cffc5478-66e2-484b-a98b-19a1321f9c9f:ebc61b7d-76e9-49bb-aad6-dda79007a861",
+  "taskId": "task_da48dfec-a42e-4105-82d9-9ec8abecb235",
+  "proposalStatus": "pending_approval",
+  "pause": {
+    "approvalInterruptStatus": "interrupted",
+    "workflowOutcome": "approval_pending_interrupt",
+    "evidenceStatus": "missing_approval_token",
+    "checkpointNext": [
+      "approval_pause"
+    ],
+    "checkpointInterrupted": true
+  },
+  "resume": {
+    "approvalResumeStatus": "approved_consumed",
+    "approvalInterruptStatus": "resumed",
+    "evidenceStatus": "captured_visible_page",
+    "sourcePointerCount": 2,
+    "firstSourcePointerTable": "eligibility_snapshots",
+    "workflowOutcome": "evidence_captured"
+  },
+  "blockedActions": [
+    "credential_entry",
+    "captcha_or_2fa_bypass",
+    "form_submit",
+    "external_write_action",
+    "payer_contact"
+  ],
+  "tokenAuthority": true,
+  "noCredentialEntry": true,
+  "noWriteActions": true
+}

@@ -102,7 +102,9 @@ test("LangGraph runner routes an insurance request and prepares OpenClaw envelop
   assert.ok(result.state.openclaw_task_proposal.routedSkills.length >= 3);
   assert.equal(result.state.openclaw_skill_proposal.task.task_type, "openclaw_skill_invocation_proposal");
   assert.equal(result.state.openclaw_skill_proposal.task.status, "pending_approval");
-  assert.equal(result.state.model_invocation.mode, "not_requested");
+  assert.equal(result.state.model_invocation, null);
+  assert.equal(result.state.llm_orchestration_decision.mode, "not_requested");
+  assert.equal(result.state.journey_plan.hitl.nativeLangGraphInterrupt, true);
   assert.equal(result.state.evidence_observation.status, "blocked_no_trusted_research_evidence");
   assert.equal(result.state.workflow_outcome, "best_effort_degraded");
   assert.match(result.state.final_response, /Unverified:/);
@@ -161,7 +163,7 @@ test("LangGraph runner creates urgent human handoff and bypasses OpenClaw and GP
   assert.equal(result.state.openclaw_envelope, null);
   assert.equal(result.state.openclaw_skill_proposal, null);
   assert.equal(result.state.evidence_observation.status, "skipped");
-  assert.equal(result.state.model_invocation.mode, "skipped_urgent_emergency_escalation");
+  assert.equal(result.state.model_invocation, null);
   assert.equal(result.state.llm_orchestration_decision.mode, "skipped_urgent_emergency_escalation");
   assert.match(result.state.final_response, /call 911 or local emergency services now/);
   assert.match(result.state.final_response, /Handoff item: handoff_/);
@@ -204,7 +206,8 @@ test("LangGraph runner records missing OpenAI key instead of leaking or requirin
       rawMessage: { source: "test", useLiveModel: true }
     });
 
-    assert.equal(result.state.model_invocation.mode, "skipped_missing_openai_api_key");
+    assert.equal(result.state.model_invocation, null);
+    assert.equal(result.state.llm_orchestration_decision.mode, "skipped_missing_openai_api_key");
     assert.doesNotMatch(JSON.stringify(result), /sk-[A-Za-z0-9_-]{12,}/);
   } finally {
     if (previous) process.env.OPENAI_API_KEY = previous;
@@ -741,13 +744,13 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     "structured_intent_classifier",
     "llm_orchestration_decision",
     "workflow_router",
+    "plan_journey",
     "skill_resolver",
-    "workflow_executor",
-    "evidence_observation"
+    "workflow_executor"
   ]);
-  assert.equal(proposalSteps[8], "continuous_intelligence_shadow");
-  assert.equal(proposalSteps[9], "response_policy");
-  assert.equal(proposalSteps[10], "model_invocation");
+  assert.equal(proposalSteps[8], "evidence_observation");
+  assert.equal(proposalSteps[9], "continuous_intelligence_shadow");
+  assert.equal(proposalSteps[10], "response_policy");
   assert.equal(proposalRun.state.continuous_intelligence.mode, "shadow_only");
   assert.equal(proposalRun.state.continuous_intelligence.productionDrivingAllowed, false);
   assert.equal(proposalRun.state.continuous_intelligence.pems.trusted, false);

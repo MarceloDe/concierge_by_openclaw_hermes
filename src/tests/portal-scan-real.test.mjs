@@ -4,7 +4,7 @@ import { readFile, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStore } from "../concierge/database.mjs";
-import { runConciergeSlice, traceForSession } from "../concierge/engine.mjs";
+import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-portal-scan-"));
@@ -65,10 +65,11 @@ test("portal page scan review payload includes section-specific captured evidenc
     ]
   });
   const trace = await traceForSession(store, result.session.id);
-  const reviewPayload = JSON.parse(trace.extractionReviews[0].review_payload);
+  const structured = result.portalScan.eligibilityResults[0].structured;
 
   assert.equal(result.browserResult.status, "multi_page_scan");
-  assert.deepEqual(reviewPayload.sectionEvidence.reachable, [
+  assert.equal(trace.portalPageSnapshots.length, 1);
+  assert.deepEqual(structured.sectionEvidence.reachable, [
     "benefits",
     "spending",
     "claims",
@@ -78,9 +79,9 @@ test("portal page scan review payload includes section-specific captured evidenc
     "pharmacy",
     "network"
   ]);
-  assert.equal(reviewPayload.documentSignals.candidateCount, 5);
-  assert.equal(reviewPayload.documentSignals.policy.documentDownloadAttempted, false);
-  assert.equal(reviewPayload.idCardSignals.directIdentifierExtracted, false);
+  assert.equal(structured.documentSignals.candidateCount, 5);
+  assert.equal(structured.documentSignals.policy.documentDownloadAttempted, false);
+  assert.equal(structured.idCardSignals.directIdentifierExtracted, false);
 });
 
 test("sanitized captured Aetna claims page parses full claims rows", async () => {

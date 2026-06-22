@@ -115,7 +115,7 @@ Known risks or gaps:
 
 ---
 
-## Phase 49 Real Dynamic Graph And Native Human-In-The-Loop - <YYYY-MM-DD>
+## Phase 49 Real Dynamic Graph And Native Human-In-The-Loop - 2026-06-22
 
 Slice name:
 - Durable checkpointer + `interrupt()`/`Command` approval; planner + real conditional edges; remove `maybe_model` and `engine.mjs`.
@@ -128,7 +128,14 @@ Files changed (expected):
 - `src/tests/graph-interrupt-resume.test.mjs` (new); updated `graph-topology.test.mjs`, `langgraph-runner.test.mjs`
 
 Implemented:
-- _<fill>_
+- Implemented as repo Phase 55 after the local phase-number correction.
+- Added `src/concierge/graphCheckpointer.mjs` with memory and file-backed saver modes; the file-backed mode round-trips LangGraph serialized checkpoint bytes and proves durable resume in tests.
+- Added `plan_journey` as a real graph node before skill resolution, carrying the selected workflow, bounded steps, missing evidence, graceful-degradation contract, and HITL requirements.
+- Added native LangGraph approval pause/resume: `evidenceObservationNode` emits approval-waiting state, the conditional edge routes to `approval_pause`, and `approval_pause` calls `interrupt()` with the read-only approval contract payload.
+- `runLangGraphOrchestration` detects pending approval interrupts and resumes with `Command({ resume: approvalToken, update: initialState })`; the approval token is still validated only by `consumeReadOnlyObservationApproval`.
+- Removed `maybeModelNode`, removed the model-tier `maybe_model` step, and changed topology to `compose_response -> END`.
+- Deleted `src/concierge/engine.mjs`; moved trace reads to `src/concierge/traceSession.mjs`; added `src/concierge/langgraphCompatibility.mjs` for old tests, delegating through LangGraph and explicit read-only approvals.
+- Updated graph topology, LangGraph runner, approval-resume, live OpenAI, portal scan, runtime adapter, session manager, memory harness, and workflow tests for the graph-owned path.
 
 Verification commands:
 - `npm run build`
@@ -138,10 +145,18 @@ Verification commands:
 - API proof + visual proof
 
 Verification result:
-- _<fill>_
+- Focused graph/HITL suite passed with 23/23 tests.
+- `npm run build` passed.
+- `npm run test:graph:topology` passed with 4/4 tests.
+- `npm run test:local` passed with 267 tests total, 265 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof artifact: `artifacts/phase55/native-hitl-api-proof.json`.
+- Visual proof artifacts: `artifacts/phase55/native-hitl-mvp-proof.png`, `artifacts/phase55/native-hitl-mvp-proof.json`, `artifacts/phase55/native-hitl-mvp-facade-connected-proof.png`, and `artifacts/phase55/native-hitl-mvp-facade-connected-proof.json`.
 
 What the user can try locally:
-- _<fill: e.g. "Start a journey that needs observation → it pauses; restart the server; approve → it resumes and completes against the same token.">_
+- Start a journey that needs read-only worker observation. Without a valid approval token, the graph pauses with `approval_interrupt.status = "interrupted"` and a checkpoint pending at `approval_pause`.
+- Approve the generated OpenClaw proposal task, then resume with the approval token; the graph consumes the token once and captures source pointers through the normal evidence node.
+- Open `/mvp?phase=phase-55-native-hitl` to verify the user-facing shell, run-state panel, OpenClaw panel, and FastAPI connector check.
 
 Known risks or gaps:
-- Durable checkpoint PHI-at-rest (coordinate with Phase 50). Confirm no raw portal text in checkpoints.
+- File-backed graph checkpoints can contain graph state and should remain in the private config path with 0600-style local permissions when enabled; production encrypted-at-rest policy remains a deployment hardening concern.
+- Compatibility helper is test-oriented and auto-approves only fixture evidence to preserve old tests through the real graph approval contract.

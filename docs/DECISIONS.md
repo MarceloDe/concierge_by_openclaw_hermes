@@ -2766,3 +2766,17 @@ This makes the user experience useful without weakening healthcare safety. The s
 
 Consequences:
 Missing trusted evidence now yields `workflow_outcome: best_effort_degraded` instead of old terminal trusted-citation blocker copy. Tests and public chat contracts now assert the new degraded answer and AI2UI option block. Phase 55 must still make the human-in-the-loop pause durable through native LangGraph interrupt/resume.
+
+## 2026-06-22 - Phase 55 Makes HITL Native And Deletes The Dual Runtime
+
+Problem:
+Phase 54 kept journeys alive when evidence was missing, but approval pauses were still modeled as returned state rather than a native graph pause. The repository also still carried the old `engine.mjs` linear runtime and the deprecated `maybe_model` side node, which made runtime ownership ambiguous.
+
+Decision:
+Make LangGraph the only orchestration runtime. Add a `plan_journey` node, add native `interrupt()`/`Command.resume` approval pause/resume, add a file-backed checkpointer option for durable proof, remove `maybe_model`, and delete `engine.mjs`. Preserve compatibility only as a thin helper that delegates to LangGraph and uses the real read-only approval contract.
+
+Rationale:
+Human-in-the-loop approval needs to be durable, observable, and resumable without creating a second authorization system. The existing approval token remains the authority, while the LangGraph interrupt provides the control-flow pause. Removing the old engine avoids divergent behavior and makes future graph topology tests meaningful.
+
+Consequences:
+`compose_response` is now the terminal answer path. `model_invocation` is retired for the old side-node; live model proof lives in structured intent, orchestration decision, sourced answer composition, and PEMS paths. Native graph checkpointing uses the LangGraph root checkpoint namespace for resume correctness, while app-facing compatibility config still exposes the historical `brainstyworkers` namespace where needed.

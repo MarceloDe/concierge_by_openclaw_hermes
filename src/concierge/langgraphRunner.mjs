@@ -1,4 +1,4 @@
-import { Annotation, END, MemorySaver, START, StateGraph } from "@langchain/langgraph";
+import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
 import {
@@ -30,7 +30,6 @@ import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./ru
 import { checkpointSession } from "./sessionManager.mjs";
 import { classifyHealthcareIntent } from "./structuredIntentClassifier.mjs";
 import { WORKFLOWS } from "./types.mjs";
-import { selectModelPayload } from "./modelPayloadPolicy.mjs";
 import { composeUrgentEscalationResponse, createHumanHandoffItem } from "./humanHandoffs.mjs";
 import { loadOpenClawSkillArtifact } from "./openclawSkillArtifacts.mjs";
 import { recordOpenClawSkillInvocationProposal, validateOpenClawEnvelopeAgainstSkill } from "./openclawSkillInvocation.mjs";
@@ -57,6 +56,7 @@ import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComp
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
+import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
   finalizeWorkerContinuationDispatch,
@@ -65,7 +65,7 @@ import {
 
 export const LANGGRAPH_RUNNER_VERSION = "2026-06-01.langgraph-runner.phase10s-ai2ui-modes.v1";
 
-const checkpointer = new MemorySaver();
+const { checkpointer, readiness: graphCheckpointerReadiness } = createGraphCheckpointer();
 const activeStores = new Map();
 
 function field(defaultValue = null) {
@@ -124,7 +124,9 @@ const BrainstyState = Annotation.Root({
   worker_continuation: field(null),
   human_handoff: field(null),
   approval_resume: field(null),
+  approval_interrupt: field(null),
   evidence_observation: field(null),
+  journey_plan: field(null),
   case_state: field(null),
   continuous_intelligence: field(null),
   sourced_answer: field(null),
@@ -1169,6 +1171,58 @@ async function maybeComposeLiveSourcedAnswer(state, deterministicAnswer) {
   }
 }
 
+async function planJourneyNode(state) {
+  const existingPlan = state.journey_decisions?.at?.(-1) ?? planJourneyFromIntent(state.structured_intent?.reasoning ?? {});
+  const neededEvidence = [
+    ...(state.structured_intent?.reasoning?.missingEvidence ?? []),
+    ...(state.workflow_route?.missingDataPointers ?? [])
+  ]
+    .filter(Boolean)
+    .map((item) => String(item));
+  const hasUserEvidence =
+    state.raw_message?.browserSnapshot ||
+    state.raw_message?.portalPageSnapshots?.length ||
+    state.raw_message?.uploadedDocuments?.length ||
+    state.raw_message?.approvalToken;
+  const journeyPlan = {
+    version: "2026-06-21.phase55-native-hitl-journey-plan.v1",
+    workflow: state.workflow,
+    routeReason: state.route_reason,
+    primaryIntent: state.structured_intent?.primary_intent ?? null,
+    steps: [
+      "resolve_openclaw_skill",
+      "prepare_bounded_worker_contract",
+      "observe_evidence_or_interrupt_for_approval",
+      "compose_sourced_or_best_effort_answer"
+    ],
+    neededEvidence,
+    evidenceAvailableNow: Boolean(hasUserEvidence || state.source_pointers?.length),
+    degradeIfMissing: true,
+    boundedClarificationLoop: {
+      enabled: true,
+      maxPrompts: 1,
+      reason: "Only evidence insufficiency may degrade; safety refusals remain deterministic hard stops."
+    },
+    hitl: {
+      nativeLangGraphInterrupt: true,
+      approvalTokenAuthorizationOfRecord: true,
+      approvalScope: "read_only_observation"
+    },
+    priorPlan: existingPlan
+  };
+  return {
+    journey_plan: journeyPlan,
+    journey_decisions: [journeyPlan],
+    proof: appendProof(state, "plan_journey", {
+      workflow: journeyPlan.workflow,
+      stepCount: journeyPlan.steps.length,
+      neededEvidenceCount: journeyPlan.neededEvidence.length,
+      degradeIfMissing: journeyPlan.degradeIfMissing,
+      nativeLangGraphInterrupt: journeyPlan.hitl.nativeLangGraphInterrupt
+    })
+  };
+}
+
 async function skillResolverNode(state) {
   if (state.final_response) {
     return {
@@ -1600,6 +1654,13 @@ async function evidenceObservationNode(state) {
       evidence_observation: {
         status: approvalResume.status,
         reason: approvalResume.reason,
+        taskId: approvalTaskId ?? null,
+        workflow: state.workflow,
+        approvalScope,
+        allowedAction,
+        candidateId: approvedDocumentCandidate?.candidateId ?? null,
+        candidateUrl: approvedDocumentCandidate?.url ?? null,
+        nativeLangGraphInterrupt: Boolean(approvalTaskId),
         actionsTaken: [],
         sourcePointers: []
       },
@@ -2429,6 +2490,61 @@ async function evidenceObservationNode(state) {
   };
 }
 
+async function approvalInterruptNode(state) {
+  const evidence = state.evidence_observation ?? {};
+  const payload = {
+    type: "read_only_observation_approval",
+    version: "2026-06-21.phase55-native-langgraph-interrupt.v1",
+    sessionId: state.session_id,
+    userId: state.user_id,
+    workflow: state.workflow,
+    taskId: evidence.taskId ?? state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
+    approvalScope: evidence.approvalScope ?? "read_only_observation",
+    allowedAction: evidence.allowedAction ?? "read_only_observation",
+    candidateId: evidence.candidateId ?? null,
+    candidateUrl: evidence.candidateUrl ?? null,
+    reason: evidence.reason ?? state.approval_resume?.reason ?? "Read-only worker observation requires explicit human approval.",
+    terminalOutcome: "not_possible_policy_or_approval_block",
+    blockedActions: [
+      "credential_entry",
+      "captcha_or_2fa_bypass",
+      "form_submit",
+      "external_write_action",
+      "payer_contact"
+    ],
+    approvalTokenAuthorizationOfRecord: true,
+    resumeCommand: {
+      kind: "Command.resume",
+      expectedValue: "approvalToken"
+    }
+  };
+  const resumed = interrupt(payload);
+  const approvalToken =
+    typeof resumed === "string"
+      ? resumed
+      : typeof resumed?.approvalToken === "string"
+        ? resumed.approvalToken
+        : null;
+  return {
+    raw_message: {
+      ...(state.raw_message ?? {}),
+      approvalTaskId: payload.taskId,
+      approvalToken
+    },
+    approval_interrupt: {
+      status: "resumed",
+      payload,
+      resumedAt: nowIso(),
+      approvalTokenReceived: Boolean(approvalToken)
+    },
+    proof: appendProof(state, "approval_interrupt", {
+      status: "resumed",
+      taskId: payload.taskId,
+      approvalTokenReceived: Boolean(approvalToken)
+    })
+  };
+}
+
 async function caseStateShadowNode(state) {
   const caseState = buildCaseState({
     userId: state.user_id,
@@ -2768,108 +2884,6 @@ async function composeResponseNode(state) {
   };
 }
 
-async function maybeModelNode(state) {
-  if (state.policy_result?.urgentEscalationRequired) {
-    return {
-      model_invocation: {
-        mode: "skipped_urgent_emergency_escalation",
-        provider: "openai",
-        model: process.env.OPENAI_MODEL || "gpt-5-mini"
-      },
-      proof: appendProof(state, "model_invocation", { mode: "skipped_urgent_emergency_escalation" })
-    };
-  }
-  const useLiveModel = state.raw_message?.useLiveModel !== false;
-  const selection = selectModelForStep("maybe_model");
-  if (!useLiveModel) {
-    return {
-      model_invocation: {
-        mode: "not_requested",
-        provider: "openai",
-        model: selection.model,
-        baseURL: selection.baseURL,
-        modelTier: selection,
-        deprecated: true
-      },
-      proof: appendProof(state, "model_invocation", { mode: "not_requested" })
-    };
-  }
-  if (!process.env.OPENAI_API_KEY) {
-    return {
-      model_invocation: {
-        mode: "skipped_missing_openai_api_key",
-        provider: "openai",
-        model: selection.model,
-        baseURL: selection.baseURL,
-        modelTier: selection,
-        deprecated: true
-      },
-      proof: appendProof(state, "model_invocation", { mode: "skipped_missing_openai_api_key" })
-    };
-  }
-  const { model, baseURL } = selection;
-  const payloadSelection = selectModelPayload(state, {
-    payloadMode: state.raw_message?.payloadMode ?? "phi_allowed_identifier_masked_reasoning"
-  });
-  const { llm } = createTieredChatModel("maybe_model", { timeout: 60000, maxRetries: 1 });
-  const messages = [
-    {
-      role: "system",
-      content:
-        "You are Brainstyworkers' healthcare insurance reasoning model inside a LangGraph-orchestrated system. The patient-approved product scope allows insurance, portal, and clinical context in this external LLM call. Use it only for insurance navigation reasoning. Keep patient name, SSN, email, member ID, subscriber ID, and subscription number masked as database pointers. Evaluate workflow routing, decision points, approval gates, and OpenClaw worker job contracts, but do not claim external action was performed. LangGraph is the workflow master; OpenClaw workers may only execute assigned jobs after approval. Do not provide diagnosis, treatment, dosage, or clinical care decisions."
-    },
-    {
-      role: "user",
-      content: JSON.stringify(payloadSelection.payload)
-    }
-  ];
-  const store = activeStores.get(state.session_id);
-  const payloadObservation = store
-    ? await recordOutboundPayloadObservation(store, {
-        sessionId: state.session_id,
-        payload: {
-          model,
-          baseURL,
-          messages
-        },
-        payloadType: "openai_chat_messages",
-        destination: "openai",
-        policyMode: payloadSelection.mode,
-        user: userFromContext(state.context_packet)
-      })
-    : null;
-  const response = await llm.invoke(messages);
-  return {
-    model_invocation: {
-      mode: "openai_chatopenai_invoked",
-      provider: "openai",
-      model,
-      baseURL,
-      modelTier: selection,
-      deprecated: true,
-      payloadMode: payloadSelection.mode,
-      externalPhiDisclosureAllowed: payloadSelection.mode === "phi_allowed_identifier_masked_reasoning",
-      outboundPayloadObservation: payloadObservation
-        ? {
-            eventType: "outbound_payload_observed",
-            payloadHash: payloadObservation.payloadHash,
-            containsPortalText: payloadObservation.containsPortalText,
-            containsDirectIdentifier: payloadObservation.containsDirectIdentifier,
-            containsSourcePointers: payloadObservation.containsSourcePointers,
-            enforcementMode: payloadObservation.enforcementMode
-          }
-        : null,
-      response: response.content
-    },
-    proof: appendProof(state, "model_invocation", {
-      mode: "openai_chatopenai_invoked",
-      model,
-      baseURL,
-      payloadMode: payloadSelection.mode
-    })
-  };
-}
-
 async function publishLangGraphLifecycleEvents(store, { user, session, state, productMemoryRetain }) {
   const common = {
     userId: user.id,
@@ -2980,12 +2994,13 @@ export function createBrainstyLangGraph() {
     .addNode("classify_intent", structuredIntentNode)
     .addNode("llm_decision", llmOrchestrationDecisionNode)
     .addNode("workflow_router", workflowRouterNode)
+    .addNode("plan_journey", planJourneyNode)
     .addNode("skill_resolver", skillResolverNode)
     .addNode("workflow_executor", workflowExecutorNode)
     .addNode("observe_evidence", evidenceObservationNode)
+    .addNode("approval_pause", approvalInterruptNode)
     .addNode("case_state_shadow", caseStateShadowNode)
     .addNode("compose_response", composeResponseNode)
-    .addNode("maybe_model", maybeModelNode)
     .addEdge(START, "input_policy")
     .addConditionalEdges("input_policy", routeAfterInputPolicy, {
       workflow_router: "workflow_router",
@@ -2996,16 +3011,18 @@ export function createBrainstyLangGraph() {
     .addEdge("llm_decision", "workflow_router")
     .addConditionalEdges("workflow_router", routeAfterWorkflowRouter, {
       compose_response: "compose_response",
-      skill_resolver: "skill_resolver"
+      plan_journey: "plan_journey"
     })
+    .addEdge("plan_journey", "skill_resolver")
     .addEdge("skill_resolver", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
     .addConditionalEdges("observe_evidence", routeAfterEvidenceObservation, {
+      approval_pause: "approval_pause",
       case_state_shadow: "case_state_shadow"
     })
+    .addEdge("approval_pause", "observe_evidence")
     .addEdge("case_state_shadow", "compose_response")
-    .addEdge("compose_response", "maybe_model")
-    .addEdge("maybe_model", END)
+    .addEdge("compose_response", END)
     .compile({ checkpointer });
 }
 
@@ -3018,16 +3035,18 @@ export function routeAfterWorkflowRouter(state) {
   if (state.policy_result?.urgentEscalationRequired || state.policy_result?.allowed === false) return "compose_response";
   if (refusalForIntent(state.intent)) return "compose_response";
   if (["urgent_handoff_created", "blocked"].includes(state.workflow_outcome)) return "compose_response";
-  return state.final_response ? "compose_response" : "skill_resolver";
+  return state.final_response ? "compose_response" : "plan_journey";
 }
 
-export function routeAfterEvidenceObservation() {
+export function routeAfterEvidenceObservation(state) {
+  if (state.evidence_observation?.nativeLangGraphInterrupt && !state.approval_resume?.ok) return "approval_pause";
   return "case_state_shadow";
 }
 
 export function describeBrainstyLangGraphTopology() {
   return {
     version: LANGGRAPH_RUNNER_VERSION,
+    checkpointer: graphCheckpointerReadiness,
     conditionalEdges: [
       {
         from: "input_policy",
@@ -3036,29 +3055,70 @@ export function describeBrainstyLangGraphTopology() {
       },
       {
         from: "workflow_router",
-        cases: ["compose_response", "skill_resolver"],
+        cases: ["compose_response", "plan_journey"],
         proves: ["policy_response", "approval_pending", "journey_execution"]
       },
       {
         from: "observe_evidence",
-        cases: ["case_state_shadow"],
-        proves: ["evidence_blocked", "evidence_found", "case_state_shadow"]
+        cases: ["approval_pause", "case_state_shadow"],
+        proves: ["native_hitl_interrupt", "evidence_blocked", "evidence_found", "case_state_shadow"]
       }
     ],
     linearEdges: [
       ["recall_context", "classify_intent"],
       ["classify_intent", "llm_decision"],
       ["llm_decision", "workflow_router"],
+      ["plan_journey", "skill_resolver"],
       ["skill_resolver", "workflow_executor"],
       ["workflow_executor", "observe_evidence"],
+      ["approval_pause", "observe_evidence"],
       ["case_state_shadow", "compose_response"],
-      ["compose_response", "maybe_model"]
+      ["compose_response", "__end__"]
     ],
-    finalResponseBranchingMechanism: "policy_and_workflow_state_first_with_final_response_backward_compatibility"
+    finalResponseBranchingMechanism: "reasoning_orchestrator_with_native_hitl_interrupts_and_terminal_compose_response"
   };
 }
 
 const graph = createBrainstyLangGraph();
+
+function hasPendingApprovalInterrupt(snapshot) {
+  if (!snapshot) return false;
+  if (Array.isArray(snapshot.next) && snapshot.next.includes("approval_pause")) return true;
+  return Boolean(snapshot.tasks?.some((task) => task?.name === "approval_pause" || task?.interrupts?.length));
+}
+
+function interruptedStatePatch(state) {
+  const interrupts = Array.isArray(state.__interrupt__) ? state.__interrupt__ : state.__interrupt__ ? [state.__interrupt__] : [];
+  if (!interrupts.length) return state;
+  const payload = interrupts[0]?.value ?? interrupts[0] ?? {};
+  return {
+    ...state,
+    approval_interrupt: {
+      status: "interrupted",
+      payload,
+      interruptedAt: nowIso(),
+      approvalTokenAuthorizationOfRecord: true
+    },
+    workflow_outcome: "approval_pending_interrupt",
+    final_response:
+      state.final_response ??
+      "Read-only worker observation is paused for explicit human approval. Approve the bounded task to resume, or continue with a best-effort answer from available evidence.",
+    proof: mergeProof(state, "approval_interrupt", {
+      status: "interrupted",
+      taskId: payload.taskId ?? null,
+      approvalTokenAuthorizationOfRecord: true
+    })
+  };
+}
+
+export async function getBrainstyLangGraphCheckpointState({ threadId, checkpointNs = "" }) {
+  return graph.getState({
+    configurable: {
+      thread_id: threadId,
+      checkpoint_ns: checkpointNs
+    }
+  });
+}
 
 export async function runLangGraphOrchestration(store, { user, session, channel = "local_web_chat", userInput, rawMessage = {} }) {
   const graphTraceId = session.langgraph_thread_id ?? createId("lgtrace");
@@ -3125,9 +3185,13 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     worker_continuation: null,
     human_handoff: null,
     approval_resume: null,
+    approval_interrupt: null,
     evidence_observation: null,
+    journey_plan: null,
     case_state: null,
     continuous_intelligence: null,
+    sourced_answer: null,
+    degraded_answer: null,
     research_evidence: null,
     uploaded_document_context: null,
     browser_result: null,
@@ -3139,6 +3203,8 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     model_invocation: null,
     final_response: null,
     ai2ui_blocks: [],
+    journey_decisions: [],
+    answer_claims: [],
     should_remember: false,
     memory_summary: null,
     memory_type: null,
@@ -3149,7 +3215,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
   const config = {
     configurable: {
       thread_id: session.langgraph_thread_id,
-      checkpoint_ns: "brainstyworkers",
+      checkpoint_ns: "",
       user_id: user.id,
       session_id: session.id
     },
@@ -3161,7 +3227,15 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
   activeStores.set(session.id, store);
   let state;
   try {
-    state = await graph.invoke(initialState, config);
+    const checkpointState = rawMessage?.approvalToken ? await graph.getState(config).catch(() => null) : null;
+    const graphInput =
+      rawMessage?.approvalToken && hasPendingApprovalInterrupt(checkpointState)
+        ? new Command({
+            resume: rawMessage.approvalToken,
+            update: initialState
+          })
+        : initialState;
+    state = interruptedStatePatch(await graph.invoke(graphInput, config));
   } finally {
     activeStores.delete(session.id);
   }
@@ -3201,7 +3275,13 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     modelInvocationMode: state.model_invocation?.mode,
     continuousIntelligenceMode: state.continuous_intelligence?.mode ?? null,
     continuousIntelligenceGateScore: state.continuous_intelligence?.gateSummary?.score ?? null,
-    continuousIntelligencePemsTrusted: state.continuous_intelligence?.pems?.trusted ?? null
+    continuousIntelligencePemsTrusted: state.continuous_intelligence?.pems?.trusted ?? null,
+    graphCheckpointer: {
+      mode: graphCheckpointerReadiness.mode,
+      durable: graphCheckpointerReadiness.durable,
+      status: graphCheckpointerReadiness.status
+    },
+    nativeHitlInterrupt: state.approval_interrupt?.status ?? null
   });
   await checkpointSession(store, {
     session,
@@ -3231,6 +3311,13 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
             }
           : null,
         modelInvocationMode: state.model_invocation?.mode
+        ,
+        graphCheckpointer: {
+          mode: graphCheckpointerReadiness.mode,
+          durable: graphCheckpointerReadiness.durable,
+          status: graphCheckpointerReadiness.status
+        },
+        nativeHitlInterrupt: state.approval_interrupt?.status ?? null
       }
     },
     metadata: {

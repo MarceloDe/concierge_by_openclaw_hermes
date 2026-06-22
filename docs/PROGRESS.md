@@ -9074,3 +9074,32 @@ Verification:
 - API proof passed at `http://127.0.0.1:4220/api/chat` with `workflowOutcome=best_effort_degraded`, `blocked_no_trusted_research_evidence`, no source pointers, `degraded_answer_with_options`, all three user options, privacy copy present, no confident uncited claims, no external actions, and no medical advice.
 - In-app browser `/mvp` proof passed at `http://127.0.0.1:4220/mvp?phase=phase-54-graceful-degradation`: deterministic local chat rendered the `Best Effort Options` card, all three option rows, pending approval-gated concierge check, unverified evidence text, isolated-sandbox privacy copy, and 0 console errors.
 - Visual/API artifacts: `artifacts/phase54/graceful-degradation-api-proof.json`, `artifacts/phase54/graceful-degradation-mvp-proof.png`, and `artifacts/phase54/graceful-degradation-mvp-proof.json`.
+
+## Phase 55 Native LangGraph HITL And Runtime Collapse - 2026-06-22
+
+Goal:
+- Implement corrected migration Phase 49 as repo Phase 55: make human-in-the-loop approval a native LangGraph interrupt/resume path, add a durable checkpointer option, remove the deprecated `maybe_model` side node, and delete the old `engine.mjs` dual pipeline.
+
+Implemented:
+- Added `src/concierge/graphCheckpointer.mjs` with an in-memory default and a local file-backed `MemorySaver` for durable checkpoint proof.
+- Added a real `plan_journey` node between workflow routing and skill resolution; `journey_plan` now records workflow, steps, missing evidence, graceful degradation behavior, and HITL requirements.
+- Added `approval_pause` as a native LangGraph `interrupt()` node. Missing/invalid approval tokens pause the graph, and valid tokens resume with `Command({ resume, update })`.
+- Kept the approval token as the authorization of record: resume control flows back through `consumeReadOnlyObservationApproval`, preserving single-use, expiry, binding, and fail-closed behavior.
+- Removed `maybeModelNode` and the `compose_response -> maybe_model -> END` edge; answer composition now terminates at `compose_response -> END`.
+- Deleted `src/concierge/engine.mjs`; server trace reads now use `src/concierge/traceSession.mjs`, and legacy tests use `src/concierge/langgraphCompatibility.mjs`, which delegates through LangGraph and the approval contract.
+- Updated live OpenAI proof to assert the surviving observed LLM orchestration path instead of the retired side node.
+
+Safety:
+- Safety-invariant suites were not modified or loosened.
+- Emergency handoff, credential entry, medical advice, prompt injection, external/write actions, and payer contact remain deterministic hard stops.
+- User/browser worker actions still require explicit approval; the interrupt is a pause/resume mechanism, not authorization.
+- Compatibility fixture evidence now creates an explicit read-only approval before replaying through LangGraph.
+
+Verification:
+- Focused Phase 55 suite passed: `node --test src/tests/graph-topology.test.mjs src/tests/graph-interrupt-resume.test.mjs src/tests/langgraph-runner.test.mjs src/tests/approval-resume.test.mjs` reported 23/23 passing.
+- `npm run build` passed.
+- `npm run test:graph:topology` passed with 4/4 tests.
+- `npm run test:local` passed with 267 tests total, 265 passing, 2 expected live-gated OpenClaw skips, and 0 failures.
+- API proof passed and is saved at `artifacts/phase55/native-hitl-api-proof.json`: proposal -> native approval interrupt -> checkpoint pending `approval_pause` -> approval token -> `Command.resume` -> captured visible-page source pointers.
+- In-app browser `/mvp` proof passed at `http://127.0.0.1:4221/mvp?phase=phase-55-native-hitl`: session start worked, FastAPI facade on port 8001 was reachable and connected to Node 4221, OpenClaw and run-state panels rendered, and browser console error count was 0.
+- Visual artifacts: `artifacts/phase55/native-hitl-mvp-proof.png`, `artifacts/phase55/native-hitl-mvp-proof.json`, `artifacts/phase55/native-hitl-mvp-facade-connected-proof.png`, and `artifacts/phase55/native-hitl-mvp-facade-connected-proof.json`.
