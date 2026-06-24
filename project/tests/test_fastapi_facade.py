@@ -1463,6 +1463,114 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertIn("Aetna claim rows were observed", payload["final_response"])
         self.assertEqual(payload["langchain_answer"]["sourcePointerIds"], ["portal_page_snapshots/aetna-portal-claims:abc123"])
 
+    def test_steel_self_host_claims_observe_rejects_offsite_current_page_before_sources(self):
+        from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
+
+        async def fake_page(provider_self, *, navigate_url=None):
+            self.assertIsNone(navigate_url)
+            return {
+                "observation": {
+                    "url": "https://dashboard.clerk.com/apps",
+                    "title": "Dashboard | Clerk.com",
+                    "text": "Claims View All Claims Example Clinic For Test Member - June 1, 2026 Your share $12.34",
+                    "links": [{"text": "Claims", "href": "https://dashboard.clerk.com/claims"}],
+                }
+            }
+
+        provider = HostedRemoteBrowserSandboxProvider(ready=True)
+        with patch.object(HostedRemoteBrowserSandboxProvider, "_observe_steel_self_host_page", fake_page):
+            result = asyncio.run(provider.observe_claims_read_only(
+                browser_session={
+                    "browser_session_id": "hosted_browser_offsite",
+                    "provider_strategy": "steel-self-host",
+                },
+                user_message="summarize claims"
+            ))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "portal_page_required")
+        self.assertEqual(result["current_url_host"], "dashboard.clerk.com")
+        self.assertEqual(result["source_pointers"], [])
+        self.assertEqual(result["claim_rows"], [])
+        self.assertFalse(result["safety"]["allowedHost"])
+        self.assertFalse(result["safety"]["agentCredentialEntryAllowed"])
+
+    def test_steel_self_host_claims_observe_stops_on_aetna_log_in_hyphen_title(self):
+        from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
+
+        async def fake_page(provider_self, *, navigate_url=None):
+            self.assertIsNone(navigate_url)
+            return {
+                "observation": {
+                    "url": "https://health.aetna.com/",
+                    "title": "Aetna Member Log-in",
+                    "text": "Aetna Member Log-in Username Password Sign in Benefits Coverage footer links",
+                    "links": [{"text": "View All Claims", "href": "/claims"}],
+                }
+            }
+
+        provider = HostedRemoteBrowserSandboxProvider(ready=True)
+        with patch.object(HostedRemoteBrowserSandboxProvider, "_observe_steel_self_host_page", fake_page):
+            result = asyncio.run(provider.observe_claims_read_only(
+                browser_session={
+                    "browser_session_id": "hosted_browser_login_hyphen",
+                    "provider_strategy": "steel-self-host",
+                },
+                user_message="summarize claims"
+            ))
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "human_login_required")
+        self.assertEqual(result["source_pointers"], [])
+        self.assertEqual(result["claim_rows"], [])
+        self.assertIn("complete login", result["next_action"])
+        self.assertFalse(result["safety"]["agentCredentialEntryAllowed"])
+
+    def test_steel_self_host_claims_observe_follows_safe_same_site_claims_link(self):
+        from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider
+
+        calls = []
+
+        async def fake_page(provider_self, *, navigate_url=None):
+            calls.append(navigate_url)
+            if navigate_url:
+                return {
+                    "observation": {
+                        "url": "https://health.aetna.com/claims",
+                        "title": "Claims - Aetna",
+                        "text": "Claims View All Claims Status Processed Example Clinic For Test Member Visited on June 1, 2026 Your share $12.34 Submit a Claim",
+                        "links": [],
+                    }
+                }
+            return {
+                "observation": {
+                    "url": "https://health.aetna.com/",
+                    "title": "Home - Aetna",
+                    "text": "Member Home Benefits Coverage",
+                    "links": [{"text": "View All Claims", "href": "/claims"}],
+                }
+            }
+
+        provider = HostedRemoteBrowserSandboxProvider(ready=True)
+        with patch.object(HostedRemoteBrowserSandboxProvider, "_observe_steel_self_host_page", fake_page):
+            result = asyncio.run(provider.observe_claims_read_only(
+                browser_session={
+                    "browser_session_id": "hosted_browser_claims_link",
+                    "provider_strategy": "steel-self-host",
+                },
+                user_message="summarize claims"
+            ))
+
+        self.assertEqual(calls, [None, "https://health.aetna.com/claims"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "claims_observed_with_source_pointers")
+        self.assertTrue(result["claims_navigation_used"])
+        self.assertEqual(result["claim_rows"][0]["status"], "Processed")
+        self.assertEqual(result["claim_rows"][0]["description"], "Example Clinic")
+        self.assertEqual(result["claim_rows"][0]["share_amount"], 12.34)
+        self.assertTrue(result["safety"]["allowedHost"])
+        self.assertFalse(result["source_pointers"][0]["rawTextReturned"])
+
     def test_hosted_browser_sandbox_provider_adapter_contract_never_overclaims_live_provider(self):
         hosted_config = "project/deployment/browser-sandbox-provider.hosted-provider.example.json"
         fake_endpoint = "https://sandbox-provider.invalid/api"

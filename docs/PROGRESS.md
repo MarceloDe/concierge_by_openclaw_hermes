@@ -9728,7 +9728,7 @@ Next:
 
 # Phase 66-73 Follow-Up — React User App Read-Only Claim Scan
 
-Date: 2026-06-23
+Date: 2026-06-24
 
 RALPH state:
 
@@ -9791,3 +9791,40 @@ Proof:
 Remaining manual gate:
 
 - The live post-login claim scan still requires the user to sign in manually inside the AWS/Steel browser and return control. The worker can then observe only active approved payer portal pages in read-only mode.
+
+# Phase 66-73 Follow-Up — Remote Claims Observation Host And Link Hardening
+
+Date: 2026-06-23
+
+RALPH state:
+
+- Requirements: continue closing the real post-login read-only OpenClaw path without weakening the browser boundary. The worker must navigate read-only claim pages, understand visible claim rows, and pass source pointers to LangChain only after user-controlled login and return-control.
+- Architecture: keep FastAPI as the public connector, Steel as the remote browser provider, and Node/LangChain as the answer composer. Claims observation remains provider-side read-only extraction plus sourced final-answer composition.
+- Loop: audited `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe`, found three provider gaps, and patched them.
+- Prove: helper probe, FastAPI facade suite, `npm run build`, and `npm run test:local`.
+- Harden: non-payer pages with claim-like text now fail closed before source pointers are created; relative same-site Aetna claims links now resolve and can be followed read-only.
+
+Implemented:
+
+- Added a shared approved member-portal host helper in `project/api/browser_sandbox.py`.
+- Blocked `observe_claims_read_only()` when the current remote page is not on an approved Aetna member portal host.
+- Fixed same-site claims link resolution by replacing the invalid `httpx.URL(..., base=...)` pattern with `urllib.parse.urljoin`.
+- Tightened login-page detection so Aetna `Member Log-in` URL/title states stop as `human_login_required`, even when the login page contains benefits/coverage footer text.
+- Added direct provider tests proving:
+  - offsite current pages such as `dashboard.clerk.com` return `portal_page_required` with no source pointers or claim rows;
+  - Aetna `Member Log-in` pages return `human_login_required` with no source pointers or claim rows;
+  - a signed-in Aetna home page can follow a relative `/claims` link and extract a visible claim row in read-only mode.
+
+Proof:
+
+- `_safe_claims_link("/claims", "View All Claims", current_url="https://health.aetna.com/")` returns `https://health.aetna.com/claims`.
+- `_safe_claims_link("https://dashboard.clerk.com/claims", "View All Claims", current_url="https://health.aetna.com/")` returns `None`.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed: 60 tests, 2 expected skips.
+- `npm run build` passed.
+- `npm run test:local` passed: 331 tests, 329 passed, 2 expected live-gated skips.
+- Live default FastAPI facade proof created an AWS/Steel session through `POST /api/v1/browser/sessions` with `provider=hosted_remote`, `provider_strategy=steel-self-host`, `provider_live_connected=true`, `stream_transport=sse_cdp_jpeg_frames`, and `navigation_status=remote_cdp_navigated`.
+- Live `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe` against the Aetna login page returned `status=human_login_required`, `source_pointer_count=0`, `claim_row_count=0`, and `agentCredentialEntryAllowed=false`.
+
+Remaining manual gate:
+
+- Actual post-login proof still needs the user to manually sign in inside the AWS/Steel browser, pass any login/2FA/captcha challenge, return control, and run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
