@@ -10,6 +10,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from project.api.auth import create_access_token
+from project.api.local_env import load_local_env_once
 from project.api.main import create_app
 
 
@@ -774,6 +775,20 @@ class FakeNodeRuntimeClient:
                 },
                 "actionsTaken": []
             }
+        if path == "/api/portal-observation/final-answer":
+            observation = body.get("observation", {})
+            pointers = observation.get("source_pointers", [])
+            pointer_ids = [f"{pointer.get('table', 'source')}/{pointer.get('id')}" for pointer in pointers]
+            return {
+                "version": "2026-06-22.remote-portal-observation-answer.v1",
+                "status": "remote_portal_validated_llm_sourced_answer_used" if pointer_ids else "remote_portal_deterministic_fallback_no_source_pointer",
+                "ok": True,
+                "mode": "validated_llm_sourced_composer" if pointer_ids else "deterministic_fallback",
+                "usedModelComposedText": bool(pointer_ids),
+                "finalResponse": "Aetna claim rows were observed with cited portal evidence." if pointer_ids else "User login is required before read-only claims observation.",
+                "sourcePointerIds": pointer_ids,
+                "validation": {"valid": bool(pointer_ids), "issues": [] if pointer_ids else ["source_pointer_required"]}
+            }
         return {"ok": True, "path": path, "userId": body.get("userId")}
 
     async def patch_json(self, path, body):
@@ -828,6 +843,53 @@ class FastApiFacadeTest(unittest.TestCase):
 
     def bearer_headers(self, user_id, *, extra_claims=None):
         return {"Authorization": f"Bearer {create_access_token(user_id, extra_claims=extra_claims)}"}
+
+    def test_local_env_loader_applies_missing_steel_facade_config_without_overriding_explicit_env(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".env.local", delete=False) as handle:
+            handle.write("\n".join([
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME=steel-self-host",
+                "WEFELLA_BROWSER_SANDBOX_CDP_URL=ws://127.0.0.1:9223",
+                "WEFELLA_BROWSER_SANDBOX_STEEL_API_URL=http://127.0.0.1:3000",
+                "WEFELLA_BROWSER_SANDBOX_STEEL_DEV_DIRECT=1",
+                "WEFELLA_NODE_RUNTIME_URL=http://127.0.0.1:4226"
+            ]))
+            env_path = handle.name
+
+        keys = [
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME",
+            "WEFELLA_BROWSER_SANDBOX_CDP_URL",
+            "WEFELLA_BROWSER_SANDBOX_STEEL_API_URL",
+            "WEFELLA_BROWSER_SANDBOX_STEEL_DEV_DIRECT",
+            "WEFELLA_NODE_RUNTIME_URL"
+        ]
+        previous = {key: os.environ.get(key) for key in keys}
+        try:
+            for key in keys:
+                os.environ.pop(key, None)
+            os.environ["WEFELLA_NODE_RUNTIME_URL"] = "http://explicit-node-runtime.test"
+
+            result = load_local_env_once(env_path)
+
+            self.assertTrue(result["loaded"])
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_PROVIDER"], "hosted_remote")
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME"], "steel-self-host")
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_STEEL_API_URL"], "http://127.0.0.1:3000")
+            self.assertEqual(os.environ["WEFELLA_NODE_RUNTIME_URL"], "http://explicit-node-runtime.test")
+            self.assertNotIn("WEFELLA_NODE_RUNTIME_URL", result["applied_keys"])
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            try:
+                os.unlink(env_path)
+            except FileNotFoundError:
+                pass
 
     def valid_visual_ocr_manifest(self):
         return {
@@ -1176,6 +1238,230 @@ class FastApiFacadeTest(unittest.TestCase):
         self.assertFalse(hosted_check["hostedProviderResolver"]["liveVerified"])
         self.assertEqual(resolver_score["score"], 50)
         self.assertEqual(hosted_score["score"], 0)
+
+    def test_hosted_browser_sandbox_phase30_remote_host_allows_read_only_session(self):
+        config = {
+            "schemaVersion": "brainstyworkers.browser-sandbox-provider.v1",
+            "provider": "hosted_remote",
+            "environment": "production-candidate",
+            "endpointRef": "env:WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL",
+            "secretSource": "managed_env",
+            "transport": {
+                "tls": True,
+                "stream": "webrtc_or_sse_frames",
+                "inputRelay": "approval_gated_human_only",
+                "screenshot": "provider_screenshot_api",
+                "ocrCaption": "provider_or_local_ocr"
+            },
+            "adapter": {
+                "mode": "hosted_provider",
+                "providerLiveConnected": True,
+                "contractHarnessOnly": False
+            },
+            "auth": {"tokenRef": "env:WEFELLA_BROWSER_SANDBOX_API_TOKEN"},
+            "sessionPolicy": {
+                "userScoped": True,
+                "sessionScoped": True,
+                "ephemeralBrowser": True,
+                "maxSessionMinutes": 30,
+                "idleTimeoutMinutes": 5,
+                "recordFrames": False,
+                "persistRawOcrText": False
+            },
+            "approvalPolicy": {
+                "requiresReadOnlyApproval": True,
+                "requiresHumanTakeoverApproval": True,
+                "agentCredentialEntryAllowed": False,
+                "externalWriteActionsAllowed": False
+            },
+            "networkPolicy": {
+                "allowlistRequired": True,
+                "offsiteFailClosed": True,
+                "credentialPagesUserOnly": True
+            },
+            "audit": {
+                "emitSessionLifecycleEvents": True,
+                "emitTakeoverEvents": True,
+                "redactInputValues": True,
+                "redactFrameContent": True
+            }
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(config, handle)
+            config_path = handle.name
+
+        provider_calls = []
+
+        async def fake_provider_json(provider_self, *, path, method="POST", body=None):
+            provider_calls.append((path, method, body or {}))
+            if path == "v1/health" and method == "GET":
+                return {"status_code": 200, "payload": {"status": "ok"}}
+            self.assertEqual(path, "v1/sessions")
+            self.assertEqual(method, "POST")
+            self.assertIn("sessionId", body)
+            self.assertNotEqual(body["sessionId"], "session_phase30_remote")
+            return {
+                "status_code": 200,
+                "payload": {
+                    "id": body["sessionId"],
+                    "status": "idle",
+                    "websocketUrl": "wss://steel.example.invalid/devtools/browser/ref",
+                    "debugUrl": "https://steel.example.invalid/v1/sessions/debug",
+                    "sessionViewerUrl": "https://viewer.example.invalid/v1/sessions/provider-live-session-ref-redacted/viewer",
+                    "dimensions": {"width": 1280, "height": 720}
+                }
+            }
+
+        async def fake_navigate(provider_self, *, target_url):
+            self.assertEqual(target_url, "https://example.com")
+            return {"ok": True, "currentUrl": "https://example.com/", "currentTitle": "Example Domain"}
+
+        with patch.dict(os.environ, {
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER": "hosted_remote",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE": config_path,
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL": "https://steel.example.invalid",
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN": "provider-token-redacted",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME": "steel-self-host",
+            "WEFELLA_BROWSER_SANDBOX_VIEWER_URL": "https://viewer.example.invalid/v1/sessions/{id}/viewer",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFIED": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_LIVE_VERIFICATION_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_WEBRTC_SIGNALING_READY": "1",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_VISUAL_OCR_REPLAY_READY": "1"
+        }, clear=True), patch(
+            "project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider._provider_json",
+            fake_provider_json
+        ), patch(
+            "project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider._navigate_steel_self_host_session",
+            fake_navigate
+        ):
+            app = create_app(inline_tasks=True)
+            app.state.node_client = FakeNodeRuntimeClient()
+            client = TestClient(app)
+            headers = self.bearer_headers("v1_phase30_remote_user")
+            browser_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_phase30_remote",
+                    "target_url": "https://example.com",
+                    "provider": "hosted_remote",
+                    "options": {"targetUrlRef": "approved-example-ref"}
+                }
+            )
+
+        self.assertEqual(browser_response.status_code, 200)
+        browser = browser_response.json()
+        self.assertEqual(browser["provider"], "hosted_remote")
+        self.assertEqual(browser["readiness"]["status"], "hosted_browser_sandbox_provider_ready")
+        self.assertTrue(browser["readiness"]["providerLiveConnected"])
+        self.assertEqual(browser["screencast"]["status"], "hosted_provider_session_created")
+        self.assertTrue(browser["screencast"]["providerLiveConnected"])
+        self.assertTrue(browser["screencast"]["sessionViewerUrl"])
+        self.assertFalse(browser["ocr_caption"]["rawOcrTextReturned"])
+        self.assertEqual([call[0] for call in provider_calls], ["v1/health", "v1/sessions"])
+        self.assertEqual(browser["readiness"]["navigationStatus"], "remote_cdp_navigated")
+        self.assertEqual(browser["current_url"], "https://example.com/")
+        self.assertEqual(browser["navigation"]["status"], "remote_cdp_navigated")
+        self.assertEqual(browser["screencast"]["frameSource"], "steel_self_host_cdp_screenshot_stream")
+        self.assertEqual(browser["screencast"]["streamTransport"], "sse_cdp_jpeg_frames")
+
+    def test_steel_self_host_claims_observe_stops_on_login_page(self):
+        async def fake_observe(provider_self, *, browser_session, user_message=None):
+            return {
+                "ok": False,
+                "status": "human_login_required",
+                "browser_session_id": browser_session.get("browser_session_id"),
+                "current_url_host": "health.aetna.com",
+                "current_title": "Aetna Member Log-in",
+                "source_pointers": [],
+                "claim_rows": [],
+                "actions_taken": ["steel_self_host_read_only_observation", "login_page_detected_stop"],
+                "next_action": "User must take over, complete login/captcha/2FA, then return control before OpenClaw observes claims.",
+                "safety": {"readOnly": True, "agentCredentialEntryAllowed": False, "formSubmitAllowed": False, "rawPortalTextReturned": False}
+            }
+
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        app.state.browser_sessions["hosted_browser_login"] = {
+            "browser_session_id": "hosted_browser_login",
+            "provider": "hosted_remote",
+            "provider_strategy": "steel-self-host",
+            "session_id": "session_login",
+            "user_id": "v1_login_claims_user"
+        }
+        with patch("project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider.observe_claims_read_only", fake_observe):
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/browser/sessions/hosted_browser_login/openclaw/claims-observe",
+                headers=self.bearer_headers("v1_login_claims_user"),
+                json={"message": "check claims after login", "useLiveModel": True}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "human_login_required")
+        self.assertEqual(payload["source_pointers"], [])
+        self.assertFalse(payload["safety"]["agentCredentialEntryAllowed"])
+        self.assertIn("User login is required", payload["final_response"])
+
+    def test_steel_self_host_claims_observe_returns_source_pointer_answer(self):
+        async def fake_observe(provider_self, *, browser_session, user_message=None):
+            return {
+                "ok": True,
+                "status": "claims_observed_with_source_pointers",
+                "browser_session_id": browser_session.get("browser_session_id"),
+                "current_url_host": "member.aetna.com",
+                "current_title": "Claims",
+                "source_pointers": [
+                    {
+                        "table": "portal_page_snapshots",
+                        "id": "aetna-portal-claims:abc123",
+                        "sourceUrl": "aetna-portal://member.aetna.com/claims",
+                        "summary": "Read-only Aetna claims observation; 1 claim row detected.",
+                        "evidenceFields": [{"label": "Claim row", "value": "Example Clinic | June 1, 2026 | share $12.34"}],
+                        "rawTextReturned": False
+                    }
+                ],
+                "claim_rows": [
+                    {
+                        "claim_ref": "portal-claim:abc123",
+                        "description": "Example Clinic",
+                        "service_date": "June 1, 2026",
+                        "share_amount": 12.34
+                    }
+                ],
+                "actions_taken": ["steel_self_host_read_only_observation", "structured_claim_rows_extracted"],
+                "safety": {"readOnly": True, "agentCredentialEntryAllowed": False, "formSubmitAllowed": False, "rawPortalTextReturned": False}
+            }
+
+        app = create_app(inline_tasks=True)
+        app.state.node_client = FakeNodeRuntimeClient()
+        app.state.browser_sessions["hosted_browser_claims"] = {
+            "browser_session_id": "hosted_browser_claims",
+            "provider": "hosted_remote",
+            "provider_strategy": "steel-self-host",
+            "session_id": "session_claims",
+            "user_id": "v1_observed_claims_user"
+        }
+        with patch("project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider.observe_claims_read_only", fake_observe):
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/browser/sessions/hosted_browser_claims/openclaw/claims-observe",
+                headers=self.bearer_headers("v1_observed_claims_user"),
+                json={"message": "summarize my claims", "useLiveModel": True}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "claims_observed_with_source_pointers")
+        self.assertEqual(payload["claim_rows"][0]["description"], "Example Clinic")
+        self.assertEqual(payload["source_pointers"][0]["table"], "portal_page_snapshots")
+        self.assertFalse(payload["source_pointers"][0]["rawTextReturned"])
+        self.assertIn("Aetna claim rows were observed", payload["final_response"])
+        self.assertEqual(payload["langchain_answer"]["sourcePointerIds"], ["portal_page_snapshots/aetna-portal-claims:abc123"])
 
     def test_hosted_browser_sandbox_provider_adapter_contract_never_overclaims_live_provider(self):
         hosted_config = "project/deployment/browser-sandbox-provider.hosted-provider.example.json"

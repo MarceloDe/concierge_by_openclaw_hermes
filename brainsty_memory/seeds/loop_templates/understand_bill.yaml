@@ -1,0 +1,20 @@
+template_id: ralph-understand-bill-v1
+target_goal: understand_bill
+version: 1
+description: Explain a patient bill using uploaded bill evidence, claim/EOB facts, plan documents, and safe public research when needed.
+entry_stage_id: extract_bill_facts
+exit_predicate_text: bill explanation includes verified charges, unknowns, next actions, and source pointers.
+max_iterations: 10
+stages:
+  - ordinal: 1
+    stage_id: extract_bill_facts
+    tools: [patient_interview]
+    verifiers: [bill_pointer_available]
+  - ordinal: 2
+    stage_id: reconcile_claim_or_eob
+    tools: [payer_portal_consult, coverage_doc_lookup]
+    verifiers: [current_evidence_preferred_over_memory]
+  - ordinal: 3
+    stage_id: compose_bill_answer
+    tools: [calculator]
+    verifiers: [answer_claims_cited]

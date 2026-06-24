@@ -1,11 +1,12 @@
 import { DATABASE_ADAPTER_VERSION, DEFAULT_DB_PATH } from "./database.mjs";
+import { resolveDatabaseDriver } from "./databaseFactory.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile, redactDatabaseUrl } from "./databaseSecretProfile.mjs";
 import { POSTGRES_ADAPTER_VERSION } from "./postgresStore.mjs";
 
 export const STORAGE_READINESS_VERSION = "2026-06-15.storage-readiness.v1";
 
 export function getStorageReadiness({ deployment = null, env = process.env } = {}) {
-  const runtimeDriver = String(env.BRAINSTY_DB_DRIVER ?? "sqlite").toLowerCase();
+  const runtimeDriver = resolveDatabaseDriver(env);
   const databaseTarget = String(env.BRAINSTY_DATABASE_TARGET ?? "postgres").toLowerCase();
   const databaseUrl = env.BRAINSTY_DATABASE_URL ?? "";
   const databaseSecretProfile = evaluateDatabaseSecretProfile(env);

@@ -14,16 +14,20 @@
       .remote-browser__bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }
       .remote-browser__title { font-size: .85rem; color: #9fb0c8; }
       .remote-browser__badge { font-size: .72rem; font-weight: 600; color: #0b0e14; background: var(--warn); padding: 3px 8px; border-radius: 999px; }
-      .remote-browser__stage { position: relative; background: #000; aspect-ratio: 3 / 4; display: flex; align-items: center; justify-content: center; }
-      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; touch-action: none; user-select: none; -webkit-user-select: none; }
+      .remote-browser__stage { position: relative; background: #000; aspect-ratio: 16 / 9; min-height: clamp(260px, 58vw, 560px); display: flex; align-items: center; justify-content: center; cursor: crosshair; }
+      .remote-browser__stage:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
       .remote-browser__stage.is-live-control { outline: 2px solid var(--warn); outline-offset: -2px; }
       .remote-browser__controls { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+      .remote-browser__nav { display: flex; gap: 8px; padding: 0 12px 10px; }
       .remote-browser__relay { display: flex; gap: 8px; padding: 0 12px 10px; }
-      .remote-browser__relay input { flex: 1; padding: 12px; font-size: 16px; border-radius: 10px; border: 1px solid var(--line); background: #0b0e14; color: var(--fg); }
+      .remote-browser__relay input, .remote-browser__nav input { flex: 1; padding: 12px; font-size: 16px; border-radius: 10px; border: 1px solid var(--line); background: #0b0e14; color: var(--fg); }
       .remote-browser__relay input:disabled { opacity: .4; }
+      .remote-browser__nav input:disabled { opacity: .4; }
       button { appearance: none; border: 1px solid var(--line); background: var(--accent); color: #fff; font-weight: 600; padding: 11px 14px; border-radius: 10px; font-size: .9rem; }
       button[data-action="return"] { background: transparent; color: var(--warn); border-color: var(--warn); }
       button[data-action="enter"] { background: #16a34a; }
+      .remote-browser__claims { background: #0b0e14; border-top: 1px solid var(--line); color: #d9e7f5; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; max-height: 180px; overflow: auto; padding: 10px 14px; white-space: pre-wrap; }
       .remote-browser__status { font-size: .78rem; color: #9fb0c8; padding: 0 14px 14px; margin: 0; line-height: 1.4; }
       .hint { font-size: .72rem; color: #6b7a93; margin: 8px 6px 14px; }
     </style>

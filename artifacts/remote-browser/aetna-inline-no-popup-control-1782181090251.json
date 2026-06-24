@@ -1,0 +1,30 @@
+{
+  "appUrl": "http://127.0.0.1:4226/mvp?phase=aetna-inline-no-popup-control&v=1782181024099",
+  "expanded": true,
+  "hasViewerAttr": false,
+  "iframeCount": 0,
+  "noPopup": true,
+  "panelPosition": "static",
+  "panelRect": {
+    "height": 1025.625,
+    "width": 1149.6484375,
+    "x": 531.8359375,
+    "y": -0.1953125
+  },
+  "proofInputValue": "inlineProof73",
+  "screenNatural": {
+    "height": 992,
+    "width": 1920
+  },
+  "screenPointerEvents": "none",
+  "stageAspectRatio": "auto",
+  "stageRect": {
+    "height": 720.64453125,
+    "width": 1119.1796875,
+    "x": 547.0703125,
+    "y": 120.13671875
+  },
+  "status": "Remote AWS browser live: Aetna Member Log-in. Use Take over for user-controlled input.",
+  "takeoverBadgeVisible": true,
+  "urlEnabled": true
+}

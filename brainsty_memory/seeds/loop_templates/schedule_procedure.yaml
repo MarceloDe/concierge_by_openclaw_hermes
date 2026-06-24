@@ -1,0 +1,16 @@
+template_id: ralph-schedule-procedure-v1
+target_goal: schedule_procedure
+version: 1
+description: Prepare procedure scheduling context without giving medical advice or contacting providers without approval.
+entry_stage_id: confirm_procedure_identity
+exit_predicate_text: procedure identity, network/cost questions, and next user actions are clear.
+max_iterations: 10
+stages:
+  - ordinal: 1
+    stage_id: confirm_procedure_identity
+    tools: [patient_interview, npi_search]
+    verifiers: [procedure_identity_confirmed]
+  - ordinal: 2
+    stage_id: verify_network_cost_context
+    tools: [payer_portal_consult, coverage_doc_lookup]
+    verifiers: [network_or_cost_source_pointer_present]

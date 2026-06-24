@@ -1,22 +1,26 @@
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_provider_missing_endpoint_or_secret",
+  "status": "hosted_browser_sandbox_provider_configured_unverified",
   "hostedProviderReady": false,
-  "hostedProviderResolverReady": false,
+  "hostedProviderResolverReady": true,
   "adapterHarnessReady": false,
   "hostedProviderResolver": {
-    "status": "hosted_browser_sandbox_provider_missing_endpoint_or_secret",
-    "resolverReady": false,
+    "status": "hosted_browser_sandbox_provider_configured_unverified",
+    "resolverReady": true,
     "ready": false,
-    "endpointResolved": false,
-    "authResolved": false,
+    "endpointResolved": true,
+    "authResolved": true,
     "liveVerified": false,
-    "liveVerificationReady": false,
+    "liveVerificationReady": true,
+    "streamRequiresWebrtc": true,
+    "webrtcSignalingReady": false,
+    "visualOcrReplayReady": false,
     "endpointRefKind": "env",
     "authTokenRefKind": "env",
     "endpointEnvPresent": true,
     "authEnvPresent": true,
+    "providerStrategy": "steel-self-host",
     "rawEndpointReturned": false,
     "rawSecretReturned": false,
     "rawSecretPathReturned": false
@@ -36,7 +40,8 @@
         "stream": "webrtc_or_sse_frames",
         "inputRelay": "approval_gated_human_only",
         "screenshot": "provider_screenshot_api",
-        "ocrCaption": "provider_or_local_ocr"
+        "ocrCaption": "provider_or_local_ocr",
+        "tls": false
       },
       "adapter": {
         "mode": "hosted_provider",

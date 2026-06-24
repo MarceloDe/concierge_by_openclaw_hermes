@@ -11,12 +11,32 @@
       .remote-browser { display: flex; flex-direction: column; gap: 8px; }
       .remote-browser__bar { display: flex; align-items: center; justify-content: space-between; }
       .remote-browser__badge { font-size: .72rem; font-weight: 700; color: #0b0e14; background: #f59e0b; padding: 2px 8px; border-radius: 999px; }
-      .remote-browser__stage { background: #000; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden; display: flex; }
-      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; touch-action: none; user-select: none; }
+      .remote-browser__stage { align-items: center; background: #000; aspect-ratio: 16 / 9; border-radius: 10px; justify-content: center; min-height: clamp(240px, 42vw, 520px); overflow: hidden; display: flex; position: relative; cursor: crosshair; width: 100%; max-width: 100%; }
+      .remote-browser__stage:focus { outline: 2px solid #2563eb; outline-offset: 2px; }
+      .remote-browser__screen { width: 100%; height: 100%; object-fit: contain; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
       .remote-browser__stage.is-live-control { outline: 2px solid #f59e0b; outline-offset: -2px; }
-      .remote-browser__controls, .remote-browser__relay { display: flex; gap: 8px; flex-wrap: wrap; }
-      .remote-browser__relay input { flex: 1; padding: 10px; font-size: 16px; border-radius: 8px; }
+      .remote-browser__controls, .remote-browser__relay, .remote-browser__nav { display: flex; gap: 8px; flex-wrap: wrap; }
+      .remote-browser__relay input, .remote-browser__nav input { flex: 1; min-width: 220px; padding: 10px; font-size: 16px; border-radius: 8px; }
+      .remote-browser__claims { background: #f7f9fa; border: 1px solid #d7e0e6; border-radius: 8px; color: #172026; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; max-height: 180px; overflow: auto; padding: 10px; white-space: pre-wrap; }
       .remote-browser__status { font-size: .76rem; opacity: .8; margin: 2px 0 0; }
+      body.remote-browser-expanded .mvp-layout {
+        grid-template-columns: minmax(190px, 240px) minmax(180px, .35fr) minmax(900px, 1.65fr);
+        overflow-x: auto;
+      }
+      .worker-browser-panel.is-expanded {
+        box-shadow: 0 10px 34px rgba(15, 23, 42, .12);
+        overflow: visible;
+        resize: vertical;
+      }
+      .worker-browser-panel.is-expanded .remote-browser__stage {
+        aspect-ratio: auto;
+        height: clamp(520px, 58vh, 780px);
+        min-height: 0;
+      }
+      body.remote-browser-expanded .chat-column { min-width: 260px; }
+      body.remote-browser-expanded .proof-rail { min-width: 760px; }
+      body.remote-browser-expanded .proof-rail > .panel:not(.worker-browser-panel) { order: 2; }
+      body.remote-browser-expanded .proof-rail > .worker-browser-panel { order: 1; }
     </style>
   </head>
   <body>
@@ -59,7 +79,7 @@
             </label>
             <label>
               Portal URL
-              <input id="portalUrl" value="https://www.aetna.com/" />
+              <input id="portalUrl" value="https://member.aetna.com" />
             </label>
             <label>
               Session ID
@@ -117,6 +137,16 @@
               <p class="eyebrow">Documents</p>
               <h2>Upload Evidence</h2>
             </div>
+            <label>
+              Bill note
+              <textarea id="billText" rows="5">Provider: Example Clinic
+Date: 2026-06-01
+Amount due: $184.22
+Payer: Aetna
+Claim number: CLM-123456</textarea>
+            </label>
+            <button id="analyzeBill" type="button">Analyze Bill</button>
+            <div id="billPanel" class="upload-panel">No bill verification run yet.</div>
             <label>
               File
               <input id="documentFile" type="file" accept=".txt,.md,.csv,.pdf,.png,.jpg,.jpeg,text/plain,text/markdown,text/csv,application/pdf,image/png,image/jpeg" />

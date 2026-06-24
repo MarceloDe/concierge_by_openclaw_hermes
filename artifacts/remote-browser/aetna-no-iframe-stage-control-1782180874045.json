@@ -1,0 +1,21 @@
+{
+  "appUrl": "http://127.0.0.1:4226/mvp?phase=no-iframe-stage-control&v=1782180756605",
+  "expanded": true,
+  "iframeCount": 0,
+  "note": "Safe temporary input overlay in remote AWS browser received text via app-owned stage; no iframe/provider viewer path in MVP mount.",
+  "proofInputValue": "stageProof42",
+  "remoteUrlField": "https://health.aetna.com/managemyaccount/login",
+  "screenNatural": {
+    "height": 992,
+    "width": 1920
+  },
+  "screenPointerEvents": "none",
+  "stageRect": {
+    "height": 921.93359375,
+    "width": 1639.0234375,
+    "x": 29.21875,
+    "y": 121.58203125
+  },
+  "status": "Remote AWS browser live: Aetna Member Log-in. Use Take over for user-controlled input.",
+  "takeoverBadgeVisible": true
+}

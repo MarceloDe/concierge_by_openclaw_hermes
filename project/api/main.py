@@ -18,6 +18,7 @@ from .browser_sandbox import (
     hosted_browser_sandbox_provider_stream
 )
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
+from .local_env import load_local_env_if_enabled
 from .models import (
     ChatAcceptedResponse,
     ChatRequest,
@@ -53,11 +54,14 @@ VERSION = "0.1.0-phase10s-ai2ui-modes"
 LOCAL_AUTH_TOKEN_SECONDS = 24 * 60 * 60
 
 
+LOCAL_ENV_METADATA = load_local_env_if_enabled()
+
+
 def allowed_origins() -> list[str]:
     raw = os.getenv("WEFELLA_ALLOWED_ORIGINS")
     if raw is None and auth_mode() in PROVIDER_AUTH_MODES:
         return []
-    raw = raw or "http://localhost:3000,http://127.0.0.1:4173,http://127.0.0.1:8000"
+    raw = raw or "http://localhost:3000,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4226,http://127.0.0.1:8000"
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
@@ -338,7 +342,8 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
             current_title=session.get("current_title"),
             readiness=session.get("readiness") or {},
             ocr_caption=session.get("ocr_caption") or {},
-            screencast=session.get("screencast") or {}
+            screencast=session.get("screencast") or {},
+            navigation=session.get("navigation") or {}
         )
 
     @app.get("/api/v1/browser/sessions/{browser_session_id}/stream")
@@ -398,6 +403,68 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
                 raise HTTPException(status_code=400, detail="takeover_id is required for end mode.")
             result = await provider.end_takeover(node_client=app.state.node_client, browser_session=browser_session, takeover_id=request.takeover_id)
         return {"version": VERSION, "browser_session_id": browser_session_id, **result}
+
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/openclaw/claims-observe")
+    async def v1_browser_openclaw_claims_observe(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(default_factory=dict), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_claims_observe")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        provider = get_browser_sandbox_provider(browser_session["provider"])
+        observe = getattr(provider, "observe_claims_read_only", None)
+        if not callable(observe):
+            raise HTTPException(status_code=400, detail="This browser provider does not support remote OpenClaw claims observation.")
+        try:
+            observation = await observe(
+                browser_session=browser_session,
+                user_message=str(body.get("message") or body.get("user_message") or "Summarize the Aetna claims list after user login.")
+            )
+        except BrowserSandboxError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        composer = await app.state.node_client.post_json(
+            "/api/portal-observation/final-answer",
+            {
+                "observation": {**observation, "session_id": browser_session.get("session_id")},
+                "userMessage": body.get("message") or body.get("user_message") or "Summarize the Aetna claims list after user login.",
+                "useLiveModel": bool(body.get("use_live_model") or body.get("useLiveModel")),
+                "user": {"id": principal.user_id}
+            }
+        )
+        return {
+            "version": VERSION,
+            "browser_session_id": browser_session_id,
+            "status": observation.get("status"),
+            "ok": observation.get("ok") is True,
+            "observation": observation,
+            "source_pointers": observation.get("source_pointers") or [],
+            "claim_rows": observation.get("claim_rows") or [],
+            "langchain_answer": composer,
+            "final_response": composer.get("finalResponse"),
+            "safety": observation.get("safety") or {}
+        }
+
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/openclaw/explore")
+    async def v1_browser_openclaw_explore(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(default_factory=dict), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_openclaw_explore")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        provider = get_browser_sandbox_provider(browser_session["provider"])
+        explore = getattr(provider, "explore_portal_read_only", None)
+        if not callable(explore):
+            raise HTTPException(status_code=400, detail="This browser provider does not support read-only portal exploration.")
+        try:
+            result = await explore(
+                browser_session=browser_session,
+                max_steps=int(body.get("max_steps") or body.get("maxSteps") or 8),
+                user_message=str(body.get("message") or body.get("user_message") or "")
+            )
+        except BrowserSandboxError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "version": VERSION,
+            "browser_session_id": browser_session_id,
+            "ok": result.get("ok") is True,
+            "status": result.get("status"),
+            "exploration": result,
+            "safety": result.get("safety") or {}
+        }
 
     @app.get("/api/v1/proof/runs/{run_id}", response_model=V1ProofRunResponse)
     async def v1_proof_run(run_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> V1ProofRunResponse:

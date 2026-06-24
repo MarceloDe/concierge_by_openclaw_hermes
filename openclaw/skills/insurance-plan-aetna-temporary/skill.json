@@ -7,5 +7,17 @@
   "purpose": "Provide Aetna-specific insurance-plan reasoning requirements and evidence expectations for LangGraph skill resolution.",
   "compatible_hosts": ["langgraph", "openclaw", "brainstyworkers_dynamic_skill_server"],
   "execution_mode": "context_resolution_only",
-  "portal_access": "delegate_to_insurance_portal_browser_with_read_only_approval"
+  "portal_access": "delegate_to_insurance_portal_browser_with_read_only_approval",
+  "portal_target_policy": {
+    "private_runtime_url_ref": "env:BRAINSTY_AETNA_PORTAL_URL",
+    "stable_login_url": "https://health.aetna.com/managemyaccount/login",
+    "allowed_hosts": [
+      "health.aetna.com",
+      "member.aetna.com",
+      "member.cvsaetna.com"
+    ],
+    "remote_browser_provider": "steel-self-host",
+    "credential_boundary": "human_takeover_only",
+    "notes": "The private runtime URL may contain a short-lived Aetna identity transaction and must stay outside Git. The skill owns host policy only; login, 2FA, captcha, form submit, payer contact, and uploads remain human-only approval events."
+  }
 }

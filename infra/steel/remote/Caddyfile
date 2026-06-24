@@ -31,6 +31,10 @@ STEEL_REMOTE_HOST:443 {
 		method GET
 		path_regexp session_live_details ^/v1/sessions/.+/live-details$
 	}
+	@session_read {
+		method GET
+		path /v1/sessions /v1/sessions/*
+	}
 	@session_release {
 		method POST
 		path_regexp session_release ^/v1/sessions/.+/release$
@@ -60,6 +64,10 @@ STEEL_REMOTE_HOST:443 {
 	}
 
 	handle @session_live_details {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle @session_read {
 		reverse_proxy 127.0.0.1:3000
 	}
 

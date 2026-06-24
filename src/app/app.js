@@ -963,6 +963,22 @@ function renderConnectorProof(payload) {
   const phase64Check = checks.find((check) => check.key === "phase64_mvp_completion_audit") ?? null;
   const phase65Score = scores.find((score) => score.key === "phase65_final_mvp_goal_evaluation") ?? null;
   const phase65Check = checks.find((check) => check.key === "phase65_final_mvp_goal_evaluation") ?? null;
+  const phase66Score = scores.find((score) => score.key === "phase66_production_contract") ?? null;
+  const phase66Check = checks.find((check) => check.key === "phase66_production_contract") ?? null;
+  const phase67Score = scores.find((score) => score.key === "phase67_graphiti_zep_schema_memory") ?? null;
+  const phase67Check = checks.find((check) => check.key === "phase67_graphiti_zep_schema_memory") ?? null;
+  const phase68Score = scores.find((score) => score.key === "phase68_postgres_production_default") ?? null;
+  const phase68Check = checks.find((check) => check.key === "phase68_postgres_production_default") ?? null;
+  const phase69Score = scores.find((score) => score.key === "phase69_bill_verification_mvp_flow") ?? null;
+  const phase69Check = checks.find((check) => check.key === "phase69_bill_verification_mvp_flow") ?? null;
+  const phase70Score = scores.find((score) => score.key === "phase70_authenticated_openclaw_bill_flow") ?? null;
+  const phase70Check = checks.find((check) => check.key === "phase70_authenticated_openclaw_bill_flow") ?? null;
+  const phase71Score = scores.find((score) => score.key === "phase71_bill_memory_skill_loop") ?? null;
+  const phase71Check = checks.find((check) => check.key === "phase71_bill_memory_skill_loop") ?? null;
+  const phase72Score = scores.find((score) => score.key === "phase72_bill_sourced_answer") ?? null;
+  const phase72Check = checks.find((check) => check.key === "phase72_bill_sourced_answer") ?? null;
+  const phase73Score = scores.find((score) => score.key === "phase73_first_testable_mvp_readiness") ?? null;
+  const phase73Check = checks.find((check) => check.key === "phase73_first_testable_mvp_readiness") ?? null;
   connectorProofStatus.textContent = `${payload.status ?? "unknown"} · ${payload.cycle ?? "connector"}`;
   connectorProof.innerHTML = `
     <article class="connector-card wide">
@@ -1041,6 +1057,148 @@ function renderConnectorProof(payload) {
           <dd>${escapeHtml(phase59Check?.checks?.pwaRequestsLiveReasoning ? "PWA requests live reasoning" : "attention: PWA deterministic default")} · OpenAI ${escapeHtml(phase59Check?.externalReadiness?.openAiConfigured ? "configured" : "not configured")}</dd>
           <dt>Memory / AWS</dt>
           <dd>${escapeHtml(phase59Check?.externalReadiness?.productMemoryStatus ?? "unknown")} · AWS checked by sanitized smoke artifact</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase66Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 66 Production Contract</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase66Score.score)} / ${escapeHtml(phase66Score.target)} · ${escapeHtml(phase66Score.status)}</dd>
+          <dt>First workflow</dt>
+          <dd>${escapeHtml(phase66Check?.decisions?.productionTarget?.firstWorkflow ?? phase66Score.firstWorkflow ?? "bill_verification_flow")} · user ${escapeHtml(phase66Check?.decisions?.productionTarget?.firstUser ?? phase66Score.firstUser ?? "patient_member")}</dd>
+          <dt>Postgres</dt>
+          <dd>${escapeHtml(phase66Check?.decisions?.postgres?.productionDefault ? "production default" : "not default")} · retention ${escapeHtml(phase66Check?.decisions?.postgres?.retentionYears ?? phase66Score.retentionYears ?? 5)} years · encrypted restore drill required</dd>
+          <dt>Memory</dt>
+          <dd>${escapeHtml(phase66Check?.decisions?.graphitiZep?.schemaFirst ? "Graphiti/Zep schema-first" : "attention")} · successful case creates memory episode</dd>
+          <dt>Browser/Auth</dt>
+          <dd>${escapeHtml(phase66Check?.decisions?.remoteBrowser?.firstDeployment ?? "self_hosted_steel_on_aws_ec2")} · credentials human-only</dd>
+          <dt>Next</dt>
+          <dd>${escapeHtml(phase66Check?.gates?.nextPhase ?? phase66Score.nextPhase ?? "phase67_graphiti_zep_schema_ready_memory_layer")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase67Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 67 Graphiti/Zep Schema Memory</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase67Score.score)} / ${escapeHtml(phase67Score.target)} · ${escapeHtml(phase67Score.status)}</dd>
+          <dt>Schema</dt>
+          <dd>entities ${escapeHtml(phase67Check?.checks?.entitiesPresent ? "ready" : "missing")} · edges ${escapeHtml(phase67Check?.checks?.edgesPresent ? "ready" : "missing")} · groups ${escapeHtml(phase67Check?.checks?.groupIdsPresent ? "ready" : "missing")}</dd>
+          <dt>Temporal/Privacy</dt>
+          <dd>${escapeHtml(phase67Check?.checks?.temporalHelpersPresent ? "temporal helpers" : "missing temporal")} · ${escapeHtml(phase67Check?.checks?.privacyFilterPresent ? "privacy filter" : "missing privacy")} · PHI pointer/hash only</dd>
+          <dt>Retrieval</dt>
+          <dd>${escapeHtml(phase67Check?.checks?.retrievalPrimitivesPresent ? "view-model primitives ready" : "missing retrieval")} · raw Graphiti nodes hidden</dd>
+          <dt>Seeds</dt>
+          <dd>${escapeHtml(phase67Check?.seedCount ?? phase67Score.seedCount ?? 0)} Ralph loop templates</dd>
+          <dt>Gate</dt>
+          <dd>${escapeHtml(phase67Check?.contract?.testCommand ?? phase67Score.testCommand ?? "npm run test:memory:schema")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase68Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 68 Postgres Production Default</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase68Score.score)} / ${escapeHtml(phase68Score.target)} · ${escapeHtml(phase68Score.status)}</dd>
+          <dt>Runtime</dt>
+          <dd>production ${escapeHtml(phase68Check?.readiness?.runtimeDriver ?? phase68Score.runtimeDriver ?? "postgres")} · local dev fallback SQLite</dd>
+          <dt>State scope</dt>
+          <dd>${escapeHtml((phase68Check?.runtimeStateScope ?? []).join(", ") || "sessions, tasks, audit, evidence, uploads, skill queue, browser state")}</dd>
+          <dt>Retention</dt>
+          <dd>${escapeHtml(phase68Check?.retention?.years ?? phase68Score.retentionYears ?? 5)} years · applies to audit/source pointers/docs/browser refs/memory facts</dd>
+          <dt>Backup</dt>
+          <dd>${escapeHtml(phase68Check?.backupRestore?.required ?? phase68Score.backupRestore ?? "encrypted_cloud_backup_restore_drill")} · local Docker is dev-only</dd>
+          <dt>Safety</dt>
+          <dd>secret profile ${escapeHtml(phase68Check?.checks?.secretProfileRequired ? "required" : "attention")} · shell-out sqlite3 ${escapeHtml(phase68Check?.checks?.sqliteShellOutAbsent ? "absent" : "attention")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase69Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 69 Bill Verification MVP</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase69Score.score)} / ${escapeHtml(phase69Score.target)} · ${escapeHtml(phase69Score.status)}</dd>
+          <dt>Endpoint</dt>
+          <dd>${escapeHtml(phase69Check?.endpoint ?? phase69Score.endpoint ?? "/api/bill-verification/analyze")} · surface ${escapeHtml(phase69Check?.pwaSurface ?? "/mvp")}</dd>
+          <dt>Evidence</dt>
+          <dd>source pointer only · raw text ${escapeHtml(phase69Check?.sample?.sourcePointer?.rawTextReturned ? "attention" : "hidden")} · missing evidence checklist ${escapeHtml(phase69Check?.checks?.missingEvidenceChecklistReady ? "ready" : "attention")}</dd>
+          <dt>Parallel agents</dt>
+          <dd>${escapeHtml((phase69Check?.sample?.parallelAgents ?? []).map((agent) => `${agent.key}:${agent.status}`).join(" · ") || "planned")}</dd>
+          <dt>No-login fallback</dt>
+          <dd>${escapeHtml(phase69Check?.sample?.noLoginFallback?.available ? "available" : "attention")} · payer contact ${escapeHtml(phase69Check?.sample?.safety?.payerContacted ? "attention" : "none")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase70Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 70 Authenticated OpenClaw Bill Proof</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase70Score.score)} / ${escapeHtml(phase70Score.target)} · ${escapeHtml(phase70Score.status)}</dd>
+          <dt>Live readiness</dt>
+          <dd>${escapeHtml(phase70Check?.liveReadiness?.status ?? phase70Score.liveReadinessStatus ?? "unknown")} · ready ${escapeHtml(phase70Check?.liveReadiness?.readyForReadOnlyObservation ?? phase70Score.readyForReadOnlyObservation ? "yes" : "no")}</dd>
+          <dt>Approval</dt>
+          <dd>${escapeHtml(phase70Check?.approvalBoundary?.approvalScope ?? "read_only_observation")} · actions ${escapeHtml((phase70Check?.approvalBoundary?.allowedActions ?? []).join(", ") || "read-only only")}</dd>
+          <dt>Human-only</dt>
+          <dd>${escapeHtml((phase70Check?.approvalBoundary?.humanOnly ?? []).join(", ") || "credentials, 2FA, captcha, submissions, uploads")}</dd>
+          <dt>Bill flow</dt>
+          <dd>${escapeHtml(phase70Check?.billVerificationIntegration?.endpoint ?? "/api/bill-verification/analyze")} · no-login fallback preserved</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase71Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 71 Bill Memory Skill Loop</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase71Score.score)} / ${escapeHtml(phase71Score.target)} · ${escapeHtml(phase71Score.status)}</dd>
+          <dt>Memory episode</dt>
+          <dd>${escapeHtml(phase71Check?.episode?.caseId ?? phase71Score.sourceCaseId ?? "case:bill")} · refs only ${escapeHtml(phase71Check?.checks?.episodeStoresRefsOnly ? "yes" : "attention")}</dd>
+          <dt>Loop</dt>
+          <dd>${escapeHtml((phase71Check?.episode?.loopIterations ?? []).map((iteration) => `${iteration.stage}:${iteration.outcome}`).join(" · ") || "extract_bill_facts · plan_next_evidence")}</dd>
+          <dt>Skill candidate</dt>
+          <dd>${escapeHtml(phase71Check?.candidate?.proposedSkillKey ?? "bill_verification_flow")} · ${escapeHtml(phase71Check?.candidate?.status ?? phase71Score.candidateStatus ?? "operator_review_required")}</dd>
+          <dt>Activation</dt>
+          <dd>staging operator ${escapeHtml(phase71Check?.candidate?.activation?.stagingOperatorActivationAllowed ? "allowed" : "attention")} · production PR ${escapeHtml(phase71Check?.candidate?.activation?.productionActivationRequiresPrMerge ? "required" : "attention")} · auto driving ${escapeHtml(phase71Check?.candidate?.activation?.autoProductionDrivingAllowed ? "attention" : "blocked")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase72Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 72 Bill Sourced Answer</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase72Score.score)} / ${escapeHtml(phase72Score.target)} · ${escapeHtml(phase72Score.status)}</dd>
+          <dt>Endpoint</dt>
+          <dd>${escapeHtml(phase72Check?.endpoint ?? phase72Score.endpoint ?? "/api/bill-verification/final-answer")} · surface ${escapeHtml(phase72Check?.pwaSurface ?? "/mvp")}</dd>
+          <dt>Composer</dt>
+          <dd>valid composed text used in contract ${escapeHtml(phase72Check?.checks?.validModelComposedTextUsed ?? phase72Score.usedModelComposedTextInProof ? "yes" : "attention")} · fallback ${escapeHtml(phase72Check?.fallbackMode ?? phase72Score.fallbackMode ?? "deterministic_fallback")}</dd>
+          <dt>Validator</dt>
+          <dd>allowed source IDs ${escapeHtml(phase72Check?.checks?.allowedSourceIdsRequired ? "required" : "attention")} · unknown source ${escapeHtml(phase72Check?.checks?.unknownSourceRejected ? "rejected" : "attention")} · external action claim ${escapeHtml(phase72Check?.checks?.unsupportedExternalActionRejected ? "rejected" : "attention")}</dd>
+          <dt>Source pointers</dt>
+          <dd>${escapeHtml((phase72Check?.sourcePointerIds ?? []).join(", ") || "none")}</dd>
+        </dl>
+      </article>
+    ` : ""}
+    ${phase73Score ? `
+      <article class="connector-card wide">
+        <h3>Phase 73 First Testable MVP Readiness</h3>
+        <dl>
+          <dt>Score</dt>
+          <dd>${escapeHtml(phase73Score.score)} / ${escapeHtml(phase73Score.target)} · ${escapeHtml(phase73Score.status)}</dd>
+          <dt>Decision</dt>
+          <dd>first testable MVP ${escapeHtml(phase73Check?.decision?.firstTestableMvpReady ?? phase73Score.firstTestableMvpReady ? "ready" : "attention")} · production ${escapeHtml(phase73Check?.decision?.productionReady ?? phase73Score.productionReady ? "ready" : "blocked")}</dd>
+          <dt>User entry</dt>
+          <dd>${escapeHtml(phase73Check?.decision?.regularUserEntry ?? "/mvp")} · workflow ${escapeHtml(phase73Check?.decision?.firstWorkflow ?? "bill_verification_flow")}</dd>
+          <dt>Proof endpoints</dt>
+          <dd>${escapeHtml((phase73Check?.proofEndpoints ?? []).join(", ") || "/api/mvp/readiness")}</dd>
+          <dt>Production blockers</dt>
+          <dd>${escapeHtml((phase73Check?.productionBlockers ?? []).join(" · ") || "none")}</dd>
         </dl>
       </article>
     ` : ""}

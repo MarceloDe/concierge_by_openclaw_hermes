@@ -167,6 +167,7 @@ class V1BrowserSessionResponse(BaseModel):
     readiness: dict[str, Any] = Field(default_factory=dict)
     ocr_caption: dict[str, Any] = Field(default_factory=dict)
     screencast: dict[str, Any] = Field(default_factory=dict)
+    navigation: dict[str, Any] = Field(default_factory=dict)
 
 
 class V1BrowserInputRequest(BaseModel):

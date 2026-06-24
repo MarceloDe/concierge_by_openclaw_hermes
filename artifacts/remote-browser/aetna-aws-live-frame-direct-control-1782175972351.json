@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "capturedAt": "2026-06-23T00:52:51.867291Z",
+    "height": 992,
+    "title": "Aetna Member Log-in",
+    "urlHost": "health.aetna.com",
+    "width": 1920
+  },
+  "src": "<image/jpeg base64 redacted>",
+  "stageRect": {
+    "height": 520,
+    "tabIndex": "0",
+    "width": 924
+  },
+  "status": "Remote AWS browser live: Aetna Member Log-in. Use Take over for user-controlled input.",
+  "text": "LIVE\n\nWorker Browser\n\nWatch the worker browser. If the portal asks for a password, 2FA, or captcha, take over and type it yourself — the assistant never enters credentials.\n\nWorker browser\nYou are in control\nStart live view\nReturn control\nContinue read-only claim scan\nEnter\n\nRemote AWS browser live: Aetna Member Log-in. Use Take over for user-controlled input.",
+  "proofInputValue": "proof123",
+  "scrollProofTop": 520
+}
