@@ -4,11 +4,13 @@ import {
   takeover,
   streamFrames,
   relayInput,
+  observeClaimsReadOnly,
   FACADE_BASE_URL,
   type SessionState,
   type BrowserSession,
   type Frame,
-  type RemoteInput
+  type RemoteInput,
+  type ClaimsObservationResult
 } from "../api";
 import { Close } from "./icons";
 
@@ -21,16 +23,22 @@ type Phase = "starting" | "ready" | "controlling" | "error";
 export function LiveView({
   session,
   targetUrl,
+  onObservationAnswer,
   onClose
 }: {
   session: SessionState;
   targetUrl: string | null;
+  onObservationAnswer?: (answer: string, result: ClaimsObservationResult) => void;
   onClose: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("starting");
   const [status, setStatus] = useState("Starting the live worker browser in the AWS sandbox…");
   const [busy, setBusy] = useState(false);
   const [relay, setRelay] = useState("");
+  const [returnedControl, setReturnedControl] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanResult, setScanResult] = useState<ClaimsObservationResult | null>(null);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
 
   const bsRef = useRef<BrowserSession | null>(null);
   const takeoverIdRef = useRef<string | null>(null);
@@ -79,6 +87,7 @@ export function LiveView({
         }
         setPhase("ready");
         setStatus("Live worker browser — read-only. Tap Take control to sign in yourself.");
+        setReturnedControl(false);
         streamFrames(
           session,
           created.streamUrl,
@@ -142,6 +151,7 @@ export function LiveView({
       grantRef.current = grant?.grantToken ?? grant?.grant_token ?? null;
       if (!grantRef.current) throw new Error("no grant token returned");
       controllingRef.current = true;
+      setReturnedControl(false);
       setPhase("controlling");
       setStatus("You have control. Click the page, type your password, pass 2FA/captcha — it goes only to Aetna.");
       setTimeout(focusStage, 0);
@@ -164,8 +174,46 @@ export function LiveView({
     setRelay("");
     lastRelayRef.current = "";
     setPhase("ready");
+    setReturnedControl(true);
     setStatus("Control returned to the assistant. Live view continues (read-only).");
     setBusy(false);
+  }
+
+  async function onReadOnlyScan() {
+    const bs = bsRef.current;
+    if (!bs) return;
+    setScanBusy(true);
+    setScanResult(null);
+    setScanMessage("OpenClaw is observing the current remote page in read-only mode...");
+    setStatus("OpenClaw is continuing read-only observation in the remote AWS sandbox...");
+    try {
+      const result = await observeClaimsReadOnly(session, bs.browserSessionId);
+      setScanResult(result);
+      const sourceIds = result.sourcePointers
+        .map((pointer) => pointer.id ? `${pointer.table ?? "source"}/${pointer.id}` : null)
+        .filter(Boolean)
+        .join(", ");
+      const nextAction = result.raw?.observation?.next_action ?? result.raw?.observation?.nextAction ?? null;
+      if (!result.ok) {
+        const msg = nextAction ?? result.status ?? "User login or claims page is still required.";
+        setScanMessage(msg);
+        setStatus(`Read-only claim scan needs attention: ${msg}`);
+        return;
+      }
+      const answer = [
+        result.finalResponse ?? `OpenClaw found ${result.claimRows.length} claim row(s).`,
+        sourceIds ? `Source pointers: ${sourceIds}` : null
+      ].filter(Boolean).join("\n\n");
+      setScanMessage(answer);
+      setStatus(`OpenClaw read-only claim scan complete: ${result.claimRows.length} claim row(s), ${result.sourcePointers.length} source pointer(s).`);
+      onObservationAnswer?.(answer, result);
+    } catch (e: any) {
+      const msg = e?.message ?? "Read-only claim scan failed.";
+      setScanMessage(msg);
+      setStatus(`Read-only claim scan failed: ${msg}`);
+    } finally {
+      setScanBusy(false);
+    }
   }
 
   // ---- input handlers (active only while controlling) ----
@@ -325,10 +373,27 @@ export function LiveView({
           </div>
         )}
 
+        {(returnedControl || scanMessage) && (
+          <div className="claim-scan">
+            <div className="claim-scan__head">
+              <span>Read-only OpenClaw scan</span>
+              <span>{scanResult?.sourcePointers?.length ? `${scanResult.sourcePointers.length} source` : "No source yet"}</span>
+            </div>
+            <pre>{scanMessage ?? "After you finish login and return control, OpenClaw can observe the claims page without entering credentials or submitting forms."}</pre>
+          </div>
+        )}
+
         <div className="sheet-controls">
           <div className="grow">{status}</div>
           {phase === "ready" && (
-            <button className="btn primary" onClick={onTakeControl} disabled={busy}>Take control</button>
+            <>
+              {returnedControl && (
+                <button className="btn" onClick={onReadOnlyScan} disabled={busy || scanBusy}>
+                  {scanBusy ? "Scanning..." : "Continue read-only claim scan"}
+                </button>
+              )}
+              <button className="btn primary" onClick={onTakeControl} disabled={busy || scanBusy}>Take control</button>
+            </>
           )}
           {controlling && (
             <button className="btn warn" onClick={onReturn} disabled={busy}>Return control</button>

@@ -11,6 +11,10 @@ const mvpCss = await readFile(new URL("../app/mvp.css", import.meta.url), "utf8"
 const remoteBrowserHtml = await readFile(new URL("../app/remote-browser.html", import.meta.url), "utf8");
 const remoteBrowserJs = await readFile(new URL("../app/remoteBrowser.js", import.meta.url), "utf8");
 const browserStreamController = await readFile(new URL("../concierge/browserStreamController.mjs", import.meta.url), "utf8");
+const userAppTsx = await readFile(new URL("../userapp/App.tsx", import.meta.url), "utf8");
+const userAppApi = await readFile(new URL("../userapp/api.ts", import.meta.url), "utf8");
+const userAppLiveView = await readFile(new URL("../userapp/components/LiveView.tsx", import.meta.url), "utf8");
+const userAppCss = await readFile(new URL("../userapp/styles.css", import.meta.url), "utf8");
 const mobilePackageJson = await readFile(new URL("../../apps/mobile-next/package.json", import.meta.url), "utf8");
 const mobileNextConfig = await readFile(new URL("../../apps/mobile-next/next.config.mjs", import.meta.url), "utf8");
 const mobilePage = await readFile(new URL("../../apps/mobile-next/app/page.jsx", import.meta.url), "utf8");
@@ -189,6 +193,19 @@ test("remote browser GUI exposes live view and human takeover controls", () => {
   assert.match(mvpJs, /provider: "hosted_remote"/);
   assert.match(mvpJs, /maybeHighlightWorkerBrowser/);
   assert.match(mvpJs, /The portal needs a login, 2FA, or captcha/);
+});
+
+test("React user app exposes remote read-only OpenClaw claim observation after human takeover", () => {
+  assert.match(userAppApi, /openclaw\/claims-observe/);
+  assert.match(userAppApi, /useLiveModel: true/);
+  assert.match(userAppLiveView, /observeClaimsReadOnly/);
+  assert.match(userAppLiveView, /Continue read-only claim scan/);
+  assert.match(userAppLiveView, /After you finish login and return control/);
+  assert.match(userAppLiveView, /OpenClaw is observing the current remote page in read-only mode/);
+  assert.match(userAppTsx, /onObservationAnswer/);
+  assert.match(userAppTsx, /I observed the signed-in portal in read-only mode only/);
+  assert.match(userAppTsx, /I did not enter credentials, submit forms, contact Aetna, or change account data/);
+  assert.match(userAppCss, /claim-scan/);
 });
 
 test("chat MVP closes completed worker continuations and suppresses stale portal prompts", () => {

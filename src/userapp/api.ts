@@ -53,6 +53,16 @@ export interface BrowserSession {
   currentTitle: string | null;
 }
 
+export interface ClaimsObservationResult {
+  ok: boolean;
+  status?: string;
+  finalResponse?: string | null;
+  sourcePointers: Array<{ table?: string; id?: string; displayLabel?: string; summary?: string }>;
+  claimRows: Array<Record<string, any>>;
+  safety: Record<string, any>;
+  raw: any;
+}
+
 const NODE_BASE = ""; // same-origin
 // Facade base: ?facade= query override (testing) > window.__FACADE_BASE (packaged) > default.
 function resolveFacadeBase(): string {
@@ -289,6 +299,27 @@ export async function relayInput(
     { authorization: `Bearer ${session.facadeToken}` },
     15000
   );
+}
+
+export async function observeClaimsReadOnly(session: SessionState, browserSessionId: string): Promise<ClaimsObservationResult> {
+  const raw = await postJson(
+    `${FACADE_BASE}/api/v1/browser/sessions/${encodeURIComponent(browserSessionId)}/openclaw/claims-observe`,
+    {
+      message: "After human login, observe Aetna claims in read-only mode and compose a cited answer.",
+      useLiveModel: true
+    },
+    { authorization: `Bearer ${session.facadeToken}` },
+    120000
+  );
+  return {
+    ok: Boolean(raw?.ok),
+    status: raw?.status,
+    finalResponse: raw?.final_response ?? raw?.finalResponse ?? raw?.langchain_answer?.finalResponse ?? null,
+    sourcePointers: raw?.source_pointers ?? raw?.sourcePointers ?? [],
+    claimRows: raw?.claim_rows ?? raw?.claimRows ?? [],
+    safety: raw?.safety ?? {},
+    raw
+  };
 }
 
 export const FACADE_BASE_URL = FACADE_BASE;

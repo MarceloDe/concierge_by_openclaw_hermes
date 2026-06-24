@@ -9725,3 +9725,38 @@ Boundary:
 Next:
 
 - Phase 71: connect successful bill/case outcomes to schema memory episodes and generated skill candidates through an operator review queue.
+
+# Phase 66-73 Follow-Up — React User App Read-Only Claim Scan
+
+Date: 2026-06-23
+
+RALPH state:
+
+- Requirements: keep Claude's Phase 66-73 user app work PR-clean, make the default FastAPI facade use the real Steel provider config on `:8000`, and let the regular-user PWA continue from human takeover into read-only OpenClaw claim observation without widening the credential/action boundary.
+- Architecture: reuse the proven FastAPI `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe` endpoint. The React `/userapp` remains a regular-user surface; `/mvp` remains the operator/parity harness.
+- Loop: added a typed `observeClaimsReadOnly()` client, surfaced **Continue read-only claim scan** after the user returns control, rendered source-aware scan status, and pushed successful observations back into the chat thread.
+- Prove: `npm run userapp:build`, focused user app/facade tests, `npm run build`, `npm run test:local`, default-facade Steel API probe, and in-app visual proof.
+- Harden: login, 2FA, captcha, password entry, payer document upload, form submit, payer contact, and account mutation remain human-only or blocked. If no signed-in claims page is visible, the scan returns a next action instead of fabricating evidence.
+
+Implemented:
+
+- Added `observeClaimsReadOnly()` in `src/userapp/api.ts`.
+- Added post-return read-only scan UI and result panel in `src/userapp/components/LiveView.tsx`.
+- Added chat handoff of the LangChain/composer result in `src/userapp/App.tsx`.
+- Added `.claim-scan` styles and rebuilt `src/app/userapp/*`.
+- Added static contract coverage in `src/tests/chat-ui-contract.test.mjs`.
+- Updated `docs/REMOTE_BROWSER_AND_USERAPP.md`.
+
+Proof:
+
+- `npm run userapp:build` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs src/tests/portal-observation-answer.test.mjs src/tests/authenticated-openclaw-bill-proof.test.mjs` passed.
+- `python3 -m unittest project.tests.test_fastapi_facade` passed: 57 tests, 2 expected skips.
+- `npm run build` passed.
+- `npm run test:local` passed: 329 tests, 327 passed, 2 expected live-gated skips.
+- Default `:8000` facade probe returned `provider=hosted_remote`, `providerStrategy=steel-self-host`, `providerLiveConnected=true`, `streamTransport=sse_cdp_jpeg_frames`, and `navigation_status=remote_cdp_navigated`.
+- Visual artifact: `artifacts/remote-browser/userapp-readonly-claim-scan-gated-1782269055577.png`.
+
+Remaining manual gate:
+
+- Actual post-login claim extraction still requires the user to sign in manually inside the AWS/Steel browser, pass any 2FA/captcha, return control, and then run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials or solve challenges.

@@ -172,6 +172,31 @@ body {
 .stage .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 1s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.claim-scan {
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+  padding: 10px 14px;
+}
+.claim-scan__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.claim-scan pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: .82rem;
+  line-height: 1.42;
+}
+
 .sheet-controls { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); align-items: center; }
 .sheet-controls .grow { flex: 1; font-size: .8rem; color: var(--muted); line-height: 1.35; }
 .btn { appearance: none; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font-weight: 600; padding: 11px 15px; border-radius: 12px; font-size: .9rem; }

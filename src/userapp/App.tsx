@@ -230,7 +230,24 @@ export function App() {
       </form>
 
       {liveOpen && (
-        <LiveView session={session} targetUrl={session.member.portalUrl} onClose={() => setLiveOpen(false)} />
+        <LiveView
+          session={session}
+          targetUrl={session.member.portalUrl}
+          onObservationAnswer={(answer, result) => {
+            setMessages((m) => [
+              ...m,
+              {
+                id: mkId(),
+                role: "assistant",
+                text:
+                  `${answer}\n\n` +
+                  `I observed the signed-in portal in read-only mode only. I did not enter credentials, submit forms, contact Aetna, or change account data. ` +
+                  `Status: ${result.status ?? "claim observation complete"}.`
+              }
+            ]);
+          }}
+          onClose={() => setLiveOpen(false)}
+        />
       )}
     </div>
   );

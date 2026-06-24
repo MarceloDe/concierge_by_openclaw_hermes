@@ -20,6 +20,16 @@ Don't embed Steel's `sessionViewerUrl` iframe — its live pane is broken behind
 ## Worker broad read-only traversal
 CDP `extract` (structured tables/dt-dd/headings + classified control catalog) and `interact` (safe click/select by ref) ops; `explore_portal_read_only`; endpoint `/openclaw/explore`. Hard deny-list `window.__wfClassify`: credentials/2FA/captcha/free-text inputs, submit buttons, auth/payment-form controls, write keywords, offsite — never actioned.
 
+## Post-login read-only claim observation
+The React `/userapp` live view now matches the prior `/mvp` widget handoff:
+
+1. Start the live browser from `/userapp`.
+2. Tap **Take control** and complete portal login, 2FA, or captcha yourself.
+3. Tap **Return control**.
+4. Tap **Continue read-only claim scan**.
+
+That button calls FastAPI `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe`. The facade asks the Steel provider to observe the current page and, when safe claim rows are visible, sends source pointers + structured claim rows back to the Node/LangChain sourced-answer composer. If the user has not logged in or no claims page is visible, the endpoint returns a next action instead of fabricating evidence. The assistant still cannot enter credentials, solve 2FA/captcha, submit forms, upload payer documents, contact Aetna, or change account data.
+
 ## Local-run env (`.env.local`, dev only; production gate untouched, default off)
 ```
 WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote
