@@ -8,6 +8,7 @@ import json
 import os
 import re
 from typing import Any, AsyncIterator
+from urllib.parse import urljoin
 from uuid import uuid4
 
 import httpx
@@ -43,6 +44,15 @@ def _safe_host(value: Any) -> str | None:
     except Exception:
         return None
     return parsed.host
+
+
+def _is_allowed_member_portal_host(host: str | None) -> bool:
+    value = (host or "").lower()
+    return bool(
+        value in {"health.aetna.com", "member.aetna.com", "member.cvsaetna.com"}
+        or value.endswith(".member.aetna.com")
+        or value.endswith(".member.cvsaetna.com")
+    )
 
 
 def _sha256(value: str) -> str:
@@ -99,17 +109,22 @@ def _extract_claim_rows(text: str) -> list[dict[str, Any]]:
 
 def _portal_login_required(url: str | None, title: str | None, text: str | None) -> bool:
     haystack = f"{url or ''}\n{title or ''}\n{text or ''}".lower()
-    login_signals = ["log in", "login", "sign in", "username", "password", "captcha", "2fa", "verification code"]
+    title_url = f"{url or ''}\n{title or ''}".lower()
+    login_pattern = re.compile(
+        r"\b(log[- ]?in|login|log[- ]?on|sign[- ]?in|signin|sign into|username|user id|password|passkey|captcha|2fa|mfa|verification code)\b",
+        re.I,
+    )
     authenticated_signals = ["claims", "view all claims", "deductible", "member home", "coverage", "benefits"]
-    return any(signal in haystack for signal in login_signals) and not any(signal in haystack for signal in authenticated_signals)
+    if login_pattern.search(title_url):
+        return True
+    return bool(login_pattern.search(haystack)) and not any(signal in haystack for signal in authenticated_signals)
 
 
 def _safe_claims_link(href: str | None, text: str | None, *, current_url: str | None) -> str | None:
     if not href:
         return None
     try:
-        base = httpx.URL(current_url or "https://health.aetna.com/")
-        target = httpx.URL(href, base=base)
+        target = httpx.URL(urljoin(current_url or "https://health.aetna.com/", href))
     except Exception:
         return None
     label = f"{text or ''} {target.path or ''} {target.query.decode() if target.query else ''}".lower()
@@ -117,7 +132,7 @@ def _safe_claims_link(href: str | None, text: str | None, *, current_url: str | 
     if "claim" not in label or any(term in label for term in blocked):
         return None
     host = (target.host or "").lower()
-    if host not in {"health.aetna.com", "member.aetna.com", "member.cvsaetna.com"} and not host.endswith(".member.aetna.com") and not host.endswith(".member.cvsaetna.com"):
+    if not _is_allowed_member_portal_host(host):
         return None
     if target.scheme != "https":
         return None
@@ -464,11 +479,7 @@ class HostedRemoteBrowserSandboxProvider(BrowserSandboxProvider):
             parsed.scheme == "https"
             and (
                 host == "example.com"
-                or host == "health.aetna.com"
-                or host == "member.aetna.com"
-                or host.endswith(".member.aetna.com")
-                or host == "member.cvsaetna.com"
-                or host.endswith(".member.cvsaetna.com")
+                or _is_allowed_member_portal_host(host)
             )
         )
 
@@ -1040,6 +1051,28 @@ await new Promise(() => {});
         title = str(observation.get("title") or "")
         text = str(observation.get("text") or "")
         links = observation.get("links") if isinstance(observation.get("links"), list) else []
+        current_host = _safe_host(current_url)
+
+        if not _is_allowed_member_portal_host(current_host):
+            return {
+                "ok": False,
+                "status": "portal_page_required",
+                "browser_session_id": browser_session.get("browser_session_id"),
+                "current_url_host": current_host,
+                "current_title": title,
+                "source_pointers": [],
+                "claim_rows": [],
+                "actions_taken": ["steel_self_host_read_only_observation", "offsite_or_unapproved_host_detected_stop"],
+                "next_action": "Navigate the remote browser to the signed-in Aetna member portal before OpenClaw observes claims.",
+                "safety": {
+                    "readOnly": True,
+                    "agentCredentialEntryAllowed": False,
+                    "formSubmitAllowed": False,
+                    "rawPortalTextReturned": False,
+                    "rawFrameRecorded": False,
+                    "allowedHost": False
+                }
+            }
 
         if _portal_login_required(current_url, title, text):
             return {
@@ -1124,7 +1157,7 @@ await new Promise(() => {});
                 "formSubmitAllowed": False,
                 "rawPortalTextReturned": False,
                 "rawFrameRecorded": False,
-                "allowedHost": _safe_host(current_url) in {"health.aetna.com", "member.aetna.com", "member.cvsaetna.com"} or bool((_safe_host(current_url) or "").endswith(".member.aetna.com"))
+                "allowedHost": _is_allowed_member_portal_host(_safe_host(current_url))
             }
         }
 
