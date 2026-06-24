@@ -86,6 +86,47 @@ test("official OpenClaw live readiness rejects unrelated offsite tabs", () => {
   assert.match(live.nextAction, /benefits|coverage|eligibility|claims/i);
 });
 
+test("official OpenClaw live readiness rejects unrelated dashboard tabs", () => {
+  const live = classifyOfficialOpenClawLiveReadiness(
+    baseReadiness({
+      tabs: {
+        currentTab: {
+          id: "tab_clerk",
+          title: "Dashboard | Clerk.com",
+          url: "https://dashboard.clerk.com/apps",
+          active: true
+        },
+        items: [],
+        count: 1
+      }
+    })
+  );
+  assert.equal(live.status, "portal_page_required");
+  assert.equal(live.readyForReadOnlyObservation, false);
+  assert.equal(live.userActionRequired, true);
+  assert.match(live.nextAction, /benefits|coverage|eligibility|claims/i);
+});
+
+test("official OpenClaw live readiness requires the payer portal tab to be active", () => {
+  const live = classifyOfficialOpenClawLiveReadiness(
+    baseReadiness({
+      tabs: {
+        currentTab: {
+          id: "tab_inactive_benefits",
+          title: "Member Benefits and Coverage",
+          url: "https://member.aetna.com/benefits",
+          active: false
+        },
+        items: [],
+        count: 1
+      }
+    })
+  );
+  assert.equal(live.status, "portal_page_required");
+  assert.equal(live.readyForReadOnlyObservation, false);
+  assert.equal(live.userActionRequired, true);
+});
+
 test("official OpenClaw live readiness marks member portal pages ready for read-only approval", () => {
   const live = classifyOfficialOpenClawLiveReadiness(
     baseReadiness({

@@ -34,10 +34,12 @@ export const OPENCLAW_LIVE_FALLBACK_CHAIN = [
 
 const AUTH_CHALLENGE_RE =
   /\b(login|log in|sign in|signin|password|passcode|passkey|two[- ]?factor|2fa|mfa|verification code|captcha|authenticate|session expired)\b/i;
-const MEMBER_PORTAL_RE = /\b(member|account|dashboard|benefit|benefits|coverage|eligibility|claims?|deductible|oop|out[- ]of[- ]pocket|secure)\b/i;
+const MEMBER_PORTAL_RE =
+  /\b(member|account|dashboard|benefit|benefits|coverage|eligibility|claims?|deductible|oop|out[- ]of[- ]pocket|secure)\b/i;
 const PUBLIC_MARKETING_PATH_RE =
   /^\/?$|\/individuals-families\b|\/employers-organizations\b|\/health-care-professionals\b|\/about-us\b|\/news\b|\/contact-us\b/i;
 const KNOWN_MEMBER_PORTAL_HOSTS = new Set(["health.aetna.com", "member.aetna.com"]);
+const KNOWN_PAYER_PORTAL_BASE_DOMAINS = ["aetna.com"];
 
 function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -69,6 +71,13 @@ function looksLikeKnownMemberPortalHost(tab = {}) {
   return KNOWN_MEMBER_PORTAL_HOSTS.has(url.hostname.toLowerCase());
 }
 
+function looksLikeKnownPayerHost(tab = {}) {
+  const url = parseUrl(tab.url);
+  if (!url) return false;
+  const host = url.hostname.toLowerCase();
+  return KNOWN_PAYER_PORTAL_BASE_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
 function looksLikePublicMarketingPage(tab = {}) {
   const url = parseUrl(tab.url);
   if (!url) return false;
@@ -80,7 +89,8 @@ function looksLikePublicMarketingPage(tab = {}) {
 }
 
 function looksLikeApprovedPortalTab(tab = {}) {
-  return looksLikeKnownMemberPortalHost(tab) || looksLikeMemberPortal(tab);
+  if (looksLikeKnownMemberPortalHost(tab)) return true;
+  return looksLikeKnownPayerHost(tab) && looksLikeMemberPortal(tab);
 }
 
 function statusDetails(status, tab) {
@@ -134,6 +144,7 @@ export function classifyOfficialOpenClawLiveReadiness(readiness = {}) {
   if (!readiness.ready) status = "official_openclaw_profile_not_ready";
   else if (!browserRunning) status = "official_openclaw_browser_not_running";
   else if (!currentTab?.url) status = "auth_required";
+  else if (currentTab.active === false) status = "portal_page_required";
   else if (looksLikeAuthChallenge(currentTab)) status = "auth_or_challenge_required";
   else if (looksLikePublicMarketingPage(currentTab) || !looksLikeApprovedPortalTab(currentTab)) status = "portal_page_required";
 
