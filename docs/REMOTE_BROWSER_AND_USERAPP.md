@@ -9,6 +9,14 @@ Two web apps share one backend:
 ## AWS channel
 Steel self-host runs on a remote host; reached from this Mac via an **SSH tunnel** exposing loopback `ws://127.0.0.1:9223` (CDP) and `http://127.0.0.1:3000` (Steel API, tokenless locally). See `infra/steel/README.md`. The real production provider config (private file + proof files + readiness flags) is out-of-Git.
 
+The default FastAPI facade (`npm run facade:dev`, port **8000**) now loads the private provider env in addition to `.env.local` when `WEFELLA_FACADE_LOAD_LOCAL_ENV=1` is set. Precedence is:
+
+1. Explicit process environment values.
+2. Private provider env file, defaulting to `~/.config/workerprototype_openclaw/phase30/phase30-remote.env`, then `~/.config/workerprototype_openclaw/phase28/phase28.env`.
+3. Repo `.env.local` for local development defaults.
+
+For `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME=steel-self-host`, the facade also maps `WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL` to `WEFELLA_BROWSER_SANDBOX_STEEL_API_URL` when no explicit Steel API URL is set. This lets the default `:8000` facade start with the same private AWS/Steel config as the debug facade, without committing endpoint tokens or raw provider values.
+
 ## The takeover fix
 Don't embed Steel's `sessionViewerUrl` iframe — its live pane is broken behind the Caddy proxy. Instead **render the facade's SSE CDP frame stream into an `<img>` and relay input via `/input`** (CDP Input dispatch, normalized 0..1 coords, object-fit:contain mapping). Takeover = `/takeover` request→grant (`grantToken`)→input.
 - New app: `src/userapp/components/LiveView.tsx`, `src/userapp/api.ts` (`streamFrames`, `relayInput`).
@@ -45,6 +53,12 @@ WEFELLA_BROWSER_SANDBOX_SCREENCAST_MAX_SECONDS=240
 ```
 Run default facade: `npm run facade:dev`. The script sets `WEFELLA_FACADE_LOAD_LOCAL_ENV=1`, so FastAPI loads missing values from `.env.local` without overriding explicit process env.
 Apps: `http://127.0.0.1:4226/userapp` and `http://127.0.0.1:4226/mvp`.
+
+If the private Phase 30 env exists, the default facade prefers it over stale `.env.local` Steel endpoint values while preserving explicit process env. To force a different private provider file for one run:
+
+```
+WEFELLA_FACADE_PRIVATE_ENV_FILE=/path/to/private-steel.env npm run facade:dev
+```
 
 Optional second facade for A/B debugging:
 `set -a; source .env.local; set +a; python3 -m uvicorn project.api.main:app --port 8001`.
