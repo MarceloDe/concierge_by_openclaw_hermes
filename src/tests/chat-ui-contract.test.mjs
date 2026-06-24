@@ -202,6 +202,7 @@ test("React user app exposes remote read-only OpenClaw claim observation after h
   assert.match(userAppLiveView, /Continue read-only claim scan/);
   assert.match(userAppLiveView, /After you finish login and return control/);
   assert.match(userAppLiveView, /OpenClaw is observing the current remote page in read-only mode/);
+  assert.match(userAppLiveView, /Proof artifact:/);
   assert.match(userAppTsx, /onObservationAnswer/);
   assert.match(userAppTsx, /I observed the signed-in portal in read-only mode only/);
   assert.match(userAppTsx, /I did not enter credentials, submit forms, contact Aetna, or change account data/);

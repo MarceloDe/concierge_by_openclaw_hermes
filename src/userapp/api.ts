@@ -59,6 +59,16 @@ export interface ClaimsObservationResult {
   finalResponse?: string | null;
   sourcePointers: Array<{ table?: string; id?: string; displayLabel?: string; summary?: string }>;
   claimRows: Array<Record<string, any>>;
+  proof?: {
+    schemaVersion?: string;
+    artifactPath?: string;
+    status?: string;
+    sourcePointerCount?: number;
+    claimRowCount?: number;
+    rawPortalTextReturned?: boolean;
+    rawFrameRecorded?: boolean;
+    externalWriteActionsAllowed?: boolean;
+  } | null;
   safety: Record<string, any>;
   raw: any;
 }
@@ -317,6 +327,7 @@ export async function observeClaimsReadOnly(session: SessionState, browserSessio
     finalResponse: raw?.final_response ?? raw?.finalResponse ?? raw?.langchain_answer?.finalResponse ?? null,
     sourcePointers: raw?.source_pointers ?? raw?.sourcePointers ?? [],
     claimRows: raw?.claim_rows ?? raw?.claimRows ?? [],
+    proof: raw?.proof ?? null,
     safety: raw?.safety ?? {},
     raw
   };

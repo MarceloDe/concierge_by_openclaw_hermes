@@ -38,6 +38,8 @@ The React `/userapp` live view now matches the prior `/mvp` widget handoff:
 
 That button calls FastAPI `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe`. The facade asks the Steel provider to observe the current page and, when safe claim rows are visible, sends source pointers + structured claim rows back to the Node/LangChain sourced-answer composer. If the user has not logged in or no claims page is visible, the endpoint returns a next action instead of fabricating evidence. The assistant still cannot enter credentials, solve 2FA/captcha, submit forms, upload payer documents, contact Aetna, or change account data.
 
+Each claims-observe call now also writes a sanitized proof artifact using schema `brainstyworkers.claims-observe-proof.v1`. By default the artifact is written under `artifacts/remote-browser/claims-observe-proof-<uuid>.json`; set `WEFELLA_CLAIMS_OBSERVE_PROOF_DIR` to redirect runtime proof files. The artifact stores source-pointer refs, claim-row hashes/counts, LangChain composer mode, safety flags, and action names. It does not store raw portal text, frame content, credentials, tokens, raw claim-row text, or final answer text. The React `/userapp` shows the artifact path after a successful read-only scan.
+
 ## Local-run env (`.env.local`, dev only; production gate untouched, default off)
 ```
 WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote
