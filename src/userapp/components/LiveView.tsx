@@ -202,7 +202,8 @@ export function LiveView({
       }
       const answer = [
         result.finalResponse ?? `OpenClaw found ${result.claimRows.length} claim row(s).`,
-        sourceIds ? `Source pointers: ${sourceIds}` : null
+        sourceIds ? `Source pointers: ${sourceIds}` : null,
+        result.proof?.artifactPath ? `Proof artifact: ${result.proof.artifactPath}` : null
       ].filter(Boolean).join("\n\n");
       setScanMessage(answer);
       setStatus(`OpenClaw read-only claim scan complete: ${result.claimRows.length} claim row(s), ${result.sourcePointers.length} source pointer(s).`);

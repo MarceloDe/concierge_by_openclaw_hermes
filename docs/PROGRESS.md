@@ -9858,3 +9858,40 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login claim extraction still requires the user to sign in manually inside the AWS/Steel browser, pass any 2FA/captcha challenge, return control, and then run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
+
+# Phase 66-73 Follow-Up — Post-Login Claims Proof Artifact
+
+Date: 2026-06-24
+
+RALPH state:
+
+- Requirements: make the post-login Aetna read-only scan auditable after the user manually signs in, while preserving the no-credentials/no-submit/no-upload browser boundary.
+- Architecture: keep the existing FastAPI `claims-observe` endpoint as the public connector path, keep Node/LangChain as the final-answer composer, and add a separate sanitized local proof artifact beside the API response.
+- Loop: added proof writing after the provider observation and LangChain answer composer complete, then surfaced the artifact path in `/userapp` when the scan succeeds.
+- Prove: focused facade and UI contract tests prove the artifact is written and does not store raw claim text, raw portal text, raw frame content, credentials, tokens, or final answer text.
+- Harden: artifact rows use source-pointer refs and hashes/counts instead of claim descriptions, service dates, or response text.
+
+Implemented:
+
+- Added `brainstyworkers.claims-observe-proof.v1` artifacts from `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe`.
+- Added `WEFELLA_CLAIMS_OBSERVE_PROOF_DIR` for runtime proof redirection; default remains `artifacts/remote-browser`.
+- Added proof metadata to the endpoint response: artifact path, status, source-pointer count, claim-row count, and safety booleans.
+- Updated the React `/userapp` live view to display `Proof artifact: <path>` after a successful read-only scan.
+- Added regression coverage in `project/tests/test_fastapi_facade.py` and `src/tests/chat-ui-contract.test.mjs`.
+
+Proof:
+
+- `npm run test:facade` passed: 61 tests, 2 expected skips.
+- `npm run userapp:build` passed.
+- `node --test src/tests/chat-ui-contract.test.mjs` passed: 15 tests.
+- `npm run build` passed.
+- `npm run test:local` passed: 331 tests, 329 passed, 2 expected live-gated skips.
+- Restarted the default FastAPI facade on `:8000`; `GET /api/v1/health` returned `node_runtime_ok=true` for Node `http://127.0.0.1:4226`.
+- Live default-facade smoke created an AWS/Steel session with `provider=hosted_remote`, `provider_strategy=steel-self-host`, `provider_live_connected=true`, `stream_transport=sse_cdp_jpeg_frames`, and `navigation_status=remote_cdp_navigated`.
+- Live `POST /api/v1/browser/sessions/{id}/openclaw/claims-observe` before user login returned `status=human_login_required`, `source_pointer_count=0`, `claim_row_count=0`, `agentCredentialEntryAllowed=false`, and proof artifact `artifacts/remote-browser/claims-observe-proof-8a2d20b6-d14f-4faa-abd6-1293b1420161.json`.
+- The live proof artifact had no blocked raw-string hits and kept `portalText=false`, `frameContent=false`, `credentials=false`, `tokens=false`, `claimRowText=false`, and `finalResponseText=false`.
+- `GET http://127.0.0.1:4226/userapp?verify=proof-artifact` served the rebuilt bundle `/userapp/assets/index-Ut5Ei0nW.js` with no browser console errors.
+
+Remaining manual gate:
+
+- Actual post-login proof still requires the user to take control inside the AWS/Steel browser, sign in to Aetna manually, pass any 2FA/captcha challenge, return control, and run **Continue read-only claim scan**. That final live proof is intentionally human-gated; Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.

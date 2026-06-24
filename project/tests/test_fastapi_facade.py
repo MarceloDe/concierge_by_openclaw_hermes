@@ -1519,23 +1519,41 @@ class FastApiFacadeTest(unittest.TestCase):
             "session_id": "session_claims",
             "user_id": "v1_observed_claims_user"
         }
-        with patch("project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider.observe_claims_read_only", fake_observe):
-            client = TestClient(app)
-            response = client.post(
-                "/api/v1/browser/sessions/hosted_browser_claims/openclaw/claims-observe",
-                headers=self.bearer_headers("v1_observed_claims_user"),
-                json={"message": "summarize my claims", "useLiveModel": True}
-            )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["status"], "claims_observed_with_source_pointers")
-        self.assertEqual(payload["claim_rows"][0]["description"], "Example Clinic")
-        self.assertEqual(payload["source_pointers"][0]["table"], "portal_page_snapshots")
-        self.assertFalse(payload["source_pointers"][0]["rawTextReturned"])
-        self.assertIn("Aetna claim rows were observed", payload["final_response"])
-        self.assertEqual(payload["langchain_answer"]["sourcePointerIds"], ["portal_page_snapshots/aetna-portal-claims:abc123"])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"WEFELLA_CLAIMS_OBSERVE_PROOF_DIR": tmpdir}, clear=False):
+                with patch("project.api.browser_sandbox.HostedRemoteBrowserSandboxProvider.observe_claims_read_only", fake_observe):
+                    client = TestClient(app)
+                    response = client.post(
+                        "/api/v1/browser/sessions/hosted_browser_claims/openclaw/claims-observe",
+                        headers=self.bearer_headers("v1_observed_claims_user"),
+                        json={"message": "summarize my claims", "useLiveModel": True}
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.json()
+                    self.assertTrue(payload["ok"])
+                    self.assertEqual(payload["status"], "claims_observed_with_source_pointers")
+                    self.assertEqual(payload["claim_rows"][0]["description"], "Example Clinic")
+                    self.assertEqual(payload["source_pointers"][0]["table"], "portal_page_snapshots")
+                    self.assertFalse(payload["source_pointers"][0]["rawTextReturned"])
+                    self.assertIn("Aetna claim rows were observed", payload["final_response"])
+                    self.assertEqual(payload["langchain_answer"]["sourcePointerIds"], ["portal_page_snapshots/aetna-portal-claims:abc123"])
+                    self.assertEqual(payload["proof"]["schemaVersion"], "brainstyworkers.claims-observe-proof.v1")
+                    self.assertEqual(payload["proof"]["sourcePointerCount"], 1)
+                    self.assertEqual(payload["proof"]["claimRowCount"], 1)
+                    self.assertFalse(payload["proof"]["rawPortalTextReturned"])
+                    proof_path = payload["proof"]["artifactPath"]
+                    self.assertTrue(os.path.exists(proof_path))
+                    with open(proof_path, encoding="utf-8") as handle:
+                        artifact_text = handle.read()
+                    artifact = json.loads(artifact_text)
+                    self.assertEqual(artifact["schemaVersion"], "brainstyworkers.claims-observe-proof.v1")
+                    self.assertEqual(artifact["sourcePointerRefs"][0]["id"], "aetna-portal-claims:abc123")
+                    self.assertEqual(artifact["langchain"]["sourcePointerIds"], ["portal_page_snapshots/aetna-portal-claims:abc123"])
+                    self.assertFalse(artifact["rawFieldsStored"]["portalText"])
+                    self.assertFalse(artifact["rawFieldsStored"]["claimRowText"])
+                    self.assertNotIn("Example Clinic", artifact_text)
+                    self.assertNotIn("June 1, 2026", artifact_text)
+                    self.assertNotIn("Aetna claim rows were observed", artifact_text)
 
     def test_steel_self_host_claims_observe_rejects_offsite_current_page_before_sources(self):
         from project.api.browser_sandbox import HostedRemoteBrowserSandboxProvider

@@ -1,6 +1,9 @@
 import asyncio
+from datetime import datetime, timezone
+import hashlib
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 from typing import Any
 
@@ -55,6 +58,7 @@ LOCAL_AUTH_TOKEN_SECONDS = 24 * 60 * 60
 
 
 LOCAL_ENV_METADATA = load_local_env_if_enabled()
+CLAIMS_OBSERVE_PROOF_SCHEMA = "brainstyworkers.claims-observe-proof.v1"
 
 
 def allowed_origins() -> list[str]:
@@ -75,6 +79,129 @@ def cors_metadata() -> dict[str, Any]:
         "allow_methods": ["GET", "POST", "PATCH", "OPTIONS"],
         "allow_headers": ["authorization", "content-type", "x-request-id"],
         "production_safe": "*" not in origins and (auth_mode() not in PROVIDER_AUTH_MODES or explicitly_configured)
+    }
+
+
+def now_utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def sha256_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def safe_bool(value: Any) -> bool:
+    return value is True
+
+
+def claims_observe_proof_dir() -> Path:
+    raw = os.getenv("WEFELLA_CLAIMS_OBSERVE_PROOF_DIR") or "artifacts/remote-browser"
+    return Path(raw).expanduser()
+
+
+def display_artifact_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
+def write_claims_observe_proof_artifact(
+    *,
+    browser_session_id: str,
+    browser_session: dict[str, Any],
+    principal: UserPrincipal,
+    observation: dict[str, Any],
+    composer: dict[str, Any]
+) -> dict[str, Any]:
+    source_pointers = observation.get("source_pointers") if isinstance(observation.get("source_pointers"), list) else []
+    claim_rows = observation.get("claim_rows") if isinstance(observation.get("claim_rows"), list) else []
+    safety = observation.get("safety") if isinstance(observation.get("safety"), dict) else {}
+    source_refs = [
+        {
+            "table": pointer.get("table"),
+            "id": pointer.get("id"),
+            "displayLabel": pointer.get("displayLabel"),
+            "rawTextReturned": safe_bool(pointer.get("rawTextReturned"))
+        }
+        for pointer in source_pointers
+        if isinstance(pointer, dict)
+    ]
+    claim_refs = [
+        {
+            "claimRef": row.get("claim_ref") or row.get("claimRef"),
+            "descriptionHash": sha256_text(row.get("description")),
+            "serviceDateHash": sha256_text(row.get("service_date") or row.get("serviceDate")),
+            "statusHash": sha256_text(row.get("status")),
+            "shareAmountPresent": row.get("share_amount") is not None or row.get("shareAmount") is not None
+        }
+        for row in claim_rows
+        if isinstance(row, dict)
+    ]
+    langchain_validation = composer.get("validation") if isinstance(composer.get("validation"), dict) else {}
+    artifact = {
+        "schemaVersion": CLAIMS_OBSERVE_PROOF_SCHEMA,
+        "createdAt": now_utc_iso(),
+        "browserSessionId": browser_session_id,
+        "sessionIdHash": sha256_text(browser_session.get("session_id")),
+        "userIdHash": sha256_text(principal.user_id),
+        "provider": browser_session.get("provider"),
+        "providerStrategy": browser_session.get("provider_strategy"),
+        "status": observation.get("status"),
+        "ok": observation.get("ok") is True,
+        "currentUrlHost": observation.get("current_url_host"),
+        "currentTitleHash": sha256_text(observation.get("current_title")),
+        "sourcePointerCount": len(source_refs),
+        "sourcePointerRefs": source_refs,
+        "claimRowCount": len(claim_refs),
+        "claimRowRefs": claim_refs,
+        "langchain": {
+            "status": composer.get("status"),
+            "mode": composer.get("mode"),
+            "usedModelComposedText": safe_bool(composer.get("usedModelComposedText")),
+            "sourcePointerIds": composer.get("sourcePointerIds") if isinstance(composer.get("sourcePointerIds"), list) else [],
+            "validation": {
+                "valid": langchain_validation.get("valid"),
+                "issueCount": len(langchain_validation.get("issues") or [])
+            },
+            "finalResponseHash": sha256_text(composer.get("finalResponse"))
+        },
+        "safety": {
+            "readOnly": safe_bool(safety.get("readOnly")),
+            "allowedHost": safety.get("allowedHost"),
+            "agentCredentialEntryAllowed": safe_bool(safety.get("agentCredentialEntryAllowed")),
+            "formSubmitAllowed": safe_bool(safety.get("formSubmitAllowed")),
+            "rawPortalTextReturned": safe_bool(safety.get("rawPortalTextReturned")),
+            "rawFrameRecorded": False,
+            "externalWriteActionsAllowed": False
+        },
+        "actionsTaken": observation.get("actions_taken") if isinstance(observation.get("actions_taken"), list) else [],
+        "rawFieldsStored": {
+            "portalText": False,
+            "frameContent": False,
+            "credentials": False,
+            "tokens": False,
+            "claimRowText": False,
+            "finalResponseText": False
+        }
+    }
+    proof_dir = claims_observe_proof_dir()
+    proof_dir.mkdir(parents=True, exist_ok=True)
+    path = proof_dir / f"claims-observe-proof-{uuid4()}.json"
+    path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "schemaVersion": CLAIMS_OBSERVE_PROOF_SCHEMA,
+        "artifactPath": display_artifact_path(path),
+        "ok": artifact["ok"],
+        "status": artifact["status"],
+        "sourcePointerCount": artifact["sourcePointerCount"],
+        "claimRowCount": artifact["claimRowCount"],
+        "rawPortalTextReturned": False,
+        "rawFrameRecorded": False,
+        "externalWriteActionsAllowed": False
     }
 
 
@@ -428,6 +555,13 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
                 "user": {"id": principal.user_id}
             }
         )
+        proof = write_claims_observe_proof_artifact(
+            browser_session_id=browser_session_id,
+            browser_session=browser_session,
+            principal=principal,
+            observation=observation,
+            composer=composer
+        )
         return {
             "version": VERSION,
             "browser_session_id": browser_session_id,
@@ -438,7 +572,8 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
             "claim_rows": observation.get("claim_rows") or [],
             "langchain_answer": composer,
             "final_response": composer.get("finalResponse"),
-            "safety": observation.get("safety") or {}
+            "safety": observation.get("safety") or {},
+            "proof": proof
         }
 
     @app.post("/api/v1/browser/sessions/{browser_session_id}/openclaw/explore")
