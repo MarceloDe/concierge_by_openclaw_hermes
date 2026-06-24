@@ -10,6 +10,134 @@ For every slice, record:
 - What the user can try locally
 - Known risks or gaps
 
+## Phase 73 First Testable MVP Readiness - 2026-06-22
+
+Slice name:
+- Aggregate Phases 66-72 into a first regular-user testable bill-verification MVP proof.
+
+Files changed:
+- `src/concierge/phase73MvpReadiness.mjs`
+- `src/server/server.mjs`
+- `src/app/app.js`
+- `src/tests/phase73-mvp-readiness.test.mjs`
+- `package.json`
+- `docs/PHASE_SCOREBOARD.md`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Added an aggregate readiness proof that requires Phases 66-72 to pass together.
+- Added a direct MVP readiness endpoint: `GET /api/mvp/readiness`.
+- Added dashboard proof key `phase73_first_testable_mvp_readiness`.
+- Declares the first testable MVP ready only for a regular-user bill-verification flow on `/mvp`.
+- Keeps production readiness false until live Postgres rollout, live Graphiti/Zep runtime, hosted remote browser readiness, authenticated OpenClaw signed-in proof, and live OpenAI composition proof are genuinely green.
+
+Verification commands:
+- `npm run test:mvp:readiness`
+- `npm run build`
+
+Verification result:
+- Passed in this run:
+  - first run caught an aggregate contract-name mismatch for the OpenClaw human-only credentials boundary;
+  - aggregate proof was aligned to the Phase 70 `credentials` contract;
+  - `npm run test:mvp:readiness`: 2 passed, 0 failed.
+  - `npm run build`: passed.
+  - `npm run test:local`: 326 total, 324 passed, 2 expected live-gated OpenClaw skips, 0 failed.
+  - Live API checks against `http://127.0.0.1:4226` passed for:
+    - `GET /api/mvp/readiness`;
+    - `POST /api/bill-verification/analyze`;
+    - `POST /api/bill-verification/final-answer`;
+    - `POST /api/bill-verification/skill-candidate`.
+  - In-app browser visual proof passed:
+    - `/mvp` first click immediately rendered bill extraction, source pointer, and "preparing sourced answer";
+    - `/mvp` later rendered a valid final answer with source IDs and no medical-advice/external-action caveat;
+    - `/` connector dashboard rendered Phase 71, Phase 72, and Phase 73 cards;
+    - Phase 73 card showed `100 / 100`, first testable MVP ready, production blocked, and named production blockers.
+
+What the user can try locally:
+- Open `/mvp`, paste a bill note, click Analyze Bill, and inspect extracted facts, missing evidence, no-login fallback, source IDs, and final answer.
+- Open `/` and inspect the Phase 66-73 proof cards.
+
+Known risks or gaps:
+- Phase 73 is a local/testable-MVP readiness decision, not a production launch decision.
+
+## Phase 72 Bill Sourced Answer - 2026-06-22
+
+Slice name:
+- LLM-primary sourced bill-answer path with strict bill claim/source validator and deterministic fallback.
+
+Files changed:
+- `src/concierge/billSourcedAnswer.mjs`
+- `src/server/server.mjs`
+- `src/app/app.js`
+- `src/app/mvp.js`
+- `src/tests/bill-sourced-answer.test.mjs`
+- `package.json`
+- `docs/PHASE_SCOREBOARD.md`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Added a bill-specific sourced answer adapter around the existing `sourcedAnswerComposer`.
+- Built source pointers and structured bill facts from the Phase 69 bill analyzer.
+- Added a strict bill validator requiring each supported bill/cost/provider/claim fact to cite an allowed source pointer ID.
+- Rejected unknown source IDs, medical-advice-shaped text, and false external-action claims such as payer contact or form submission.
+- Added deterministic fallback for no sources, no live model request, missing key, or validation failure.
+- Added `POST /api/bill-verification/final-answer`.
+- Updated `/mvp` so bill analysis immediately prepares a user-visible final answer with mode, validation, and source IDs.
+- Added connector proof key `phase72_bill_sourced_answer` and dashboard card.
+
+Verification commands:
+- `npm run test:bill-sourced-answer`
+- `npm run build`
+
+Verification result:
+- Passed in this run:
+  - first run caught a validator gap for the phrase "payer was contacted";
+  - validator was tightened to catch both "contacted payer" and "payer was contacted";
+  - `npm run test:bill-sourced-answer`: 3 passed, 0 failed.
+
+What the user can try locally:
+- Open `/mvp`, paste a bill note, click Analyze Bill, and review the extracted facts plus final sourced/fallback answer.
+
+Known risks or gaps:
+- Local tests prove the strict schema, validator, and fallback. Live OpenAI composition remains credential-gated and must not be counted as live LLM proof unless `OPENAI_API_KEY` is configured and the live composition test runs.
+
+## Phase 71 Bill Memory Skill Loop - 2026-06-22
+
+Slice name:
+- Ref-only bill-case memory episode and operator-reviewed skill candidate loop.
+
+Files changed:
+- `src/concierge/billMemorySkillLoop.mjs`
+- `src/server/server.mjs`
+- `src/app/app.js`
+- `src/tests/bill-memory-skill-loop.test.mjs`
+- `package.json`
+- `docs/PHASE_SCOREBOARD.md`
+- `docs/PROGRESS.md`
+
+Implemented:
+- Added a successful-bill-case memory episode contract for Graphiti/Zep ingestion.
+- Stored source pointer IDs, hashes, loop stages, and outcome metrics only; raw bill text and PHI payloads are not stored in the episode contract.
+- Added a reviewed skill candidate contract for `bill_verification_flow` containing tools, extractors, verifiers, sensors, controller loop stages, UI blocks, retrieval rules, and tests.
+- Kept staging activation operator-gated, production activation PR-gated, production driving blocked, and kill switch required.
+- Added `POST /api/bill-verification/skill-candidate` for a regular MVP test path.
+- Added connector proof key `phase71_bill_memory_skill_loop` and dashboard card.
+
+Verification commands:
+- `npm run test:bill-memory-skill-loop`
+- `npm run build`
+
+Verification result:
+- Passed in this run:
+  - `npm run test:bill-memory-skill-loop`: 3 passed, 0 failed.
+  - `npm run build`: passed.
+
+What the user can try locally:
+- Open `/mvp`, analyze a bill note, then use the API endpoint `/api/bill-verification/skill-candidate` to see the memory episode and skill candidate created for operator review.
+
+Known risks or gaps:
+- This phase creates the candidate contract and proof surface; it does not auto-write a skill into the worktree or enable production answer driving.
+
 ## Phase 35 PEMS Supervised Promotion Gates - 2026-06-18
 
 Slice name:
@@ -9434,3 +9562,166 @@ Verification:
 - API proof passed at `http://127.0.0.1:4231/api/proof/runs/local` and `http://127.0.0.1:4231/api/mvp/final-goal-evaluation`: `phase65_final_mvp_goal_evaluation` scored `100 / 100`, local/pilot MVP was `achieved`, production launch was `not_achieved`, and four production blockers were carried forward.
 - Dashboard visual proof passed at `http://127.0.0.1:4231/?phase=phase-65-final-mvp-goal-evaluation`: the Phase 65 card rendered final score, local/pilot MVP achieved, production launch not achieved, final answer, next recommended phase `fix-production-blockers`, and zero console errors.
 - Artifacts: `artifacts/phase65/phase65-dashboard-final-mvp-goal-evaluation.png` and `artifacts/phase65/phase65-final-mvp-goal-evaluation-proof.json`.
+# Phase 66 — Production Contract
+
+Date: 2026-06-22
+
+RALPH state:
+
+- Requirements: parsed the founder production interview answers and the attached Graphiti/Zep memory schema prompt.
+- Architecture: kept the existing server-first Node/FastAPI/PWA/dashboard architecture; locked the next wave as production blocker closure rather than a rewrite.
+- Loop: added a production contract module, dashboard proof entry, documentation, and test coverage.
+- Prove: `phase66_production_contract` must score 100/100 before Phase 67 starts.
+- Harden: resolved two ambiguous answers into safer production rules: encrypted cloud backup/restore is required for production PHI, and generated skills may be reviewed/operator-activated only inside gated contexts with versioned production activation.
+
+Implemented:
+
+- Added `src/concierge/productionContract.mjs`.
+- Added `docs/PRODUCTION_CONTRACT_PHASE66.md`.
+- Added dashboard/API proof key `phase66_production_contract`.
+- Added scoreboard row `production_contract_phase66`.
+
+Locked decisions:
+
+- First user: patient/member.
+- First workflow: bill verification flow from chat/PWA, including physical bill photo/upload.
+- Postgres: production default with 5-year retention.
+- Backup/restore: encrypted cloud backup and restore drill required for production.
+- Product memory: Graphiti/Zep schema-first, with patient-private and procedural memory boundaries.
+- Browser: self-hosted Steel on AWS first, user-visible live block, human-only credentials/2FA/captcha/form submission/uploads/payer contact.
+- OpenClaw auth: manual user login; session state may persist, credentials may not.
+- Skills: insurance portal browser, claim journey, Aetna plan, prior auth prep, denial appeal, procedure prep, provider network, pharmacy/formulary.
+- Answers: LLM-primary sourced composition when cited evidence exists, deterministic fallback only when validation fails or evidence/model is unavailable.
+
+Next:
+
+- Phase 67: implement the attached Graphiti/Zep schema-ready memory layer before executor/orchestrator memory-driving changes.
+
+# Phase 67 — Graphiti/Zep Schema-Ready Product Memory
+
+Date: 2026-06-22
+
+RALPH state:
+
+- Requirements: implement the attached `brainsty_graphiti_memory_schema_prompt.md` as a schema-only product-memory contract.
+- Architecture: Python/Pydantic package under `brainsty_memory/` with Node dashboard proof. No executor, UI, DSPy signatures, or agent prompts in this phase.
+- Loop: added entities, edges, group IDs, temporal helpers, privacy filter, ingestion envelopes/schema generation, retrieval view models/primitives, seed loop templates, migration stub, schema docs, and tests.
+- Prove: `npm run test:memory:schema`, `node --test src/tests/graphiti-schema-memory.test.mjs`, and `npm run build`.
+- Harden: provider-facing price retrieval filters plan-member/private observations; evidence artifacts block raw PHI body; Graphiti retrieval boundary returns view models, not raw nodes.
+
+Implemented:
+
+- Added `brainsty_memory/entities.py`.
+- Added `brainsty_memory/edges.py`.
+- Added `brainsty_memory/groups.py`.
+- Added `brainsty_memory/temporal.py`.
+- Added `brainsty_memory/privacy.py`.
+- Added `brainsty_memory/ingest/schemas.py`.
+- Added `brainsty_memory/retrieval/`.
+- Added `brainsty_memory/seeds/loop_templates/*.yaml`.
+- Added `brainsty_memory/migrate.py`.
+- Added `docs/schema.md`.
+- Added `tests/test_schema_contract.py`.
+- Added `src/concierge/graphitiSchemaMemory.mjs`.
+- Added dashboard/API proof key `phase67_graphiti_zep_schema_memory`.
+
+Boundary:
+
+- This is schema-ready memory, not a live Graphiti executor integration.
+- The in-memory test store proves signatures, privacy semantics, temporal behavior, and return shapes deterministically.
+- Production Graphiti calls must preserve the same contracts when wired in later phases.
+
+Next:
+
+- Phase 68: make Postgres the production/default runtime path with retention and encrypted backup/restore proof.
+
+# Phase 68 — Postgres Production Default
+
+Date: 2026-06-22
+
+RALPH state:
+
+- Requirements: Postgres must become the production/default runtime store while local development remains ergonomic and SQLite-backed.
+- Architecture: preserve the existing `PostgresStore` and smoke gates; add production-profile default resolution and dashboard proof instead of replacing the storage layer.
+- Loop: updated database driver resolution, storage readiness, proof module, dashboard/API proof, tests, and docs.
+- Prove: `npm run test:production:database`, `npm run test:db:safety`, and `npm run build`.
+- Harden: production readiness still requires secret-backed database URL, 5-year retention policy, encrypted backup/restore drill, provider backup policy, endpoint parity, worker leases, and bound-parameter adapters.
+
+Implemented:
+
+- Added `resolveDatabaseDriver()` and `isProductionDatabaseProfile()` in `src/concierge/databaseFactory.mjs`.
+- `NODE_ENV=production` or `BRAINSTY_RUNTIME_ENV=production-candidate` with `BRAINSTY_DATABASE_TARGET=postgres` now selects the Postgres runtime when `BRAINSTY_DB_DRIVER` is absent.
+- Local development without explicit driver still selects SQLite.
+- Updated `getStorageReadiness()` to use the same driver resolver as server startup.
+- Added `src/concierge/productionDatabaseReadiness.mjs`.
+- Added dashboard/API proof key `phase68_postgres_production_default`.
+- Added `src/tests/production-database-readiness.test.mjs`.
+
+Locked scope:
+
+- Production runtime state includes sessions, tasks, approvals/audit, source pointers/evidence, uploaded document metadata, generated-skill queue/executor state, and browser session state.
+- Retention target is 5 years.
+- Local Docker backup is development proof only; production requires encrypted cloud backup/restore drill.
+
+Next:
+
+- Phase 69: build the patient bill verification PWA/API flow on top of the production contract and schema memory posture.
+
+# Phase 69 — Patient Bill Verification MVP Flow
+
+Date: 2026-06-22
+
+RALPH state:
+
+- Requirements: the first real workflow is patient/member bill verification, including a physical bill/photo intake path and a no-login explanation fallback.
+- Architecture: add a safe Node parity endpoint and `/mvp` user-facing bill note intake while preserving the existing FastAPI upload path for real files.
+- Loop: implemented bill signal extraction, missing evidence checklist, source-pointer-only posture, parallel agent plan, no-login fallback, dashboard/API proof, PWA controls, and tests.
+- Prove: `npm run test:bill-verification`, `npm run build`, and visual `/mvp` testing.
+- Harden: no payer contact, form submission, credential entry, medical advice, or raw PHI graph/payload storage occurs in the bill analyzer.
+
+Implemented:
+
+- Added `src/concierge/billVerification.mjs`.
+- Added `POST /api/bill-verification/analyze`.
+- Added `/mvp` bill note textarea, `Analyze Bill` button, and bill verification panel.
+- Added dashboard/API proof key `phase69_bill_verification_mvp_flow`.
+- Added `src/tests/bill-verification-flow.test.mjs`.
+
+User behavior:
+
+- User can paste or type visible bill details.
+- The app extracts provider, amount, date, payer, claim reference, masked bill number, and code hints when present.
+- The app shows missing evidence and a no-login explanation fallback.
+- The app proposes parallel agents: bill parser, plan document research, approval/user-login-gated OpenClaw portal observer, and de-identified trusted public research.
+
+Next:
+
+- Phase 70: strengthen authenticated OpenClaw browser proof around the bill verification path and live user-controlled session boundaries.
+
+# Phase 70 — Authenticated OpenClaw Bill Flow Proof
+
+Date: 2026-06-22
+
+RALPH state:
+
+- Requirements: bill verification may use authenticated OpenClaw only with user-controlled login, read-only approval, source refs, and human-only takeover for credentials/2FA/captcha/submissions/uploads.
+- Architecture: keep existing OpenClaw live readiness and takeover boundaries; add a bill-flow proof contract without pretending a portal is signed in.
+- Loop: added Phase 70 proof module, dashboard/API proof, and tests.
+- Prove: `npm run test:openclaw:bill-auth` and `npm run build`.
+- Harden: the proof status distinguishes `live_gate_ready_user_login_required` from `ready_for_read_only_approval`.
+
+Implemented:
+
+- Added `src/concierge/authenticatedOpenClawBillProof.mjs`.
+- Added dashboard/API proof key `phase70_authenticated_openclaw_bill_flow`.
+- Added `src/tests/authenticated-openclaw-bill-proof.test.mjs`.
+
+Boundary:
+
+- Agent cannot enter credentials, passkeys, 2FA, captcha, or SSN.
+- Agent cannot submit forms, upload documents, contact payers, pay/cancel, or modify records.
+- Authenticated portal readiness still requires a user-controlled signed-in session.
+
+Next:
+
+- Phase 71: connect successful bill/case outcomes to schema memory episodes and generated skill candidates through an operator review queue.

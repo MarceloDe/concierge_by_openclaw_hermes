@@ -1,0 +1,20 @@
+template_id: ralph-build-claim-v1
+target_goal: build_claim
+version: 1
+description: Build a claim packet from patient-provided bill, EOB, portal claim state, and required supporting evidence.
+entry_stage_id: collect_bill_artifacts
+exit_predicate_text: final verifier confirms claim packet fields and evidence pointers are complete.
+max_iterations: 12
+stages:
+  - ordinal: 1
+    stage_id: collect_bill_artifacts
+    tools: [patient_interview]
+    verifiers: [patient_has_bill_pointer]
+  - ordinal: 2
+    stage_id: verify_claim_context
+    tools: [payer_portal_consult, coverage_doc_lookup]
+    verifiers: [claim_context_has_source_pointer]
+  - ordinal: 3
+    stage_id: package_next_steps
+    tools: [calculator, escalation_template]
+    verifiers: [final_answer_has_citations]

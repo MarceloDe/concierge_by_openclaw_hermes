@@ -1,0 +1,20 @@
+template_id: ralph-preauth-medication-v1
+target_goal: preauth_medication
+version: 1
+description: Prepare medication prior authorization context using formulary and step-therapy evidence.
+entry_stage_id: identify_medication
+exit_predicate_text: medication coverage and PA checklist are cited or blockers are explicit.
+max_iterations: 12
+stages:
+  - ordinal: 1
+    stage_id: identify_medication
+    tools: [medication_classifier, medication_search]
+    verifiers: [drug_identity_confirmed]
+  - ordinal: 2
+    stage_id: verify_formulary
+    tools: [formulary_lookup, coverage_doc_lookup]
+    verifiers: [formulary_entry_valid_as_of]
+  - ordinal: 3
+    stage_id: prepare_pa_next_steps
+    tools: [p2p_review_request, written_grievance_template]
+    verifiers: [human_review_before_submission]

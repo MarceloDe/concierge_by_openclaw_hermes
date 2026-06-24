@@ -1,11 +1,11 @@
 {
   "ok": true,
   "version": "2026-06-17.browser-sandbox-provider.v1",
-  "status": "hosted_browser_sandbox_provider_selection_contract_ready",
+  "status": "hosted_browser_sandbox_provider_selection_preflight_ready",
   "providerSelectionContractReady": true,
-  "providerSelectionPreflightReady": false,
-  "selectedProviderKnown": false,
-  "selectedProviderKey": null,
+  "providerSelectionPreflightReady": true,
+  "selectedProviderKnown": true,
+  "selectedProviderKey": "custom_webrtc",
   "hostedProviderReady": false,
   "hostedRemoteScoreMayPassOnlyAfterLiveVerified": true,
   "validation": {

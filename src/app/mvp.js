@@ -23,6 +23,8 @@ const state = {
   runtimeEvents: [],
   documentCandidates: [],
   latestUpload: null,
+  latestBillVerification: null,
+  latestBillAnswer: null,
   sessionHistory: null,
   latestFeedback: null,
   latestExport: null,
@@ -57,6 +59,8 @@ const elements = {
   workerStatus: $("#workerStatus"),
   documentFile: $("#documentFile"),
   documentKind: $("#documentKind"),
+  billText: $("#billText"),
+  billPanel: $("#billPanel"),
   uploadPanel: $("#uploadPanel"),
   feedbackComment: $("#feedbackComment"),
   historyPanel: $("#historyPanel"),
@@ -552,6 +556,9 @@ function usingFacade() {
 }
 
 function facadeBaseUrl() {
+  // ?facade= query override (points at a working facade, e.g. :8001) > the input field > default.
+  const q = new URLSearchParams(location.search).get("facade");
+  if (q) return q.trim().replace(/\/$/, "");
   return (elements.facadeUrl?.value ?? "http://127.0.0.1:8000").trim().replace(/\/$/, "");
 }
 
@@ -646,22 +653,33 @@ function updateSession(enrollment) {
   if (state.session?.id) mountWorkerBrowser();
 }
 
-// Mount the live worker-browser widget once per session. The /api/runtime/browser/*
-// routes are served same-origin by the Node runtime (where /mvp is served), so apiBase
-// is empty regardless of the chat backend toggle.
+// Mount the live worker-browser widget once per session/backend route. Regular-user
+// facade mode must use the hosted browser sandbox API; the local CDP path is kept for
+// explicit Node/operator parity only.
 function mountWorkerBrowser() {
   const mount = document.getElementById("remoteBrowserMount");
   const panel = document.getElementById("workerBrowserPanel");
   if (!mount || !panel) return;
-  if (state.remoteBrowserSession === state.session.id) return;
+  const facadeSelected = usingFacade();
+  const providerMode = facadeSelected ? "facade_remote" : "local_cdp";
+  const remoteBrowserKey = [
+    state.session.id,
+    providerMode,
+    providerMode === "facade_remote" ? facadeBaseUrl() : "same-origin-node"
+  ].join("::");
+  if (state.remoteBrowserSession === remoteBrowserKey) return;
   state.remoteBrowser?.destroy?.();
   state.remoteBrowser = mountRemoteBrowser(mount, {
     sessionId: state.session.id,
     userId: state.user?.id ?? null,
     apiBase: "",
-    targetUrl: elements.portalUrl.value.trim() || null
+    targetUrl: elements.portalUrl.value.trim() || null,
+    providerMode,
+    facadeBaseUrl: facadeBaseUrl(),
+    authToken: state.facadeAccessToken,
+    provider: "hosted_remote"
   });
-  state.remoteBrowserSession = state.session.id;
+  state.remoteBrowserSession = remoteBrowserKey;
   panel.hidden = false;
 }
 
@@ -1473,6 +1491,116 @@ function renderUploadPanel(upload = state.latestUpload) {
   `;
 }
 
+function renderBillPanel(result = state.latestBillVerification) {
+  if (!elements.billPanel) return;
+  if (!result) {
+    elements.billPanel.textContent = "No bill verification run yet.";
+    return;
+  }
+  const detected = result.detected ?? {};
+  const agents = result.parallelAgents ?? [];
+  const missing = result.missingEvidence ?? [];
+  const answer = state.latestBillAnswer;
+  const fields = [
+    ["Provider", detected.provider],
+    ["Amount", detected.amount ? `$${detected.amount}` : null],
+    ["Date", detected.date],
+    ["Payer", detected.payer],
+    ["Claim", detected.claim],
+    ["Bill", detected.billNumberMasked],
+    ["CPT/HCPCS", detected.cpt?.join(", ")]
+  ];
+  elements.billPanel.innerHTML = `
+    <div class="phase-proof-state ${escapeHtml(result.status ?? "unknown")}">
+      <strong>${escapeHtml(result.status ?? "not analyzed")}</strong>
+      <span>${escapeHtml(result.sourcePointer?.kind ?? "bill note")}</span>
+    </div>
+    <div class="key-value-list">
+      <dl>
+        <dt>Source pointer</dt>
+        <dd>${escapeHtml(result.sourcePointer?.id ?? "none")}</dd>
+        <dt>Raw text stored</dt>
+        <dd>${escapeHtml(result.sourcePointer?.rawTextReturned ? "attention" : "no")}</dd>
+        <dt>Missing</dt>
+        <dd>${escapeHtml(missing.length ? missing.join(", ") : "none")}</dd>
+      </dl>
+    </div>
+    <div class="upload-fields">
+      ${fields.map(([label, value]) => `<div class="upload-field"><b>${escapeHtml(label)}</b><span>${escapeHtml(value || "not found")}</span></div>`).join("")}
+    </div>
+    <ol class="citation-spans">
+      ${agents.map((agent) => `<li><span>${escapeHtml(agent.key)}</span><p>${escapeHtml(agent.status)} · ${escapeHtml(agent.task)}</p></li>`).join("")}
+    </ol>
+    <p class="upload-preview">${escapeHtml(result.noLoginFallback?.message ?? "No no-login fallback reported.")}</p>
+    ${
+      answer
+        ? `
+          <section class="citation-panel" aria-label="Bill sourced answer">
+            <div class="panel-heading">
+              <p class="eyebrow">Final Answer</p>
+              <h3>${escapeHtml(answer.mode ?? "deterministic_fallback")}</h3>
+            </div>
+            <p class="upload-preview">${escapeHtml(answer.finalResponse ?? "No final response composed yet.")}</p>
+            <div class="key-value-list">
+              <dl>
+                <dt>Validation</dt>
+                <dd>${escapeHtml(answer.validation?.valid ? "valid" : (answer.validation?.issues ?? []).join(", ") || "fallback")}</dd>
+                <dt>Model text used</dt>
+                <dd>${escapeHtml(answer.usedModelComposedText ? "yes" : "no")}</dd>
+                <dt>Sources</dt>
+                <dd>${escapeHtml((answer.sourcePointerIds ?? []).join(", ") || result.sourcePointer?.id || "none")}</dd>
+              </dl>
+            </div>
+          </section>
+        `
+        : ""
+    }
+  `;
+}
+
+async function analyzeBill() {
+  await ensureSession();
+  const text = elements.billText?.value?.trim() ?? "";
+  if (!text) {
+    elements.billPanel.textContent = "Paste or type the visible bill details first.";
+    addMessage("system", "Paste or type the visible bill details before running bill verification.");
+    return { ok: false, status: "bill_text_required" };
+  }
+  const payload = await api("/api/bill-verification/analyze", {
+    method: "POST",
+    body: JSON.stringify({
+      text,
+      filename: "mvp-bill-note.txt",
+      userId: state.user?.id,
+      sessionId: state.session?.id,
+      payer: elements.payer?.value
+    }),
+    timeoutMs: 30000
+  });
+  state.latestBillVerification = payload;
+  state.latestBillAnswer = {
+    mode: "preparing_sourced_answer",
+    usedModelComposedText: false,
+    finalResponse: "Preparing a sourced answer from the bill source pointer and validation rails.",
+    sourcePointerIds: payload.sourcePointer?.id ? [`${payload.sourcePointer.kind}/${payload.sourcePointer.id}`] : [],
+    validation: { valid: false, issues: ["composition_in_progress"] }
+  };
+  renderBillPanel(payload);
+  state.latestBillAnswer = await api("/api/bill-verification/final-answer", {
+    method: "POST",
+    body: JSON.stringify({
+      analysis: payload,
+      useLiveModel: Boolean(elements.useLiveModel?.checked)
+    }),
+    timeoutMs: 90000
+  });
+  renderBillPanel(payload);
+  const message = `Help me verify this bill. Use the bill source pointer ${payload.sourcePointer?.id}, ask for missing evidence if needed, and explain what you can verify without portal login.`;
+  elements.message.value = message;
+  addMessage("system", `Bill analyzed and answer prepared: ${payload.userVisibleSummary}`);
+  return payload;
+}
+
 async function uploadDocument() {
   if (!usingFacade()) {
     elements.uploadPanel.textContent = "Document upload requires the Wefella FastAPI facade. Start the facade or use the Node route for non-upload MVP testing.";
@@ -2268,6 +2396,8 @@ function activateFacadeRoute() {
   elements.backendRoute.value = "wefella";
   state.facadeAccessToken = null;
   state.latestFacadeTask = null;
+  state.remoteBrowserSession = null;
+  if (state.session?.id) mountWorkerBrowser();
   setFacadeStatus("FastAPI facade selected. Start Session will mint a local MVP bearer token.");
   renderAnswer(state.latestRun);
 }
@@ -2275,11 +2405,13 @@ function activateFacadeRoute() {
 function handleBackendRouteChange() {
   state.facadeAccessToken = null;
   state.latestFacadeTask = null;
+  state.remoteBrowserSession = null;
   if (usingFacade()) {
     setFacadeStatus("FastAPI facade selected. Check Facade, then Start Session.");
   } else {
     setFacadeStatus("Direct Node route active for operator parity.");
   }
+  if (state.session?.id) mountWorkerBrowser();
   renderAnswer(state.latestRun);
 }
 
@@ -2293,6 +2425,8 @@ function resetView() {
   state.latestFacadeTask = null;
   state.parityResult = null;
   state.latestUpload = null;
+  state.latestBillVerification = null;
+  state.latestBillAnswer = null;
   state.sessionHistory = null;
   state.latestFeedback = null;
   state.latestExport = null;
@@ -2309,6 +2443,7 @@ function resetView() {
   if (elements.feedbackComment) elements.feedbackComment.value = "";
   renderSessionHistory();
   renderUploadPanel();
+  renderBillPanel();
   renderPhase9FProof();
   renderParity();
   renderAnswer();
@@ -2348,6 +2483,7 @@ $("#useFacade").addEventListener("click", activateFacadeRoute);
 $("#runParity").addEventListener("click", () => runAction("Running Node versus FastAPI parity check...", runParityCheck));
 $("#uploadDocument").addEventListener("click", () => runAction("Uploading document and running local extraction...", uploadDocument));
 $("#askUploadedDocument").addEventListener("click", () => runAction("Routing uploaded document question through LangGraph...", askAboutUploadedDocument));
+$("#analyzeBill").addEventListener("click", () => runAction("Analyzing bill and preparing verification plan...", analyzeBill));
 $("#loadHistory").addEventListener("click", () => runAction("Loading protected session history...", loadSessionHistory));
 $("#loadHandoffs").addEventListener("click", () => runAction("Loading human handoff queue...", loadHandoffs));
 $("#exportSession").addEventListener("click", () => runAction("Exporting the latest sourced answer...", exportSessionAnswer));

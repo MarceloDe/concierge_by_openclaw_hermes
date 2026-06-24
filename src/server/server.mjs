@@ -119,6 +119,19 @@ import { buildPhase62GeneratedSkillReviewQueueProof, listGeneratedSkillReviewQue
 import { buildPhase63GeneratedSkillPrExecutorProof, listGeneratedSkillPrExecutorRuns } from "../concierge/generatedSkillPrExecutor.mjs";
 import { buildPhase64MvpCompletionAudit } from "../concierge/mvpCompletionAudit.mjs";
 import { buildPhase65FinalMvpGoalEvaluation } from "../concierge/finalMvpGoalEvaluation.mjs";
+import { buildPhase66ProductionContractProof } from "../concierge/productionContract.mjs";
+import { buildPhase67GraphitiSchemaMemoryProof } from "../concierge/graphitiSchemaMemory.mjs";
+import { buildPhase68ProductionDatabaseProof } from "../concierge/productionDatabaseReadiness.mjs";
+import { analyzeBillVerificationInput, buildPhase69BillVerificationProof } from "../concierge/billVerification.mjs";
+import { buildPhase70AuthenticatedOpenClawBillProof } from "../concierge/authenticatedOpenClawBillProof.mjs";
+import {
+  buildPhase71BillMemorySkillLoopProof,
+  createBillVerificationMemoryEpisode,
+  createBillVerificationSkillCandidate
+} from "../concierge/billMemorySkillLoop.mjs";
+import { buildPhase72BillSourcedAnswerProof, composeBillVerificationFinalAnswer } from "../concierge/billSourcedAnswer.mjs";
+import { composePortalObservationFinalAnswer } from "../concierge/portalObservationAnswer.mjs";
+import { buildPhase73MvpReadinessProof } from "../concierge/phase73MvpReadiness.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -173,8 +186,17 @@ await loadLocalEnvOnce();
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8"
+  ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".map": "application/json; charset=utf-8"
 };
 
 const store = await createDatabaseStore(process.env).initialize();
@@ -1451,6 +1473,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     error: error.message
   }));
   const liveReadiness = classifyOfficialOpenClawLiveReadiness(openclawReadiness);
+  const phase70AuthenticatedOpenClawBillProof = buildPhase70AuthenticatedOpenClawBillProof({ liveReadiness });
   const phase56Hardening = await buildPhase56HardeningProof();
   const phase57ExtensibleSkills = await buildPhase57ExtensibleSkillsProof();
   const phase58TrustedAnswerDriving = buildPhase58TrustedAnswerDrivingProof();
@@ -1478,6 +1501,25 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     counts
   });
   const phase65FinalMvpGoalEvaluation = buildPhase65FinalMvpGoalEvaluation({ phase64MvpCompletionAudit });
+  const phase66ProductionContract = buildPhase66ProductionContractProof({ docsPresent: true });
+  const phase67GraphitiSchemaMemory = buildPhase67GraphitiSchemaMemoryProof();
+  const phase68ProductionDatabase = buildPhase68ProductionDatabaseProof();
+  const phase69BillVerification = buildPhase69BillVerificationProof();
+  const phase71BillMemorySkillLoop = buildPhase71BillMemorySkillLoopProof();
+  const phase72BillSourcedAnswer = await buildPhase72BillSourcedAnswerProof();
+  const phase73MvpReadiness = buildPhase73MvpReadinessProof({
+    phase66ProductionContract,
+    phase67GraphitiSchemaMemory,
+    phase68ProductionDatabase,
+    phase69BillVerification,
+    phase70AuthenticatedOpenClawBillProof,
+    phase71BillMemorySkillLoop,
+    phase72BillSourcedAnswer,
+    storage,
+    productMemory,
+    deployment,
+    liveReadiness
+  });
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1714,6 +1756,46 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase65_final_mvp_goal_evaluation",
         status: phase65FinalMvpGoalEvaluation.status,
         target: "Final MVP decision record declares local/pilot MVP achieved while keeping production launch blockers explicit."
+      },
+      {
+        key: "phase66_production_contract",
+        status: phase66ProductionContract.status,
+        target: "Founder decisions for production bill verification, Postgres, Graphiti/Zep memory, Steel browser, OpenClaw auth, skills, and sourced answers are locked before runtime changes."
+      },
+      {
+        key: "phase67_graphiti_zep_schema_memory",
+        status: phase67GraphitiSchemaMemory.status,
+        target: "Graphiti/Zep product memory has schema-first entity, edge, group, temporal, privacy, ingestion, retrieval, seed, migration, and test contracts before executor wiring."
+      },
+      {
+        key: "phase68_postgres_production_default",
+        status: phase68ProductionDatabase.status,
+        target: "Postgres is the production/default runtime store with 5-year retention, encrypted backup/restore drill, provider backup policy, and local SQLite dev fallback."
+      },
+      {
+        key: "phase69_bill_verification_mvp_flow",
+        status: phase69BillVerification.status,
+        target: "Patient-facing bill verification can analyze a bill photo/text note, show missing evidence, propose parallel agents, offer no-login fallback, and preserve OpenClaw approval boundaries."
+      },
+      {
+        key: "phase70_authenticated_openclaw_bill_flow",
+        status: phase70AuthenticatedOpenClawBillProof.status,
+        target: "Bill verification may use authenticated OpenClaw only through user-controlled login, explicit read-only approval, source refs, and human-only takeover for credentials/2FA/captcha/submissions/uploads."
+      },
+      {
+        key: "phase71_bill_memory_skill_loop",
+        status: phase71BillMemorySkillLoop.status,
+        target: "Successful bill verification cases create ref-only Graphiti/Zep memory episodes and operator-reviewed skill candidates without automatic production driving."
+      },
+      {
+        key: "phase72_bill_sourced_answer",
+        status: phase72BillSourcedAnswer.status,
+        target: "Bill verification final answers prefer LLM-sourced composition when cited evidence is valid and fall back deterministically when no key, no sources, or validation failure occurs."
+      },
+      {
+        key: "phase73_first_testable_mvp_readiness",
+        status: phase73MvpReadiness.status,
+        target: "Aggregate Phases 66-72 into a first regular-user testable bill-verification MVP while keeping production blockers explicit."
       }
     ],
     checks: [
@@ -1853,6 +1935,97 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         proof: phase65FinalMvpGoalEvaluation.proof,
         finalAnswer: phase65FinalMvpGoalEvaluation.finalAnswer,
         nextRecommendedPhase: phase65FinalMvpGoalEvaluation.nextRecommendedPhase
+      },
+      {
+        key: "phase66_production_contract",
+        status: phase66ProductionContract.status,
+        ok: phase66ProductionContract.ok,
+        score: phase66ProductionContract.score,
+        target: phase66ProductionContract.target,
+        checks: phase66ProductionContract.checks,
+        decisions: phase66ProductionContract.decisions,
+        gates: phase66ProductionContract.gates,
+        blockersResolved: phase66ProductionContract.blockersResolved
+      },
+      {
+        key: "phase67_graphiti_zep_schema_memory",
+        status: phase67GraphitiSchemaMemory.status,
+        ok: phase67GraphitiSchemaMemory.ok,
+        score: phase67GraphitiSchemaMemory.score,
+        target: phase67GraphitiSchemaMemory.target,
+        checks: phase67GraphitiSchemaMemory.checks,
+        seedCount: phase67GraphitiSchemaMemory.seedCount,
+        missingFiles: phase67GraphitiSchemaMemory.missingFiles,
+        contract: phase67GraphitiSchemaMemory.contract
+      },
+      {
+        key: "phase68_postgres_production_default",
+        status: phase68ProductionDatabase.status,
+        ok: phase68ProductionDatabase.ok,
+        score: phase68ProductionDatabase.score,
+        target: phase68ProductionDatabase.target,
+        checks: phase68ProductionDatabase.checks,
+        runtimeStateScope: phase68ProductionDatabase.runtimeStateScope,
+        retention: phase68ProductionDatabase.retention,
+        backupRestore: phase68ProductionDatabase.backupRestore,
+        readiness: phase68ProductionDatabase.readiness
+      },
+      {
+        key: "phase69_bill_verification_mvp_flow",
+        status: phase69BillVerification.status,
+        ok: phase69BillVerification.ok,
+        score: phase69BillVerification.score,
+        target: phase69BillVerification.target,
+        checks: phase69BillVerification.checks,
+        sample: phase69BillVerification.sample,
+        endpoint: phase69BillVerification.endpoint,
+        pwaSurface: phase69BillVerification.pwaSurface
+      },
+      {
+        key: "phase70_authenticated_openclaw_bill_flow",
+        status: phase70AuthenticatedOpenClawBillProof.status,
+        ok: phase70AuthenticatedOpenClawBillProof.ok,
+        score: phase70AuthenticatedOpenClawBillProof.score,
+        target: phase70AuthenticatedOpenClawBillProof.target,
+        checks: phase70AuthenticatedOpenClawBillProof.checks,
+        liveReadiness: phase70AuthenticatedOpenClawBillProof.liveReadiness,
+        approvalBoundary: phase70AuthenticatedOpenClawBillProof.approvalBoundary,
+        billVerificationIntegration: phase70AuthenticatedOpenClawBillProof.billVerificationIntegration
+      },
+      {
+        key: "phase71_bill_memory_skill_loop",
+        status: phase71BillMemorySkillLoop.status,
+        ok: phase71BillMemorySkillLoop.ok,
+        score: phase71BillMemorySkillLoop.score,
+        target: phase71BillMemorySkillLoop.target,
+        checks: phase71BillMemorySkillLoop.checks,
+        episode: phase71BillMemorySkillLoop.episode,
+        candidate: phase71BillMemorySkillLoop.candidate
+      },
+      {
+        key: "phase72_bill_sourced_answer",
+        status: phase72BillSourcedAnswer.status,
+        ok: phase72BillSourcedAnswer.ok,
+        score: phase72BillSourcedAnswer.score,
+        target: phase72BillSourcedAnswer.target,
+        checks: phase72BillSourcedAnswer.checks,
+        endpoint: phase72BillSourcedAnswer.endpoint,
+        pwaSurface: phase72BillSourcedAnswer.pwaSurface,
+        sourcePointerIds: phase72BillSourcedAnswer.sourcePointerIds,
+        validation: phase72BillSourcedAnswer.valid.validation,
+        fallbackMode: phase72BillSourcedAnswer.fallback.mode
+      },
+      {
+        key: "phase73_first_testable_mvp_readiness",
+        status: phase73MvpReadiness.status,
+        ok: phase73MvpReadiness.ok,
+        score: phase73MvpReadiness.score,
+        target: phase73MvpReadiness.target,
+        checks: phase73MvpReadiness.checks,
+        decision: phase73MvpReadiness.decision,
+        testPlan: phase73MvpReadiness.testPlan,
+        productionBlockers: phase73MvpReadiness.productionBlockers,
+        proofEndpoints: phase73MvpReadiness.proofEndpoints
       },
       {
         key: "database_storage",
@@ -2569,6 +2742,76 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         blockerCount: phase65FinalMvpGoalEvaluation.decision.productionLaunchBlockedBy.length
       },
       {
+        key: "phase66_production_contract",
+        score: phase66ProductionContract.score,
+        target: phase66ProductionContract.target,
+        status: phase66ProductionContract.status,
+        firstWorkflow: phase66ProductionContract.decisions.productionTarget.firstWorkflow,
+        firstUser: phase66ProductionContract.decisions.productionTarget.firstUser,
+        retentionYears: phase66ProductionContract.decisions.postgres.retentionYears,
+        nextPhase: phase66ProductionContract.gates.nextPhase
+      },
+      {
+        key: "phase67_graphiti_zep_schema_memory",
+        score: phase67GraphitiSchemaMemory.score,
+        target: phase67GraphitiSchemaMemory.target,
+        status: phase67GraphitiSchemaMemory.status,
+        seedCount: phase67GraphitiSchemaMemory.seedCount,
+        testCommand: phase67GraphitiSchemaMemory.contract.testCommand
+      },
+      {
+        key: "phase68_postgres_production_default",
+        score: phase68ProductionDatabase.score,
+        target: phase68ProductionDatabase.target,
+        status: phase68ProductionDatabase.status,
+        runtimeDriver: phase68ProductionDatabase.readiness.runtimeDriver,
+        retentionYears: phase68ProductionDatabase.retention.years,
+        backupRestore: phase68ProductionDatabase.backupRestore.required
+      },
+      {
+        key: "phase69_bill_verification_mvp_flow",
+        score: phase69BillVerification.score,
+        target: phase69BillVerification.target,
+        status: phase69BillVerification.status,
+        endpoint: phase69BillVerification.endpoint,
+        missingEvidenceCount: phase69BillVerification.sample.missingEvidence.length
+      },
+      {
+        key: "phase70_authenticated_openclaw_bill_flow",
+        score: phase70AuthenticatedOpenClawBillProof.score,
+        target: phase70AuthenticatedOpenClawBillProof.target,
+        status: phase70AuthenticatedOpenClawBillProof.status,
+        liveReadinessStatus: phase70AuthenticatedOpenClawBillProof.liveReadiness.status,
+        readyForReadOnlyObservation: phase70AuthenticatedOpenClawBillProof.liveReadiness.readyForReadOnlyObservation
+      },
+      {
+        key: "phase71_bill_memory_skill_loop",
+        score: phase71BillMemorySkillLoop.score,
+        target: phase71BillMemorySkillLoop.target,
+        status: phase71BillMemorySkillLoop.status,
+        candidateStatus: phase71BillMemorySkillLoop.candidate.status,
+        productionDrivingAllowed: phase71BillMemorySkillLoop.candidate.activation.autoProductionDrivingAllowed,
+        sourceCaseId: phase71BillMemorySkillLoop.episode.caseId
+      },
+      {
+        key: "phase72_bill_sourced_answer",
+        score: phase72BillSourcedAnswer.score,
+        target: phase72BillSourcedAnswer.target,
+        status: phase72BillSourcedAnswer.status,
+        endpoint: phase72BillSourcedAnswer.endpoint,
+        usedModelComposedTextInProof: phase72BillSourcedAnswer.valid.usedModelComposedText,
+        fallbackMode: phase72BillSourcedAnswer.fallback.mode
+      },
+      {
+        key: "phase73_first_testable_mvp_readiness",
+        score: phase73MvpReadiness.score,
+        target: phase73MvpReadiness.target,
+        status: phase73MvpReadiness.status,
+        firstTestableMvpReady: phase73MvpReadiness.decision.firstTestableMvpReady,
+        productionReady: phase73MvpReadiness.decision.productionReady,
+        productionBlockerCount: phase73MvpReadiness.productionBlockers.length
+      },
+      {
         key: "canonical_goal_tied_phase_execution",
         score: 100,
         target: 100,
@@ -2782,15 +3025,34 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
   };
 }
 
+// Entry routes that resolve to the new Vite/React user app shell (built into src/app/userapp).
+const USERAPP_SHELL = "userapp/index.html";
+const isUserAppRoute = (p) => p === "/userapp" || p === "/userapp/" || p === "/app" || p === "/app/";
+
 async function serveStatic(req, res) {
   const path = new URL(req.url, "http://localhost").pathname;
-  const fileName = path === "/" ? "index.html" : path === "/mvp" ? "mvp.html" : path.slice(1);
+  const fileName = path === "/"
+    ? "index.html"
+    : path === "/mvp"
+      ? "mvp.html"
+      : isUserAppRoute(path)
+        ? USERAPP_SHELL
+        : path.slice(1);
   const filePath = join(APP_DIR, fileName);
   try {
     const content = await readFile(filePath);
     res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream" });
     res.end(content);
   } catch {
+    // SPA fallback: unknown sub-paths under the user app resolve to its shell.
+    if (path.startsWith("/userapp/") || path.startsWith("/app/")) {
+      try {
+        const shell = await readFile(join(APP_DIR, USERAPP_SHELL));
+        res.writeHead(200, { "content-type": MIME[".html"] });
+        res.end(shell);
+        return;
+      } catch { /* fall through to 404 */ }
+    }
     sendJson(res, 404, { error: "Not found" });
   }
 }
@@ -2818,6 +3080,86 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname.startsWith("/api/proof/runs/")) {
     const runId = decodeURIComponent(url.pathname.split("/").pop() || "server-connector-next-mobile-mvp");
     sendJson(res, 200, await connectorProofRun(runId));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/mvp/readiness") {
+    const proof = await connectorProofRun("phase73-first-testable-mvp-readiness");
+    const phase73 = proof.checks.find((check) => check.key === "phase73_first_testable_mvp_readiness");
+    sendJson(res, 200, phase73 ?? { ok: false, status: "phase73_readiness_not_found" });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bill-verification/analyze") {
+    const body = await readJson(req);
+    sendJson(
+      res,
+      200,
+      analyzeBillVerificationInput({
+        text: body.text ?? body.billText ?? "",
+        filename: body.filename ?? "typed-bill-note.txt",
+        userId: body.userId ?? body.user_id ?? null,
+        sessionId: body.sessionId ?? body.session_id ?? null,
+        payer: body.payer ?? null
+      })
+    );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bill-verification/skill-candidate") {
+    const body = await readJson(req);
+    const analysis = analyzeBillVerificationInput({
+      text: body.text ?? body.billText ?? "",
+      filename: body.filename ?? "typed-bill-note.txt",
+      userId: body.userId ?? body.user_id ?? null,
+      sessionId: body.sessionId ?? body.session_id ?? null,
+      payer: body.payer ?? null
+    });
+    const episode = createBillVerificationMemoryEpisode({
+      billAnalysis: analysis,
+      outcome: body.outcome ?? "successful_case",
+      reviewedBy: body.reviewedBy ?? "operator_pending"
+    });
+    const candidate = createBillVerificationSkillCandidate({ memoryEpisode: episode, analysis });
+    sendJson(res, 200, {
+      ok: true,
+      status: "phase71_skill_candidate_created_for_operator_review",
+      analysis,
+      episode,
+      candidate
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bill-verification/final-answer") {
+    const body = await readJson(req);
+    const result = await composeBillVerificationFinalAnswer({
+      analysis: body.analysis ?? null,
+      text: body.text ?? body.billText ?? "",
+      filename: body.filename ?? "typed-bill-note.txt",
+      userId: body.userId ?? body.user_id ?? null,
+      sessionId: body.sessionId ?? body.session_id ?? null,
+      payer: body.payer ?? null,
+      llmDraft: body.llmDraft ?? null,
+      useLiveModel: Boolean(body.useLiveModel),
+      store,
+      user: body.user ?? null
+    });
+    sendJson(res, 200, result);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/portal-observation/final-answer") {
+    const body = await readJson(req);
+    const result = await composePortalObservationFinalAnswer({
+      observation: body.observation ?? {},
+      userMessage: body.userMessage ?? body.message ?? "",
+      llmDraft: body.llmDraft ?? null,
+      useLiveModel: Boolean(body.useLiveModel),
+      store,
+      user: body.user ?? null
+    });
+    sendJson(res, 200, result);
     return;
   }
 

@@ -7,8 +7,20 @@ export function normalizeDatabaseDriver(value) {
   return driver === "postgres" ? "postgres" : "sqlite";
 }
 
+export function isProductionDatabaseProfile(env = process.env) {
+  const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").trim().toLowerCase();
+  return ["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
+}
+
+export function resolveDatabaseDriver(env = process.env) {
+  if (env.BRAINSTY_DB_DRIVER) return normalizeDatabaseDriver(env.BRAINSTY_DB_DRIVER);
+  const target = String(env.BRAINSTY_DATABASE_TARGET ?? "postgres").trim().toLowerCase();
+  if (isProductionDatabaseProfile(env) && target === "postgres") return "postgres";
+  return "sqlite";
+}
+
 export function createDatabaseStore(env = process.env) {
-  const driver = normalizeDatabaseDriver(env.BRAINSTY_DB_DRIVER);
+  const driver = resolveDatabaseDriver(env);
   if (driver === "postgres") {
     return new PostgresStore(getDatabaseUrlFromEnv(env));
   }

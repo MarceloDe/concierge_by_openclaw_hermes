@@ -1,0 +1,20 @@
+template_id: ralph-verify-price-provider-v1
+target_goal: verify_price_provider
+version: 1
+description: Verify provider price/network context while preventing patient plan disclosure to provider-facing queries.
+entry_stage_id: identify_provider_and_procedure
+exit_predicate_text: price/network facts are cited with disclosure-safe output or blockers are explicit.
+max_iterations: 12
+stages:
+  - ordinal: 1
+    stage_id: identify_provider_and_procedure
+    tools: [patient_interview, npi_search]
+    verifiers: [provider_and_procedure_confirmed]
+  - ordinal: 2
+    stage_id: retrieve_price_network_facts
+    tools: [calculator, coverage_doc_lookup]
+    verifiers: [privacy_filter_applied]
+  - ordinal: 3
+    stage_id: compare_cash_and_plan_safe
+    tools: [coupon_lookup, calculator]
+    verifiers: [no_plan_leak_provider_facing]

@@ -1,0 +1,20 @@
+template_id: ralph-preauth-procedure-v1
+target_goal: preauth_procedure
+version: 1
+description: Prepare a prior authorization checklist for a procedure using plan rules and uploaded evidence.
+entry_stage_id: collect_preauth_inputs
+exit_predicate_text: preauth checklist is ready or explicit blockers are listed.
+max_iterations: 12
+stages:
+  - ordinal: 1
+    stage_id: collect_preauth_inputs
+    tools: [patient_interview]
+    verifiers: [cpt_or_procedure_confirmed]
+  - ordinal: 2
+    stage_id: verify_plan_rule
+    tools: [coverage_doc_lookup, payer_portal_consult]
+    verifiers: [benefit_rule_source_pointer_present]
+  - ordinal: 3
+    stage_id: prepare_packet
+    tools: [p2p_review_request, written_grievance_template]
+    verifiers: [human_review_before_submission]

@@ -1,0 +1,16 @@
+template_id: ralph-find-bill-v1
+target_goal: find_bill
+version: 1
+description: Help the patient locate the likely source, claim, or portal record for a bill.
+entry_stage_id: identify_bill_clues
+exit_predicate_text: likely bill source or clear missing evidence request is produced.
+max_iterations: 8
+stages:
+  - ordinal: 1
+    stage_id: identify_bill_clues
+    tools: [patient_interview]
+    verifiers: [bill_clues_present]
+  - ordinal: 2
+    stage_id: search_portal_or_docs
+    tools: [payer_portal_consult, coverage_doc_lookup]
+    verifiers: [search_scope_read_only]
