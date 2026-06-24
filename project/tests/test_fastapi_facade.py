@@ -10,7 +10,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from project.api.auth import create_access_token
-from project.api.local_env import load_local_env_once
+from project.api.local_env import load_facade_env_once, load_local_env_once, reset_local_env_loader_for_tests
 from project.api.main import create_app
 
 
@@ -845,6 +845,7 @@ class FastApiFacadeTest(unittest.TestCase):
         return {"Authorization": f"Bearer {create_access_token(user_id, extra_claims=extra_claims)}"}
 
     def test_local_env_loader_applies_missing_steel_facade_config_without_overriding_explicit_env(self):
+        reset_local_env_loader_for_tests()
         with tempfile.NamedTemporaryFile("w", suffix=".env.local", delete=False) as handle:
             handle.write("\n".join([
                 "WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote",
@@ -890,6 +891,79 @@ class FastApiFacadeTest(unittest.TestCase):
                 os.unlink(env_path)
             except FileNotFoundError:
                 pass
+            reset_local_env_loader_for_tests()
+
+    def test_default_facade_env_prefers_private_steel_config_over_repo_local_values(self):
+        reset_local_env_loader_for_tests()
+        with tempfile.NamedTemporaryFile("w", suffix=".env.local", delete=False) as local_handle:
+            local_handle.write("\n".join([
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME=steel-self-host",
+                "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL=http://127.0.0.1:3000",
+                "WEFELLA_BROWSER_SANDBOX_STEEL_API_URL=http://127.0.0.1:3000",
+                "WEFELLA_BROWSER_SANDBOX_CDP_URL=ws://127.0.0.1:9223",
+                "WEFELLA_NODE_RUNTIME_URL=http://127.0.0.1:4226"
+            ]))
+            local_path = local_handle.name
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as private_handle:
+            private_handle.write("\n".join([
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE=/private/config/runtime.json",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER=hosted_remote",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY=1",
+                "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME=steel-self-host",
+                "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL=https://steel-remote.invalid",
+                "WEFELLA_BROWSER_SANDBOX_CDP_URL=ws://127.0.0.1:9223",
+                "WEFELLA_BROWSER_SANDBOX_API_TOKEN=private-token-that-must-not-leak",
+                "WEFELLA_BROWSER_SANDBOX_VIEWER_URL=https://steel-remote.invalid",
+                "BRAINSTY_AETNA_PORTAL_URL=https://health.aetna.com/managemyaccount/login"
+            ]))
+            private_path = private_handle.name
+
+        keys = [
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_CONFIG_FILE",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_READY",
+            "WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME",
+            "WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL",
+            "WEFELLA_BROWSER_SANDBOX_STEEL_API_URL",
+            "WEFELLA_BROWSER_SANDBOX_CDP_URL",
+            "WEFELLA_BROWSER_SANDBOX_API_TOKEN",
+            "WEFELLA_BROWSER_SANDBOX_VIEWER_URL",
+            "BRAINSTY_AETNA_PORTAL_URL",
+            "WEFELLA_NODE_RUNTIME_URL"
+        ]
+        previous = {key: os.environ.get(key) for key in keys}
+        try:
+            for key in keys:
+                os.environ.pop(key, None)
+            os.environ["WEFELLA_NODE_RUNTIME_URL"] = "http://explicit-node-runtime.test"
+
+            result = load_facade_env_once(local_path=local_path, private_env_paths=[private_path])
+
+            self.assertTrue(result["loaded"])
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL"], "https://steel-remote.invalid")
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_STEEL_API_URL"], "https://steel-remote.invalid")
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME"], "steel-self-host")
+            self.assertEqual(os.environ["WEFELLA_BROWSER_SANDBOX_API_TOKEN"], "private-token-that-must-not-leak")
+            self.assertEqual(os.environ["BRAINSTY_AETNA_PORTAL_URL"], "https://health.aetna.com/managemyaccount/login")
+            self.assertEqual(os.environ["WEFELLA_NODE_RUNTIME_URL"], "http://explicit-node-runtime.test")
+            self.assertNotIn("WEFELLA_NODE_RUNTIME_URL", result["applied_keys"])
+            result_text = json.dumps(result)
+            self.assertNotIn("private-token-that-must-not-leak", result_text)
+            self.assertNotIn("https://steel-remote.invalid", result_text)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            for path in [local_path, private_path]:
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    pass
+            reset_local_env_loader_for_tests()
 
     def valid_visual_ocr_manifest(self):
         return {

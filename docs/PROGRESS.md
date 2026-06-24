@@ -9828,3 +9828,33 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login proof still needs the user to manually sign in inside the AWS/Steel browser, pass any login/2FA/captcha challenge, return control, and run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
+
+# Phase 66-73 Follow-Up — Default Facade Private Steel Config Hydration
+
+Date: 2026-06-24
+
+RALPH state:
+
+- Requirements: keep Claude's `/userapp` work and Phase 66-73 PR history clean, make the default FastAPI facade on `:8000` start with the private AWS/Steel provider config, and avoid relying on a separate `:8001` debug facade or stale `.env.local` Steel endpoints.
+- Architecture: keep Node as the internal runtime, FastAPI as the connector, `/userapp` as the regular-user app, and `/mvp` as the operator harness. Runtime provider values stay outside Git under `~/.config/workerprototype_openclaw/`.
+- Loop: extended the conservative FastAPI env loader so explicit process env wins, private Phase 30/Phase 28 Steel env wins over repo-local loaded Steel defaults, and `steel-self-host` maps `WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL` to `WEFELLA_BROWSER_SANDBOX_STEEL_API_URL` when no explicit Steel API URL exists.
+- Prove: added focused facade env-loader regression coverage and a live import proof showing the default facade resolves the private Steel endpoint and CDP tunnel metadata without returning secret values.
+- Harden: no endpoint token, raw provider secret, portal credential, frame, OCR text, or payer login value is committed or returned by the loader metadata.
+
+Implemented:
+
+- Added `load_facade_env_once()` in `project/api/local_env.py`.
+- Added private-provider env discovery for `~/.config/workerprototype_openclaw/phase30/phase30-remote.env`, then `~/.config/workerprototype_openclaw/phase28/phase28.env`.
+- Added a `WEFELLA_FACADE_PRIVATE_ENV_FILE` override for one-off private provider file selection.
+- Added Steel self-host endpoint aliasing from `WEFELLA_BROWSER_SANDBOX_ENDPOINT_URL` to `WEFELLA_BROWSER_SANDBOX_STEEL_API_URL` for the default facade.
+- Added regression coverage in `project/tests/test_fastapi_facade.py`.
+- Updated `docs/REMOTE_BROWSER_AND_USERAPP.md`.
+
+Proof:
+
+- `python3 -m unittest project.tests.test_fastapi_facade.FastApiFacadeTest.test_local_env_loader_applies_missing_steel_facade_config_without_overriding_explicit_env project.tests.test_fastapi_facade.FastApiFacadeTest.test_default_facade_env_prefers_private_steel_config_over_repo_local_values` passed.
+- `WEFELLA_FACADE_LOAD_LOCAL_ENV=1 python3 - <<'PY' ... import project.api.main ... PY` loaded `.env.local` plus the private Phase 30 env, selected the Phase 30 provider file over Phase 28, resolved `WEFELLA_BROWSER_SANDBOX_PROVIDER_NAME=steel-self-host`, resolved redacted endpoint hosts for Steel API/viewer/CDP, and returned only key/path metadata.
+
+Remaining manual gate:
+
+- Actual post-login claim extraction still requires the user to sign in manually inside the AWS/Steel browser, pass any 2FA/captcha challenge, return control, and then run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
