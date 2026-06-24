@@ -9760,3 +9760,34 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login claim extraction still requires the user to sign in manually inside the AWS/Steel browser, pass any 2FA/captcha, return control, and then run **Continue read-only claim scan**. Codex/OpenClaw must not enter credentials or solve challenges.
+
+# Phase 66-73 Follow-Up — Claude User App Verification And OpenClaw Readiness Hardening
+
+Date: 2026-06-23
+
+RALPH state:
+
+- Requirements: verify the Claude Code implementation of the regular-user app and ensure the app did not lose the new `/userapp` surface or default FastAPI facade path.
+- Architecture: keep `/userapp` as the regular-user PWA backed by FastAPI `:8000`; keep `/mvp` as the operator/parity harness; keep official OpenClaw observation limited to active approved payer portal tabs.
+- Loop: inspected the committed Claude app files, rebuilt/served `/userapp`, tested FastAPI local auth and readiness, then hardened official OpenClaw readiness against unrelated browser tabs.
+- Prove: focused readiness tests, `npm run build`, `npm run test:local`, `/userapp` HTTP asset check, Node `/api/openclaw/official/status` runtime check, and FastAPI `/api/auth/local-session` plus `/api/v1/openclaw/readiness` check.
+- Harden: generic authenticated-looking pages such as third-party dashboards no longer qualify for read-only approval. An inactive payer tab also no longer qualifies.
+
+Implemented:
+
+- Tightened `src/concierge/openclawLiveReadiness.mjs` so member/dashboard/account keywords only count on known payer hosts.
+- Required the current payer portal tab to be active before read-only approval readiness.
+- Added regression coverage in `src/tests/openclaw-live-readiness.test.mjs` for `https://dashboard.clerk.com/apps` and inactive payer portal tabs.
+
+Proof:
+
+- `node --test src/tests/openclaw-live-readiness.test.mjs src/tests/authenticated-openclaw-bill-proof.test.mjs` passed: 13 tests.
+- `npm run build` passed.
+- `npm run test:local` passed: 331 tests, 329 passed, 2 expected live-gated skips.
+- `GET http://127.0.0.1:4226/userapp?v=readiness-offsite-fix` served the built React user app assets.
+- `GET http://127.0.0.1:4226/api/openclaw/official/status` returned fail-closed live readiness when no active approved payer portal tab was available.
+- `POST http://127.0.0.1:8000/api/auth/local-session` with a member payload minted a local facade bearer token, and `GET http://127.0.0.1:8000/api/v1/openclaw/readiness` returned the official OpenClaw readiness envelope through the public connector.
+
+Remaining manual gate:
+
+- The live post-login claim scan still requires the user to sign in manually inside the AWS/Steel browser and return control. The worker can then observe only active approved payer portal pages in read-only mode.
