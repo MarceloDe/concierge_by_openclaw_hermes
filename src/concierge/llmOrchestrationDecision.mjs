@@ -65,6 +65,14 @@ function sourcePointerHints(state) {
   }));
 }
 
+function recentConversationHints(state) {
+  return (state.context_packet?.recentConversation ?? []).slice(-8).map((item) => ({
+    role: item.role,
+    content: maskDirectIdentifiers(compact(item.content, 360), state),
+    risk: item.risk ?? {}
+  }));
+}
+
 function dynamicSkillHints(state) {
   const context = state.dynamic_skill_context ?? {};
   return {
@@ -138,6 +146,7 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       failedChecks: (state.policy_result?.checks ?? []).filter((check) => !check.passed).map((check) => check.name)
     },
     curatedClassifier: state.structured_intent,
+    recentConversation: recentConversationHints(state),
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
     dynamicSkills: dynamicSkillHints(state),

@@ -29,6 +29,15 @@ function compactText(value, limit = 1200) {
   return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
 }
 
+function redactAuthSecretText(value) {
+  return String(value ?? "")
+    .replace(
+      /\b(password|passcode|passkey|one[- ]time code|otp|verification code|2fa|mfa|captcha)\b\s*(?:is|=|:)\s*["']?[^\s,;]+/gi,
+      "$1 [redacted]"
+    )
+    .replace(/\b(ssn|social security)\b\s*(?:is|=|:)?\s*\d{3}[- ]?\d{2}[- ]?\d{4}\b/gi, "$1 [redacted]");
+}
+
 function compactTaskMetadata(metadata = {}) {
   const workerPlan = metadata.workerPlan ?? {};
   return {
@@ -87,6 +96,35 @@ async function getRecentMemoryItems(store, userId, limit = 12) {
     return {
       ...rest,
       metadata: parseJson(metadata_json, {})
+    };
+  });
+}
+
+async function getRecentConversationMessages(store, sessionId, limit = 12) {
+  if (!sessionId) return [];
+  const safeLimit = Math.max(1, Math.min(30, Number(limit) || 12));
+  const rows = await store.all(
+    `SELECT id, role, content, created_at
+     FROM conversation_messages
+     WHERE session_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?;`,
+    [sessionId, safeLimit]
+  );
+  return rows.reverse().map((row) => {
+    const risk = classifyUntrustedTextRisk(row.content ?? "");
+    return {
+      id: row.id,
+      role: row.role,
+      content: compactText(redactAuthSecretText(row.content), 700),
+      createdAt: row.created_at,
+      untrusted: true,
+      risk: {
+        promptInjection: Boolean(risk.promptInjection),
+        credential: Boolean(risk.credential),
+        externalAction: Boolean(risk.externalAction),
+        urgentEscalation: Boolean(risk.urgentEscalation)
+      }
     };
   });
 }
@@ -457,10 +495,11 @@ export async function retainMemoryFromSession(store, { user, session, reason = "
 }
 
 export async function buildContextPacket(store, { user, session = null, channel = "local_web_chat", userInput = "" }) {
-  const [managedSession, recentSessions, memoryItems, openTasks, scheduledJobs, dbPointers, openclaw, portal] = await Promise.all([
+  const [managedSession, recentSessions, memoryItems, recentConversation, openTasks, scheduledJobs, dbPointers, openclaw, portal] = await Promise.all([
     session ? getManagedSessionState(store, session.id) : Promise.resolve(null),
     getRecentSessions(store, user.id),
     getRecentMemoryItems(store, user.id),
+    getRecentConversationMessages(store, session?.id),
     getOpenTasks(store, user.id),
     getScheduledJobs(store, user.id),
     getLatestStructuredPointers(store, user.id),
@@ -522,6 +561,7 @@ export async function buildContextPacket(store, { user, session = null, channel 
       userInput
     },
     recentSessions,
+    recentConversation,
     memoryItems: memoryItems.map((item) => ({
       id: item.id,
       scope: item.memory_scope,

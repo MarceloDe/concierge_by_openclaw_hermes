@@ -850,6 +850,34 @@ async function llmOrchestrationDecisionNode(state) {
     };
   }
 
+  if (
+    state.raw_message?.interactiveFastPath === true &&
+    Number(state.structured_intent?.confidence ?? 0) >= 0.7 &&
+    (state.structured_intent?.refusalOrEscalationFlag ?? "none") === "none"
+  ) {
+    return {
+      llm_orchestration_decision: {
+        mode: "skipped_interactive_fast_path",
+        provider: "openai",
+        model,
+        baseURL,
+        modelTier: selection,
+        valid: false,
+        usedByRouter: false,
+        workflow: state.structured_intent?.workflow ?? null,
+        confidence: 0,
+        rationale: "The regular-user PWA requested a low-latency interactive turn; the deterministic structured route is used and the second live planner call is skipped.",
+        issues: [],
+        warnings: ["interactive_fast_path_skipped_llm_planner"]
+      },
+      proof: appendProof(state, "llm_orchestration_decision", {
+        mode: "skipped_interactive_fast_path",
+        workflow: state.structured_intent?.workflow ?? null,
+        structuredConfidence: state.structured_intent?.confidence ?? null
+      })
+    };
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return {
       llm_orchestration_decision: {
@@ -2728,6 +2756,27 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
+  const credentialCheck = state.policy_result?.checks?.find((check) => check.name === "credential_boundary");
+  if (credentialCheck?.severity === "user_controlled_auth_guidance") {
+    const payer = portal?.payer ?? state.context_packet?.user?.payer ?? "your insurer";
+    return {
+      final_response: [
+        `Yes. I can guide you while you type your own ${payer} password, 2FA, or captcha in the live browser.`,
+        "I will not ask for, see, store, or enter your credentials. You stay in control of the keyboard during authentication.",
+        "Open the live portal browser, tap Take control, complete login yourself, then return control. After that I can continue with read-only navigation or evidence extraction inside the approved scope.",
+        "If you prefer not to log in, I can still explain the general portal steps and tell you which documents or screenshots would let me help without portal access."
+      ].join("\n\n"),
+      should_remember: false,
+      memory_summary: `User requested user-controlled authentication guidance for ${state.workflow}.`,
+      memory_type: "user_controlled_auth_guidance_event",
+      workflow_outcome: "user_controlled_auth_guidance",
+      proof: appendProof(state, "response_policy", {
+        finalResponsePrepared: true,
+        userControlledAuthGuidance: true,
+        credentialBoundaryMode: credentialCheck.mode ?? null
+      })
+    };
+  }
   if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
     const degraded = await composeBestEffortAnswer(state, {
       reason: state.evidence_observation.reason ?? "authenticated_portal_evidence_unavailable",

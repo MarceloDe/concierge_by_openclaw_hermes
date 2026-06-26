@@ -44,6 +44,18 @@ export interface ChatResult {
   raw: any;
 }
 
+export interface ChatMessageContext {
+  role: "user" | "assistant" | "system";
+  text: string;
+}
+
+export interface ChatOptions {
+  useLiveModel?: boolean;
+  recentMessages?: ChatMessageContext[];
+  compact?: boolean;
+  interactiveFastPath?: boolean;
+}
+
 export interface BrowserSession {
   browserSessionId: string;
   sessionViewerUrl: string | null;
@@ -147,18 +159,26 @@ export async function startSession(member: Member = DEFAULT_MEMBER): Promise<Ses
   return { sessionId, userId, facadeToken, member };
 }
 
-export async function sendChat(session: SessionState, message: string, opts: { useLiveModel?: boolean } = {}): Promise<ChatResult> {
+export async function sendChat(session: SessionState, message: string, opts: ChatOptions = {}): Promise<ChatResult> {
+  const compact = opts.compact ?? true;
   const payload = {
     member: session.member,
     sessionId: session.sessionId,
     message,
+    recentMessages: opts.recentMessages ?? [],
     useLiveModel: opts.useLiveModel ?? true,
-    executeEvidenceObservation: false
+    executeEvidenceObservation: false,
+    compact,
+    responseMode: compact ? "compact" : "full",
+    includeDebug: !compact,
+    interactiveFastPath: opts.interactiveFastPath ?? true
   };
   const raw = await postJson(`${NODE_BASE}/api/chat`, payload);
   return {
     finalResponse: raw?.finalResponse ?? raw?.final_response ?? "",
-    ai2uiBlocks: Array.isArray(raw?.ai2uiBlocks) ? raw.ai2uiBlocks : (raw?.graphRun?.state?.ai2ui_blocks ?? []),
+    ai2uiBlocks: Array.isArray(raw?.ai2uiBlocks)
+      ? raw.ai2uiBlocks
+      : (raw?.graphRun?.state?.ai2ui_blocks ?? raw?.graphSummary?.ai2uiBlocks ?? []),
     sourcePointers: raw?.sourcePointers ?? raw?.source_pointers ?? [],
     intent: raw?.intent,
     raw

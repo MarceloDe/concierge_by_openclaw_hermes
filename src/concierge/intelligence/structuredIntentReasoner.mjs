@@ -15,6 +15,14 @@ function compact(value, limit = 800) {
   return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
 }
 
+function recentConversationHints(contextPacket, state) {
+  return (contextPacket?.recentConversation ?? []).slice(-8).map((item) => ({
+    role: item.role,
+    content: maskDirectIdentifiers(compact(item.content, 360), state),
+    risk: item.risk ?? {}
+  }));
+}
+
 function missingEvidence(candidateEvidence = [], contextPacket = null) {
   const pointers = contextPacket?.dbPointers ?? [];
   const pointerText = JSON.stringify(pointers).toLowerCase();
@@ -105,6 +113,7 @@ export function buildStructuredIntentReasoningMessages(state) {
       approvalRequired: state.policy_result?.approvalRequired ?? null
     },
     curated_classifier: state.structured_intent ?? null,
+    recent_conversation: recentConversationHints(contextPacket, state),
     db_pointers: (contextPacket.dbPointers ?? []).slice(0, 20),
     memory_facts_advisory_only: (state.product_memory_recall?.facts ?? []).slice(0, 5).map((fact) => compact(fact.fact ?? fact.name ?? fact.uuid, 320)),
     output_schema: {

@@ -21,6 +21,7 @@ interface Msg {
 
 let nid = 0;
 const mkId = () => `m${++nid}`;
+const RECENT_MESSAGE_LIMIT = 6;
 
 // Premade "canvas" functions from the original interface, as opaque one-tap actions.
 const QUICK = [
@@ -28,6 +29,79 @@ const QUICK = [
   { key: "claim", label: "Claim status", sub: "Why wasn't this paid?", Icon: Receipt, message: "Why didn't my insurance pay my last visit? Walk me through the claim." },
   { key: "bill", label: "Bill investigation", sub: "Check a bill", Icon: DocSearch, message: "Help me investigate a medical bill — find overcharges and explain what I actually owe." }
 ];
+
+function recentChatContext(messages: Msg[]) {
+  return messages
+    .filter((m) => !m.typing)
+    .slice(-RECENT_MESSAGE_LIMIT)
+    .map((m) => ({ role: m.role, text: m.text }));
+}
+
+function previousAssistantOfferedReadOnly(messages: Msg[]) {
+  return [...messages]
+    .reverse()
+    .some((m) => m.role === "assistant" && /option\s*b|read[- ]only extraction|read[- ]only access|read[- ]only claim scan/i.test(m.text));
+}
+
+function previousAssistantOfferedStepGuidance(messages: Msg[]) {
+  return [...messages]
+    .reverse()
+    .some((m) => m.role === "assistant" && /option\s*a|step[- ]by[- ]step|login steps|log in/i.test(m.text));
+}
+
+function isPortalConnectRequest(text: string) {
+  const normalized = text.toLowerCase();
+  return (
+    /\b(connect|open|access|sign ?in|log ?in)\b.*\b(aetna|insurance|insurer|portal)\b/i.test(normalized) ||
+    /\b(aetna|insurance|insurer|portal)\b.*\b(connect|open|access|sign ?in|log ?in)\b/i.test(normalized) ||
+    /\b(help|guide|walk|support)\b.{0,80}\b(log|login|sign|connect|access)\b.{0,80}\b(aetna|insurance|insurer|portal)\b/i.test(normalized) ||
+    /\b(log|login|sign)\b.{0,30}\b(in|into|to|at)\b.{0,30}\b(aetna|insurance|insurer|portal)\b/i.test(normalized)
+  );
+}
+
+function isReadOnlyExtractionChoice(text: string, messages: Msg[]) {
+  return (
+    (/\b(option|choice)\s*b\b/i.test(text) && previousAssistantOfferedReadOnly(messages)) ||
+    /\bread[- ]?only\b.*\b(extraction|scan|observe|access|portal)\b/i.test(text)
+  );
+}
+
+function isStepGuidanceChoice(text: string, messages: Msg[]) {
+  return (/\b(option|choice)\s*a\b/i.test(text) && previousAssistantOfferedStepGuidance(messages)) || /\bstep[- ]by[- ]step\b/i.test(text);
+}
+
+function isUserControlledAuthGuidance(text: string, messages: Msg[]) {
+  return (
+    /\b(guide|walk|help|support)\b/i.test(text) &&
+    /\b(password|passcode|passkey|2fa|two[- ]factor|one[- ]time code|otp|verification code|mfa|captcha|log ?in|sign ?in)\b/i.test(text) &&
+    (previousAssistantOfferedReadOnly(messages) ||
+      previousAssistantOfferedStepGuidance(messages) ||
+      /\b(portal|aetna|insurance|insurer|browser)\b/i.test(text))
+  );
+}
+
+function portalAssistText(member: SessionState["member"]) {
+  return (
+    `Yes — I'll open the live ${member.payer} browser now. You stay in control for username, password, 2FA, and captcha; ` +
+    `I will not type credentials or submit forms for you.\n\n` +
+    `After you finish login, return control and press Continue read-only claim scan so OpenClaw can observe the signed-in page without changing account data.`
+  );
+}
+
+function userControlledAuthGuidanceText(member: SessionState["member"]) {
+  return (
+    `Yes. I can guide you while you type your own ${member.payer} password, 2FA, or captcha in the live browser. ` +
+    `I will not ask for, see, store, or enter your credentials.\n\n` +
+    `Tap Take control, complete the login yourself, then return control. If you prefer not to log in, I can still explain the general portal steps and what evidence to upload instead.`
+  );
+}
+
+function stepGuidanceText(member: SessionState["member"]) {
+  return (
+    `Use the Connect ${member.payer} portal button when you're ready. Keep your username, password, phone or authenticator app, insurance card, and photo ID nearby.\n\n` +
+    `If the portal asks for a password, 2FA, or captcha, take control and complete it yourself. After login, return control so I can continue read-only observation.`
+  );
+}
 
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
@@ -94,12 +168,34 @@ export function App() {
     async (message: string) => {
       const text = message.trim();
       if (!text || !session || busy) return;
-      setBusy(true);
       const userMsg: Msg = { id: mkId(), role: "user", text };
+
+      if (isPortalConnectRequest(text) || isReadOnlyExtractionChoice(text, messages)) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: portalAssistText(session.member) }]);
+        setLiveOpen(true);
+        return;
+      }
+
+      if (isUserControlledAuthGuidance(text, messages)) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: userControlledAuthGuidanceText(session.member) }]);
+        setLiveOpen(true);
+        return;
+      }
+
+      if (isStepGuidanceChoice(text, messages)) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: stepGuidanceText(session.member) }]);
+        return;
+      }
+
+      setBusy(true);
       const typingMsg: Msg = { id: mkId(), role: "assistant", text: "", typing: true };
       setMessages((m) => [...m, userMsg, typingMsg]);
       try {
-        const res = await sendChat(session, text);
+        const res = await sendChat(session, text, {
+          recentMessages: recentChatContext([...messages, userMsg]),
+          compact: true,
+          interactiveFastPath: true
+        });
         setMessages((m) =>
           m.map((x) =>
             x.id === typingMsg.id
@@ -117,7 +213,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [session, busy]
+    [session, busy, messages]
   );
 
   const onAction = useCallback(

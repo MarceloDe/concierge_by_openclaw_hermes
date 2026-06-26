@@ -8,6 +8,15 @@ test("policy blocks credential-entry requests", () => {
   assert.equal(result.checks.find((check) => check.name === "credential_boundary").severity, "block");
 });
 
+test("policy allows user-controlled authentication guidance without exposing secrets", () => {
+  const result = evaluateInputPolicy("Please guide me while I enter my own password in the Aetna portal.");
+  const credential = result.checks.find((check) => check.name === "credential_boundary");
+  assert.equal(result.allowed, true);
+  assert.equal(credential.passed, true);
+  assert.equal(credential.severity, "user_controlled_auth_guidance");
+  assert.match(credential.detail, /user must type secrets directly/i);
+});
+
 test("policy blocks medical advice requests", () => {
   const result = evaluateInputPolicy("Which medication dosage should I take?");
   assert.equal(result.allowed, false);
