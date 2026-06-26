@@ -63,6 +63,7 @@ export interface BrowserSession {
   readiness: Record<string, any>;
   providerLiveConnected: boolean;
   currentTitle: string | null;
+  reusedPersistentProfile?: boolean;
 }
 
 export interface ClaimsObservationResult {
@@ -196,8 +197,28 @@ function viewport() {
   };
 }
 
-/** Create a live Steel remote-browser session via the facade. Returns the embeddable viewer URL. */
-export async function createBrowserSession(session: SessionState, targetUrl: string | null = null): Promise<BrowserSession> {
+export interface BrowserSessionOptions {
+  hiddenUntilAuthRequired?: boolean;
+  forceNew?: boolean;
+}
+
+function browserProfileRef(session: SessionState, targetUrl: string | null) {
+  const host = (() => {
+    try {
+      return new URL(targetUrl ?? session.member.portalUrl).host.toLowerCase();
+    } catch {
+      return "approved-portal";
+    }
+  })();
+  return `${session.userId}:${session.member.payer.toLowerCase()}:${host}`;
+}
+
+/** Create or reuse a live Steel remote-browser session via the facade. */
+export async function createBrowserSession(
+  session: SessionState,
+  targetUrl: string | null = null,
+  options: BrowserSessionOptions = {}
+): Promise<BrowserSession> {
   if (!session.facadeToken) {
     throw new Error("Live browser needs a facade session token (facade unreachable at start).");
   }
@@ -210,6 +231,18 @@ export async function createBrowserSession(session: SessionState, targetUrl: str
       options: {
         client: "brainsty_userapp_live_view",
         requireHostedAwsSandbox: true,
+        persistentProfile: true,
+        reuseAuthenticatedSession: true,
+        keepAliveAfterViewerHidden: true,
+        hiddenUntilAuthRequired: Boolean(options.hiddenUntilAuthRequired),
+        forceNew: Boolean(options.forceNew),
+        profileRef: browserProfileRef(session, targetUrl),
+        portalAccountRef: `${session.member.payer.toLowerCase()}:member-portal`,
+        consentRef: "user_consented_remote_browser_session_retention",
+        persistSessionCookies: true,
+        rawPasswordStorageAllowed: false,
+        agentCredentialEntryAllowed: false,
+        passwordManagerAutomationAllowed: false,
         ...viewport(),
         targetUrlRef: targetUrl ? "userapp-selected-target-url-ref" : "approved-target-url-ref-redacted"
       }
@@ -226,7 +259,8 @@ export async function createBrowserSession(session: SessionState, targetUrl: str
     streamUrl: raw?.stream_url ?? null,
     readiness: raw?.readiness ?? {},
     providerLiveConnected: Boolean(screencast?.providerLiveConnected ?? raw?.readiness?.providerLiveConnected),
-    currentTitle: raw?.current_title ?? null
+    currentTitle: raw?.current_title ?? null,
+    reusedPersistentProfile: Boolean(raw?.readiness?.reusedPersistentProfile)
   };
 }
 

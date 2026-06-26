@@ -306,6 +306,8 @@ export function buildOpenClawArmPromptContract(contextPacket) {
       [
         "LangGraph delegates the workflow and goal. Inside that assigned task, use OpenClaw's adaptive capability aggressively and intelligently.",
         "You may decompose the assigned task into subtasks, run a task-scoped status subagent, choose the best browser/web/API/scrape path, open extra browser instances, and create task-scoped helper skills or scripts when useful.",
+        "Prefer a retained authenticated AWS browser sandbox session when available. Keep the user-facing live browser hidden after successful user login, and reopen it only for expired auth, password, passkey, 2FA, captcha, or other user-only challenges.",
+        "Within the assigned approval scope, continue same-site read-only portal navigation, DOM inspection, OCR, and official-document extraction without asking the user to watch the browser.",
         "Use Zep/Graphiti recall, prior sessions, open tasks, scheduled jobs, and database pointers as context for the user's history and learned lessons.",
         "If a required browser path fails, try the next safe read-only path from the skill registry and report the blocker.",
         formatRouteCandidates(packet.workflowArchitecture)

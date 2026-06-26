@@ -202,11 +202,18 @@ test("remote browser GUI exposes live view and human takeover controls", () => {
 test("React user app exposes remote read-only OpenClaw claim observation after human takeover", () => {
   assert.match(userAppApi, /openclaw\/claims-observe/);
   assert.match(userAppApi, /useLiveModel: true/);
+  assert.match(userAppApi, /persistentProfile: true/);
+  assert.match(userAppApi, /reuseAuthenticatedSession: true/);
+  assert.match(userAppApi, /keepAliveAfterViewerHidden: true/);
+  assert.match(userAppApi, /rawPasswordStorageAllowed: false/);
   assert.match(userAppApi, /recentMessages/);
   assert.match(userAppApi, /responseMode: compact \? "compact" : "full"/);
   assert.match(userAppApi, /interactiveFastPath/);
   assert.match(userAppLiveView, /observeClaimsReadOnly/);
   assert.match(userAppLiveView, /Continue read-only claim scan/);
+  assert.match(userAppLiveView, /hideOnSuccess/);
+  assert.match(userAppLiveView, /onPortalConnected/);
+  assert.match(userAppLiveView, /onBrowserSessionReady/);
   assert.match(userAppLiveView, /After you finish login and return control/);
   assert.match(userAppLiveView, /OpenClaw is observing the current remote page in read-only mode/);
   assert.match(userAppLiveView, /Proof artifact:/);
@@ -214,9 +221,13 @@ test("React user app exposes remote read-only OpenClaw claim observation after h
   assert.match(userAppTsx, /isReadOnlyExtractionChoice/);
   assert.match(userAppTsx, /isUserControlledAuthGuidance/);
   assert.match(userAppTsx, /portalAssistText/);
+  assert.match(userAppTsx, /startPortalFlow/);
+  assert.match(userAppTsx, /onBrowserSessionReady=\{setRetainedBrowser\}/);
+  assert.match(userAppTsx, /We are connected to your/);
+  assert.match(userAppTsx, /I hid the remote browser window and kept the AWS browser session alive/);
   assert.match(userAppTsx, /userControlledAuthGuidanceText/);
   assert.match(userAppTsx, /I will not ask for, see, store, or enter your credentials/);
-  assert.match(userAppTsx, /Continue read-only claim scan/);
+  assert.match(userAppTsx, /createBrowserSession\(session, session\.member\.portalUrl, \{ hiddenUntilAuthRequired: true \}\)/);
   assert.match(userAppTsx, /setLiveOpen\(true\)/);
   assert.match(userAppTsx, /recentChatContext/);
   assert.match(userAppTsx, /I observed the signed-in portal in read-only mode only/);
@@ -429,6 +440,10 @@ test("server connector dashboard and Next mobile PWA expose only the v1 connecto
   assert.match(mobileNextConfig, /outputFileTracingRoot/);
   assert.match(mobilePage, /Brainstyworkers/);
   assert.match(mobilePage, /createBrowserSession/);
+  assert.match(mobilePage, /provider: "hosted_remote"/);
+  assert.match(mobilePage, /persistentProfile: true/);
+  assert.match(mobilePage, /keepAliveAfterViewerHidden: true/);
+  assert.match(mobilePage, /rawPasswordStorageAllowed: false/);
   assert.match(mobilePage, /TASK_FINAL_STATES/);
   assert.match(mobilePage, /userFacingAnswer/);
   assert.match(mobilePage, /Benefits answer ready/);

@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   startSession,
   sendChat,
+  createBrowserSession,
+  observeClaimsReadOnly,
   DEFAULT_MEMBER,
   type SessionState,
   type Ai2UiBlock,
-  type Ai2UiOption
+  type Ai2UiOption,
+  type BrowserSession,
+  type ClaimsObservationResult
 } from "./api";
 import { Ai2UiBlocks } from "./components/Ai2Ui";
 import { LiveView } from "./components/LiveView";
@@ -82,9 +86,9 @@ function isUserControlledAuthGuidance(text: string, messages: Msg[]) {
 
 function portalAssistText(member: SessionState["member"]) {
   return (
-    `Yes — I'll open the live ${member.payer} browser now. You stay in control for username, password, 2FA, and captcha; ` +
+    `Yes — I'll check whether your ${member.payer} portal is already connected. If the saved remote session needs login, I'll open the live browser for you. You stay in control for username, password, 2FA, and captcha; ` +
     `I will not type credentials or submit forms for you.\n\n` +
-    `After you finish login, return control and press Continue read-only claim scan so OpenClaw can observe the signed-in page without changing account data.`
+    `After you finish login and return control, I will hide the browser window, keep the AWS session alive, and continue read-only OpenClaw work from the signed-in portal.`
   );
 }
 
@@ -111,6 +115,7 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+  const [retainedBrowser, setRetainedBrowser] = useState<BrowserSession | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -147,6 +152,7 @@ export function App() {
     try {
       const s = await startSession(DEFAULT_MEMBER);
       setSession(s);
+      setRetainedBrowser(null);
       setMessages([
         {
           id: mkId(),
@@ -164,6 +170,64 @@ export function App() {
     }
   }, []);
 
+  function portalConnectedText(member: SessionState["member"], result?: ClaimsObservationResult | null) {
+    const sources = result?.sourcePointers?.length ?? 0;
+    const rows = result?.claimRows?.length ?? 0;
+    return (
+      `We are connected to your ${member.payer} insurance portal account. I hid the remote browser window and kept the AWS browser session alive, so you can stay in chat while OpenClaw continues read-only navigation.\n\n` +
+      `You can now ask what you want me to verify. I can inspect benefits, claim status, copay evidence, plan documents, and portal pages without entering credentials, submitting forms, contacting ${member.payer}, or changing account data.` +
+      (sources || rows ? `\n\nCurrent read-only proof: ${rows} claim row(s), ${sources} source pointer(s).` : "")
+    );
+  }
+
+  const startPortalFlow = useCallback(
+    async (userMsg?: Msg) => {
+      if (!session || busy) return;
+      setBusy(true);
+      if (userMsg) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: portalAssistText(session.member) }]);
+      } else {
+        setMessages((m) => [...m, { id: mkId(), role: "assistant", text: `Checking whether your ${session.member.payer} portal is already connected...` }]);
+      }
+      try {
+        const browser = retainedBrowser ?? await createBrowserSession(session, session.member.portalUrl, { hiddenUntilAuthRequired: true });
+        setRetainedBrowser(browser);
+        const readiness = await observeClaimsReadOnly(session, browser.browserSessionId);
+        if (readiness.ok) {
+          setMessages((m) => [...m, { id: mkId(), role: "assistant", text: portalConnectedText(session.member, readiness) }]);
+          setLiveOpen(false);
+          return;
+        }
+        const status = readiness.status ?? "login_needed";
+        setMessages((m) => [
+          ...m,
+          {
+            id: mkId(),
+            role: "assistant",
+            text:
+              status === "human_login_required"
+                ? `The retained AWS browser session needs your ${session.member.payer} login again. I am opening the live browser for takeover; after you return control, I will hide it and continue in read-only mode.`
+                : `I could not confirm a signed-in ${session.member.payer} portal page yet (${status}). I am opening the live browser so you can guide it or sign in yourself.`
+          }
+        ]);
+        setLiveOpen(true);
+      } catch (e: any) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: mkId(),
+            role: "assistant",
+            text: `I could not silently verify the retained portal session (${e?.message ?? "unknown error"}). I am opening the live browser so you can take control.`
+          }
+        ]);
+        setLiveOpen(true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session, busy, retainedBrowser]
+  );
+
   const ask = useCallback(
     async (message: string) => {
       const text = message.trim();
@@ -171,8 +235,7 @@ export function App() {
       const userMsg: Msg = { id: mkId(), role: "user", text };
 
       if (isPortalConnectRequest(text) || isReadOnlyExtractionChoice(text, messages)) {
-        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: portalAssistText(session.member) }]);
-        setLiveOpen(true);
+        void startPortalFlow(userMsg);
         return;
       }
 
@@ -213,19 +276,19 @@ export function App() {
         setBusy(false);
       }
     },
-    [session, busy, messages]
+    [session, busy, messages, startPortalFlow]
   );
 
   const onAction = useCallback(
     (label: string, opt?: Ai2UiOption) => {
       // Approval-scoped portal options open the live browser; everything else is a follow-up turn.
       if (opt?.approvalScope === "read_only_observation" || /portal|sign in|log in|aetna/i.test(label)) {
-        setLiveOpen(true);
+        void startPortalFlow();
         return;
       }
       void ask(label);
     },
-    [ask]
+    [ask, startPortalFlow]
   );
 
   function onSubmit(e: React.FormEvent) {
@@ -296,7 +359,7 @@ export function App() {
             </span>
           </button>
         ))}
-        <button className="live" onClick={() => setLiveOpen(true)}>
+        <button className="live" onClick={() => startPortalFlow()} disabled={busy}>
           <span className="ic">
             <Globe size={17} />
           </span>
@@ -329,6 +392,8 @@ export function App() {
         <LiveView
           session={session}
           targetUrl={session.member.portalUrl}
+          initialBrowserSession={retainedBrowser}
+          onBrowserSessionReady={setRetainedBrowser}
           onObservationAnswer={(answer, result) => {
             setMessages((m) => [
               ...m,
@@ -341,6 +406,9 @@ export function App() {
                   `Status: ${result.status ?? "claim observation complete"}.`
               }
             ]);
+          }}
+          onPortalConnected={(_answer, result) => {
+            setMessages((m) => [...m, { id: mkId(), role: "assistant", text: portalConnectedText(session.member, result) }]);
           }}
           onClose={() => setLiveOpen(false)}
         />

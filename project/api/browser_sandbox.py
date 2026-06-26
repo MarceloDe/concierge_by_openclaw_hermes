@@ -1170,6 +1170,9 @@ await new Promise(() => {});
         options: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         provider_session_id = str(uuid4())
+        safe_options = options or {}
+        persistent_profile = safe_options.get("persistentProfile") is True
+        profile_ref_hash = _sha256(str(safe_options.get("profileRef") or ""))[:16] if safe_options.get("profileRef") else None
         _api = self._steel_api_caller()
         health = await _api(path="v1/health", method="GET")
         if health["status_code"] >= 400 or health["payload"].get("status") != "ok":
@@ -1216,6 +1219,12 @@ await new Promise(() => {});
                 "adapterMode": "hosted_provider",
                 "providerStrategy": "steel-self-host",
                 "providerLiveConnected": True,
+                "persistentProfileRequested": persistent_profile,
+                "profileRefHash": profile_ref_hash,
+                "keepAliveAfterViewerHidden": safe_options.get("keepAliveAfterViewerHidden") is True,
+                "rawPasswordStorageAllowed": False,
+                "passwordManagerAutomationAllowed": False,
+                "agentCredentialEntryAllowed": False,
                 "userActionRequired": None,
                 "nextAction": "use_embedded_steel_viewer_and_human_takeover",
                 "navigationStatus": "remote_cdp_navigated" if navigation else "remote_session_created_waiting_for_target",

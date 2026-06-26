@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from uuid import uuid4
 from typing import Any
@@ -220,6 +221,7 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     app.state.rate_limiter = RateLimiter()
     app.state.upload_store = UploadStore()
     app.state.browser_sessions = {}
+    app.state.browser_profile_sessions = {}
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -445,6 +447,24 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     @app.post("/api/v1/browser/sessions", response_model=V1BrowserSessionResponse)
     async def v1_create_browser_session(request_context: Request, request: V1BrowserSessionRequest, principal: UserPrincipal = Depends(require_user)) -> V1BrowserSessionResponse:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser")
+        options = request.options if isinstance(request.options, dict) else {}
+        profile_key = browser_profile_key(principal=principal, request=request)
+        if profile_key and options.get("forceNew") is not True:
+            existing_id = app.state.browser_profile_sessions.get(profile_key)
+            existing = app.state.browser_sessions.get(existing_id) if existing_id else None
+            if existing and existing.get("user_id") == principal.user_id:
+                readiness = dict(existing.get("readiness") or {})
+                readiness.update({
+                    "reusedPersistentProfile": True,
+                    "profilePersistence": "active_remote_browser_session_reused",
+                    "hiddenUntilAuthRequired": bool(options.get("hiddenUntilAuthRequired")),
+                    "keepAliveAfterViewerHidden": True,
+                    "rawPasswordStorageAllowed": False,
+                    "agentCredentialEntryAllowed": False
+                })
+                existing["readiness"] = readiness
+                existing["profile_key"] = profile_key
+                return browser_session_response_from_session(existing)
         try:
             provider = get_browser_sandbox_provider(request.provider)
             session = await provider.create_session(
@@ -456,22 +476,24 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
             )
         except BrowserSandboxError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if profile_key:
+            readiness = dict(session.get("readiness") or {})
+            readiness.update({
+                "reusedPersistentProfile": False,
+                "profilePersistence": "active_remote_browser_session_retained",
+                "hiddenUntilAuthRequired": bool(options.get("hiddenUntilAuthRequired")),
+                "keepAliveAfterViewerHidden": True,
+                "persistSessionCookies": bool(options.get("persistSessionCookies")),
+                "rawPasswordStorageAllowed": False,
+                "agentCredentialEntryAllowed": False,
+                "passwordManagerAutomationAllowed": False
+            })
+            session["readiness"] = readiness
+            session["profile_key"] = profile_key
         app.state.browser_sessions[session["browser_session_id"]] = session
-        return V1BrowserSessionResponse(
-            version=VERSION,
-            browser_session_id=session["browser_session_id"],
-            provider=session["provider"],
-            session_id=session["session_id"],
-            user_id=session["user_id"],
-            stream_url=f"/api/v1/browser/sessions/{session['browser_session_id']}/stream",
-            takeover_state=session["takeover_state"],
-            current_url=session.get("current_url"),
-            current_title=session.get("current_title"),
-            readiness=session.get("readiness") or {},
-            ocr_caption=session.get("ocr_caption") or {},
-            screencast=session.get("screencast") or {},
-            navigation=session.get("navigation") or {}
-        )
+        if profile_key:
+            app.state.browser_profile_sessions[profile_key] = session["browser_session_id"]
+        return browser_session_response_from_session(session)
 
     @app.get("/api/v1/browser/sessions/{browser_session_id}/stream")
     async def v1_browser_stream(browser_session_id: str, request_context: Request, principal: UserPrincipal = Depends(require_user)) -> StreamingResponse:
@@ -1170,6 +1192,35 @@ def browser_session_for_user(app: FastAPI, browser_session_id: str, principal: U
     if browser_session.get("user_id") != principal.user_id:
         raise HTTPException(status_code=403, detail="Browser session does not belong to this user.")
     return browser_session
+
+
+def browser_profile_key(*, principal: UserPrincipal, request: V1BrowserSessionRequest) -> str | None:
+    options = request.options if isinstance(request.options, dict) else {}
+    if options.get("persistentProfile") is not True:
+        return None
+    raw_ref = str(options.get("profileRef") or "").strip()
+    if not raw_ref:
+        return None
+    safe_ref = re.sub(r"[^a-zA-Z0-9_.:@-]+", "_", raw_ref)[:240]
+    return f"{principal.user_id}:{request.provider}:{safe_ref}"
+
+
+def browser_session_response_from_session(session: dict[str, Any]) -> V1BrowserSessionResponse:
+    return V1BrowserSessionResponse(
+        version=VERSION,
+        browser_session_id=session["browser_session_id"],
+        provider=session["provider"],
+        session_id=session["session_id"],
+        user_id=session["user_id"],
+        stream_url=f"/api/v1/browser/sessions/{session['browser_session_id']}/stream",
+        takeover_state=session["takeover_state"],
+        current_url=session.get("current_url"),
+        current_title=session.get("current_title"),
+        readiness=session.get("readiness") or {},
+        ocr_caption=session.get("ocr_caption") or {},
+        screencast=session.get("screencast") or {},
+        navigation=session.get("navigation") or {}
+    )
 
 
 def build_connector_proof_run(run_id: str, *, checks: dict[str, Any], actor_user_id: str) -> dict[str, Any]:
