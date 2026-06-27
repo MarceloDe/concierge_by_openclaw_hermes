@@ -50,6 +50,34 @@ async function mergeLangChainConfig(config = {}, { step, selection, context }) {
   };
 }
 
+function modelHardTimeoutMs() {
+  const value = Number(process.env.BRAINSTY_MODEL_HARD_TIMEOUT_MS || 45000);
+  return Number.isFinite(value) && value > 0 ? value : 45000;
+}
+
+// Bound every model call so a stalled provider/reasoning call fails loud and
+// classified (LLM_TIMEOUT) instead of hanging the orchestration. Aborts the
+// request via AbortSignal and races a hard rejection as a backstop.
+async function invokeWithHardTimeout(target, input, config, ms, step) {
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), ms);
+  let raceTimer = null;
+  try {
+    return await Promise.race([
+      target.invoke(input, { ...config, signal: controller.signal }),
+      new Promise((_, reject) => {
+        raceTimer = setTimeout(() => {
+          reject(Object.assign(new Error(`llm_hard_timeout:${step}:${ms}ms`), { code: "llm_hard_timeout", step }));
+        }, ms);
+        raceTimer.unref?.();
+      })
+    ]);
+  } finally {
+    clearTimeout(abortTimer);
+    if (raceTimer) clearTimeout(raceTimer);
+  }
+}
+
 function wrapModelWithObservability(llm, { step, selection, context }) {
   if (!llm || typeof llm.invoke !== "function") return llm;
   return new Proxy(llm, {
@@ -78,7 +106,7 @@ function wrapModelWithObservability(llm, { step, selection, context }) {
               message_count: Array.isArray(input) ? input.length : null
             }
           },
-          async () => target.invoke(input, mergedConfig)
+          async () => invokeWithHardTimeout(target, input, mergedConfig, modelHardTimeoutMs(), step)
         );
       };
     }
