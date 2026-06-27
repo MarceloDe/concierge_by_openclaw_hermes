@@ -92,7 +92,8 @@
     "build": "node src/server/build-check.mjs",
     "test:mvp:audit": "node --test src/tests/mvp-completion-audit.test.mjs",
     "test:mvp:final": "node --test src/tests/final-mvp-goal-evaluation.test.mjs",
-    "test:redis:portfolio": "node --test src/tests/capability-portfolio-mirror-redis.test.mjs"
+    "test:redis:portfolio": "node --test src/tests/capability-portfolio-mirror-redis.test.mjs",
+    "test:redis:provenance": "node --test src/tests/capability-provenance-redis.test.mjs"
   },
   "engines": {
     "node": ">=25"

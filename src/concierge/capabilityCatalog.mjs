@@ -1,6 +1,7 @@
-import { nowIso } from "./database.mjs";
+import { nowIso, createId } from "./database.mjs";
 import { redact_text, stableHash } from "../observability/redaction.mjs";
 import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
+import { audit } from "./audit.mjs";
 
 export const CATALOG_PORTFOLIO_MIRROR_VERSION = "2026-06-27.catalog-portfolio-mirror.v1";
 
@@ -221,4 +222,127 @@ export async function hydrateCapabilityPointer(store, { pointer, requestRoute = 
       riskLevel: backing?.risk_level ?? null
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// Step 6: provenance read-back loop. A demote/quarantine writes a hash-chained
+// provenance row AND flips capabilities.status so the production select excludes it,
+// AND evicts the Redis mirror -> closing write->read-back->affects-planner.
+// ---------------------------------------------------------------------------
+
+async function latestProvenanceHash(store, capabilityId) {
+  const row = await store.get(
+    "SELECT event_hash FROM capability_provenance WHERE capability_id = ? AND event_hash IS NOT NULL ORDER BY rowid DESC LIMIT 1;",
+    [capabilityId]
+  );
+  return row?.event_hash ?? null;
+}
+
+// Single write path for catalog mutations: append-only provenance row (hash-chained)
+// + a hash-chained audit_events entry. Rationale is PHI-masked (preview + hash only).
+export async function recordCapabilityProvenance(store, {
+  capabilityId = null, processId = null, event_type, source_kind = null,
+  fromStatus = null, toStatus = null, pemsCandidateId = null, generatedSkillQueueId = null,
+  graphitiEpisodeRef = null, sessionCheckpointId = null, reviewerUserId = null,
+  rationale = "", sourcePointerIds = [], metadata = {}, sessionId = null
+} = {}) {
+  const previous_event_hash = capabilityId ? await latestProvenanceHash(store, capabilityId) : null;
+  const created_at = nowIso();
+  const rationalePreview = redact_text(String(rationale ?? "")).replace(/\s+/g, " ").trim().slice(0, 180);
+  const id = createId("capprov");
+  const event_hash = stableHash(
+    JSON.stringify({ id, capabilityId, processId, event_type, fromStatus, toStatus, previous_event_hash, created_at }),
+    "capprov"
+  );
+  await store.insert("capability_provenance", {
+    id,
+    capability_id: capabilityId,
+    process_id: processId,
+    event_type,
+    source_kind: source_kind,
+    from_status: fromStatus,
+    to_status: toStatus,
+    pems_candidate_id: pemsCandidateId,
+    generated_skill_queue_id: generatedSkillQueueId,
+    graphiti_episode_ref: graphitiEpisodeRef,
+    session_checkpoint_id: sessionCheckpointId,
+    reviewer_user_id: reviewerUserId,
+    rationale_preview: rationalePreview,
+    rationale_hash: stableHash(String(rationale ?? ""), "caprat"),
+    source_pointer_ids_json: JSON.stringify(sourcePointerIds ?? []),
+    metadata_json: JSON.stringify(metadata ?? {}),
+    previous_event_hash,
+    event_hash,
+    created_at
+  });
+  // Hash-chained operator audit trail (separate chain, verifiable via verifyAuditChain).
+  await audit(store, sessionId, `capability_provenance_${event_type}`, {
+    capabilityId, processId, event_type, fromStatus, toStatus, source_kind, rationalePreview
+  });
+  return { revisionId: id, eventHash: event_hash };
+}
+
+async function evictSessions(cache, sessionIds = []) {
+  let evicted = 0;
+  for (const sessionId of sessionIds) {
+    try {
+      evicted += (await cache.adapter.del(catalogPortfolioKey(sessionId))) ? 1 : 0;
+    } catch {
+      /* best-effort eviction */
+    }
+  }
+  return evicted;
+}
+
+async function transitionCapabilityStatus(store, { capabilityId, eventType, toStatus, toLifecycle, reason, safetyClass = null, sourceKind, sessionIds = [], reviewerUserId = null }) {
+  const cap = await store.findOne("capabilities", { id: capabilityId });
+  if (!cap) return { ok: false, reason: "capability_not_found" };
+  await store.update("capabilities", { status: toStatus, lifecycle_state: toLifecycle, updated_at: nowIso() }, { id: capabilityId });
+  const prov = await recordCapabilityProvenance(store, {
+    capabilityId, event_type: eventType, source_kind: sourceKind,
+    fromStatus: cap.status, toStatus, reviewerUserId,
+    rationale: reason, metadata: safetyClass ? { safetyClass } : {}
+  });
+  const cache = createRuntimeContextCache();
+  const evicted = await evictSessions(cache, sessionIds);
+  return { ok: true, capabilityKey: cap.capability_key, fromStatus: cap.status, toStatus, provenanceId: prov.revisionId, redisEvicted: evicted };
+}
+
+export function quarantineCapability(store, { capabilityId, reason = "safety_incident", safetyClass = null, sessionIds = [], reviewerUserId = null } = {}) {
+  return transitionCapabilityStatus(store, { capabilityId, eventType: "quarantined", toStatus: "quarantined", toLifecycle: "shadow", reason, safetyClass, sourceKind: "safety", sessionIds, reviewerUserId });
+}
+
+export function demoteCapability(store, { capabilityId, reason = "demoted", sessionIds = [], reviewerUserId = null } = {}) {
+  return transitionCapabilityStatus(store, { capabilityId, eventType: "demoted", toStatus: "demoted", toLifecycle: "shadow", reason, sourceKind: "review", sessionIds, reviewerUserId });
+}
+
+// Project PEMS maturity (the authority) onto the planner-facing lifecycle. This is the
+// read-back writer that makes a PEMS demotion actually filter out of the planner select.
+export async function syncCapabilityLifecycleFromPems(store, { capabilityId, candidateId, sessionIds = [] } = {}) {
+  const cap = await store.findOne("capabilities", { id: capabilityId });
+  if (!cap) return { ok: false, reason: "capability_not_found" };
+  const maturity = await store.findOne("pems_candidate_maturity", { candidate_id: candidateId });
+  if (!maturity) return { ok: false, reason: "maturity_not_found" };
+  const status = String(maturity.promotion_status ?? "");
+  let toStatus = cap.status;
+  let toLifecycle = cap.lifecycle_state;
+  if (/demot|quarantin|reject|revok/i.test(status)) {
+    toStatus = "quarantined";
+    toLifecycle = "shadow";
+  } else if (maturity.production_driving_allowed === 1 || /production|promoted|trusted/i.test(status)) {
+    toStatus = "active";
+    toLifecycle = "production";
+  } else {
+    toStatus = "active";
+    toLifecycle = "supervised_advisory";
+  }
+  await store.update("capabilities", { status: toStatus, lifecycle_state: toLifecycle, updated_at: nowIso() }, { id: capabilityId });
+  await recordCapabilityProvenance(store, {
+    capabilityId, event_type: "lifecycle_sync", source_kind: "pems",
+    fromStatus: cap.status, toStatus, pemsCandidateId: candidateId,
+    rationale: `pems promotion_status=${status} production_driving_allowed=${maturity.production_driving_allowed}`
+  });
+  const cache = createRuntimeContextCache();
+  const evicted = await evictSessions(cache, sessionIds);
+  return { ok: true, capabilityKey: cap.capability_key, toStatus, toLifecycle, redisEvicted: evicted };
 }
