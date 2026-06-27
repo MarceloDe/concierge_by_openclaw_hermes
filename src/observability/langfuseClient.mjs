@@ -115,32 +115,20 @@ export function is_langfuse_enabled(env = process.env) {
   return getLangfuseStatus(env).enabled;
 }
 
+// LangChain auto-instrumentation is intentionally a no-op on this repo.
+//
+// The manual span layer (createLangfuseTrace + withCheckpoint) is the primary
+// and complete trace source: it already emits agent.run, router/planner/model
+// (`model.<step>`, kind llm.call), final-response, and OpenClaw spans. The
+// optional LangChain CallbackHandler would only add deeper *automatic* model/
+// tool sub-observations, and there is no compatible package for this stack:
+//   - langfuse-langchain@3 peer-requires langchain <0.4.0 (this repo is v1).
+//   - @langfuse/langchain@5 is the OpenTelemetry-based v5 SDK; it does not
+//     attach to the v3 `Langfuse` client used here and would need a full
+//     observability migration to v5/OTel (a separate, deliberate phase).
+// Returning null here keeps modelTierPolicy's callback merge a safe pass-through.
 export async function get_langchain_callback_handler() {
-  if (!is_langfuse_enabled()) return null;
-  if (!callbackHandlerPromise) {
-    callbackHandlerPromise = import("langfuse-langchain")
-      .then((module) => {
-        const CallbackHandler = module.CallbackHandler ?? module.LangfuseCallbackHandler ?? module.default;
-        return CallbackHandler ? new CallbackHandler({ root: awaitableClientProxy() }) : null;
-      })
-      .catch(() => null);
-  }
-  return callbackHandlerPromise;
-}
-
-function awaitableClientProxy() {
-  return new Proxy(
-    {},
-    {
-      get(_, prop) {
-        return async (...args) => {
-          const client = await resolveClient();
-          if (typeof client?.[prop] === "function") return client[prop](...args);
-          return null;
-        };
-      }
-    }
-  );
+  return null;
 }
 
 export async function createLangfuseTrace({ traceId = null, name = "agent.run", metadata = {}, input = null, userId = null, sessionId = null } = {}) {

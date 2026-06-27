@@ -1,0 +1,62 @@
+{
+  "proof": "langfuse_live_proof_green",
+  "observability_version": "2026-06-27.langfuse-observability.v1",
+  "captured_at": "2026-06-27",
+  "langfuse": {
+    "mode": "langfuse_enabled",
+    "server_version": "3.200.0",
+    "sdk": "langfuse@3.38.x (manual spans, primary trace layer)",
+    "host_note": "self-hosted local Docker, remapped to 127.0.0.1:3100 because phase28_steel_api holds :3000",
+    "environment": "local",
+    "release": "local-dev",
+    "project_id": "cmqwfbdhc0006s007y1dwc10m",
+    "project_name": "AI_CONCIERGE"
+  },
+  "langchain_callback": {
+    "status": "intentional_noop_for_langchain_v1",
+    "reason": "langfuse-langchain@3 peer requires langchain <0.4.0; @langfuse/langchain@5 is the OTel v5 SDK incompatible with the v3 manual client. Manual spans cover routing, model, checkpoints, failures, OpenClaw handoffs, latency."
+  },
+  "smoke_trace": {
+    "trace_id": "lftrace_d9483ece-30cf-4bd1-9877-e8ea15763515",
+    "observations": 3,
+    "spans": ["agent.run", "router.route_selected", "openclaw.approval_required"]
+  },
+  "live_concierge_request": {
+    "request_summary": "eligibility/benefits navigation request (PHI-free synthetic prompt)",
+    "trace_id": "thread:user_7ee9a312-a078-44cd-83d2-4b6941c3fbde:4641fa23-1da0-4095-8f14-807e0054fcf2",
+    "trace_url": "http://localhost:3100/project/cmqwfbdhc0006s007y1dwc10m/traces/thread%3Auser_7ee9a312-a078-44cd-83d2-4b6941c3fbde%3A4641fa23-1da0-4095-8f14-807e0054fcf2",
+    "workflow": "eligibility_benefits_navigation",
+    "llm_orchestration_mode": "openai_chatopenai_invoked",
+    "observations": 15,
+    "spans": [
+      "agent.run",
+      "input_policy",
+      "recall_context",
+      "classify_intent",
+      "model.structured_intent",
+      "llm_decision",
+      "model.llm_orchestration_decision",
+      "workflow_router",
+      "plan_journey",
+      "skill_resolver",
+      "workflow_executor",
+      "observe_evidence",
+      "case_state_shadow",
+      "compose_response",
+      "model.graceful_degradation"
+    ]
+  },
+  "fixes_applied": [
+    "Removed duplicate langfuse dependency line in package.json",
+    "get_langchain_callback_handler() is now an honest documented no-op for LangChain v1 (removed broken import of incompatible langfuse-langchain)",
+    "Added AsyncLocalStorage trace context (runWithTraceContext/getActiveTraceContext) so model.* spans nest under agent.run instead of spawning orphan root traces"
+  ],
+  "verification": {
+    "npm_run_smoke_langfuse": "passed (langfuse_enabled, trace landed)",
+    "npm_run_test_observability": "5/5 passed",
+    "focused_graph_model_observability_suite": "30/30 passed",
+    "npm_run_build": "passed"
+  },
+  "secrets": "redacted_none_present",
+  "phi": "none_synthetic_prompt_only"
+}

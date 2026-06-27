@@ -1,8 +1,23 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createLangfuseTrace } from "./langfuseClient.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "./failures.mjs";
 import { redact_payload, safe_metadata, safeSummaryFromPayload } from "./redaction.mjs";
 
 export const CHECKPOINTS_VERSION = "2026-06-27.langfuse-checkpoints.v1";
+
+// Carries the active root trace identity across async boundaries so that deeply
+// nested checkpoints (e.g. model.* spans created inside LangGraph nodes) attach
+// to the same Langfuse trace as agent.run instead of spawning orphan root traces.
+const traceContextStorage = new AsyncLocalStorage();
+
+export function getActiveTraceContext() {
+  return traceContextStorage.getStore() ?? null;
+}
+
+export function runWithTraceContext(traceContext, fn) {
+  if (!traceContext?.traceId) return fn();
+  return traceContextStorage.run(traceContext, fn);
+}
 
 function nowMs() {
   return Number(process.hrtime.bigint() / 1000000n);
@@ -21,14 +36,15 @@ function checkpointMetadata(name, kind, metadata = {}, startedAt = null) {
 
 export async function start_checkpoint(name, kind = "span", metadata = {}, input = null) {
   const startedAt = nowMs();
-  const traceId = metadata.trace_id ?? metadata.traceId ?? metadata.graph_trace_id ?? null;
+  const ambient = getActiveTraceContext();
+  const traceId = metadata.trace_id ?? metadata.traceId ?? metadata.graph_trace_id ?? ambient?.traceId ?? null;
   const trace = await createLangfuseTrace({
     traceId,
     name: metadata.root_trace_name ?? "brainstyworkers.agentic_runtime",
     metadata,
     input: redact_payload(input),
-    userId: metadata.user_hash ?? null,
-    sessionId: metadata.session_id ?? null
+    userId: metadata.user_hash ?? ambient?.userId ?? null,
+    sessionId: metadata.session_id ?? ambient?.sessionId ?? null
   });
   const span = trace?.span
     ? trace.span({

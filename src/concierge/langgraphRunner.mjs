@@ -66,7 +66,7 @@ import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
-import { observedLangGraphNode, start_checkpoint, summarizeNodeOutput } from "../observability/checkpoints.mjs";
+import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput } from "../observability/checkpoints.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -3334,7 +3334,12 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
             update: initialState
           })
         : initialState;
-    state = interruptedStatePatch(await graph.invoke(graphInput, config));
+    state = interruptedStatePatch(
+      await runWithTraceContext(
+        { traceId: graphTraceId, sessionId: session.id, userId: user.id },
+        () => graph.invoke(graphInput, config)
+      )
+    );
     rootCheckpoint.end_checkpoint(summarizeNodeOutput(state), {
       workflow: state.workflow,
       route: state.workflow_route?.workflowKey ?? state.workflow,
