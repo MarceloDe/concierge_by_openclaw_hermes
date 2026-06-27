@@ -664,6 +664,28 @@ async function inputPolicyNode(state) {
 
 async function recallContextNode(state) {
   const packet = state.context_packet;
+  const runtimeContext = packet?.runtimeContext ?? null;
+  // Trace the runtime-context cache read-back as a memory.read span.
+  await withCheckpoint(
+    "memory.read",
+    {
+      kind: "cache.read",
+      metadata: {
+        trace_id: state.graph_trace_id,
+        session_id: state.session_id,
+        cache_backend: runtimeContext?.cacheBackend ?? null,
+        cache_status: runtimeContext?.cacheStatus ?? null,
+        achieved_checkpoints: runtimeContext?.achievedCheckpoints?.length ?? 0,
+        prior_decision_pointers: runtimeContext?.priorDecisionPointers?.length ?? 0
+      },
+      input: { cacheKey: runtimeContext?.cacheKey ?? null }
+    },
+    async () => ({
+      cacheBackend: runtimeContext?.cacheBackend ?? null,
+      cacheStatus: runtimeContext?.cacheStatus ?? "no_runtime_context",
+      achievedCheckpoints: runtimeContext?.achievedCheckpoints?.length ?? 0
+    })
+  );
   const bundle = buildRuntimeCompatibilityBundle(packet, {
     source: "langgraph_runner",
     requestedAt: nowIso()
@@ -784,6 +806,42 @@ async function structuredIntentNode(state) {
   };
 }
 
+function summarizeHydration(hydratedCapabilities) {
+  if (!hydratedCapabilities) return null;
+  return {
+    cacheBackend: hydratedCapabilities.cacheBackend,
+    cacheHit: hydratedCapabilities.cacheHit,
+    requested: hydratedCapabilities.requested,
+    resolvedCount: hydratedCapabilities.resolvedCount,
+    resolvedPortfolioIds: hydratedCapabilities.resolved.map((entry) => entry.portfolioId).slice(0, 10),
+    missing: hydratedCapabilities.missing
+  };
+}
+
+// Dereference the pointers the planner selected back into hydrated capability
+// payloads, traced as capability.hydrate. Runs for any valid decision (live or
+// replayed) so the read-back is deterministic and feeds the worker dispatch.
+async function hydrateDecisionCapabilities(state, decision) {
+  const selectedPointers = [
+    ...(decision?.selectedCapabilityPointers ?? []),
+    ...(decision?.selectedCapabilityPortfolioIds ?? [])
+  ];
+  if (!selectedPointers.length) return null;
+  return withCheckpoint(
+    "capability.hydrate",
+    {
+      kind: "cache.read",
+      metadata: {
+        trace_id: state.graph_trace_id,
+        session_id: state.session_id,
+        requested_pointers: selectedPointers.length
+      },
+      input: { requestedPointerCount: selectedPointers.length }
+    },
+    async () => hydrateCapabilityPointers(state.session_id, selectedPointers)
+  );
+}
+
 async function llmOrchestrationDecisionNode(state) {
   if (state.policy_result?.urgentEscalationRequired) {
     return {
@@ -827,15 +885,18 @@ async function llmOrchestrationDecisionNode(state) {
       model: state.raw_message.llmOrchestrationDecisionReplay.model ?? "replay",
       fallbackWorkflow: state.structured_intent?.workflow
     });
+    const hydratedCapabilities = await hydrateDecisionCapabilities(state, decision);
     return {
-      llm_orchestration_decision: decision,
+      hydrated_capabilities: hydratedCapabilities,
+      llm_orchestration_decision: { ...decision, hydratedCapabilities },
       proof: appendProof(state, "llm_orchestration_decision", {
         mode: decision.mode,
         valid: decision.valid,
         workflow: decision.workflow,
         confidence: decision.confidence,
         confidenceBand: confidenceBand(decision),
-        issues: decision.issues
+        issues: decision.issues,
+        capabilityHydration: summarizeHydration(hydratedCapabilities)
       })
     };
   }
@@ -904,6 +965,18 @@ async function llmOrchestrationDecisionNode(state) {
         requireSourcePointers: true
       })
     : null;
+  const plannerCheckpoint = await start_checkpoint(
+    "planner.start",
+    "planner",
+    {
+      trace_id: state.graph_trace_id,
+      session_id: state.session_id,
+      model,
+      prompt_message_count: messages.length,
+      capability_rows: state.context_packet?.capabilityPortfolio?.promptTable?.length ?? 0
+    },
+    { promptMessageCount: messages.length }
+  );
   try {
     const { llm } = createTieredChatModel("llm_orchestration_decision", { timeout: 60000, maxRetries: 1 });
     const response = await llm.invoke(messages);
@@ -913,6 +986,10 @@ async function llmOrchestrationDecisionNode(state) {
       model,
       fallbackWorkflow: state.structured_intent?.workflow
     });
+    plannerCheckpoint.end_checkpoint(
+      { workflow: decision.workflow, confidence: decision.confidence, valid: decision.valid },
+      { checkpoint_name: "planner.output", output_summary: { workflow: decision.workflow, confidence: decision.confidence, selectedPointerCount: (decision.selectedCapabilityPointers ?? []).length } }
+    );
     const llmOutputIndex = await indexLlmOutput({
       sessionId: state.session_id,
       graphTraceId: state.graph_trace_id,
@@ -924,28 +1001,8 @@ async function llmOrchestrationDecisionNode(state) {
       parsed: decision
     });
     // Dereference the pointers the planner selected: read the portfolio back from
-    // the runtime cache (Redis) and hydrate the selected entries. This is the
-    // read-back half of the pointer architecture and is traced as capability.hydrate.
-    const selectedPointers = [
-      ...(decision.selectedCapabilityPointers ?? []),
-      ...(decision.selectedCapabilityPortfolioIds ?? [])
-    ];
-    let hydratedCapabilities = null;
-    if (selectedPointers.length) {
-      hydratedCapabilities = await withCheckpoint(
-        "capability.hydrate",
-        {
-          kind: "cache.read",
-          metadata: {
-            trace_id: state.graph_trace_id,
-            session_id: state.session_id,
-            requested_pointers: selectedPointers.length
-          },
-          input: { requestedPointerCount: selectedPointers.length }
-        },
-        async () => hydrateCapabilityPointers(state.session_id, selectedPointers)
-      );
-    }
+    // the runtime cache (Redis) and hydrate the selected entries (capability.hydrate).
+    const hydratedCapabilities = await hydrateDecisionCapabilities(state, decision);
     return {
       hydrated_capabilities: hydratedCapabilities,
       llm_orchestration_decision: {
@@ -974,19 +1031,11 @@ async function llmOrchestrationDecisionNode(state) {
         confidence: decision.confidence,
         confidenceBand: confidenceBand(decision),
         issues: decision.issues,
-        capabilityHydration: hydratedCapabilities
-          ? {
-              cacheBackend: hydratedCapabilities.cacheBackend,
-              cacheHit: hydratedCapabilities.cacheHit,
-              requested: hydratedCapabilities.requested,
-              resolvedCount: hydratedCapabilities.resolvedCount,
-              resolvedTitles: hydratedCapabilities.resolved.map((entry) => entry.portfolioId).slice(0, 10),
-              missing: hydratedCapabilities.missing
-            }
-          : null
+        capabilityHydration: summarizeHydration(hydratedCapabilities)
       })
     };
   } catch (error) {
+    plannerCheckpoint.fail_checkpoint(error);
     return {
       llm_orchestration_decision: {
         mode: "openai_chatopenai_failed",
@@ -1354,6 +1403,20 @@ async function workflowExecutorNode(state) {
     workflowKey: state.workflow
   });
   const workerPlan = buildLangGraphOpenClawWorkerPlan(envelope, validation);
+  // Read-back changes behavior: the capabilities the planner selected (hydrated
+  // from Redis) are surfaced into the dispatch so the worker job carries the
+  // planner's chosen skills/tools/workflows, not just the deterministic defaults.
+  const plannerHydratedCapabilities = (state.hydrated_capabilities?.resolved ?? []).map((entry) => ({
+    portfolioId: entry.portfolioId,
+    kind: entry.kind,
+    title: entry.title,
+    skillKey: entry.hydrate?.key ?? entry.hydrate?.skillKey ?? null,
+    toolKey: entry.hydrate?.key ?? entry.hydrate?.toolKey ?? null,
+    workflowKey: entry.hydrate?.workflowKey ?? null
+  }));
+  const plannerSelectedSkillKeys = plannerHydratedCapabilities
+    .filter((entry) => entry.kind === "skill" && entry.skillKey)
+    .map((entry) => entry.skillKey);
   const boundedTaskProposal = buildOpenClawBoundedTaskProposal({
     registry,
     dynamicSkillContext: state.dynamic_skill_context,
@@ -1389,7 +1452,12 @@ async function workflowExecutorNode(state) {
         }
       : null,
     workerPlanId: workerPlan.planId,
-    workerJobIds: workerPlan.workerJobs.map((job) => job.jobId)
+    workerJobIds: workerPlan.workerJobs.map((job) => job.jobId),
+    plannerHydratedCapabilities,
+    plannerSelectedSkillKeys,
+    plannerCapabilitySource: state.hydrated_capabilities
+      ? { cacheBackend: state.hydrated_capabilities.cacheBackend, cacheHit: state.hydrated_capabilities.cacheHit, resolvedCount: state.hydrated_capabilities.resolvedCount }
+      : null
   };
   return {
     openclaw_envelope: envelope,
@@ -2792,6 +2860,22 @@ async function composeResponseNode(state) {
       proof: appendProof(state, "response_policy", { reusedPolicyResponse: true })
     };
   }
+  // Trace source-pointer validation: whether cited evidence exists to ground the answer.
+  const sourcePointers = state.source_pointers ?? [];
+  await withCheckpoint(
+    "source_pointer.validation",
+    {
+      kind: "source_pointer.validation",
+      metadata: {
+        trace_id: state.graph_trace_id,
+        session_id: state.session_id,
+        source_pointer_count: sourcePointers.length,
+        has_trusted_evidence: sourcePointers.length > 0,
+        evidence_status: state.evidence_observation?.status ?? null
+      }
+    },
+    async () => ({ sourcePointerCount: sourcePointers.length, hasTrustedEvidence: sourcePointers.length > 0 })
+  );
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);

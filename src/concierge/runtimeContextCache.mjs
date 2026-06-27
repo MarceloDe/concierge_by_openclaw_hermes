@@ -209,7 +209,24 @@ export function compactManagedCheckpoints(managedSession, { limit = 6 } = {}) {
 }
 
 export function buildRuntimeContextManifest({ session, contextPacket, managedSession, previous = null }) {
-  const achievedCheckpoints = compactManagedCheckpoints(managedSession);
+  const currentCheckpoints = compactManagedCheckpoints(managedSession);
+  // Merge prior cached checkpoints (cross-turn / inter-session runtime memory)
+  // with the freshly computed set so a resumed session inherits context from the
+  // cache instead of rebuilding from scratch. Dedupe by checkpointId; DB-derived
+  // current checkpoints win on conflict.
+  const seen = new Set(currentCheckpoints.map((checkpoint) => checkpoint.checkpointId));
+  let mergedFromPreviousCount = 0;
+  const merged = [...currentCheckpoints];
+  for (const prior of previous?.achievedCheckpoints ?? []) {
+    if (prior?.checkpointId && !seen.has(prior.checkpointId)) {
+      seen.add(prior.checkpointId);
+      merged.push(prior);
+      mergedFromPreviousCount += 1;
+    }
+  }
+  const achievedCheckpoints = merged
+    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
+    .slice(0, 12);
   const latestCheckpoint = achievedCheckpoints[0] ?? null;
   const priorDecisionPointers = achievedCheckpoints
     .filter((checkpoint) => checkpoint.workflow || checkpoint.routeReason)
@@ -236,6 +253,7 @@ export function buildRuntimeContextManifest({ session, contextPacket, managedSes
     threadId: session.langgraph_thread_id,
     generatedAt: contextPacket.generatedAt,
     previousManifestHash: previous?.manifestHash ?? null,
+    mergedFromPreviousCount,
     latestCheckpoint,
     achievedCheckpoints,
     priorDecisionPointers,

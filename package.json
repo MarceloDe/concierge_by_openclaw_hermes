@@ -25,6 +25,7 @@
     "test:orchestrator:nondeterministic": "node --test src/tests/orchestrator-nondeterministic-live.test.mjs",
     "test:redis:hydration": "node --test src/tests/capability-hydration-redis.test.mjs",
     "test:redis:crossprocess": "node --test src/tests/redis-crossprocess.test.mjs",
+    "test:redis:phase4": "node --test src/tests/phase4-hydration-behavior.test.mjs",
     "smoke:langfuse": "node scripts/langfuse-observability-smoke.mjs",
     "test:journeys": "node --test src/tests/graceful-degradation.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/intelligence-default.test.mjs src/tests/model-tier-policy.test.mjs src/tests/structured-intent-classifier.test.mjs",
     "test:production:contract": "node --test src/tests/production-contract.test.mjs",
