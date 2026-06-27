@@ -1,4 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
+import { get_langchain_callback_handler } from "../observability/langfuseClient.mjs";
+import { withCheckpoint } from "../observability/checkpoints.mjs";
+import { safe_metadata, safeSummaryFromPayload } from "../observability/redaction.mjs";
 
 export const MODEL_TIER_POLICY_VERSION = "2026-06-21.phase53-model-tier-policy.v1";
 
@@ -21,6 +24,66 @@ const STEP_TIERS = Object.freeze({
 });
 
 let testChatModelFactory = null;
+
+async function mergeLangChainConfig(config = {}, { step, selection, context }) {
+  const handler = await get_langchain_callback_handler();
+  const callbacks = [
+    ...(Array.isArray(config.callbacks) ? config.callbacks : config.callbacks ? [config.callbacks] : []),
+    ...(handler ? [handler] : [])
+  ];
+  return {
+    ...config,
+    callbacks,
+    metadata: safe_metadata({
+      ...(config.metadata ?? {}),
+      app_name: "brainstyworkers-ai-concierge",
+      prompt_name: step,
+      prompt_role: context.promptRole ?? "runtime",
+      model: selection.model,
+      workflow: context.workflow,
+      route: context.route,
+      session_id: context.sessionId,
+      trace_id: context.traceId,
+      langchain_runtime: "langchain_js",
+      safety_mode: "deterministic_rails_llm_planner"
+    })
+  };
+}
+
+function wrapModelWithObservability(llm, { step, selection, context }) {
+  if (!llm || typeof llm.invoke !== "function") return llm;
+  return new Proxy(llm, {
+    get(target, prop, receiver) {
+      if (prop !== "invoke") return Reflect.get(target, prop, receiver);
+      return async (input, config = {}) => {
+        const mergedConfig = await mergeLangChainConfig(config, { step, selection, context });
+        return withCheckpoint(
+          `model.${step}`,
+          {
+            kind: "llm.call",
+            metadata: {
+              trace_id: context.traceId,
+              session_id: context.sessionId,
+              checkpoint_name: `model.${step}`,
+              checkpoint_kind: "llm.call",
+              prompt_name: step,
+              prompt_version: context.promptVersion ?? selection.policyVersion,
+              prompt_role: context.promptRole ?? "runtime",
+              model: selection.model,
+              workflow: context.workflow,
+              route: context.route
+            },
+            input: {
+              input_summary: safeSummaryFromPayload(input, "llm_input"),
+              message_count: Array.isArray(input) ? input.length : null
+            }
+          },
+          async () => target.invoke(input, mergedConfig)
+        );
+      };
+    }
+  });
+}
 
 function normalizeTier(step, context = {}) {
   const requested = context.tier ?? STEP_TIERS[step] ?? step;
@@ -74,7 +137,7 @@ export function createTieredChatModel(step, context = {}) {
   const llm = testChatModelFactory
     ? testChatModelFactory({ step, selection, options, context })
     : new ChatOpenAI(options);
-  return { llm, selection, options };
+  return { llm: wrapModelWithObservability(llm, { step, selection, context }), selection, options };
 }
 
 export function setTieredChatModelFactoryForTests(factory) {

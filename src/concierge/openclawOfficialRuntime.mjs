@@ -10,6 +10,8 @@ import { createId, nowIso } from "./database.mjs";
 import { READ_ONLY_DOCUMENT_ALLOWED_ACTION, candidateIdFor } from "./documentCandidateApproval.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
 import { evaluatePortalAction } from "./policy.mjs";
+import { start_checkpoint } from "../observability/checkpoints.mjs";
+import { classifyFailureClass } from "../observability/failures.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -1087,7 +1089,7 @@ async function captureOpenClawVisiblePage({ store, browserRunId, config, targetU
   };
 }
 
-export async function runOfficialOpenClawReadOnlyObservation({
+async function runOfficialOpenClawReadOnlyObservationInternal({
   store,
   session,
   portal,
@@ -1539,6 +1541,66 @@ export async function runOfficialOpenClawReadOnlyObservation({
       }))
     }
   };
+}
+
+export async function runOfficialOpenClawReadOnlyObservation(options) {
+  const config = options?.config ?? getOfficialOpenClawConfig();
+  const checkpoint = await start_checkpoint(
+    "openclaw.gateway_call",
+    "openclaw.gateway_call",
+    {
+      trace_id: options?.session?.langgraph_thread_id ?? options?.approval?.graphTraceId ?? null,
+      session_id: options?.session?.id ?? null,
+      openclaw_profile: config.profile,
+      channel: "official_openclaw_cli",
+      skill_name: config.skillKey,
+      tool_name: "official_read_only_observation",
+      worker_name: config.agentId,
+      approval_required: true,
+      approval_status: options?.approval?.status ?? options?.approval?.approvalStatus ?? null,
+      command_type: "read_only_browser_observation",
+      sandbox_mode: "dedicated_openclaw_profile",
+      read_only_mode: true,
+      timeout_ms: DEFAULT_TIMEOUT_MS
+    },
+    {
+      portalId: options?.portal?.id ?? null,
+      targetUrlHost: (() => {
+        try {
+          return new URL(options?.targetUrl ?? options?.approvedDocumentCandidate?.url ?? options?.portal?.portal_url ?? "").hostname;
+        } catch {
+          return null;
+        }
+      })(),
+      useCurrentTab: Boolean(options?.useCurrentTab),
+      multiPage: Boolean(options?.multiPage)
+    }
+  );
+  try {
+    const result = await runOfficialOpenClawReadOnlyObservationInternal(options);
+    if (result?.connected === false || /^official_openclaw_.*(?:failed|missing|unsupported|invalid|mismatch)/.test(result?.status ?? "")) {
+      const error = new Error(result?.status ?? "openclaw_gateway_error");
+      error.code = result?.status;
+      checkpoint.fail_checkpoint(error, classifyFailureClass(error), {
+        result_status: result?.status ?? "unknown"
+      });
+    } else {
+      checkpoint.end_checkpoint(
+        {
+          status: result?.status ?? "unknown",
+          connected: Boolean(result?.connected),
+          actionCount: result?.actionsTaken?.length ?? 0,
+          pageCount: result?.pages?.length ?? 0,
+          sourcePointerReady: Boolean(result?.extraction)
+        },
+        { result_status: result?.status ?? "unknown" }
+      );
+    }
+    return result;
+  } catch (error) {
+    checkpoint.fail_checkpoint(error, classifyFailureClass(error));
+    throw error;
+  }
 }
 
 export async function runOfficialOpenClawApprovedWriteAction({

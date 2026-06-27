@@ -2920,3 +2920,17 @@ A final decision should not be inferred from scattered scores. It should be expl
 
 Consequences:
 The project can now move from feature-building into production-blocker resolution. The next recommended phase is to fix production blockers rather than add new breadth.
+
+## 2026-06-27 - Langfuse Observability Is A Thin Fail-Soft Runtime Layer
+
+Problem:
+The runtime needs deep agentic tracing for planner, router, launcher, profile, model, tool, worker, OpenClaw bridge, latency, prompt efficiency, and failure debugging. The trace layer must not become a new orchestration authority, and it must not send raw PHI/PII, browser frames, portal text, credentials, or screenshots to a third-party or local telemetry store by default.
+
+Decision:
+Add a dedicated `src/observability/` layer with a Langfuse client factory, no-op fallback, redaction, checkpoint helpers, prompt registry, and central failure taxonomy. The governed LangChain/LangGraph runtime remains the authority. OpenClaw remains an external bridge. Instrumentation is manual at stable product boundaries: root graph run, key LangGraph nodes, centralized model invocation, and the official OpenClaw read-only dispatch wrapper.
+
+Rationale:
+Manual spans are more stable for this codebase than a broad callback-only integration because the repository currently uses LangChain v1 and the optional `langfuse-langchain` package has an incompatible peer dependency. The implementation still exposes `get_langchain_callback_handler()` as a best-effort hook for a future compatible package, but production tracing does not depend on it.
+
+Consequences:
+When `LANGFUSE_ENABLED=false` or keys are missing, the product runs normally with a no-op tracer. When configured, Langfuse receives sanitized trace/span metadata, failure classes, safe input/output summaries, route/workflow names, and source-pointer counts. Future operators can debug latency and routing mistakes without weakening deterministic safety rails or exposing raw healthcare data.

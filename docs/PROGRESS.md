@@ -10120,3 +10120,45 @@ Remaining follow-up:
 
 - Mirror the full Phase 76-82 implementation record into Cortex and publish both project/Cortex branches for review.
 - Production follow-up still requires real Redis deployment, Postgres production-default rollout, live Graphiti/Zep adapter proof, hosted remote browser readiness, and authenticated OpenClaw signed-in proof.
+
+# Langfuse Observability Slice — Agentic Runtime Tracing
+
+Date: 2026-06-27
+
+RALPH state:
+
+- Requirements: add local/self-host-compatible Langfuse observability for the governed LangChain/LangGraph runtime without making OpenClaw the production authority and without leaking PHI/PII to telemetry.
+- Architecture: added a thin observability layer under `src/observability/` with a Langfuse client factory, no-op fallback, redaction, failure taxonomy, checkpoint helpers, and prompt registry. Manual checkpoints are the primary integration because the current repo uses LangChain v1 and the optional `langfuse-langchain` package is not installed due peer-version mismatch.
+- Loop: instrumented root graph runs, key LangGraph nodes, centralized model invocations, and the official OpenClaw read-only runtime wrapper. Checkpoints capture route names, workflow, profile/tool/worker/OpenClaw metadata, source-pointer counts, failure classes, latency, and sanitized summaries only.
+- Prove: added focused observability tests, a local smoke command, docs, env examples, and reran the full local harness.
+- Harden: the tracer is fail-soft. If `LANGFUSE_ENABLED` is false or keys are missing, the app runs with a no-op tracer. Startup logs redact secrets, and raw browser frames/screenshots/portal text/credentials are redacted before trace emission.
+
+Implemented:
+
+- Added `src/observability/langfuseClient.mjs`.
+- Added `src/observability/redaction.mjs`.
+- Added `src/observability/checkpoints.mjs`.
+- Added `src/observability/failures.mjs`.
+- Added `src/observability/prompts.mjs`.
+- Added `scripts/langfuse-observability-smoke.mjs`.
+- Added `src/tests/langfuse-observability.test.mjs`.
+- Added `npm run test:observability` and `npm run smoke:langfuse`.
+- Added Langfuse env settings to `.env.example`.
+- Added README section `Local Langfuse Observability`.
+- Wrapped centralized model invocations in `src/concierge/modelTierPolicy.mjs`.
+- Wrapped key graph nodes and root `agent.run` in `src/concierge/langgraphRunner.mjs`.
+- Wrapped official OpenClaw read-only runtime dispatch in `src/concierge/openclawOfficialRuntime.mjs`.
+- Added startup and shutdown hooks in `src/server/server.mjs`.
+
+Proof:
+
+- `npm run test:observability` passed: 5 tests.
+- `npm run smoke:langfuse` passed in no-op mode and printed a trace ID with `secrets: redacted`.
+- Focused graph/model/OpenClaw suite passed: 46 tests, 44 passed, 2 expected live-gated OpenClaw skips.
+- `npm run build` passed.
+- `npm run test:local` passed: 332 tests, 330 passed, 2 expected live-gated OpenClaw skips.
+
+Remaining follow-up:
+
+- Run against a real local/self-hosted Langfuse instance with private keys and capture a live trace URL for the next operator verification cycle.
+- Install a LangChain callback package only after a version compatible with LangChain v1 is available; manual spans are the current supported trace path.
