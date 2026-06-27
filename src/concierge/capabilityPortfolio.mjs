@@ -198,6 +198,38 @@ export async function attachCapabilityPortfolio(contextPacket) {
   }
 }
 
+// Dereference the pointers the LLM planner selected back into full hydrated
+// capability payloads. This is the read-back half of the pointer architecture:
+// the portfolio fullPayload was written to the runtime cache (Redis) during
+// context build; here we read it and resolve only the selected entries.
+export async function hydrateCapabilityPointers(sessionId, pointers = []) {
+  const load = await loadCapabilityPortfolio(sessionId);
+  const entries = load.portfolio?.entries ?? {};
+  const resolved = [];
+  const missing = [];
+  for (const pointer of pointers) {
+    const raw = String(pointer ?? "").trim();
+    if (!raw) continue;
+    const portfolioId = raw.includes("#") ? raw.slice(raw.indexOf("#") + 1) : raw;
+    const entry = entries[portfolioId];
+    if (entry) {
+      resolved.push({ portfolioId, kind: entry.kind, title: entry.title, pointer: raw, hydrate: entry.hydrate });
+    } else {
+      missing.push(raw);
+    }
+  }
+  return {
+    cacheBackend: load.cacheBackend,
+    cacheKey: load.cacheKey,
+    cacheStatus: load.status,
+    cacheHit: Boolean(load.portfolio),
+    requested: pointers.length,
+    resolvedCount: resolved.length,
+    missing,
+    resolved
+  };
+}
+
 export async function loadCapabilityPortfolio(sessionId) {
   const cache = createRuntimeContextCache();
   const key = capabilityPortfolioKey(sessionId);

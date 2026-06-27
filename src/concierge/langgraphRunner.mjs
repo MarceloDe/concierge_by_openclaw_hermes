@@ -66,7 +66,8 @@ import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
-import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput } from "../observability/checkpoints.mjs";
+import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
+import { hydrateCapabilityPointers } from "./capabilityPortfolio.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -124,6 +125,7 @@ const BrainstyState = Annotation.Root({
   intent: field(null),
   structured_intent: field(null),
   llm_orchestration_decision: field(null),
+  hydrated_capabilities: field(null),
   dynamic_skill_context: field(null),
   memory_skill_tree: field(null),
   workflow: field(null),
@@ -921,12 +923,37 @@ async function llmOrchestrationDecisionNode(state) {
       content: response.content,
       parsed: decision
     });
+    // Dereference the pointers the planner selected: read the portfolio back from
+    // the runtime cache (Redis) and hydrate the selected entries. This is the
+    // read-back half of the pointer architecture and is traced as capability.hydrate.
+    const selectedPointers = [
+      ...(decision.selectedCapabilityPointers ?? []),
+      ...(decision.selectedCapabilityPortfolioIds ?? [])
+    ];
+    let hydratedCapabilities = null;
+    if (selectedPointers.length) {
+      hydratedCapabilities = await withCheckpoint(
+        "capability.hydrate",
+        {
+          kind: "cache.read",
+          metadata: {
+            trace_id: state.graph_trace_id,
+            session_id: state.session_id,
+            requested_pointers: selectedPointers.length
+          },
+          input: { requestedPointerCount: selectedPointers.length }
+        },
+        async () => hydrateCapabilityPointers(state.session_id, selectedPointers)
+      );
+    }
     return {
+      hydrated_capabilities: hydratedCapabilities,
       llm_orchestration_decision: {
         ...decision,
         baseURL,
         modelTier: selection,
         llmOutputIndex,
+        hydratedCapabilities,
         confidenceBand: confidenceBand(decision),
         response: response.content,
         outboundPayloadObservation: payloadObservation
@@ -946,7 +973,17 @@ async function llmOrchestrationDecisionNode(state) {
         workflow: decision.workflow,
         confidence: decision.confidence,
         confidenceBand: confidenceBand(decision),
-        issues: decision.issues
+        issues: decision.issues,
+        capabilityHydration: hydratedCapabilities
+          ? {
+              cacheBackend: hydratedCapabilities.cacheBackend,
+              cacheHit: hydratedCapabilities.cacheHit,
+              requested: hydratedCapabilities.requested,
+              resolvedCount: hydratedCapabilities.resolvedCount,
+              resolvedTitles: hydratedCapabilities.resolved.map((entry) => entry.portfolioId).slice(0, 10),
+              missing: hydratedCapabilities.missing
+            }
+          : null
       })
     };
   } catch (error) {
