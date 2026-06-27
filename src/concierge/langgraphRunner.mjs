@@ -68,6 +68,7 @@ import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDe
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
 import { hydrateCapabilityPointers } from "./capabilityPortfolio.mjs";
+import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -126,6 +127,7 @@ const BrainstyState = Annotation.Root({
   structured_intent: field(null),
   llm_orchestration_decision: field(null),
   hydrated_capabilities: field(null),
+  worker_runtime_state: field(null),
   dynamic_skill_context: field(null),
   memory_skill_tree: field(null),
   workflow: field(null),
@@ -1430,6 +1432,15 @@ async function workflowExecutorNode(state) {
   const plannerSelectedSkillKeys = plannerHydratedCapabilities
     .filter((entry) => entry.kind === "skill" && entry.skillKey)
     .map((entry) => entry.skillKey);
+  // Stateful OpenClaw: hydrate prior worker runtime state from Redis so this
+  // dispatch resumes with what earlier dispatches observed (cross-turn/process),
+  // keyed to the LangGraph thread. Traced as worker.state.read.
+  const threadId = state.context_packet?.currentSession?.langgraph_thread_id ?? sessionFromState(state)?.langgraph_thread_id ?? null;
+  const priorWorkerState = await withCheckpoint(
+    "worker.state.read",
+    { kind: "cache.read", metadata: { trace_id: state.graph_trace_id, session_id: state.session_id } },
+    async () => readWorkerRuntimeState(state.session_id)
+  );
   const boundedTaskProposal = buildOpenClawBoundedTaskProposal({
     registry,
     dynamicSkillContext: state.dynamic_skill_context,
@@ -1470,9 +1481,30 @@ async function workflowExecutorNode(state) {
     plannerSelectedSkillKeys,
     plannerCapabilitySource: state.hydrated_capabilities
       ? { cacheBackend: state.hydrated_capabilities.cacheBackend, cacheHit: state.hydrated_capabilities.cacheHit, resolvedCount: state.hydrated_capabilities.resolvedCount }
+      : null,
+    // Stateful worker: what this dispatch resumed from (prior runtime state).
+    resumedFromWorkerState: priorWorkerState.cacheHit
+      ? { dispatchCount: priorWorkerState.prior?.dispatchCount ?? 0, lastWorkflow: priorWorkerState.prior?.latestDispatch?.workflow ?? null }
       : null
   };
+  // Persist this dispatch into the worker runtime state (Redis) so the next
+  // dispatch/turn/process resumes from it — making OpenClaw stateful like LangGraph.
+  const workerStateRecord = await recordWorkerDispatchState({
+    sessionId: state.session_id,
+    threadId,
+    dispatch: {
+      dispatchedAt: nowIso(),
+      workflow: state.workflow,
+      skillKey: validation.skillKey,
+      executionMode: validation.executionMode,
+      plannerSelectedSkillKeys,
+      hydratedCapabilityCount: plannerHydratedCapabilities.length,
+      workerPlanId: workerPlan.planId
+    }
+  });
+  toolCall.workerStatePersisted = { cacheBackend: workerStateRecord.cacheBackend, stored: workerStateRecord.stored, dispatchCount: workerStateRecord.state.dispatchCount };
   return {
+    worker_runtime_state: workerStateRecord.state,
     openclaw_envelope: envelope,
     openclaw_skill_validation: validation,
     openclaw_worker_plan: workerPlan,
