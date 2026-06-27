@@ -1,13 +1,41 @@
 # Implementation Plan
 
-Status: Phase 35 implementation plan. Earlier MVP, connector, browser-sandbox, operating-system, and continuous-intelligence phases remain in history below. The active slice is supervised PEMS promotion: keep Phase 34 shadow persistence, add explicit reviewer/evaluator gates, and do not permit production-driving recommendations.
+Status: Phase 76-82 mandatory plan. Earlier MVP, connector, browser-sandbox, operating-system, continuous-intelligence, PEMS, and first-testable-MVP phases remain in history below. The active wave is Redis pointer runtime plus LLM-primary orchestration: keep deterministic safety rails, add fast runtime checkpoints/context, and remove naive free-text routing.
 
 Source of truth:
 - `docs/CODEX_START_PROMPT.md`
 - `AGENTS.md`
 - `brainstyworkers_ai_concierge_prompt.md`
 
-Last updated: 2026-06-18
+Last updated: 2026-06-26
+
+## Phase 76-82 - Redis Pointer Runtime And LLM-Primary Orchestrator
+
+Canonical plan:
+- `docs/PHASE_76_82_REDIS_LLM_ORCHESTRATOR_PLAN.md`
+
+Goals:
+- Make typed chat LLM-primary for open-ended insurance questions.
+- Keep deterministic policy, PHI, egress, approval, audit, and claim/source validators as the safety floor.
+- Use Redis as a fast rebuildable runtime context and checkpoint layer.
+- Keep Postgres/SQLite as the source of truth and Graphiti/Zep as long-term semantic/product memory.
+- Ensure every chat or user action includes achieved checkpoints and short pointers to prior decisions.
+
+Implementation plan:
+- Phase 76: add general planner regression gates for medication copay and claim questions, without exact sentence validation.
+- Phase 77: add Redis/in-memory runtime context store, checkpoint manifests, prompt cache keys, and latency proof.
+- Phase 78: add Redis-backed capability portfolio rows for workflows, journeys, skills, tools, remote browser state, approvals, and AI2UI actions.
+- Phase 79: index LLM planner/composer outputs as redacted summaries, hashes, selected portfolio IDs, and source pointer refs.
+- Phase 80: add Redis-backed LangGraph checkpoint/resume support with duplicate worker-dispatch protection.
+- Phase 81: add vector-to-context retrieval over runtime summaries and capability portfolio entries.
+- Phase 82: expose checkpoint, portfolio, vector, LLM-decision, resume, and Ralph proof panels in the dashboard.
+
+Acceptance:
+- Medication copay and claim questions route through top-tier planner reasoning, not frontend regex or mocked flows.
+- Planner prompts include compact capability tables and Redis pointers, not raw full context.
+- LangGraph can resume from safe checkpoints without recomputing or duplicating browser/OpenClaw work.
+- Dashboard and API expose auditable checkpoint trails, selected portfolio IDs, cache hits, vector hits, model tier, and safety verdicts.
+- The Cortex semantic/procedural mirror lands by PR before the wave is marked complete.
 
 ## Phase 35 - PEMS Supervised Promotion Gates
 
