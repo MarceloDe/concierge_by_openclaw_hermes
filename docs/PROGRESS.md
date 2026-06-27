@@ -9992,3 +9992,37 @@ Proof:
 Remaining follow-up:
 
 - Phase 79 must index LLM outputs and planner decisions by pointer so downstream agents, checkpoints, and future prompts can cite prior model decisions without re-injecting full text.
+
+# Phase 79 — LLM Output Index Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: index LLM outputs so future turns, agents, and checkpoints can reference prior reasoning by pointer instead of re-injecting full model text.
+- Architecture: added a Redis-compatible `llmOutputIndex` that records output IDs, cache pointers, model/tier metadata, output hashes, selected portfolio IDs/pointers, workflow, intent, confidence, and issue/warning counts. It deliberately does not store raw model output text in the prompt-facing index.
+- Loop: live structured-intent and LLM-orchestration planner outputs are indexed after model invocation. The next context packet loads recent output pointers and injects them into structured-intent/planner payloads.
+- Prove: tests run two live-model graph turns with deterministic fake LangChain models. The first turn writes structured-intent and planner output entries; the second turn receives those entries as pointers and the planner can return `priorLlmOutputPointersUsed`.
+- Harden: removed rationale/model-prose summaries from the index after tests caught that raw rationale text could leak into prompt context. The retained index uses hashes and structured routing fields only.
+
+Implemented:
+
+- Added `src/concierge/llmOutputIndex.mjs`.
+- Indexed live structured-intent outputs.
+- Indexed live LLM orchestration decision outputs.
+- Added `llmOutputIndex` to context packets, structured-intent payloads, and LLM planner payloads.
+- Extended `normalizeLlmOrchestrationDecision()` with `priorLlmOutputPointersUsed`.
+- Added `npm run test:llm:output-index`.
+- Added `src/tests/phase79-llm-output-index.test.mjs`.
+
+Proof:
+
+- `npm run test:llm:output-index` passed: 2 tests.
+- Combined Phase 76-79 gates passed: `npm run test:planner:general && npm run test:runtime:context && npm run test:capability:portfolio && npm run test:llm:output-index`.
+- `npm run test:egress` passed: 4 tests.
+- Related model/payload/LangGraph suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/intelligence-default.test.mjs src/tests/langgraph-runner.test.mjs` passed: 28 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 80 must use the checkpoint/cache pointers for explicit resume/error handling so interrupted or failed LangGraph flows can resume from achieved checkpoints instead of restarting from scratch.

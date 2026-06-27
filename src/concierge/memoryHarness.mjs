@@ -1,6 +1,7 @@
 import { audit } from "./audit.mjs";
 import { attachCapabilityPortfolio } from "./capabilityPortfolio.mjs";
 import { createId, nowIso } from "./database.mjs";
+import { loadLlmOutputIndex } from "./llmOutputIndex.mjs";
 import { classifyUntrustedTextRisk } from "./policy.mjs";
 import { buildPromptBundle } from "./promptContracts.mjs";
 import { getManagedSessionState } from "./sessionManager.mjs";
@@ -569,6 +570,7 @@ export async function buildContextPacket(store, { user, session = null, channel 
   };
   if (session) {
     const runtimeContextLoad = await loadRuntimeContextForSession(session);
+    packet.llmOutputIndex = await loadLlmOutputIndex(session.id);
     const runtimeManifest = buildRuntimeContextManifest({
       session,
       contextPacket: packet,

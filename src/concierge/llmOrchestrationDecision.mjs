@@ -169,6 +169,15 @@ export function buildLlmOrchestrationDecisionPayload(state) {
           portfolioHash: state.context_packet.capabilityPortfolio.portfolioHash,
           entryCount: state.context_packet.capabilityPortfolio.entryCount,
           promptTable: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
+      }
+      : null,
+    llmOutputIndex: state.context_packet?.llmOutputIndex
+      ? {
+          cacheBackend: state.context_packet.llmOutputIndex.cacheBackend,
+          cacheKey: state.context_packet.llmOutputIndex.cacheKey,
+          status: state.context_packet.llmOutputIndex.status,
+          latestOutputId: state.context_packet.llmOutputIndex.latestOutputId,
+          entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
         }
       : null,
     openclawCapabilityPolicy: {
@@ -194,7 +203,8 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       responseStrategy: "how LangGraph should explain the next step to the user",
       userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string",
       selectedCapabilityPortfolioIds: ["portfolio IDs from capabilityPortfolio.promptTable"],
-      selectedCapabilityPointers: ["cache pointers from capabilityPortfolio.promptTable"]
+      selectedCapabilityPointers: ["cache pointers from capabilityPortfolio.promptTable"],
+      priorLlmOutputPointersUsed: ["LLM output index pointers consulted, if any"]
     }
   };
 }
@@ -283,6 +293,7 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     userFacingNextQuestion: parsed.userFacingNextQuestion ? compact(parsed.userFacingNextQuestion, 500) : "",
     selectedCapabilityPortfolioIds: asArray(parsed.selectedCapabilityPortfolioIds),
     selectedCapabilityPointers: asArray(parsed.selectedCapabilityPointers),
+    priorLlmOutputPointersUsed: asArray(parsed.priorLlmOutputPointersUsed),
     issues,
     warnings,
     rawDecision: parsed

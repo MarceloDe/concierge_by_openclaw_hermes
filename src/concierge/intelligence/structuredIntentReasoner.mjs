@@ -1,4 +1,5 @@
 import { maskDirectIdentifiers } from "../modelPayloadPolicy.mjs";
+import { indexLlmOutput } from "../llmOutputIndex.mjs";
 import { createTieredChatModel, selectModelForStep } from "../modelTierPolicy.mjs";
 import { recordOutboundPayloadObservation } from "../outboundPayloadObservability.mjs";
 import {
@@ -121,6 +122,13 @@ export function buildStructuredIntentReasoningMessages(state) {
           cache_key: state.context_packet.capabilityPortfolio.cacheKey,
           portfolio_hash: state.context_packet.capabilityPortfolio.portfolioHash,
           prompt_table: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
+      }
+      : null,
+    llm_output_index: state.context_packet?.llmOutputIndex
+      ? {
+          cache_key: state.context_packet.llmOutputIndex.cacheKey,
+          status: state.context_packet.llmOutputIndex.status,
+          entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
         }
       : null,
     output_schema: {
@@ -186,11 +194,21 @@ export async function invokeLiveStructuredIntentReasoner({ state, store = null, 
   const response = await llm.invoke(messages);
   const validation = validateStructuredIntentReasoning(response.content);
   const reasoning = validation.valid ? { ...validation.value, reasoning_source: "llm" } : validation.value;
+  const llmOutputIndex = await indexLlmOutput({
+    sessionId,
+    step: "structured_intent",
+    model,
+    modelTier: selection,
+    mode: "openai_chatopenai_invoked",
+    content: response.content,
+    parsed: reasoning
+  });
   return {
     mode: "openai_chatopenai_invoked",
     model,
     baseURL,
     modelTier: selection,
+    llmOutputIndex,
     valid: validation.valid,
     issues: validation.issues,
     reasoning,

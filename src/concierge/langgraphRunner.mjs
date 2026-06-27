@@ -16,6 +16,7 @@ import {
   approvalMetadataForDocumentCandidateTask
 } from "./documentCandidateApproval.mjs";
 import { buildContextPacket, retainMemoryFromSession } from "./memoryHarness.mjs";
+import { indexLlmOutput } from "./llmOutputIndex.mjs";
 import { selectMemorySkillTree } from "./memorySkillTree.mjs";
 import { composeResponse } from "./outputPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
@@ -898,11 +899,22 @@ async function llmOrchestrationDecisionNode(state) {
       model,
       fallbackWorkflow: state.structured_intent?.workflow
     });
+    const llmOutputIndex = await indexLlmOutput({
+      sessionId: state.session_id,
+      graphTraceId: state.graph_trace_id,
+      step: "llm_orchestration_decision",
+      model,
+      modelTier: selection,
+      mode: "openai_chatopenai_invoked",
+      content: response.content,
+      parsed: decision
+    });
     return {
       llm_orchestration_decision: {
         ...decision,
         baseURL,
         modelTier: selection,
+        llmOutputIndex,
         confidenceBand: confidenceBand(decision),
         response: response.content,
         outboundPayloadObservation: payloadObservation
