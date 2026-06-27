@@ -10026,3 +10026,35 @@ Proof:
 Remaining follow-up:
 
 - Phase 80 must use the checkpoint/cache pointers for explicit resume/error handling so interrupted or failed LangGraph flows can resume from achieved checkpoints instead of restarting from scratch.
+
+# Phase 80 — Checkpoint Resume Plan
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: make checkpoint/cache pointers usable for explicit resume and error handling, so the orchestrator can continue from achieved work instead of restarting from scratch.
+- Architecture: added a deterministic `checkpoint_resume_plan` derived from the runtime-context manifest, durable session checkpoints, and prior LLM output pointers. The database checkpoint remains authoritative; Redis/memory cache is a fast pointer layer only.
+- Loop: every LangGraph run now builds a resume plan before graph invocation. If `resumeFromRuntimeContext`, `resumeFromCheckpoint`, or an approval token is present, the plan is marked requested. The plan is included in graph state, checkpoint metadata, structured-intent payloads, and planner payloads.
+- Prove: tests seed a completed run, start a second run with `resumeFromRuntimeContext`, and verify the resume plan includes latest checkpoint ID, completed step, prior workflow, prior route, deterministic authority, and cache role. A live-model harness also verifies prior LLM-output pointers are visible to the planner.
+- Harden: resume metadata does not bypass LangGraph or deterministic safety. It gives the planner and graph a compact continuation map while preserving policy evaluation and approval gates.
+
+Implemented:
+
+- Added `src/concierge/checkpointResumePlan.mjs`.
+- Added `checkpoint_resume_plan` to LangGraph state.
+- Added checkpoint resume plans to structured-intent and LLM planner payloads.
+- Stored checkpoint resume metadata in the session checkpoint metadata.
+- Added `npm run test:checkpoint:resume`.
+- Added `src/tests/phase80-checkpoint-resume-plan.test.mjs`.
+
+Proof:
+
+- `npm run test:checkpoint:resume` passed: 2 tests.
+- Combined runtime resume gates passed: `npm run test:runtime:context && npm run test:llm:output-index && npm run test:checkpoint:resume`.
+- Related checkpoint/runtime suite passed: `node --test src/tests/session-manager.test.mjs src/tests/graph-interrupt-resume.test.mjs src/tests/runtime-events.test.mjs src/tests/llm-orchestration-decision.test.mjs` passed: 18 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 81 must add vector-to-context retrieval pointers for workflows, skills, and prior outputs, while keeping prompt context compact and source-pointered.

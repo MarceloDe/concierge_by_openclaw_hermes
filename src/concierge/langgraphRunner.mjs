@@ -1,6 +1,7 @@
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
+import { buildCheckpointResumePlan } from "./checkpointResumePlan.mjs";
 import {
   buildCaseState,
   buildContinuousIntelligenceShadow,
@@ -111,6 +112,7 @@ const BrainstyState = Annotation.Root({
   user_input: field(""),
   raw_message: field({}),
   context_packet: field(null),
+  checkpoint_resume_plan: field(null),
   runtime_bundle: field(null),
   memory_context: field(""),
   product_memory_recall: field(null),
@@ -3209,6 +3211,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     error: productMemoryRecall.error ?? null,
     cortexProductMemory: false
   };
+  const checkpointResumePlan = buildCheckpointResumePlan({ contextPacket: context.packet, rawMessage });
   const initialState = {
     schema_version: LANGGRAPH_RUNNER_VERSION,
     user_id: user.id,
@@ -3218,6 +3221,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     user_input: userInput,
     raw_message: rawMessage,
     context_packet: context.packet,
+    checkpoint_resume_plan: checkpointResumePlan,
     runtime_bundle: null,
     memory_context: "",
   product_memory_recall: productMemoryRecall,
@@ -3375,7 +3379,8 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     },
     metadata: {
       source: "live_langgraph_runtime",
-      package: "@langchain/langgraph"
+      package: "@langchain/langgraph",
+      checkpointResumePlan
     }
   });
   const refreshedManagedSession = await getManagedSessionState(store, session.id);

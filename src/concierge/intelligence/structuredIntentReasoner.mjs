@@ -129,6 +129,16 @@ export function buildStructuredIntentReasoningMessages(state) {
           cache_key: state.context_packet.llmOutputIndex.cacheKey,
           status: state.context_packet.llmOutputIndex.status,
           entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
+      }
+      : null,
+    checkpoint_resume_plan: state.checkpoint_resume_plan
+      ? {
+          requested: state.checkpoint_resume_plan.requested,
+          available: state.checkpoint_resume_plan.available,
+          strategy: state.checkpoint_resume_plan.strategy,
+          resume_checkpoint_id: state.checkpoint_resume_plan.resumeCheckpointId,
+          prior_workflow: state.checkpoint_resume_plan.priorWorkflow,
+          prior_llm_output_pointer_count: state.checkpoint_resume_plan.priorLlmOutputPointers?.length ?? 0
         }
       : null,
     output_schema: {

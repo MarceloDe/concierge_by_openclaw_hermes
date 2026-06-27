@@ -178,6 +178,22 @@ export function buildLlmOrchestrationDecisionPayload(state) {
           status: state.context_packet.llmOutputIndex.status,
           latestOutputId: state.context_packet.llmOutputIndex.latestOutputId,
           entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
+      }
+      : null,
+    checkpointResumePlan: state.checkpoint_resume_plan
+      ? {
+          requested: state.checkpoint_resume_plan.requested,
+          available: state.checkpoint_resume_plan.available,
+          strategy: state.checkpoint_resume_plan.strategy,
+          cacheKey: state.checkpoint_resume_plan.cacheKey,
+          resumeCheckpointId: state.checkpoint_resume_plan.resumeCheckpointId,
+          latestCompletedStep: state.checkpoint_resume_plan.latestCompletedStep,
+          priorWorkflow: state.checkpoint_resume_plan.priorWorkflow,
+          priorRouteReason: state.checkpoint_resume_plan.priorRouteReason,
+          priorEvidenceObservationStatus: state.checkpoint_resume_plan.priorEvidenceObservationStatus,
+          priorSourcePointerCount: state.checkpoint_resume_plan.priorSourcePointerCount,
+          priorLlmOutputPointers: state.checkpoint_resume_plan.priorLlmOutputPointers,
+          safeToResumeWithoutReplayingPriorSteps: state.checkpoint_resume_plan.safeToResumeWithoutReplayingPriorSteps
         }
       : null,
     openclawCapabilityPolicy: {
