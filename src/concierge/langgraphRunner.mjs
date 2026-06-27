@@ -1,6 +1,7 @@
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
+import { buildCheckpointResumePlan } from "./checkpointResumePlan.mjs";
 import {
   buildCaseState,
   buildContinuousIntelligenceShadow,
@@ -16,6 +17,7 @@ import {
   approvalMetadataForDocumentCandidateTask
 } from "./documentCandidateApproval.mjs";
 import { buildContextPacket, retainMemoryFromSession } from "./memoryHarness.mjs";
+import { indexLlmOutput } from "./llmOutputIndex.mjs";
 import { selectMemorySkillTree } from "./memorySkillTree.mjs";
 import { composeResponse } from "./outputPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
@@ -28,7 +30,13 @@ import {
 } from "./portalEvidenceVerifier.mjs";
 import { persistPortalPageScan } from "./portalScan.mjs";
 import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./runtimeAdapters.mjs";
-import { checkpointSession } from "./sessionManager.mjs";
+import { checkpointSession, getManagedSessionState } from "./sessionManager.mjs";
+import {
+  buildRuntimeContextManifest,
+  createRuntimeContextCache,
+  runtimeContextKey,
+  storeRuntimeContextManifest
+} from "./runtimeContextCache.mjs";
 import { classifyHealthcareIntent } from "./structuredIntentClassifier.mjs";
 import { WORKFLOWS } from "./types.mjs";
 import { composeUrgentEscalationResponse, createHumanHandoffItem } from "./humanHandoffs.mjs";
@@ -104,6 +112,7 @@ const BrainstyState = Annotation.Root({
   user_input: field(""),
   raw_message: field({}),
   context_packet: field(null),
+  checkpoint_resume_plan: field(null),
   runtime_bundle: field(null),
   memory_context: field(""),
   product_memory_recall: field(null),
@@ -892,11 +901,22 @@ async function llmOrchestrationDecisionNode(state) {
       model,
       fallbackWorkflow: state.structured_intent?.workflow
     });
+    const llmOutputIndex = await indexLlmOutput({
+      sessionId: state.session_id,
+      graphTraceId: state.graph_trace_id,
+      step: "llm_orchestration_decision",
+      model,
+      modelTier: selection,
+      mode: "openai_chatopenai_invoked",
+      content: response.content,
+      parsed: decision
+    });
     return {
       llm_orchestration_decision: {
         ...decision,
         baseURL,
         modelTier: selection,
+        llmOutputIndex,
         confidenceBand: confidenceBand(decision),
         response: response.content,
         outboundPayloadObservation: payloadObservation
@@ -3191,6 +3211,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     error: productMemoryRecall.error ?? null,
     cortexProductMemory: false
   };
+  const checkpointResumePlan = buildCheckpointResumePlan({ contextPacket: context.packet, rawMessage });
   const initialState = {
     schema_version: LANGGRAPH_RUNNER_VERSION,
     user_id: user.id,
@@ -3200,6 +3221,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     user_input: userInput,
     raw_message: rawMessage,
     context_packet: context.packet,
+    checkpoint_resume_plan: checkpointResumePlan,
     runtime_bundle: null,
     memory_context: "",
   product_memory_recall: productMemoryRecall,
@@ -3318,7 +3340,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     },
     nativeHitlInterrupt: state.approval_interrupt?.status ?? null
   });
-  await checkpointSession(store, {
+  const checkpointResult = await checkpointSession(store, {
     session,
     stepName: "langgraph_run_completed",
     statePatch: {
@@ -3357,8 +3379,40 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     },
     metadata: {
       source: "live_langgraph_runtime",
-      package: "@langchain/langgraph"
+      package: "@langchain/langgraph",
+      checkpointResumePlan
     }
+  });
+  const refreshedManagedSession = await getManagedSessionState(store, session.id);
+  const runtimeContextCache = createRuntimeContextCache();
+  const runtimeContextManifest = buildRuntimeContextManifest({
+    session,
+    contextPacket: context.packet,
+    managedSession: refreshedManagedSession,
+    previous: context.packet.runtimeContext ?? null
+  });
+  const runtimeContextStored = await storeRuntimeContextManifest({
+    cache: runtimeContextCache,
+    key: runtimeContextKey(session.id),
+    manifest: runtimeContextManifest
+  });
+  state.runtime_context_cache = {
+    version: runtimeContextManifest.version,
+    backend: runtimeContextCache.backend,
+    cacheKey: runtimeContextKey(session.id),
+    manifestHash: runtimeContextManifest.manifestHash,
+    stored: runtimeContextStored.ok,
+    storeError: runtimeContextStored.error ?? null,
+    checkpointId: checkpointResult.checkpointId,
+    achievedCheckpointCount: runtimeContextManifest.achievedCheckpoints.length,
+    promptCompaction: runtimeContextManifest.promptCompaction
+  };
+  state.proof = mergeProof(state, "runtime_context_cache", {
+    backend: runtimeContextCache.backend,
+    stored: runtimeContextStored.ok,
+    manifestHash: runtimeContextManifest.manifestHash,
+    checkpointId: checkpointResult.checkpointId,
+    achievedCheckpointCount: runtimeContextManifest.achievedCheckpoints.length
   });
   if (persistConversation && state.final_response) {
     await store.insert("conversation_messages", {

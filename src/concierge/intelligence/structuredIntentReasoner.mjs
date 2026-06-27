@@ -1,4 +1,5 @@
 import { maskDirectIdentifiers } from "../modelPayloadPolicy.mjs";
+import { indexLlmOutput } from "../llmOutputIndex.mjs";
 import { createTieredChatModel, selectModelForStep } from "../modelTierPolicy.mjs";
 import { recordOutboundPayloadObservation } from "../outboundPayloadObservability.mjs";
 import {
@@ -107,6 +108,46 @@ export function buildStructuredIntentReasoningMessages(state) {
     curated_classifier: state.structured_intent ?? null,
     db_pointers: (contextPacket.dbPointers ?? []).slice(0, 20),
     memory_facts_advisory_only: (state.product_memory_recall?.facts ?? []).slice(0, 5).map((fact) => compact(fact.fact ?? fact.name ?? fact.uuid, 320)),
+    runtime_context: state.context_packet?.runtimeContext
+      ? {
+          cache_key: state.context_packet.runtimeContext.cacheKey,
+          manifest_hash: state.context_packet.runtimeContext.manifestHash,
+          achieved_checkpoints: (state.context_packet.runtimeContext.achievedCheckpoints ?? []).slice(0, 6),
+          prior_decision_pointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
+          prompt_compaction: state.context_packet.runtimeContext.promptCompaction
+      }
+      : null,
+    capability_portfolio: state.context_packet?.capabilityPortfolio
+      ? {
+          cache_key: state.context_packet.capabilityPortfolio.cacheKey,
+          portfolio_hash: state.context_packet.capabilityPortfolio.portfolioHash,
+          prompt_table: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
+      }
+      : null,
+    llm_output_index: state.context_packet?.llmOutputIndex
+      ? {
+          cache_key: state.context_packet.llmOutputIndex.cacheKey,
+          status: state.context_packet.llmOutputIndex.status,
+          entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
+      }
+      : null,
+    checkpoint_resume_plan: state.checkpoint_resume_plan
+      ? {
+          requested: state.checkpoint_resume_plan.requested,
+          available: state.checkpoint_resume_plan.available,
+          strategy: state.checkpoint_resume_plan.strategy,
+          resume_checkpoint_id: state.checkpoint_resume_plan.resumeCheckpointId,
+          prior_workflow: state.checkpoint_resume_plan.priorWorkflow,
+          prior_llm_output_pointer_count: state.checkpoint_resume_plan.priorLlmOutputPointers?.length ?? 0
+      }
+      : null,
+    runtime_vector_context: state.context_packet?.runtimeVectorIndex
+      ? {
+          cache_key: state.context_packet.runtimeVectorIndex.cacheKey,
+          method: state.context_packet.runtimeVectorIndex.method,
+          top_matches: (state.context_packet.runtimeVectorIndex.topMatches ?? []).slice(0, 10)
+        }
+      : null,
     output_schema: {
       primary_intent: "one allowed journey",
       candidate_journeys: [
@@ -170,11 +211,21 @@ export async function invokeLiveStructuredIntentReasoner({ state, store = null, 
   const response = await llm.invoke(messages);
   const validation = validateStructuredIntentReasoning(response.content);
   const reasoning = validation.valid ? { ...validation.value, reasoning_source: "llm" } : validation.value;
+  const llmOutputIndex = await indexLlmOutput({
+    sessionId,
+    step: "structured_intent",
+    model,
+    modelTier: selection,
+    mode: "openai_chatopenai_invoked",
+    content: response.content,
+    parsed: reasoning
+  });
   return {
     mode: "openai_chatopenai_invoked",
     model,
     baseURL,
     modelTier: selection,
+    llmOutputIndex,
     valid: validation.valid,
     issues: validation.issues,
     reasoning,

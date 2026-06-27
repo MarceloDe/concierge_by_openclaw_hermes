@@ -20,6 +20,16 @@ const WORKFLOW_DEFINITIONS = [
     memory_scopes: ["episodic", "long_term"]
   },
   {
+    workflow_key: "pharmacy_formulary",
+    title: "Pharmacy and formulary scrutiny",
+    journey_stage: "pharmacy_benefit_scrutiny",
+    description: "Review medication coverage, formulary tier, pharmacy benefit requirements, copay/coinsurance signals, and source pointers from plan documents or the authenticated payer portal.",
+    required_user_fields: ["user.id", "user.email", "portal_account"],
+    required_data_pointers: ["eligibility_snapshots", "portal_accounts"],
+    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory", "web_search_authoritative_sources"],
+    memory_scopes: ["session", "episodic", "semantic", "long_term"]
+  },
+  {
     workflow_key: "prior_authorization_navigation",
     title: "Prior authorization navigation",
     journey_stage: "service_authorization",
@@ -260,7 +270,7 @@ const KNOWLEDGE_SOURCES = [
     source_type: "user_authenticated_payer_portal",
     authority_level: "user_account_primary",
     base_url: "https://www.aetna.com/",
-    workflow_keys: ["eligibility_benefits_navigation", "claim_status_navigation", "payer_portal_read_only_extraction"],
+    workflow_keys: ["eligibility_benefits_navigation", "claim_status_navigation", "pharmacy_formulary", "payer_portal_read_only_extraction"],
     refresh_policy: "read_live_visible_state_when_user_logged_in",
     access_method: "user_authenticated_browser_only",
     status: "active_registry"
@@ -569,6 +579,7 @@ function routeScore(workflow, userInput, memoryItems) {
   const keys = {
     eligibility_benefits_navigation: ["eligibility", "benefit", "coverage", "deductible", "copay", "out-of-pocket", "aetna"],
     claim_status_navigation: ["claim", "eob", "paid", "denied", "status", "patient responsibility"],
+    pharmacy_formulary: ["medication", "drug", "pharmacy", "formulary", "rx", "prescription", "copay", "tier"],
     prior_authorization_navigation: ["prior authorization", "precert", "authorization", "approved", "pending"],
     denial_appeal_preparation: ["denial", "appeal", "reconsideration", "medical necessity", "letter"],
     payer_portal_read_only_extraction: ["portal", "browser", "chrome", "extract", "scrape", "logged"],

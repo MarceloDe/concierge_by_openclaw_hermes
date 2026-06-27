@@ -30,6 +30,7 @@ export const COMPLEXITIES = Object.freeze(["low", "moderate", "high"]);
 export const WORKFLOW_TO_JOURNEY = Object.freeze({
   eligibility_benefits_navigation: JOURNEY_KEYS.BENEFITS_ELIGIBILITY,
   claim_status_navigation: JOURNEY_KEYS.CLAIMS_EOB_PAYMENT,
+  pharmacy_formulary: JOURNEY_KEYS.PHARMACY_FORMULARY,
   prior_authorization_navigation: JOURNEY_KEYS.PRIOR_AUTHORIZATION,
   denial_appeal_preparation: JOURNEY_KEYS.DENIAL_APPEAL,
   payer_portal_read_only_extraction: JOURNEY_KEYS.BENEFITS_ELIGIBILITY,
@@ -41,10 +42,10 @@ export const WORKFLOW_TO_JOURNEY = Object.freeze({
 export const JOURNEY_TO_WORKFLOW = Object.freeze({
   [JOURNEY_KEYS.BENEFITS_ELIGIBILITY]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.CLAIMS_EOB_PAYMENT]: "claim_status_navigation",
+  [JOURNEY_KEYS.PHARMACY_FORMULARY]: "pharmacy_formulary",
   [JOURNEY_KEYS.PRIOR_AUTHORIZATION]: "prior_authorization_navigation",
   [JOURNEY_KEYS.DENIAL_APPEAL]: "denial_appeal_preparation",
   [JOURNEY_KEYS.PROVIDER_NETWORK]: "eligibility_benefits_navigation",
-  [JOURNEY_KEYS.PHARMACY_FORMULARY]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.PROCEDURE_ADMIN_CHECKLIST]: "eligibility_benefits_navigation",
   [JOURNEY_KEYS.DOCUMENT_REVIEW]: "document_or_trace_review",
   [JOURNEY_KEYS.COST_ESTIMATE]: "eligibility_benefits_navigation",

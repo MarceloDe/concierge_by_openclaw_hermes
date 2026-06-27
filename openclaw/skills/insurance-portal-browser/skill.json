@@ -9,6 +9,7 @@
   "allowed_workflows": [
     "eligibility_benefits_navigation",
     "claim_status_navigation",
+    "pharmacy_formulary",
     "prior_authorization_navigation",
     "payer_portal_read_only_extraction"
   ],

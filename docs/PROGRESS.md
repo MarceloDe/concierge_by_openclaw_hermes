@@ -9895,3 +9895,228 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login proof still requires the user to take control inside the AWS/Steel browser, sign in to Aetna manually, pass any 2FA/captcha challenge, return control, and run **Continue read-only claim scan**. That final live proof is intentionally human-gated; Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
+
+# Phase 76 — LLM-Primary General Planner Questions
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: stop brittle sentence-specific free-text routing, prove general user questions re-enter the LLM planner with context, and keep deterministic logic reserved for safety and UI-selected workflow controls.
+- Architecture: keep LangGraph as the workflow authority, but make medication-copay and claim questions planner-routed through the top-tier LLM orchestration decision node. Promote `pharmacy_formulary` from a journey-only concept to a workflow visible to the runtime registry, LLM decision contract, prompt contract, OpenClaw skill boundary, and AI2UI path.
+- Loop: added a focused deterministic harness that injects a fake LangChain model factory at the model boundary, then runs the full LangGraph orchestration for two general prompts: medication copay and claim inquiry.
+- Prove: tests assert the graph invokes the planner tier (`gpt-5`), includes route candidates and OpenClaw capability policy in the planner payload, adopts the planner workflow, and no longer relies on frontend phrase shortcuts like `interactiveFastPath` or “option B”.
+- Harden: planner-tier model selection no longer inherits a classifier-sized global `OPENAI_MODEL` fallback; classifier can still use `OPENAI_MODEL`, while planner/reasoner default to top-tier models unless explicitly configured.
+
+Implemented:
+
+- Added `pharmacy_formulary` to `LLM_DECISION_WORKFLOWS`, prompt contracts, reasoning schema workflow mapping, workflow registry seed data, Aetna member-portal source mapping, route scoring, and the insurance portal browser skill manifest.
+- Added `npm run test:planner:general`.
+- Added `src/tests/phase76-planner-general-questions.test.mjs`.
+- Updated the prior pharmacy-formulary LangGraph expectation from generic eligibility routing to first-class `pharmacy_formulary` workflow routing.
+- Added model-tier regression coverage proving planner/reasoner do not inherit `OPENAI_MODEL=gpt-5-mini`.
+
+Proof:
+
+- `npm run test:planner:general` passed: 3 tests.
+- Focused affected suite passed: `node --test src/tests/model-tier-policy.test.mjs src/tests/workflow-architecture.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/structured-intent-classifier.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/langgraph-runner.test.mjs src/tests/prompt-contracts.test.mjs src/tests/openclaw-skill-artifacts.test.mjs src/tests/openclaw-skill-invocation.test.mjs` passed: 48 tests.
+- `npm run test:journeys` passed: 19 tests.
+- `npm run test:openclaw:skills` passed: 14 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 77 must add Redis-backed runtime context/checkpoint pointers, prompt compaction, cache keys, and achieved-checkpoint injection so every chat or user action carries compact prior decisions without skipping planner reasoning.
+
+# Phase 77 — Redis-Compatible Runtime Context And Checkpoint Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: reduce long-context latency without skipping reasoning, add Redis-style fast runtime context, and ensure each chat/user action carries achieved checkpoint pointers and prior decisions.
+- Architecture: added a `runtimeContextCache` adapter with optional real Redis via `BRAINSTY_REDIS_URL` / `REDIS_URL` and deterministic in-memory fallback for local/test. The cache stores hydratable manifests only; authoritative user/session/checkpoint state stays in the database.
+- Loop: context-packet creation now reads the previous manifest, builds a compact pointer manifest from durable session checkpoints, writes it to the fast cache, and injects only safe pointers into the context packet. After each LangGraph completion checkpoint, the cache is refreshed from the durable session checkpoint state.
+- Prove: new tests run two chats in the same session and prove the second chat includes the first run's achieved checkpoint pointers, prior workflow/route decisions, cache key, manifest hash, and prompt-compaction metadata.
+- Harden: runtime context does not carry raw prior chat text; it uses hashes, checkpoint IDs, workflow pointers, source-pointer counts, and context-packet IDs.
+
+Implemented:
+
+- Added `src/concierge/runtimeContextCache.mjs` with `memory` and minimal RESP-compatible `redis` adapters.
+- Added runtime context manifests to `buildContextPacket()`.
+- Added runtime context summaries to structured-intent and LLM orchestration decision payloads.
+- Added post-checkpoint cache refresh in `runLangGraphOrchestration()`.
+- Added `npm run test:runtime:context`.
+- Added `src/tests/phase77-redis-runtime-context.test.mjs`.
+
+Proof:
+
+- `npm run test:runtime:context` passed: 3 tests.
+- Affected context/session/payload suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/session-manager.test.mjs src/tests/session-continuity.test.mjs src/tests/runtime-events.test.mjs src/tests/runtime-adapters.test.mjs src/tests/workflow-architecture.test.mjs src/tests/llm-orchestration-decision.test.mjs` passed: 28 tests.
+- `npm run test:egress` passed: 4 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 78 must add the Redis-backed capability portfolio: short planner-visible descriptions with portfolio IDs and cache pointers for skills, workflows, tools, graph paths, and available worker actions.
+
+# Phase 78 — Redis-Backed Capability Portfolio
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: provide the planner with a compact portfolio of available workflows, skills, tools, graph paths, and worker capabilities, backed by fast Redis-style pointers rather than a large prompt dump.
+- Architecture: added a capability portfolio manifest stored in the same Redis-compatible runtime cache. The planner sees a balanced short table with `portfolioId`, `kind`, `title`, `shortDescription`, `score`, and `pointer`; hydrated entries stay in the cache.
+- Loop: context-packet creation now attaches a portfolio every run. The LLM orchestration decision payload and structured-intent payload include the short table. The decision parser now preserves `selectedCapabilityPortfolioIds` and `selectedCapabilityPointers` returned by the planner.
+- Prove: tests hydrate the portfolio from cache, verify key workflow/skill/tool/graph entries are present, verify planner payloads omit hydrated entries, and verify selected portfolio IDs/pointers survive normalization.
+- Harden: the portfolio table is balanced and pins critical entries (`pharmacy_formulary`, `claim_status_navigation`, `insurance_portal_browser`, `openclaw_authenticated_browser`, and the LLM planner graph path) so high-value capabilities are not crowded out by lower-value entries.
+
+Implemented:
+
+- Added `src/concierge/capabilityPortfolio.mjs`.
+- Attached `capabilityPortfolio` to each context packet.
+- Added capability portfolio summaries to the structured-intent and LLM planner payloads.
+- Extended `normalizeLlmOrchestrationDecision()` with selected capability IDs/pointers.
+- Added `npm run test:capability:portfolio`.
+- Added `src/tests/phase78-capability-portfolio.test.mjs`.
+
+Proof:
+
+- `npm run test:capability:portfolio` passed: 3 tests.
+- `npm run test:planner:general` passed: 3 tests.
+- `npm run test:runtime:context` passed: 3 tests.
+- Related prompt/runtime suite passed: `node --test src/tests/workflow-architecture.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/model-payload-policy.test.mjs src/tests/prompt-contracts.test.mjs src/tests/runtime-adapters.test.mjs` passed: 18 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 79 must index LLM outputs and planner decisions by pointer so downstream agents, checkpoints, and future prompts can cite prior model decisions without re-injecting full text.
+
+# Phase 79 — LLM Output Index Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: index LLM outputs so future turns, agents, and checkpoints can reference prior reasoning by pointer instead of re-injecting full model text.
+- Architecture: added a Redis-compatible `llmOutputIndex` that records output IDs, cache pointers, model/tier metadata, output hashes, selected portfolio IDs/pointers, workflow, intent, confidence, and issue/warning counts. It deliberately does not store raw model output text in the prompt-facing index.
+- Loop: live structured-intent and LLM-orchestration planner outputs are indexed after model invocation. The next context packet loads recent output pointers and injects them into structured-intent/planner payloads.
+- Prove: tests run two live-model graph turns with deterministic fake LangChain models. The first turn writes structured-intent and planner output entries; the second turn receives those entries as pointers and the planner can return `priorLlmOutputPointersUsed`.
+- Harden: removed rationale/model-prose summaries from the index after tests caught that raw rationale text could leak into prompt context. The retained index uses hashes and structured routing fields only.
+
+Implemented:
+
+- Added `src/concierge/llmOutputIndex.mjs`.
+- Indexed live structured-intent outputs.
+- Indexed live LLM orchestration decision outputs.
+- Added `llmOutputIndex` to context packets, structured-intent payloads, and LLM planner payloads.
+- Extended `normalizeLlmOrchestrationDecision()` with `priorLlmOutputPointersUsed`.
+- Added `npm run test:llm:output-index`.
+- Added `src/tests/phase79-llm-output-index.test.mjs`.
+
+Proof:
+
+- `npm run test:llm:output-index` passed: 2 tests.
+- Combined Phase 76-79 gates passed: `npm run test:planner:general && npm run test:runtime:context && npm run test:capability:portfolio && npm run test:llm:output-index`.
+- `npm run test:egress` passed: 4 tests.
+- Related model/payload/LangGraph suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/intelligence-default.test.mjs src/tests/langgraph-runner.test.mjs` passed: 28 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 80 must use the checkpoint/cache pointers for explicit resume/error handling so interrupted or failed LangGraph flows can resume from achieved checkpoints instead of restarting from scratch.
+
+# Phase 80 — Checkpoint Resume Plan
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: make checkpoint/cache pointers usable for explicit resume and error handling, so the orchestrator can continue from achieved work instead of restarting from scratch.
+- Architecture: added a deterministic `checkpoint_resume_plan` derived from the runtime-context manifest, durable session checkpoints, and prior LLM output pointers. The database checkpoint remains authoritative; Redis/memory cache is a fast pointer layer only.
+- Loop: every LangGraph run now builds a resume plan before graph invocation. If `resumeFromRuntimeContext`, `resumeFromCheckpoint`, or an approval token is present, the plan is marked requested. The plan is included in graph state, checkpoint metadata, structured-intent payloads, and planner payloads.
+- Prove: tests seed a completed run, start a second run with `resumeFromRuntimeContext`, and verify the resume plan includes latest checkpoint ID, completed step, prior workflow, prior route, deterministic authority, and cache role. A live-model harness also verifies prior LLM-output pointers are visible to the planner.
+- Harden: resume metadata does not bypass LangGraph or deterministic safety. It gives the planner and graph a compact continuation map while preserving policy evaluation and approval gates.
+
+Implemented:
+
+- Added `src/concierge/checkpointResumePlan.mjs`.
+- Added `checkpoint_resume_plan` to LangGraph state.
+- Added checkpoint resume plans to structured-intent and LLM planner payloads.
+- Stored checkpoint resume metadata in the session checkpoint metadata.
+- Added `npm run test:checkpoint:resume`.
+- Added `src/tests/phase80-checkpoint-resume-plan.test.mjs`.
+
+Proof:
+
+- `npm run test:checkpoint:resume` passed: 2 tests.
+- Combined runtime resume gates passed: `npm run test:runtime:context && npm run test:llm:output-index && npm run test:checkpoint:resume`.
+- Related checkpoint/runtime suite passed: `node --test src/tests/session-manager.test.mjs src/tests/graph-interrupt-resume.test.mjs src/tests/runtime-events.test.mjs src/tests/llm-orchestration-decision.test.mjs` passed: 18 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 81 must add vector-to-context retrieval pointers for workflows, skills, and prior outputs, while keeping prompt context compact and source-pointered.
+
+# Phase 81 — Runtime Vector-To-Context Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: add vector-to-context retrieval so planner prompts can receive relevant workflow, skill, tool, checkpoint, and prior-output pointers without loading full histories or hydrated capability manifests.
+- Architecture: added a provider-neutral runtime vector index stored in the Redis-compatible cache. The current implementation uses deterministic local lexical term vectors as the safe fallback; an embedding provider can replace the scoring method later without changing the context contract.
+- Loop: each context packet builds vector documents from the capability portfolio, achieved checkpoints, and LLM output index entries. It stores the full vector index in cache and injects only top matches with pointers, text hashes, scores, and labels into the structured-intent/planner payloads.
+- Prove: tests show medication-copay prompts retrieve `workflow:pharmacy_formulary`, claim prompts retrieve `workflow:claim_status_navigation`, and planner payloads receive pointer/hash top matches without raw user text.
+- Harden: added domain aliases for common insurance language (`medication`, `prescription`, `rx`, `claim`, `EOB`, etc.) so vector retrieval generalizes beyond exact workflow key strings while remaining deterministic and auditable.
+
+Implemented:
+
+- Added `src/concierge/runtimeVectorIndex.mjs`.
+- Attached `runtimeVectorIndex` to context packets.
+- Added runtime vector summaries to structured-intent and LLM planner payloads.
+- Added `npm run test:runtime:vector-context`.
+- Added `src/tests/phase81-runtime-vector-context.test.mjs`.
+
+Proof:
+
+- `npm run test:runtime:vector-context` passed: 3 tests.
+- Related gates passed: `npm run test:capability:portfolio && npm run test:runtime:vector-context && npm run test:checkpoint:resume`.
+- Related model/payload/workflow suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/intelligence-default.test.mjs src/tests/workflow-architecture.test.mjs` passed: 15 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 82 must surface the Phase 76-81 runtime-context gates in operator/dashboard proof, run the final local gate set, and mirror the implementation to Cortex.
+
+# Phase 82 — Runtime Intelligence Readiness Proof
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: close the Phase 76-82 wave with an auditable operator/dashboard proof that the Redis-compatible runtime context, capability portfolio, LLM output index, checkpoint resume plan, vector-to-context retrieval, and LLM-primary planner gates are all present and testable.
+- Architecture: added a lightweight readiness proof builder that inspects the mandatory package-script gates and exposes the result through the existing connector proof run. The proof is intentionally structural and local: Redis remains optional with memory fallback, while Postgres remains the durable source of truth for authoritative session/user state.
+- Loop: Phase 82 aggregates the prior phase gates instead of adding a new hidden decision path. The dashboard score now distinguishes the Phase 76-82 pointer-context wave from older MVP readiness and keeps deterministic safety rails as the final authority.
+- Prove: added a focused readiness test and reran the complete Phase 76-82 focused gate chain with egress and build.
+- Harden: no free-text sentence matching was added. The planner remains the semantic decision point for typed chat questions, with deterministic code used for safety, validation, approval, source checks, and UI-selected workflow controls.
+
+Implemented:
+
+- Added `src/concierge/phase82RuntimeIntelligenceReadiness.mjs`.
+- Added `phase82_runtime_intelligence_pointer_context` to connector proof goals, checks, and score table output.
+- Added `npm run test:runtime:intelligence-readiness`.
+- Added `src/tests/phase82-runtime-intelligence-readiness.test.mjs`.
+- Updated `docs/PHASE_SCOREBOARD.md` so `redis_runtime_context_phase76_82` and `llm_primary_chat_orchestrator_phase76_82` score `100` after the proof gate.
+
+Proof:
+
+- `npm run test:runtime:intelligence-readiness` passed: 2 tests.
+- Complete Phase 76-82 focused chain passed: `npm run test:planner:general && npm run test:runtime:context && npm run test:capability:portfolio && npm run test:llm:output-index && npm run test:checkpoint:resume && npm run test:runtime:vector-context && npm run test:runtime:intelligence-readiness && npm run test:egress && npm run build`.
+- `npm run test:local` passed: 332 tests, 330 passed, 2 expected live-gated OpenClaw skips.
+
+Remaining follow-up:
+
+- Mirror the full Phase 76-82 implementation record into Cortex and publish both project/Cortex branches for review.
+- Production follow-up still requires real Redis deployment, Postgres production-default rollout, live Graphiti/Zep adapter proof, hosted remote browser readiness, and authenticated OpenClaw signed-in proof.

@@ -31,6 +31,14 @@ test("model tier policy selects explicit classifier reasoner and planner tiers",
   assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "planner-test");
 });
 
+test("planner tier does not inherit classifier-sized OPENAI_MODEL fallback", () => {
+  const env = { OPENAI_MODEL: "gpt-5-mini" };
+
+  assert.equal(selectModelForStep("structured_intent", { env }).model, "gpt-5-mini");
+  assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "gpt-5");
+  assert.equal(selectModelForStep("sourced_answer", { env }).model, "gpt-5");
+});
+
 test("model tier policy keeps edge SLM as a pinned not-implemented interface", () => {
   assert.throws(() => selectModelForStep("offline_small_model", { tier: "edge_slm", env: {} }), {
     code: "not_implemented",

@@ -5,6 +5,7 @@ export const LLM_ORCHESTRATION_DECISION_VERSION = "2026-05-28.llm-orchestration-
 export const LLM_DECISION_WORKFLOWS = Object.freeze([
   "eligibility_benefits_navigation",
   "claim_status_navigation",
+  "pharmacy_formulary",
   "prior_authorization_navigation",
   "denial_appeal_preparation",
   "payer_portal_read_only_extraction",
@@ -147,6 +148,64 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       enabled: Boolean(state.product_memory_recall?.enabled),
       facts: (state.product_memory_recall?.facts ?? []).slice(0, 6).map((fact) => compact(fact.fact ?? fact.name ?? fact.uuid, 360))
     },
+    runtimeContext: state.context_packet?.runtimeContext
+      ? {
+          cacheBackend: state.context_packet.runtimeContext.cacheBackend,
+          cacheStatus: state.context_packet.runtimeContext.cacheStatus,
+          cacheKey: state.context_packet.runtimeContext.cacheKey,
+          manifestHash: state.context_packet.runtimeContext.manifestHash,
+          previousManifestHash: state.context_packet.runtimeContext.previousManifestHash,
+          latestCheckpoint: state.context_packet.runtimeContext.latestCheckpoint,
+          achievedCheckpoints: (state.context_packet.runtimeContext.achievedCheckpoints ?? []).slice(0, 6),
+          priorDecisionPointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
+          promptCompaction: state.context_packet.runtimeContext.promptCompaction,
+          capabilitySummary: (state.context_packet.runtimeContext.capabilitySummary ?? []).slice(0, 5)
+      }
+      : null,
+    capabilityPortfolio: state.context_packet?.capabilityPortfolio
+      ? {
+          cacheBackend: state.context_packet.capabilityPortfolio.cacheBackend,
+          cacheKey: state.context_packet.capabilityPortfolio.cacheKey,
+          portfolioHash: state.context_packet.capabilityPortfolio.portfolioHash,
+          entryCount: state.context_packet.capabilityPortfolio.entryCount,
+          promptTable: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
+      }
+      : null,
+    llmOutputIndex: state.context_packet?.llmOutputIndex
+      ? {
+          cacheBackend: state.context_packet.llmOutputIndex.cacheBackend,
+          cacheKey: state.context_packet.llmOutputIndex.cacheKey,
+          status: state.context_packet.llmOutputIndex.status,
+          latestOutputId: state.context_packet.llmOutputIndex.latestOutputId,
+          entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
+      }
+      : null,
+    runtimeVectorContext: state.context_packet?.runtimeVectorIndex
+      ? {
+          cacheBackend: state.context_packet.runtimeVectorIndex.cacheBackend,
+          cacheKey: state.context_packet.runtimeVectorIndex.cacheKey,
+          method: state.context_packet.runtimeVectorIndex.method,
+          embeddingProvider: state.context_packet.runtimeVectorIndex.embeddingProvider,
+          queryHash: state.context_packet.runtimeVectorIndex.queryHash,
+          topMatches: (state.context_packet.runtimeVectorIndex.topMatches ?? []).slice(0, 10)
+        }
+      : null,
+    checkpointResumePlan: state.checkpoint_resume_plan
+      ? {
+          requested: state.checkpoint_resume_plan.requested,
+          available: state.checkpoint_resume_plan.available,
+          strategy: state.checkpoint_resume_plan.strategy,
+          cacheKey: state.checkpoint_resume_plan.cacheKey,
+          resumeCheckpointId: state.checkpoint_resume_plan.resumeCheckpointId,
+          latestCompletedStep: state.checkpoint_resume_plan.latestCompletedStep,
+          priorWorkflow: state.checkpoint_resume_plan.priorWorkflow,
+          priorRouteReason: state.checkpoint_resume_plan.priorRouteReason,
+          priorEvidenceObservationStatus: state.checkpoint_resume_plan.priorEvidenceObservationStatus,
+          priorSourcePointerCount: state.checkpoint_resume_plan.priorSourcePointerCount,
+          priorLlmOutputPointers: state.checkpoint_resume_plan.priorLlmOutputPointers,
+          safeToResumeWithoutReplayingPriorSteps: state.checkpoint_resume_plan.safeToResumeWithoutReplayingPriorSteps
+        }
+      : null,
     openclawCapabilityPolicy: {
       workerMayChooseWorkflow: false,
       workerMayCreateSubtasks: true,
@@ -168,7 +227,10 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       approvalScope: "read_only_observation or specific action scope",
       workerGoal: "specific OpenClaw task goal inside the selected workflow",
       responseStrategy: "how LangGraph should explain the next step to the user",
-      userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string"
+      userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string",
+      selectedCapabilityPortfolioIds: ["portfolio IDs from capabilityPortfolio.promptTable"],
+      selectedCapabilityPointers: ["cache pointers from capabilityPortfolio.promptTable"],
+      priorLlmOutputPointersUsed: ["LLM output index pointers consulted, if any"]
     }
   };
 }
@@ -255,6 +317,9 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     workerGoal: parsed.workerGoal ? compact(parsed.workerGoal, 1000) : null,
     responseStrategy: parsed.responseStrategy ? compact(parsed.responseStrategy, 1000) : null,
     userFacingNextQuestion: parsed.userFacingNextQuestion ? compact(parsed.userFacingNextQuestion, 500) : "",
+    selectedCapabilityPortfolioIds: asArray(parsed.selectedCapabilityPortfolioIds),
+    selectedCapabilityPointers: asArray(parsed.selectedCapabilityPointers),
+    priorLlmOutputPointersUsed: asArray(parsed.priorLlmOutputPointersUsed),
     issues,
     warnings,
     rawDecision: parsed

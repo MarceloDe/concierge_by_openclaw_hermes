@@ -47,7 +47,7 @@ export function selectModelForStep(step, context = {}) {
     context.model ??
     envForTier(tier, "MODEL", env) ??
     (tier === "planner" ? env.BRAINSTY_REASONER_MODEL : null) ??
-    env.OPENAI_MODEL ??
+    (tier === "classifier" ? env.OPENAI_MODEL : null) ??
     DEFAULT_MODELS[tier];
   const baseURL =
     context.baseURL ??

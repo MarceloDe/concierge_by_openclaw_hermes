@@ -132,6 +132,7 @@ import {
 import { buildPhase72BillSourcedAnswerProof, composeBillVerificationFinalAnswer } from "../concierge/billSourcedAnswer.mjs";
 import { composePortalObservationFinalAnswer } from "../concierge/portalObservationAnswer.mjs";
 import { buildPhase73MvpReadinessProof } from "../concierge/phase73MvpReadiness.mjs";
+import { buildPhase82RuntimeIntelligenceReadinessProof } from "../concierge/phase82RuntimeIntelligenceReadiness.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
@@ -1520,6 +1521,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
     deployment,
     liveReadiness
   });
+  const phase82RuntimeIntelligenceReadiness = buildPhase82RuntimeIntelligenceReadinessProof();
   return {
     version: "server-connector-next-mobile-mvp.v2",
     runId,
@@ -1796,6 +1798,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         key: "phase73_first_testable_mvp_readiness",
         status: phase73MvpReadiness.status,
         target: "Aggregate Phases 66-72 into a first regular-user testable bill-verification MVP while keeping production blockers explicit."
+      },
+      {
+        key: "phase82_runtime_intelligence_pointer_context",
+        status: phase82RuntimeIntelligenceReadiness.status,
+        target: "Phases 76-82 make chat orchestration LLM-primary with Redis-compatible checkpoint pointers, capability portfolio pointers, LLM output indexing, resume plans, and vector-to-context retrieval."
       }
     ],
     checks: [
@@ -2026,6 +2033,16 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         testPlan: phase73MvpReadiness.testPlan,
         productionBlockers: phase73MvpReadiness.productionBlockers,
         proofEndpoints: phase73MvpReadiness.proofEndpoints
+      },
+      {
+        key: "phase82_runtime_intelligence_pointer_context",
+        status: phase82RuntimeIntelligenceReadiness.status,
+        ok: phase82RuntimeIntelligenceReadiness.ok,
+        score: phase82RuntimeIntelligenceReadiness.score,
+        target: phase82RuntimeIntelligenceReadiness.target,
+        checks: phase82RuntimeIntelligenceReadiness.checks,
+        gates: phase82RuntimeIntelligenceReadiness.gates,
+        proof: phase82RuntimeIntelligenceReadiness.proof
       },
       {
         key: "database_storage",
@@ -2810,6 +2827,17 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         firstTestableMvpReady: phase73MvpReadiness.decision.firstTestableMvpReady,
         productionReady: phase73MvpReadiness.decision.productionReady,
         productionBlockerCount: phase73MvpReadiness.productionBlockers.length
+      },
+      {
+        key: "phase82_runtime_intelligence_pointer_context",
+        score: phase82RuntimeIntelligenceReadiness.score,
+        target: phase82RuntimeIntelligenceReadiness.target,
+        status: phase82RuntimeIntelligenceReadiness.status,
+        redisRuntimeContext: phase82RuntimeIntelligenceReadiness.proof.redisCompatibleCheckpointPointers,
+        capabilityPortfolio: phase82RuntimeIntelligenceReadiness.proof.capabilityPortfolioPointers,
+        llmOutputIndex: phase82RuntimeIntelligenceReadiness.proof.llmOutputIndexPointers,
+        checkpointResumePlan: phase82RuntimeIntelligenceReadiness.proof.checkpointResumePlan,
+        vectorToContext: phase82RuntimeIntelligenceReadiness.proof.vectorToContextPointers
       },
       {
         key: "canonical_goal_tied_phase_execution",
