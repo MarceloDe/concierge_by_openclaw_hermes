@@ -12,6 +12,11 @@ import {
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { capabilityPortfolioKey, loadCapabilityPortfolio } from "../concierge/capabilityPortfolio.mjs";
 
+// Hermetic precondition: verifies the no-Redis in-memory fallback path, pinned
+// independent of ambient .env.local (which now configures BRAINSTY_REDIS_URL).
+process.env.BRAINSTY_REDIS_URL = "";
+process.env.REDIS_URL = "";
+
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-phase78-capability-portfolio-"));
   return new SqliteStore(join(dir, "test.sqlite")).initialize();

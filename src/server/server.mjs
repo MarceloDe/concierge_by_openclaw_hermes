@@ -73,7 +73,9 @@ import {
   runOperatorAssistant
 } from "../concierge/operatorAssistant.mjs";
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
+import { createRuntimeContextCache } from "../concierge/runtimeContextCache.mjs";
 import {
+  getProductMemoryConfig,
   getProductMemoryStatus,
   getProductMemoryReplayQueueSummary,
   listProductMemoryReplayQueue,
@@ -5032,5 +5034,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`Brainstyworkers AI Concierge running at http://${HOST}:${PORT}`);
     console.log(`Database driver: ${store.driver ?? "sqlite"} ${store.dbPath ? `(${store.dbPath})` : ""}`.trim());
     console.log(langfuseStartupLine());
+    try {
+      const runtimeCache = createRuntimeContextCache();
+      const productMemory = getProductMemoryConfig();
+      const redisWarn = runtimeCache.backend === "memory" ? " (WARNING: no BRAINSTY_REDIS_URL/REDIS_URL — runtime context is process-local only, lost on restart)" : "";
+      console.log(`[runtime] context cache backend=${runtimeCache.backend}${runtimeCache.urlHash ? ` url=${runtimeCache.urlHash}` : ""}${redisWarn}`);
+      console.log(`[runtime] product memory adapter=${productMemory.adapter}; enabled=${productMemory.enabled}; phi_cleared=${productMemory.phiCleared}`);
+    } catch (error) {
+      console.log(`[runtime] readiness probe failed: ${error?.message ?? "unknown"}`);
+    }
   });
 }

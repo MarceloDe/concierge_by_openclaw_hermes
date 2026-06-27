@@ -22,6 +22,7 @@
     "test:runtime:vector-context": "node --test src/tests/phase81-runtime-vector-context.test.mjs",
     "test:runtime:intelligence-readiness": "node --test src/tests/phase82-runtime-intelligence-readiness.test.mjs",
     "test:observability": "node --test src/tests/langfuse-observability.test.mjs",
+    "test:orchestrator:nondeterministic": "node --test src/tests/orchestrator-nondeterministic-live.test.mjs",
     "smoke:langfuse": "node scripts/langfuse-observability-smoke.mjs",
     "test:journeys": "node --test src/tests/graceful-degradation.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/intelligence-default.test.mjs src/tests/model-tier-policy.test.mjs src/tests/structured-intent-classifier.test.mjs",
     "test:production:contract": "node --test src/tests/production-contract.test.mjs",

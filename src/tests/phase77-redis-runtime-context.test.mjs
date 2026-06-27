@@ -14,6 +14,13 @@ import {
   runtimeContextKey
 } from "../concierge/runtimeContextCache.mjs";
 
+// Hermetic precondition: this suite verifies the no-Redis in-memory fallback path.
+// Pin it explicitly so it is independent of ambient .env.local (which now sets
+// BRAINSTY_REDIS_URL for the running app). Empty (defined) values keep
+// loadLocalEnvOnce from repopulating them.
+process.env.BRAINSTY_REDIS_URL = "";
+process.env.REDIS_URL = "";
+
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-phase77-runtime-context-"));
   return new SqliteStore(join(dir, "test.sqlite")).initialize();
