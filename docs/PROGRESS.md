@@ -9895,3 +9895,80 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login proof still requires the user to take control inside the AWS/Steel browser, sign in to Aetna manually, pass any 2FA/captcha challenge, return control, and run **Continue read-only claim scan**. That final live proof is intentionally human-gated; Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
+
+# Phase 75 Follow-Up — User App Chat Latency And Contextual Option Handling
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: investigate the `/userapp` chat latency and the visible failure where the assistant did not understand "Go to the option B" after offering A/B portal options.
+- Architecture: keep the LLM-primary orchestrator available for regular product reasoning, but give the regular-user PWA a compact, contextual, low-latency path for portal-control setup turns.
+- Loop: fixed the PWA to carry recent message context, added a local portal-follow-up resolver for "connect portal" and contextual option B, added compact `/api/chat` responses, and added a guarded `interactiveFastPath` that skips only the second live planner call when the structured route is already confident.
+- Prove: added regression tests for contextual option expansion, compact chat payloads, and the PWA portal fast path; visually verified the patched PWA opens the AWS/Steel Aetna browser modal in read-only mode with the Take control button visible.
+- Harden: context expansion is narrow to A/B portal follow-ups and keeps unrelated fragments unchanged; credential entry, 2FA, captcha, submit, upload, payer contact, and account mutations remain human-only.
+
+Root cause:
+
+- `/userapp` sent only the latest chat text to `/api/chat`; the server received "Go to the option B" without the prior assistant message defining option B as read-only extraction.
+- Standalone "Go to the option B" was correctly blocked as contextless/out-of-scope by deterministic policy, but that was wrong for the PWA conversation state.
+- The portal setup turn also paid for live model orchestration and returned debug-heavy graph/trace/count payloads, producing slow regular-user chat.
+
+Implemented:
+
+- Added contextual PWA follow-up handling in `src/userapp/App.tsx`:
+  - portal-connect requests open the live browser immediately,
+  - contextual option B opens the live browser and instructs the user to finish login, return control, then continue read-only claim scan,
+  - contextual option A returns step-by-step login guidance without a server round trip.
+- Added recent message context, compact mode, and `interactiveFastPath` payload fields in `src/userapp/api.ts`.
+- Added compact `/api/chat` responses in `src/server/server.mjs` that omit `graphRun`, `trace`, and `counts` unless debug/full mode is requested.
+- Added `interactiveFastPath` handling in `src/concierge/langgraphRunner.mjs` to skip the second live LLM planner call for confident regular-user PWA turns while preserving deterministic safety rails.
+- Added narrow server-side A/B expansion in `src/concierge/channelAdapter.mjs` so direct API clients with `recentMessages` also preserve context.
+
+Proof:
+
+- `node --test src/tests/channel-adapter-context.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/runtime-collapse.test.mjs` passed: 20 tests.
+- `npm run userapp:build` passed.
+- `npm run build` passed.
+- Local compact API proof for the exact follow-up "Go to the option B" with recent assistant context returned in `0.291s`, `59913` bytes, `hasGraphRun=false`, `hasTrace=false`, `intent=enrollment_portal_depuration`, `workflow=eligibility_benefits_navigation`, and `routeReason=structured_intent_classifier`.
+- Visual PWA proof at `http://127.0.0.1:4226/userapp?phase=phase-75-chat-latency-context`:
+  - starting a session showed `Live browser ready`,
+  - submitting "are you able to help me to connect with my insurance portal?" produced immediate contextual guidance,
+  - the live AWS/Steel Aetna browser modal opened in read-only mode with the **Take control** button visible.
+
+Remaining manual gate:
+
+- Post-login extraction still requires the user to take control inside the AWS/Steel browser, enter credentials/2FA/captcha manually, return control, and run **Continue read-only claim scan**. OpenClaw remains read-only and must not enter credentials, solve challenges, submit forms, upload documents, contact Aetna, or mutate account data.
+
+Follow-up correction:
+
+- Added same-session context rehydration for `/api/chat`: if a client sends a `sessionId` without `recentMessages`, the server now reads recent `conversation_messages` before normalizing the new user turn.
+- Added sanitized `recentConversation` to LangGraph context packets so orchestrator prompts, structured-intent reasoning, LLM planner payloads, and PEMS shadow persistence can see the active thread alongside demographics, recent sessions, memory items, portal account, database pointers, open tasks, and scheduled jobs.
+- Narrowed credential policy from "any password mention blocks" to:
+  - block assistant credential entry/request/storage/transmission,
+  - block SSN and secret-value disclosure,
+  - allow user-controlled authentication guidance when the user is explicitly typing their own password/2FA/captcha.
+- Added a positive response policy for `user_controlled_auth_guidance` so the backend answers supportively: guide the user while they type secrets themselves, never ask for or see credentials, and offer a no-login fallback.
+- Broadened `/userapp` typo-tolerant portal matching so phrases like "help me log at/to my insurance portal" open the live support path immediately.
+
+Additional proof:
+
+- `node --test src/tests/policy.test.mjs src/tests/channel-adapter-context.test.mjs src/tests/chat-ui-contract.test.mjs src/tests/langgraph-runner.test.mjs src/tests/runtime-collapse.test.mjs` passed: 48 tests.
+- `npm run userapp:build` passed.
+- `npm run build` passed.
+- Live two-turn API proof with no `recentMessages` on the second turn:
+  - first turn: "can you help me to log at me insurance portal?"
+  - second turn: "but you can guide me and i put the password?"
+  - total time for both turns: `0.403s`,
+  - `second_allowed=true`,
+  - `credential_severity=user_controlled_auth_guidance`,
+  - `workflowOutcome=user_controlled_auth_guidance`,
+  - `hasGraphRun=false`,
+  - `hasTrace=false`,
+  - refusal text absent,
+  - support text present: "I can guide you while you type your own Aetna password...".
+- Visual PWA proof at `http://127.0.0.1:4226/userapp?phase=phase-75-context-auth-guidance-proof`:
+  - "can you help me to log at me insurance portal?" produced live-browser support,
+  - "but you can guide me and i put the password?" produced positive user-controlled auth guidance,
+  - no "cannot enter or request passwords" refusal appeared,
+  - the AWS/Steel live-browser modal opened.

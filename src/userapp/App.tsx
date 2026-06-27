@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   startSession,
   sendChat,
+  createBrowserSession,
+  observeClaimsReadOnly,
   DEFAULT_MEMBER,
   type SessionState,
   type Ai2UiBlock,
-  type Ai2UiOption
+  type Ai2UiOption,
+  type BrowserSession,
+  type ClaimsObservationResult
 } from "./api";
 import { Ai2UiBlocks } from "./components/Ai2Ui";
 import { LiveView } from "./components/LiveView";
@@ -21,6 +25,7 @@ interface Msg {
 
 let nid = 0;
 const mkId = () => `m${++nid}`;
+const RECENT_MESSAGE_LIMIT = 6;
 
 // Premade "canvas" functions from the original interface, as opaque one-tap actions.
 const QUICK = [
@@ -28,6 +33,79 @@ const QUICK = [
   { key: "claim", label: "Claim status", sub: "Why wasn't this paid?", Icon: Receipt, message: "Why didn't my insurance pay my last visit? Walk me through the claim." },
   { key: "bill", label: "Bill investigation", sub: "Check a bill", Icon: DocSearch, message: "Help me investigate a medical bill — find overcharges and explain what I actually owe." }
 ];
+
+function recentChatContext(messages: Msg[]) {
+  return messages
+    .filter((m) => !m.typing)
+    .slice(-RECENT_MESSAGE_LIMIT)
+    .map((m) => ({ role: m.role, text: m.text }));
+}
+
+function previousAssistantOfferedReadOnly(messages: Msg[]) {
+  return [...messages]
+    .reverse()
+    .some((m) => m.role === "assistant" && /option\s*b|read[- ]only extraction|read[- ]only access|read[- ]only claim scan/i.test(m.text));
+}
+
+function previousAssistantOfferedStepGuidance(messages: Msg[]) {
+  return [...messages]
+    .reverse()
+    .some((m) => m.role === "assistant" && /option\s*a|step[- ]by[- ]step|login steps|log in/i.test(m.text));
+}
+
+function isPortalConnectRequest(text: string) {
+  const normalized = text.toLowerCase();
+  return (
+    /\b(connect|open|access|sign ?in|log ?in)\b.*\b(aetna|insurance|insurer|portal)\b/i.test(normalized) ||
+    /\b(aetna|insurance|insurer|portal)\b.*\b(connect|open|access|sign ?in|log ?in)\b/i.test(normalized) ||
+    /\b(help|guide|walk|support)\b.{0,80}\b(log|login|sign|connect|access)\b.{0,80}\b(aetna|insurance|insurer|portal)\b/i.test(normalized) ||
+    /\b(log|login|sign)\b.{0,30}\b(in|into|to|at)\b.{0,30}\b(aetna|insurance|insurer|portal)\b/i.test(normalized)
+  );
+}
+
+function isReadOnlyExtractionChoice(text: string, messages: Msg[]) {
+  return (
+    (/\b(option|choice)\s*b\b/i.test(text) && previousAssistantOfferedReadOnly(messages)) ||
+    /\bread[- ]?only\b.*\b(extraction|scan|observe|access|portal)\b/i.test(text)
+  );
+}
+
+function isStepGuidanceChoice(text: string, messages: Msg[]) {
+  return (/\b(option|choice)\s*a\b/i.test(text) && previousAssistantOfferedStepGuidance(messages)) || /\bstep[- ]by[- ]step\b/i.test(text);
+}
+
+function isUserControlledAuthGuidance(text: string, messages: Msg[]) {
+  return (
+    /\b(guide|walk|help|support)\b/i.test(text) &&
+    /\b(password|passcode|passkey|2fa|two[- ]factor|one[- ]time code|otp|verification code|mfa|captcha|log ?in|sign ?in)\b/i.test(text) &&
+    (previousAssistantOfferedReadOnly(messages) ||
+      previousAssistantOfferedStepGuidance(messages) ||
+      /\b(portal|aetna|insurance|insurer|browser)\b/i.test(text))
+  );
+}
+
+function portalAssistText(member: SessionState["member"]) {
+  return (
+    `Yes — I'll check whether your ${member.payer} portal is already connected. If the saved remote session needs login, I'll open the live browser for you. You stay in control for username, password, 2FA, and captcha; ` +
+    `I will not type credentials or submit forms for you.\n\n` +
+    `After you finish login and return control, I will hide the browser window, keep the AWS session alive, and continue read-only OpenClaw work from the signed-in portal.`
+  );
+}
+
+function userControlledAuthGuidanceText(member: SessionState["member"]) {
+  return (
+    `Yes. I can guide you while you type your own ${member.payer} password, 2FA, or captcha in the live browser. ` +
+    `I will not ask for, see, store, or enter your credentials.\n\n` +
+    `Tap Take control, complete the login yourself, then return control. If you prefer not to log in, I can still explain the general portal steps and what evidence to upload instead.`
+  );
+}
+
+function stepGuidanceText(member: SessionState["member"]) {
+  return (
+    `Use the Connect ${member.payer} portal button when you're ready. Keep your username, password, phone or authenticator app, insurance card, and photo ID nearby.\n\n` +
+    `If the portal asks for a password, 2FA, or captcha, take control and complete it yourself. After login, return control so I can continue read-only observation.`
+  );
+}
 
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
@@ -37,6 +115,7 @@ export function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+  const [retainedBrowser, setRetainedBrowser] = useState<BrowserSession | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,6 +152,7 @@ export function App() {
     try {
       const s = await startSession(DEFAULT_MEMBER);
       setSession(s);
+      setRetainedBrowser(null);
       setMessages([
         {
           id: mkId(),
@@ -90,16 +170,95 @@ export function App() {
     }
   }, []);
 
+  function portalConnectedText(member: SessionState["member"], result?: ClaimsObservationResult | null) {
+    const sources = result?.sourcePointers?.length ?? 0;
+    const rows = result?.claimRows?.length ?? 0;
+    return (
+      `We are connected to your ${member.payer} insurance portal account. I hid the remote browser window and kept the AWS browser session alive, so you can stay in chat while OpenClaw continues read-only navigation.\n\n` +
+      `You can now ask what you want me to verify. I can inspect benefits, claim status, copay evidence, plan documents, and portal pages without entering credentials, submitting forms, contacting ${member.payer}, or changing account data.` +
+      (sources || rows ? `\n\nCurrent read-only proof: ${rows} claim row(s), ${sources} source pointer(s).` : "")
+    );
+  }
+
+  const startPortalFlow = useCallback(
+    async (userMsg?: Msg) => {
+      if (!session || busy) return;
+      setBusy(true);
+      if (userMsg) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: portalAssistText(session.member) }]);
+      } else {
+        setMessages((m) => [...m, { id: mkId(), role: "assistant", text: `Checking whether your ${session.member.payer} portal is already connected...` }]);
+      }
+      try {
+        const browser = retainedBrowser ?? await createBrowserSession(session, session.member.portalUrl, { hiddenUntilAuthRequired: true });
+        setRetainedBrowser(browser);
+        const readiness = await observeClaimsReadOnly(session, browser.browserSessionId);
+        if (readiness.ok) {
+          setMessages((m) => [...m, { id: mkId(), role: "assistant", text: portalConnectedText(session.member, readiness) }]);
+          setLiveOpen(false);
+          return;
+        }
+        const status = readiness.status ?? "login_needed";
+        setMessages((m) => [
+          ...m,
+          {
+            id: mkId(),
+            role: "assistant",
+            text:
+              status === "human_login_required"
+                ? `The retained AWS browser session needs your ${session.member.payer} login again. I am opening the live browser for takeover; after you return control, I will hide it and continue in read-only mode.`
+                : `I could not confirm a signed-in ${session.member.payer} portal page yet (${status}). I am opening the live browser so you can guide it or sign in yourself.`
+          }
+        ]);
+        setLiveOpen(true);
+      } catch (e: any) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: mkId(),
+            role: "assistant",
+            text: `I could not silently verify the retained portal session (${e?.message ?? "unknown error"}). I am opening the live browser so you can take control.`
+          }
+        ]);
+        setLiveOpen(true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session, busy, retainedBrowser]
+  );
+
   const ask = useCallback(
     async (message: string) => {
       const text = message.trim();
       if (!text || !session || busy) return;
-      setBusy(true);
       const userMsg: Msg = { id: mkId(), role: "user", text };
+
+      if (isPortalConnectRequest(text) || isReadOnlyExtractionChoice(text, messages)) {
+        void startPortalFlow(userMsg);
+        return;
+      }
+
+      if (isUserControlledAuthGuidance(text, messages)) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: userControlledAuthGuidanceText(session.member) }]);
+        setLiveOpen(true);
+        return;
+      }
+
+      if (isStepGuidanceChoice(text, messages)) {
+        setMessages((m) => [...m, userMsg, { id: mkId(), role: "assistant", text: stepGuidanceText(session.member) }]);
+        return;
+      }
+
+      setBusy(true);
       const typingMsg: Msg = { id: mkId(), role: "assistant", text: "", typing: true };
       setMessages((m) => [...m, userMsg, typingMsg]);
       try {
-        const res = await sendChat(session, text);
+        const res = await sendChat(session, text, {
+          recentMessages: recentChatContext([...messages, userMsg]),
+          compact: true,
+          interactiveFastPath: true
+        });
         setMessages((m) =>
           m.map((x) =>
             x.id === typingMsg.id
@@ -117,19 +276,19 @@ export function App() {
         setBusy(false);
       }
     },
-    [session, busy]
+    [session, busy, messages, startPortalFlow]
   );
 
   const onAction = useCallback(
     (label: string, opt?: Ai2UiOption) => {
       // Approval-scoped portal options open the live browser; everything else is a follow-up turn.
       if (opt?.approvalScope === "read_only_observation" || /portal|sign in|log in|aetna/i.test(label)) {
-        setLiveOpen(true);
+        void startPortalFlow();
         return;
       }
       void ask(label);
     },
-    [ask]
+    [ask, startPortalFlow]
   );
 
   function onSubmit(e: React.FormEvent) {
@@ -200,7 +359,7 @@ export function App() {
             </span>
           </button>
         ))}
-        <button className="live" onClick={() => setLiveOpen(true)}>
+        <button className="live" onClick={() => startPortalFlow()} disabled={busy}>
           <span className="ic">
             <Globe size={17} />
           </span>
@@ -233,6 +392,8 @@ export function App() {
         <LiveView
           session={session}
           targetUrl={session.member.portalUrl}
+          initialBrowserSession={retainedBrowser}
+          onBrowserSessionReady={setRetainedBrowser}
           onObservationAnswer={(answer, result) => {
             setMessages((m) => [
               ...m,
@@ -245,6 +406,9 @@ export function App() {
                   `Status: ${result.status ?? "claim observation complete"}.`
               }
             ]);
+          }}
+          onPortalConnected={(_answer, result) => {
+            setMessages((m) => [...m, { id: mkId(), role: "assistant", text: portalConnectedText(session.member, result) }]);
           }}
           onClose={() => setLiveOpen(false)}
         />

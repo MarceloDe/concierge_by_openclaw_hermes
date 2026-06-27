@@ -1420,15 +1420,50 @@ class FastApiFacadeTest(unittest.TestCase):
                     "session_id": "session_phase30_remote",
                     "target_url": "https://example.com",
                     "provider": "hosted_remote",
-                    "options": {"targetUrlRef": "approved-example-ref"}
+                    "options": {
+                        "targetUrlRef": "approved-example-ref",
+                        "persistentProfile": True,
+                        "profileRef": "v1_phase30_remote_user:aetna:example.com",
+                        "reuseAuthenticatedSession": True,
+                        "keepAliveAfterViewerHidden": True,
+                        "hiddenUntilAuthRequired": True,
+                        "persistSessionCookies": True,
+                        "rawPasswordStorageAllowed": False,
+                        "agentCredentialEntryAllowed": False
+                    }
+                }
+            )
+            reused_response = client.post(
+                "/api/v1/browser/sessions",
+                headers=headers,
+                json={
+                    "session_id": "session_phase30_remote",
+                    "target_url": "https://example.com",
+                    "provider": "hosted_remote",
+                    "options": {
+                        "targetUrlRef": "approved-example-ref",
+                        "persistentProfile": True,
+                        "profileRef": "v1_phase30_remote_user:aetna:example.com",
+                        "reuseAuthenticatedSession": True,
+                        "hiddenUntilAuthRequired": True,
+                        "rawPasswordStorageAllowed": False,
+                        "agentCredentialEntryAllowed": False
+                    }
                 }
             )
 
         self.assertEqual(browser_response.status_code, 200)
+        self.assertEqual(reused_response.status_code, 200)
         browser = browser_response.json()
+        reused = reused_response.json()
         self.assertEqual(browser["provider"], "hosted_remote")
+        self.assertEqual(reused["browser_session_id"], browser["browser_session_id"])
+        self.assertTrue(reused["readiness"]["reusedPersistentProfile"])
+        self.assertEqual(reused["readiness"]["profilePersistence"], "active_remote_browser_session_reused")
         self.assertEqual(browser["readiness"]["status"], "hosted_browser_sandbox_provider_ready")
         self.assertTrue(browser["readiness"]["providerLiveConnected"])
+        self.assertEqual(browser["readiness"]["profilePersistence"], "active_remote_browser_session_retained")
+        self.assertFalse(browser["readiness"]["rawPasswordStorageAllowed"])
         self.assertEqual(browser["screencast"]["status"], "hosted_provider_session_created")
         self.assertTrue(browser["screencast"]["providerLiveConnected"])
         self.assertTrue(browser["screencast"]["sessionViewerUrl"])

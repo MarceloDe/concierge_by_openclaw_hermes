@@ -896,3 +896,34 @@ test("LangGraph runner blocks credential-entry requests before structured routin
   assert.equal(result.state.openclaw_envelope, null);
   assert.match(result.state.final_response, /cannot enter or request passwords/);
 });
+
+test("LangGraph runner supports user-controlled portal login guidance and carries same-session context", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store);
+  await store.insert("conversation_messages", {
+    id: "msg_prior_auth_guidance",
+    session_id: session.id,
+    role: "assistant",
+    content: "I can guide you through signing in to the Aetna insurance portal, but you must type your own password and 2FA.",
+    created_at: new Date(Date.now() - 1000).toISOString()
+  });
+
+  const result = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Please guide me while I enter my own password in the Aetna portal.",
+    rawMessage: { source: "test", useLiveModel: false, executeEvidenceObservation: false }
+  });
+
+  assert.equal(result.state.policy_result.allowed, true);
+  assert.equal(result.state.policy_result.checks.find((check) => check.name === "credential_boundary").severity, "user_controlled_auth_guidance");
+  assert.notEqual(result.state.workflow, "refuse_credential_entry");
+  assert.doesNotMatch(result.state.final_response, /cannot enter or request passwords/i);
+  assert.match(result.state.final_response, /I can guide you while you type your own Aetna password/i);
+  assert.match(result.state.final_response, /If you prefer not to log in/i);
+  assert.ok(result.contextPacket.packet.recentConversation.length >= 2);
+  assert.ok(result.contextPacket.packet.recentConversation.some((item) => item.role === "assistant" && /signing in/.test(item.content)));
+  assert.ok(result.contextPacket.packet.recentConversation.some((item) => item.role === "user" && /enter my own password/.test(item.content)));
+  assert.ok(result.state.continuous_intelligence_persistence?.shadowRunId);
+});

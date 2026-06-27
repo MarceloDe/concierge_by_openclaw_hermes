@@ -226,6 +226,23 @@ async function readJson(req) {
   return body ? JSON.parse(body) : {};
 }
 
+async function recentMessagesForChatNormalization(store, sessionId, limit = 8) {
+  if (!sessionId) return [];
+  const safeLimit = Math.max(1, Math.min(20, Number(limit) || 8));
+  const rows = await store.all(
+    `SELECT role, content
+     FROM conversation_messages
+     WHERE session_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?;`,
+    [sessionId, safeLimit]
+  );
+  return rows.reverse().map((row) => ({
+    role: row.role,
+    text: row.content
+  }));
+}
+
 async function readJsonIfExists(path) {
   try {
     return JSON.parse(await readFile(resolve(path), "utf8"));
@@ -4026,12 +4043,19 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/chat") {
     const body = await readJson(req);
-    const envelope = normalizeWebChat(body);
+    const compactResponse = body.compact === true || body.responseMode === "compact" || body.includeDebug === false;
     const enrollment = await enrollDefaultMember(store, body.member ?? {}, {
       sessionId: body.sessionId,
       resumeLatestSession: Boolean(body.resumeLatestSession),
       title: body.sessionTitle
     });
+    const normalizedBody = {
+      ...body,
+      recentMessages: Array.isArray(body.recentMessages) && body.recentMessages.length
+        ? body.recentMessages
+        : await recentMessagesForChatNormalization(store, enrollment.session.id)
+    };
+    const envelope = normalizeWebChat(normalizedBody);
     const graphRun = await runLangGraphOrchestration(store, {
       user: enrollment.user,
       session: enrollment.session,
@@ -4040,18 +4064,20 @@ async function handleApi(req, res, url) {
       rawMessage: {
         ...body,
         ...envelope,
+        recentMessages: normalizedBody.recentMessages,
         source: "api_chat",
         executeEvidenceObservation: body.executeEvidenceObservation !== false,
         useLiveModel: body.useLiveModel !== false,
+        interactiveFastPath: body.interactiveFastPath === true,
         payloadMode: body.payloadMode ?? "phi_allowed_identifier_masked_reasoning",
         requestedAt: new Date().toISOString()
       }
     });
-    const trace = await traceForSession(store, enrollment.session.id);
-    sendJson(res, 200, {
+    const trace = compactResponse ? null : await traceForSession(store, enrollment.session.id);
+    const payload = {
       user: enrollment.user,
       portal: enrollment.portal,
-      session: trace.session ?? enrollment.session,
+      session: trace?.session ?? enrollment.session,
       intent: graphRun.state.intent,
       policyResult: graphRun.state.policy_result,
       browserResult: graphRun.state.browser_result,
@@ -4059,11 +4085,27 @@ async function handleApi(req, res, url) {
       portalScan: graphRun.state.portal_scan,
       sourcePointers: graphRun.state.source_pointers,
       ai2uiBlocks: graphRun.state.ai2ui_blocks,
-      finalResponse: graphRun.state.final_response,
-      graphRun,
-      trace,
-      counts: await store.counts()
-    });
+      finalResponse: graphRun.state.final_response
+    };
+    if (compactResponse) {
+      payload.graphSummary = {
+        schemaVersion: graphRun.state.schema_version,
+        traceId: graphRun.state.graph_trace_id,
+        workflow: graphRun.state.workflow,
+        workflowOutcome: graphRun.state.workflow_outcome,
+        routeReason: graphRun.state.route_reason,
+        structuredReasoningSource: graphRun.state.structured_intent?.reasoning_source ?? null,
+        liveReasonerMode: graphRun.state.structured_intent?.liveReasoner?.mode ?? null,
+        llmDecisionMode: graphRun.state.llm_orchestration_decision?.mode ?? null,
+        proofSteps: graphRun.state.proof?.map((step) => step.step).filter(Boolean) ?? [],
+        ai2uiBlocks: graphRun.state.ai2ui_blocks ?? []
+      };
+    } else {
+      payload.graphRun = graphRun;
+      payload.trace = trace;
+      payload.counts = await store.counts();
+    }
+    sendJson(res, 200, payload);
     return;
   }
 

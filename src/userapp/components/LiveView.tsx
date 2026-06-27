@@ -23,12 +23,18 @@ type Phase = "starting" | "ready" | "controlling" | "error";
 export function LiveView({
   session,
   targetUrl,
+  initialBrowserSession,
+  onBrowserSessionReady,
   onObservationAnswer,
+  onPortalConnected,
   onClose
 }: {
   session: SessionState;
   targetUrl: string | null;
+  initialBrowserSession?: BrowserSession | null;
+  onBrowserSessionReady?: (browserSession: BrowserSession) => void;
   onObservationAnswer?: (answer: string, result: ClaimsObservationResult) => void;
+  onPortalConnected?: (answer: string, result: ClaimsObservationResult) => void;
   onClose: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>("starting");
@@ -74,8 +80,9 @@ export function LiveView({
     abortRef.current = abort;
     (async () => {
       try {
-        const created = await createBrowserSession(session, targetUrl);
+        const created = initialBrowserSession ?? await createBrowserSession(session, targetUrl);
         bsRef.current = created;
+        onBrowserSessionReady?.(created);
         if (!created.streamUrl) {
           setPhase("error");
           setStatus(
@@ -109,7 +116,7 @@ export function LiveView({
       }
     })();
     return () => abort.abort();
-  }, [session, targetUrl]);
+  }, [session, targetUrl, initialBrowserSession, onBrowserSessionReady]);
 
   const send = useCallback(
     (input: RemoteInput) => {
@@ -175,11 +182,12 @@ export function LiveView({
     lastRelayRef.current = "";
     setPhase("ready");
     setReturnedControl(true);
-    setStatus("Control returned to the assistant. Live view continues (read-only).");
+    setStatus("Control returned. Checking whether the signed-in portal is ready for read-only OpenClaw work...");
     setBusy(false);
+    await onReadOnlyScan({ hideOnSuccess: true });
   }
 
-  async function onReadOnlyScan() {
+  async function onReadOnlyScan(options: { hideOnSuccess?: boolean } = {}) {
     const bs = bsRef.current;
     if (!bs) return;
     setScanBusy(true);
@@ -208,6 +216,10 @@ export function LiveView({
       setScanMessage(answer);
       setStatus(`OpenClaw read-only claim scan complete: ${result.claimRows.length} claim row(s), ${result.sourcePointers.length} source pointer(s).`);
       onObservationAnswer?.(answer, result);
+      if (options.hideOnSuccess) {
+        onPortalConnected?.(answer, result);
+        onClose();
+      }
     } catch (e: any) {
       const msg = e?.message ?? "Read-only claim scan failed.";
       setScanMessage(msg);
@@ -389,7 +401,7 @@ export function LiveView({
           {phase === "ready" && (
             <>
               {returnedControl && (
-                <button className="btn" onClick={onReadOnlyScan} disabled={busy || scanBusy}>
+                <button className="btn" onClick={() => onReadOnlyScan()} disabled={busy || scanBusy}>
                   {scanBusy ? "Scanning..." : "Continue read-only claim scan"}
                 </button>
               )}

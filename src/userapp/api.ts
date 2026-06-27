@@ -44,6 +44,18 @@ export interface ChatResult {
   raw: any;
 }
 
+export interface ChatMessageContext {
+  role: "user" | "assistant" | "system";
+  text: string;
+}
+
+export interface ChatOptions {
+  useLiveModel?: boolean;
+  recentMessages?: ChatMessageContext[];
+  compact?: boolean;
+  interactiveFastPath?: boolean;
+}
+
 export interface BrowserSession {
   browserSessionId: string;
   sessionViewerUrl: string | null;
@@ -51,6 +63,7 @@ export interface BrowserSession {
   readiness: Record<string, any>;
   providerLiveConnected: boolean;
   currentTitle: string | null;
+  reusedPersistentProfile?: boolean;
 }
 
 export interface ClaimsObservationResult {
@@ -147,18 +160,26 @@ export async function startSession(member: Member = DEFAULT_MEMBER): Promise<Ses
   return { sessionId, userId, facadeToken, member };
 }
 
-export async function sendChat(session: SessionState, message: string, opts: { useLiveModel?: boolean } = {}): Promise<ChatResult> {
+export async function sendChat(session: SessionState, message: string, opts: ChatOptions = {}): Promise<ChatResult> {
+  const compact = opts.compact ?? true;
   const payload = {
     member: session.member,
     sessionId: session.sessionId,
     message,
+    recentMessages: opts.recentMessages ?? [],
     useLiveModel: opts.useLiveModel ?? true,
-    executeEvidenceObservation: false
+    executeEvidenceObservation: false,
+    compact,
+    responseMode: compact ? "compact" : "full",
+    includeDebug: !compact,
+    interactiveFastPath: opts.interactiveFastPath ?? true
   };
   const raw = await postJson(`${NODE_BASE}/api/chat`, payload);
   return {
     finalResponse: raw?.finalResponse ?? raw?.final_response ?? "",
-    ai2uiBlocks: Array.isArray(raw?.ai2uiBlocks) ? raw.ai2uiBlocks : (raw?.graphRun?.state?.ai2ui_blocks ?? []),
+    ai2uiBlocks: Array.isArray(raw?.ai2uiBlocks)
+      ? raw.ai2uiBlocks
+      : (raw?.graphRun?.state?.ai2ui_blocks ?? raw?.graphSummary?.ai2uiBlocks ?? []),
     sourcePointers: raw?.sourcePointers ?? raw?.source_pointers ?? [],
     intent: raw?.intent,
     raw
@@ -176,8 +197,28 @@ function viewport() {
   };
 }
 
-/** Create a live Steel remote-browser session via the facade. Returns the embeddable viewer URL. */
-export async function createBrowserSession(session: SessionState, targetUrl: string | null = null): Promise<BrowserSession> {
+export interface BrowserSessionOptions {
+  hiddenUntilAuthRequired?: boolean;
+  forceNew?: boolean;
+}
+
+function browserProfileRef(session: SessionState, targetUrl: string | null) {
+  const host = (() => {
+    try {
+      return new URL(targetUrl ?? session.member.portalUrl).host.toLowerCase();
+    } catch {
+      return "approved-portal";
+    }
+  })();
+  return `${session.userId}:${session.member.payer.toLowerCase()}:${host}`;
+}
+
+/** Create or reuse a live Steel remote-browser session via the facade. */
+export async function createBrowserSession(
+  session: SessionState,
+  targetUrl: string | null = null,
+  options: BrowserSessionOptions = {}
+): Promise<BrowserSession> {
   if (!session.facadeToken) {
     throw new Error("Live browser needs a facade session token (facade unreachable at start).");
   }
@@ -190,6 +231,18 @@ export async function createBrowserSession(session: SessionState, targetUrl: str
       options: {
         client: "brainsty_userapp_live_view",
         requireHostedAwsSandbox: true,
+        persistentProfile: true,
+        reuseAuthenticatedSession: true,
+        keepAliveAfterViewerHidden: true,
+        hiddenUntilAuthRequired: Boolean(options.hiddenUntilAuthRequired),
+        forceNew: Boolean(options.forceNew),
+        profileRef: browserProfileRef(session, targetUrl),
+        portalAccountRef: `${session.member.payer.toLowerCase()}:member-portal`,
+        consentRef: "user_consented_remote_browser_session_retention",
+        persistSessionCookies: true,
+        rawPasswordStorageAllowed: false,
+        agentCredentialEntryAllowed: false,
+        passwordManagerAutomationAllowed: false,
         ...viewport(),
         targetUrlRef: targetUrl ? "userapp-selected-target-url-ref" : "approved-target-url-ref-redacted"
       }
@@ -206,7 +259,8 @@ export async function createBrowserSession(session: SessionState, targetUrl: str
     streamUrl: raw?.stream_url ?? null,
     readiness: raw?.readiness ?? {},
     providerLiveConnected: Boolean(screencast?.providerLiveConnected ?? raw?.readiness?.providerLiveConnected),
-    currentTitle: raw?.current_title ?? null
+    currentTitle: raw?.current_title ?? null,
+    reusedPersistentProfile: Boolean(raw?.readiness?.reusedPersistentProfile)
   };
 }
 

@@ -164,6 +164,8 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       workerMayOpenAdditionalBrowserInstances: true,
       workerMayTryReadOnlyApisAndScrapers: true,
       workerMayUsePortalSearch: true,
+      workerMayReuseRetainedAuthenticatedSandboxSession: true,
+      workerMayContinueAfterUserHiddenLiveView: true,
       workerMayReadOfficialDocumentsWhenNeeded: true,
       workerMayAnalyzePdfDocumentsWhenNeeded: true,
       workerMayExtractStructuredInsuranceData: true,
@@ -192,6 +194,14 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       dataCollectionFields: OPENCLAW_DATA_COLLECTION_FIELDS,
       evidenceFields: ["source", "details", "confidence"],
       authBoundary: "user_completes_login_passkey_2fa_captcha_then_worker_resumes",
+      retainedSessionPolicy: {
+        useRetainedAwsSandboxSessionWhenAvailable: true,
+        hideUserLiveViewAfterSuccessfulLogin: true,
+        reopenLiveViewOnlyWhenAuthExpiresOrChallengeAppears: true,
+        sessionCookiesMayPersistAfterUserConsent: true,
+        rawPasswordStorageAllowed: false,
+        passwordManagerAutomationAllowed: false
+      },
       documentPolicy: {
         readOnlyDocumentsAllowedWhenNeeded: true,
         documentTypes: [
@@ -207,6 +217,8 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
       },
       toolingStrategy: [
         "reuse authenticated project browser tab or open the approved portal URL",
+        "prefer a retained authenticated AWS sandbox session before asking the user to log in again",
+        "after user takeover succeeds, continue same-site read-only navigation while the user-facing live window stays hidden",
         "ask the user to complete login, passkey, 2FA, captcha, or session challenges themselves",
         "inspect rendered DOM, accessibility tree, links, buttons, forms, tabs, and safe read-only JavaScript text",
         "capture screenshot OCR for visual tables, cards, modals, canvas, images, and PDF viewers",
@@ -231,6 +243,7 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
         "decompose_assigned_task_into_subtasks",
         "run_task_scoped_status_subagent",
         "choose_best_available_browser_automation",
+        "reuse_retained_authenticated_aws_sandbox_session",
         "open_additional_browser_instances_when_useful",
         "scrape_or_read_public_web_sources",
         "try_read_only_api_access_when_configured",
@@ -241,6 +254,7 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
         "use_local_os_automation_within_task_scope",
         "observe_authenticated_pages",
         "select_safe_same_site_read_only_navigation_targets",
+        "continue_hidden_read_only_portal_navigation_after_user_login",
         "capture_per_page_dom_and_ocr_evidence",
         "extract_structured_plan_claims_and_benefit_data",
         "extract_visible_facts",

@@ -140,7 +140,22 @@ export default function MobileMvp() {
       const browser = await createBrowserSession(auth.access_token, {
         session_id: auth.session_id,
         target_url: member.portalUrl,
-        provider: "local_cdp"
+        provider: "hosted_remote",
+        options: {
+          client: "brainsty_mobile_next_live_view",
+          requireHostedAwsSandbox: true,
+          persistentProfile: true,
+          reuseAuthenticatedSession: true,
+          keepAliveAfterViewerHidden: true,
+          hiddenUntilAuthRequired: true,
+          profileRef: `${auth.user_id}:${member.payer.toLowerCase()}:member-portal`,
+          portalAccountRef: `${member.payer.toLowerCase()}:member-portal`,
+          consentRef: "user_consented_remote_browser_session_retention",
+          persistSessionCookies: true,
+          rawPasswordStorageAllowed: false,
+          agentCredentialEntryAllowed: false,
+          passwordManagerAutomationAllowed: false
+        }
       });
       setWorker((prev) => ({ ...(prev || {}), browser }));
       setFrameSrc("");
@@ -293,7 +308,7 @@ export default function MobileMvp() {
         <div className="live-stage">
           {frameSrc ? <img src={frameSrc} alt="Live worker browser frame" /> : <span>{liveStatus}</span>}
         </div>
-        <p>Read-only live view. Login, passkey, 2FA, captcha, SSN entry, form submission, payer contact, and record changes remain outside worker control.</p>
+        <p>Read-only live view opens only when login or takeover is needed. After you return control, the AWS browser session stays alive and the chat continues with a connected portal state. Login, passkey, 2FA, captcha, SSN entry, form submission, payer contact, and record changes remain outside worker control.</p>
       </section>
 
       {error ? <p className="error">{error}</p> : null}
