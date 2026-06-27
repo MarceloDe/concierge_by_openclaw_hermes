@@ -1,4 +1,65 @@
 import { nowIso } from "./database.mjs";
+import { redact_text, stableHash } from "../observability/redaction.mjs";
+
+// PHI masking gate for planner-facing capability metadata. Any text derived from
+// Graphiti/PEMS consolidation MUST pass through this before it can populate the
+// planner-facing columns (short_description/when_to_use/why_use/best_used_for),
+// because those columns are injected straight into the planner prompt. It reuses the
+// shared redaction patterns and adds extra identifier scrubbing (MRN / long digit
+// runs). phiCleared is true only when no identifier survives the scrub.
+const EXTRA_ID_PATTERNS = [
+  [/\b(?:mrn|medical record(?:\s*(?:no|number|#))?)\s*[:#-]?\s*[A-Z0-9-]{4,}\b/gi, "[REDACTED_MRN]"],
+  [/\b\d{6,}\b/g, "[REDACTED_ID]"]
+];
+const RESIDUAL_PHI = [
+  /\b\d{3}-\d{2}-\d{4}\b/,
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+  /\b\d{6,}\b/,
+  /\b(?:member|subscriber|policy|claim|patient|mrn)\s*(?:id|number|no|#)\s*[:#-]?\s*[A-Z0-9-]{4,}\b/i
+];
+
+function scrubPlannerText(value) {
+  let text = redact_text(String(value ?? ""));
+  for (const [pattern, replacement] of EXTRA_ID_PATTERNS) text = text.replace(pattern, replacement);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function hasResidualPhi(text) {
+  return RESIDUAL_PHI.some((p) => p.test(String(text ?? "")));
+}
+
+// Pure transform. Returns masked planner columns + a hash/preview of the raw and a
+// phiCleared verdict. Names in free text are NOT auto-detected — PEMS episodes are
+// already source-pointered/structured (buildSafeProductMemoryEpisode); this is the
+// second-layer identifier gate before metadata reaches the prompt.
+export function maskPlannerMetadata({ shortDescription = "", whenToUse = "", whyUse = "", bestUsedFor = "", sourcePointerIds = [] } = {}) {
+  const rawJoined = [shortDescription, whenToUse, whyUse, bestUsedFor].join(" | ");
+  const masked = {
+    shortDescription: scrubPlannerText(shortDescription),
+    whenToUse: scrubPlannerText(whenToUse),
+    whyUse: scrubPlannerText(whyUse),
+    bestUsedFor: scrubPlannerText(bestUsedFor)
+  };
+  const maskedJoined = Object.values(masked).join(" | ");
+  const containedPhi = hasResidualPhi(rawJoined) || maskedJoined !== [shortDescription, whenToUse, whyUse, bestUsedFor].map((v) => String(v ?? "").replace(/\s+/g, " ").trim()).join(" | ");
+  const phiCleared = !hasResidualPhi(maskedJoined);
+  return {
+    ...masked,
+    rationaleHash: stableHash(rawJoined, "capmeta"),
+    rationalePreview: maskedJoined.length > 180 ? `${maskedJoined.slice(0, 177)}...` : maskedJoined,
+    containedPhi,
+    phiCleared,
+    sourcePointerIds
+  };
+}
+
+// Guard for the ingest path: refuse to let unmasked PHI reach planner columns.
+export function assertPlannerMetadataSafe(text) {
+  if (hasResidualPhi(text)) {
+    throw new Error("planner_metadata_unmasked_phi_detected");
+  }
+  return true;
+}
 
 // Hydrate half of the pointer contract: dereference a capability pointer back to its
 // executable HOW, but only after verification. Backing tables
