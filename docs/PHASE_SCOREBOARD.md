@@ -24,8 +24,8 @@ This file is the local score mirror for the goal-tied development loop. The oper
 | first_testable_mvp_readiness_phase73 | 100 | Phase 73 local MVP ready | Phases 66-72 are aggregated into a first regular-user bill-verification MVP on `/mvp`; production readiness remains false until live Postgres, Graphiti/Zep, hosted browser, authenticated OpenClaw, and live LLM proofs are complete. |
 | multi_channel_openclaw_gateway | 0 | Deferred | WhatsApp, Telegram, email, and voice are not production-ready. |
 | production_database_rollout | 90 | Partially ready | Postgres profiles and safety contracts exist; production default rollout must still be proven under real deployment conditions. |
-| redis_runtime_context_phase76_82 | 0 | Active plan | Redis pointer runtime, compact checkpoint manifests, capability portfolio pointers, LLM output indexing, vector-to-context retrieval, and resumable LangGraph checkpoints are mandatory for the next LLM-primary orchestrator wave. |
-| llm_primary_chat_orchestrator_phase76_82 | 0 | Active plan | Typed chat must use top-tier planner reasoning over session context, capability portfolio, OpenClaw skills, remote browser state, DB pointers, and prior checkpoint decisions; deterministic code remains safety/validation only. |
+| redis_runtime_context_phase76_82 | 100 | Phase 82 runtime-intelligence pointer context | Redis-compatible runtime context, compact checkpoint manifests, capability portfolio pointers, LLM output indexing, vector-to-context retrieval, and checkpoint resume plans are implemented with local deterministic proof gates and memory fallback when Redis is not configured. |
+| llm_primary_chat_orchestrator_phase76_82 | 100 | Phase 82 runtime-intelligence pointer context | General medication-copay and claim questions now route through the top-tier planner harness with session context, capability portfolio, OpenClaw skill/tool pointers, runtime vector matches, LLM output pointers, and checkpoint resume plans; deterministic code remains safety/validation only. |
 
 ## Phase 32 Acceptance Checklist
 

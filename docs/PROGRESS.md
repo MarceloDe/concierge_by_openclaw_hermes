@@ -10089,3 +10089,34 @@ Proof:
 Remaining follow-up:
 
 - Phase 82 must surface the Phase 76-81 runtime-context gates in operator/dashboard proof, run the final local gate set, and mirror the implementation to Cortex.
+
+# Phase 82 — Runtime Intelligence Readiness Proof
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: close the Phase 76-82 wave with an auditable operator/dashboard proof that the Redis-compatible runtime context, capability portfolio, LLM output index, checkpoint resume plan, vector-to-context retrieval, and LLM-primary planner gates are all present and testable.
+- Architecture: added a lightweight readiness proof builder that inspects the mandatory package-script gates and exposes the result through the existing connector proof run. The proof is intentionally structural and local: Redis remains optional with memory fallback, while Postgres remains the durable source of truth for authoritative session/user state.
+- Loop: Phase 82 aggregates the prior phase gates instead of adding a new hidden decision path. The dashboard score now distinguishes the Phase 76-82 pointer-context wave from older MVP readiness and keeps deterministic safety rails as the final authority.
+- Prove: added a focused readiness test and reran the complete Phase 76-82 focused gate chain with egress and build.
+- Harden: no free-text sentence matching was added. The planner remains the semantic decision point for typed chat questions, with deterministic code used for safety, validation, approval, source checks, and UI-selected workflow controls.
+
+Implemented:
+
+- Added `src/concierge/phase82RuntimeIntelligenceReadiness.mjs`.
+- Added `phase82_runtime_intelligence_pointer_context` to connector proof goals, checks, and score table output.
+- Added `npm run test:runtime:intelligence-readiness`.
+- Added `src/tests/phase82-runtime-intelligence-readiness.test.mjs`.
+- Updated `docs/PHASE_SCOREBOARD.md` so `redis_runtime_context_phase76_82` and `llm_primary_chat_orchestrator_phase76_82` score `100` after the proof gate.
+
+Proof:
+
+- `npm run test:runtime:intelligence-readiness` passed: 2 tests.
+- Complete Phase 76-82 focused chain passed: `npm run test:planner:general && npm run test:runtime:context && npm run test:capability:portfolio && npm run test:llm:output-index && npm run test:checkpoint:resume && npm run test:runtime:vector-context && npm run test:runtime:intelligence-readiness && npm run test:egress && npm run build`.
+- `npm run test:local` passed: 332 tests, 330 passed, 2 expected live-gated OpenClaw skips.
+
+Remaining follow-up:
+
+- Mirror the full Phase 76-82 implementation record into Cortex and publish both project/Cortex branches for review.
+- Production follow-up still requires real Redis deployment, Postgres production-default rollout, live Graphiti/Zep adapter proof, hosted remote browser readiness, and authenticated OpenClaw signed-in proof.

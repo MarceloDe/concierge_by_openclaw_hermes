@@ -20,6 +20,7 @@
     "test:llm:output-index": "node --test src/tests/phase79-llm-output-index.test.mjs",
     "test:checkpoint:resume": "node --test src/tests/phase80-checkpoint-resume-plan.test.mjs",
     "test:runtime:vector-context": "node --test src/tests/phase81-runtime-vector-context.test.mjs",
+    "test:runtime:intelligence-readiness": "node --test src/tests/phase82-runtime-intelligence-readiness.test.mjs",
     "test:journeys": "node --test src/tests/graceful-degradation.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/intelligence-default.test.mjs src/tests/model-tier-policy.test.mjs src/tests/structured-intent-classifier.test.mjs",
     "test:production:contract": "node --test src/tests/production-contract.test.mjs",
     "test:production:database": "node --test src/tests/production-database-readiness.test.mjs",
