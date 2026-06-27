@@ -1,5 +1,70 @@
 import { nowIso } from "./database.mjs";
 import { redact_text, stableHash } from "../observability/redaction.mjs";
+import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
+
+export const CATALOG_PORTFOLIO_MIRROR_VERSION = "2026-06-27.catalog-portfolio-mirror.v1";
+
+// Distinct key from the legacy per-turn portfolio (brainsty:capability-portfolio:*)
+// so the DB-sourced catalog mirror does not collide during the transition.
+export function catalogPortfolioKey(sessionId) {
+  return `brainsty:capability-catalog:${sessionId}`;
+}
+
+// Build the planner-facing manifest FROM POSTGRES (authoritative): metadata-only rows
+// (the planner half: when/why/short_description + pointer + score) and pointer entries.
+// The HOW is never included here — it is fetched via hydrateCapabilityPointer.
+export async function buildSessionPortfolioFromPostgres(store, sessionId) {
+  const cacheKey = catalogPortfolioKey(sessionId);
+  const caps = await store.all(
+    "SELECT capability_key, kind, short_description, when_to_use, why_use, best_used_for, planner_score FROM capabilities WHERE status='active' AND lifecycle_state='production' ORDER BY planner_score DESC, capability_key ASC;"
+  );
+  const procs = await store.all(
+    "SELECT process_key, title, short_description, when_to_use, why_use, best_used_for, planner_score, approval_scope FROM processes WHERE status='active' AND lifecycle_state='production' AND offerable=1 ORDER BY display_order ASC, planner_score DESC;"
+  );
+  const promptTable = [
+    ...procs.map((p) => ({ portfolioId: p.process_key, kind: "process", title: p.title, whenToUse: p.when_to_use, whyUse: p.why_use, shortDescription: p.short_description, approvalScope: p.approval_scope, pointer: `${cacheKey}#${p.process_key}`, score: p.planner_score })),
+    ...caps.map((c) => ({ portfolioId: c.capability_key, kind: c.kind, title: c.short_description || c.capability_key, whenToUse: c.when_to_use, whyUse: c.why_use, shortDescription: c.short_description, pointer: `${cacheKey}#${c.capability_key}`, score: c.planner_score }))
+  ];
+  const entries = Object.fromEntries(promptTable.map((row) => [row.portfolioId, { portfolioId: row.portfolioId, kind: row.kind, pointer: row.pointer }]));
+  return { version: CATALOG_PORTFOLIO_MIRROR_VERSION, cacheKey, sessionId, promptTable, entries, capabilityCount: caps.length, processCount: procs.length };
+}
+
+// WRITE half (Postgres-before-Redis): read authoritative PG, then mirror to cache.
+export async function mirrorCapabilityPortfolioToRedis(store, { sessionId, ttlSeconds = 1800 } = {}) {
+  const manifest = await buildSessionPortfolioFromPostgres(store, sessionId);
+  const cache = createRuntimeContextCache();
+  let stored = false;
+  let storeError = null;
+  try {
+    await cache.adapter.set(manifest.cacheKey, manifest, { ttlSeconds });
+    stored = true;
+  } catch (error) {
+    storeError = error.message;
+  }
+  return { backend: cache.backend, cacheKey: manifest.cacheKey, stored, storeError, count: manifest.promptTable.length };
+}
+
+// READ half: cache.hit fast path; on miss rebuild from authoritative Postgres + re-mirror.
+export async function loadSessionPortfolio(store, { sessionId } = {}) {
+  const cache = createRuntimeContextCache();
+  const cacheKey = catalogPortfolioKey(sessionId);
+  let cached = null;
+  try {
+    cached = await cache.adapter.get(cacheKey);
+  } catch {
+    cached = null;
+  }
+  if (cached) {
+    return { backend: cache.backend, cacheKey, cacheHit: true, traceEvent: "cache.hit", manifest: cached };
+  }
+  const manifest = await buildSessionPortfolioFromPostgres(store, sessionId);
+  try {
+    await cache.adapter.set(cacheKey, manifest, { ttlSeconds: 1800 });
+  } catch {
+    /* visible degrade: backend reported on the result */
+  }
+  return { backend: cache.backend, cacheKey, cacheHit: false, traceEvent: "cache.miss", rebuiltFromPostgres: true, manifest };
+}
 
 // PHI masking gate for planner-facing capability metadata. Any text derived from
 // Graphiti/PEMS consolidation MUST pass through this before it can populate the

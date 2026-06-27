@@ -123,6 +123,27 @@ class MinimalRedisClient {
     await this.command(["SET", key, JSON.stringify(value), "EX", String(ttlSeconds)]);
     return true;
   }
+
+  async setNX(key, value, { ttlSeconds = 900 } = {}) {
+    const result = await this.command(["SET", key, JSON.stringify(value), "NX", "EX", String(ttlSeconds)]);
+    return result === "OK" || result === true;
+  }
+
+  async del(key) {
+    const result = await this.command(["DEL", key]);
+    return Number(result) || 0;
+  }
+
+  async ping() {
+    const startedAt = Date.now();
+    try {
+      const result = await this.command(["PING"]);
+      const healthy = result === "PONG" || /PONG/i.test(String(result));
+      return { healthy, pingMs: Date.now() - startedAt };
+    } catch (error) {
+      return { healthy: false, pingMs: Date.now() - startedAt, error: error.message };
+    }
+  }
 }
 
 class MemoryRuntimeCache {
@@ -147,6 +168,23 @@ class MemoryRuntimeCache {
     });
     return true;
   }
+
+  async setNX(key, value, { ttlSeconds = 900 } = {}) {
+    const existing = await this.get(key);
+    if (existing !== null) return false;
+    await this.set(key, value, { ttlSeconds });
+    return true;
+  }
+
+  async del(key) {
+    return memoryStore.delete(key) ? 1 : 0;
+  }
+
+  async ping() {
+    // Development-only backend; report unhealthy-for-production so readiness never
+    // scores a process-local Map as Redis-backed.
+    return { healthy: true, pingMs: 0, backend: "memory", productionReady: false };
+  }
 }
 
 class RedisRuntimeCache {
@@ -161,6 +199,18 @@ class RedisRuntimeCache {
 
   set(key, value, options) {
     return this.client.set(key, value, options);
+  }
+
+  setNX(key, value, options) {
+    return this.client.setNX(key, value, options);
+  }
+
+  del(key) {
+    return this.client.del(key);
+  }
+
+  ping() {
+    return this.client.ping();
   }
 }
 
