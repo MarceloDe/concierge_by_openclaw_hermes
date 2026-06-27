@@ -7,7 +7,9 @@ import { evaluateInputPolicy } from "../concierge/policy.mjs";
 import { classifyHealthcareIntent } from "../concierge/structuredIntentClassifier.mjs";
 
 function reason(message) {
-  const policyResult = evaluateInputPolicy(message);
+  // Validates the deterministic reasoner under the classic keyword domain gate,
+  // independent of the LLM-always flag (which makes the gate advisory).
+  const policyResult = evaluateInputPolicy(message, { llmScopesDomain: false });
   const curatedIntent = classifyHealthcareIntent({
     message,
     policyResult,

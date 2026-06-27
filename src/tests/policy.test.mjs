@@ -30,10 +30,29 @@ test("portal action policy allows read-only navigation and gates irreversible ac
   assert.equal(submit.approvalRequired, true);
 });
 
-test("policy blocks unrelated non-healthcare requests", () => {
-  const result = evaluateInputPolicy("Write me a poem about a vacation in Italy");
+test("policy blocks unrelated non-healthcare requests under the deterministic domain gate", () => {
+  const result = evaluateInputPolicy("Write me a poem about a vacation in Italy", { llmScopesDomain: false });
   assert.equal(result.allowed, false);
   assert.equal(result.checks.find((check) => check.name === "healthcare_domain_boundary").severity, "block");
+});
+
+test("policy defers domain scoping to the LLM for free-text chat (advisory, not hard-blocked)", () => {
+  const result = evaluateInputPolicy("Write me a poem about a vacation in Italy", { llmScopesDomain: true });
+  assert.equal(result.allowed, true);
+  assert.equal(result.domainAdvisory, true);
+  assert.equal(result.checks.find((check) => check.name === "healthcare_domain_boundary").severity, "advisory_llm_scoped");
+});
+
+test("policy allows insurance out-of-pocket phrasing before LLM planning", () => {
+  for (const message of [
+    "Can you help me to discovery my specific out of the pocket status?",
+    "Can you help me with out of the pocket value?",
+    "What is my OOP max for this Aetna plan?"
+  ]) {
+    const result = evaluateInputPolicy(message);
+    assert.equal(result.allowed, true, message);
+    assert.equal(result.checks.find((check) => check.name === "healthcare_domain_boundary").severity, "ok", message);
+  }
 });
 
 test("policy blocks direct prompt injection requests", () => {

@@ -865,7 +865,7 @@ async function llmOrchestrationDecisionNode(state) {
     // Under LLM-always, a missing key is a LOUD degraded-intelligence state, not a
     // silent success: routing must not pretend the curated classifier is the
     // planner. The router surfaces intelligence_status=degraded and a clarify path.
-    const llmAlways = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS === "1";
+    const llmAlways = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
     return {
       llm_orchestration_decision: {
         mode: "skipped_missing_openai_api_key",

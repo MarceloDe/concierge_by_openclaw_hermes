@@ -71,7 +71,7 @@ export function detectUrgentEscalation(message) {
   };
 }
 
-export function evaluateInputPolicy(message, { llmScopesDomain = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS === "1" } = {}) {
+export function evaluateInputPolicy(message, { llmScopesDomain = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0" } = {}) {
   const checks = [];
   const credentialRequest = CREDENTIAL_PATTERNS.some((pattern) => pattern.test(message));
   const medicalAdvice = MEDICAL_ADVICE_PATTERNS.some((pattern) => pattern.test(message));
