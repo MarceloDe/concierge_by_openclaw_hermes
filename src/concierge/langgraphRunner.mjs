@@ -3282,9 +3282,28 @@ export function routeAfterEvidenceObservation(state) {
   return "case_state_shadow";
 }
 
+// Canonical registry of graph node names (matches the .addNode() calls in
+// createBrainstyLangGraph). Capability/process graph_subpath_json is validated
+// against this at seed time so subpaths cannot reference non-existent nodes.
+export const BRAINSTY_GRAPH_NODE_NAMES = Object.freeze([
+  "input_policy",
+  "recall_context",
+  "classify_intent",
+  "llm_decision",
+  "workflow_router",
+  "plan_journey",
+  "skill_resolver",
+  "workflow_executor",
+  "observe_evidence",
+  "approval_pause",
+  "case_state_shadow",
+  "compose_response"
+]);
+
 export function describeBrainstyLangGraphTopology() {
   return {
     version: LANGGRAPH_RUNNER_VERSION,
+    nodes: BRAINSTY_GRAPH_NODE_NAMES,
     checkpointer: graphCheckpointerReadiness,
     conditionalEdges: [
       {
