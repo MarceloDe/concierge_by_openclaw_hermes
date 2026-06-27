@@ -66,6 +66,8 @@ import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
+import { observedLangGraphNode, start_checkpoint, summarizeNodeOutput } from "../observability/checkpoints.mjs";
+import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
   finalizeWorkerContinuationDispatch,
@@ -3044,18 +3046,18 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
 
 export function createBrainstyLangGraph() {
   return new StateGraph(BrainstyState)
-    .addNode("input_policy", inputPolicyNode)
-    .addNode("recall_context", recallContextNode)
-    .addNode("classify_intent", structuredIntentNode)
-    .addNode("llm_decision", llmOrchestrationDecisionNode)
-    .addNode("workflow_router", workflowRouterNode)
-    .addNode("plan_journey", planJourneyNode)
-    .addNode("skill_resolver", skillResolverNode)
-    .addNode("workflow_executor", workflowExecutorNode)
-    .addNode("observe_evidence", evidenceObservationNode)
-    .addNode("approval_pause", approvalInterruptNode)
-    .addNode("case_state_shadow", caseStateShadowNode)
-    .addNode("compose_response", composeResponseNode)
+    .addNode("input_policy", observedLangGraphNode("input_policy", "guardrail.check", inputPolicyNode))
+    .addNode("recall_context", observedLangGraphNode("recall_context", "memory.read", recallContextNode))
+    .addNode("classify_intent", observedLangGraphNode("classify_intent", "router.intent_classified", structuredIntentNode))
+    .addNode("llm_decision", observedLangGraphNode("llm_decision", "planner.output", llmOrchestrationDecisionNode))
+    .addNode("workflow_router", observedLangGraphNode("workflow_router", "router.route_selected", workflowRouterNode))
+    .addNode("plan_journey", observedLangGraphNode("plan_journey", "launcher.agent_selected", planJourneyNode))
+    .addNode("skill_resolver", observedLangGraphNode("skill_resolver", "profile.loaded", skillResolverNode))
+    .addNode("workflow_executor", observedLangGraphNode("workflow_executor", "openclaw.dispatch", workflowExecutorNode))
+    .addNode("observe_evidence", observedLangGraphNode("observe_evidence", "worker.dispatch", evidenceObservationNode))
+    .addNode("approval_pause", observedLangGraphNode("approval_pause", "openclaw.approval_requested", approvalInterruptNode))
+    .addNode("case_state_shadow", observedLangGraphNode("case_state_shadow", "profile.updated", caseStateShadowNode))
+    .addNode("compose_response", observedLangGraphNode("compose_response", "final.response", composeResponseNode))
     .addEdge(START, "input_policy")
     .addConditionalEdges("input_policy", routeAfterInputPolicy, {
       workflow_router: "workflow_router",
@@ -3279,9 +3281,49 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     context: {
       userId: user.id,
       sessionId: session.id
+    },
+    metadata: {
+      app_name: "brainstyworkers-ai-concierge",
+      environment: process.env.LANGFUSE_ENVIRONMENT || process.env.NODE_ENV || "local",
+      release: process.env.LANGFUSE_RELEASE || "local",
+      session_id: session.id,
+      trace_id: graphTraceId,
+      user_hash: user.id,
+      workflow: rawMessage.workflow ?? null,
+      langchain_runtime: "@langchain/langgraph",
+      openclaw_enabled: Boolean(rawMessage.useOfficialOpenClawWorker || rawMessage.workerContinuationId),
+      safety_mode: "deterministic_rails_llm_planner",
+      phi_redaction_enabled: true
     }
   };
   activeStores.set(session.id, store);
+  const rootCheckpoint = await start_checkpoint(
+    "agent.run",
+    "agent.run",
+    {
+      app_name: "brainstyworkers-ai-concierge",
+      environment: process.env.LANGFUSE_ENVIRONMENT || process.env.NODE_ENV || "local",
+      release: process.env.LANGFUSE_RELEASE || "local",
+      workflow: rawMessage.workflow ?? null,
+      tenant_id: rawMessage.tenantId ?? user.tenant_id ?? null,
+      session_id: session.id,
+      trace_id: graphTraceId,
+      user_hash: user.id,
+      agent_version: LANGGRAPH_RUNNER_VERSION,
+      route: null,
+      planner_version: "llm_orchestration_decision.v1",
+      router_version: "structured_intent_classifier",
+      profile_name: "brainstyworkers",
+      langchain_runtime: "@langchain/langgraph",
+      openclaw_enabled: Boolean(rawMessage.useOfficialOpenClawWorker || rawMessage.workerContinuationId),
+      safety_mode: "deterministic_rails_llm_planner",
+      phi_redaction_enabled: true
+    },
+    {
+      input_summary: String(userInput ?? "").slice(0, 180),
+      channel
+    }
+  );
   let state;
   try {
     const checkpointState = rawMessage?.approvalToken ? await graph.getState(config).catch(() => null) : null;
@@ -3293,6 +3335,19 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
           })
         : initialState;
     state = interruptedStatePatch(await graph.invoke(graphInput, config));
+    rootCheckpoint.end_checkpoint(summarizeNodeOutput(state), {
+      workflow: state.workflow,
+      route: state.workflow_route?.workflowKey ?? state.workflow,
+      status: state.workflow_outcome ?? "completed",
+      source_pointer_count: state.source_pointers?.length ?? 0,
+      approval_status: state.approval_resume?.status ?? state.approval_interrupt?.status ?? null,
+      result_status: state.evidence_observation?.status ?? null
+    });
+  } catch (error) {
+    rootCheckpoint.fail_checkpoint(error, classifyFailureClass(error, FAILURE_CLASSES.UNKNOWN_ERROR), {
+      status: "failed"
+    });
+    throw error;
   } finally {
     activeStores.delete(session.id);
   }

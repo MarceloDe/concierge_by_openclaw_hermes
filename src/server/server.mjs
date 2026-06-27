@@ -19,6 +19,7 @@ import { loadOpenClawSkillRegistry } from "../concierge/openclaw/skillRegistry.m
 import { buildOpenClawBoundedTaskProposal } from "../concierge/openclaw/workerPolicy.mjs";
 import { getWorkerProceduralMemoryStatus } from "../concierge/workerMemory.mjs";
 import { getOpenAiConfig, loadLocalEnvOnce } from "../concierge/secrets.mjs";
+import { langfuseStartupLine, shutdown_langfuse } from "../observability/langfuseClient.mjs";
 import { closeManagedSession, getManagedSessionState, listManagedSessions } from "../concierge/sessionManager.mjs";
 import {
   SessionContinuityError,
@@ -5013,6 +5014,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     } catch (error) {
       console.error(`Retention sweeper daemon stop failed: ${error.message}`);
     }
+    await shutdown_langfuse().catch(() => null);
     server.close((error) => {
       if (error) console.error(`HTTP server close failed: ${error.message}`);
       process.exit(error ? 1 : 0);
@@ -5029,5 +5031,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   server.listen(PORT, HOST, () => {
     console.log(`Brainstyworkers AI Concierge running at http://${HOST}:${PORT}`);
     console.log(`Database driver: ${store.driver ?? "sqlite"} ${store.dbPath ? `(${store.dbPath})` : ""}`.trim());
+    console.log(langfuseStartupLine());
   });
 }

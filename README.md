@@ -113,6 +113,46 @@ flowchart LR
   Safety -. gates .-> Validator
 ```
 
+## Local Langfuse Observability
+
+Langfuse is supported as a local/self-host-compatible tracing layer for the Node/LangGraph product runtime. It is disabled by default and fail-open: if `LANGFUSE_ENABLED=false`, keys are missing, or the local Langfuse host is down, the app runs normally with a no-op tracer.
+
+Start or point to a Langfuse instance, then configure local env without committing secrets:
+
+```bash
+LANGFUSE_ENABLED=true
+LANGFUSE_HOST=http://localhost:3000
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_ENVIRONMENT=local
+LANGFUSE_RELEASE=local-dev
+```
+
+The runtime logs a redacted startup line such as:
+
+```text
+[observability] Langfuse langfuse_enabled; host=http://localhost:3000; environment=local; release=local-dev; secrets=redacted
+```
+
+What is traced:
+
+- root `agent.run` trace for each LangGraph concierge run;
+- graph checkpoints for input policy, memory/profile context, structured intent, LLM planner, workflow router, journey launcher, skill/profile resolution, OpenClaw proposal, worker/evidence observation, approval pause, case-state update, and final response;
+- centralized model invocations from `createTieredChatModel`;
+- official OpenClaw bridge calls as external worker/tool checkpoints.
+
+What is not sent by default:
+
+- raw PHI/PII, credentials, cookies, browser screenshots, raw portal text, raw OCR text, raw uploaded documents, or raw tool output.
+
+Use the focused local gate:
+
+```bash
+npm run test:observability
+```
+
+With credentials configured, a full app run through `/userapp` or `/mvp` will create a trace keyed by the LangGraph trace id. Without credentials, the same run exercises the no-op tracer.
+
 ## RALPH Loop
 
 The project is developed in a repeated RALPH loop:
