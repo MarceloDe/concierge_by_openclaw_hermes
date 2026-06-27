@@ -74,6 +74,7 @@ import {
 } from "../concierge/operatorAssistant.mjs";
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { createRuntimeContextCache } from "../concierge/runtimeContextCache.mjs";
+import { classifyBrowserRemoteReadiness } from "../concierge/browserRemoteReadiness.mjs";
 import {
   getProductMemoryConfig,
   getProductMemoryStatus,
@@ -5040,6 +5041,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const redisWarn = runtimeCache.backend === "memory" ? " (WARNING: no BRAINSTY_REDIS_URL/REDIS_URL — runtime context is process-local only, lost on restart)" : "";
       console.log(`[runtime] context cache backend=${runtimeCache.backend}${runtimeCache.urlHash ? ` url=${runtimeCache.urlHash}` : ""}${redisWarn}`);
       console.log(`[runtime] product memory adapter=${productMemory.adapter}; enabled=${productMemory.enabled}; phi_cleared=${productMemory.phiCleared}`);
+      const browserReadiness = classifyBrowserRemoteReadiness();
+      console.log(`[runtime] remote browser tier=${browserReadiness.tier}; production_ready=${browserReadiness.productionReady}; provider=${browserReadiness.providerName ?? browserReadiness.provider}`);
     } catch (error) {
       console.log(`[runtime] readiness probe failed: ${error?.message ?? "unknown"}`);
     }

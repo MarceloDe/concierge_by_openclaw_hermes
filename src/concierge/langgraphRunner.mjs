@@ -69,6 +69,7 @@ import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
 import { hydrateCapabilityPointers } from "./capabilityPortfolio.mjs";
 import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
+import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -1489,6 +1490,7 @@ async function workflowExecutorNode(state) {
   };
   // Persist this dispatch into the worker runtime state (Redis) so the next
   // dispatch/turn/process resumes from it — making OpenClaw stateful like LangGraph.
+  const browserReadiness = classifyBrowserRemoteReadiness();
   const workerStateRecord = await recordWorkerDispatchState({
     sessionId: state.session_id,
     threadId,
@@ -1499,10 +1501,16 @@ async function workflowExecutorNode(state) {
       executionMode: validation.executionMode,
       plannerSelectedSkillKeys,
       hydratedCapabilityCount: plannerHydratedCapabilities.length,
-      workerPlanId: workerPlan.planId
+      workerPlanId: workerPlan.planId,
+      // Stateful worker carries the (honestly-classified) remote browser tier + the
+      // reusable session endpoint so later dispatches can reuse the live session.
+      browserReadinessTier: browserReadiness.tier,
+      browserProductionReady: browserReadiness.productionReady,
+      browserCdpUrl: browserReadiness.cdpUrl
     }
   });
   toolCall.workerStatePersisted = { cacheBackend: workerStateRecord.cacheBackend, stored: workerStateRecord.stored, dispatchCount: workerStateRecord.state.dispatchCount };
+  toolCall.remoteBrowserReadiness = { tier: browserReadiness.tier, productionReady: browserReadiness.productionReady };
   return {
     worker_runtime_state: workerStateRecord.state,
     openclaw_envelope: envelope,
