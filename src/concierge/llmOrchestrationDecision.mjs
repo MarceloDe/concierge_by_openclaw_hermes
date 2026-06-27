@@ -180,6 +180,16 @@ export function buildLlmOrchestrationDecisionPayload(state) {
           entries: (state.context_packet.llmOutputIndex.entries ?? []).slice(0, 8)
       }
       : null,
+    runtimeVectorContext: state.context_packet?.runtimeVectorIndex
+      ? {
+          cacheBackend: state.context_packet.runtimeVectorIndex.cacheBackend,
+          cacheKey: state.context_packet.runtimeVectorIndex.cacheKey,
+          method: state.context_packet.runtimeVectorIndex.method,
+          embeddingProvider: state.context_packet.runtimeVectorIndex.embeddingProvider,
+          queryHash: state.context_packet.runtimeVectorIndex.queryHash,
+          topMatches: (state.context_packet.runtimeVectorIndex.topMatches ?? []).slice(0, 10)
+        }
+      : null,
     checkpointResumePlan: state.checkpoint_resume_plan
       ? {
           requested: state.checkpoint_resume_plan.requested,

@@ -2,6 +2,7 @@ import { audit } from "./audit.mjs";
 import { attachCapabilityPortfolio } from "./capabilityPortfolio.mjs";
 import { createId, nowIso } from "./database.mjs";
 import { loadLlmOutputIndex } from "./llmOutputIndex.mjs";
+import { attachRuntimeVectorIndex } from "./runtimeVectorIndex.mjs";
 import { classifyUntrustedTextRisk } from "./policy.mjs";
 import { buildPromptBundle } from "./promptContracts.mjs";
 import { getManagedSessionState } from "./sessionManager.mjs";
@@ -598,6 +599,7 @@ export async function buildContextPacket(store, { user, session = null, channel 
       capabilitySummary: runtimeManifest.capabilitySummary
     };
     packet.capabilityPortfolio = await attachCapabilityPortfolio(packet);
+    packet.runtimeVectorIndex = await attachRuntimeVectorIndex(packet);
   }
   packet.promptBundle = buildPromptBundle(packet);
 

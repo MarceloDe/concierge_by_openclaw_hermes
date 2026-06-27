@@ -139,6 +139,13 @@ export function buildStructuredIntentReasoningMessages(state) {
           resume_checkpoint_id: state.checkpoint_resume_plan.resumeCheckpointId,
           prior_workflow: state.checkpoint_resume_plan.priorWorkflow,
           prior_llm_output_pointer_count: state.checkpoint_resume_plan.priorLlmOutputPointers?.length ?? 0
+      }
+      : null,
+    runtime_vector_context: state.context_packet?.runtimeVectorIndex
+      ? {
+          cache_key: state.context_packet.runtimeVectorIndex.cacheKey,
+          method: state.context_packet.runtimeVectorIndex.method,
+          top_matches: (state.context_packet.runtimeVectorIndex.topMatches ?? []).slice(0, 10)
         }
       : null,
     output_schema: {

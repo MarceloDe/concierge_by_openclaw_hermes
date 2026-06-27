@@ -10058,3 +10058,34 @@ Proof:
 Remaining follow-up:
 
 - Phase 81 must add vector-to-context retrieval pointers for workflows, skills, and prior outputs, while keeping prompt context compact and source-pointered.
+
+# Phase 81 — Runtime Vector-To-Context Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: add vector-to-context retrieval so planner prompts can receive relevant workflow, skill, tool, checkpoint, and prior-output pointers without loading full histories or hydrated capability manifests.
+- Architecture: added a provider-neutral runtime vector index stored in the Redis-compatible cache. The current implementation uses deterministic local lexical term vectors as the safe fallback; an embedding provider can replace the scoring method later without changing the context contract.
+- Loop: each context packet builds vector documents from the capability portfolio, achieved checkpoints, and LLM output index entries. It stores the full vector index in cache and injects only top matches with pointers, text hashes, scores, and labels into the structured-intent/planner payloads.
+- Prove: tests show medication-copay prompts retrieve `workflow:pharmacy_formulary`, claim prompts retrieve `workflow:claim_status_navigation`, and planner payloads receive pointer/hash top matches without raw user text.
+- Harden: added domain aliases for common insurance language (`medication`, `prescription`, `rx`, `claim`, `EOB`, etc.) so vector retrieval generalizes beyond exact workflow key strings while remaining deterministic and auditable.
+
+Implemented:
+
+- Added `src/concierge/runtimeVectorIndex.mjs`.
+- Attached `runtimeVectorIndex` to context packets.
+- Added runtime vector summaries to structured-intent and LLM planner payloads.
+- Added `npm run test:runtime:vector-context`.
+- Added `src/tests/phase81-runtime-vector-context.test.mjs`.
+
+Proof:
+
+- `npm run test:runtime:vector-context` passed: 3 tests.
+- Related gates passed: `npm run test:capability:portfolio && npm run test:runtime:vector-context && npm run test:checkpoint:resume`.
+- Related model/payload/workflow suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/intelligence-default.test.mjs src/tests/workflow-architecture.test.mjs` passed: 15 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 82 must surface the Phase 76-81 runtime-context gates in operator/dashboard proof, run the final local gate set, and mirror the implementation to Cortex.
