@@ -31,6 +31,7 @@ import {
 import { persistPortalPageScan } from "./portalScan.mjs";
 import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./runtimeAdapters.mjs";
 import { checkpointSession, getManagedSessionState } from "./sessionManager.mjs";
+import { runLedgerMode, writeShadowCheckpointLedger } from "./checkpointRunLedger.mjs";
 import {
   buildRuntimeContextManifest,
   createRuntimeContextCache,
@@ -3644,6 +3645,20 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       checkpointResumePlan
     }
   });
+  // Step 7: write-only shadow checkpoint ledger (gated; never affects control flow).
+  if (runLedgerMode() === "shadow") {
+    try {
+      await writeShadowCheckpointLedger(store, {
+        user,
+        session,
+        state,
+        graphTraceId,
+        sessionCheckpointId: checkpointResult.checkpointId
+      });
+    } catch {
+      /* shadow ledger is write-only and must never break the orchestration */
+    }
+  }
   const refreshedManagedSession = await getManagedSessionState(store, session.id);
   const runtimeContextCache = createRuntimeContextCache();
   const runtimeContextManifest = buildRuntimeContextManifest({
