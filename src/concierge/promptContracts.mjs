@@ -7,6 +7,7 @@ export const PROMPT_CONTRACT_VERSION = "2026-05-17.prompt-contract.v1";
 const ORCHESTRATOR_ALLOWED_WORKFLOWS = [
   "eligibility_benefits_navigation",
   "claim_status_navigation",
+  "pharmacy_formulary",
   "prior_authorization_navigation",
   "denial_appeal_preparation",
   "payer_portal_read_only_extraction",

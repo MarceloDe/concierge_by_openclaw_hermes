@@ -14,6 +14,7 @@
     "test:llm:intent": "node --test src/tests/llm-intent-live.test.mjs",
     "test:llm:composition": "node --test src/tests/llm-composition-live.test.mjs",
     "test:llm:journeys": "node --test src/tests/llm-journeys-live.test.mjs",
+    "test:planner:general": "node --test src/tests/phase76-planner-general-questions.test.mjs",
     "test:journeys": "node --test src/tests/graceful-degradation.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/intelligence-default.test.mjs src/tests/model-tier-policy.test.mjs src/tests/structured-intent-classifier.test.mjs",
     "test:production:contract": "node --test src/tests/production-contract.test.mjs",
     "test:production:database": "node --test src/tests/production-database-readiness.test.mjs",

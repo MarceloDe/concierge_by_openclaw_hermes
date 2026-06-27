@@ -24,6 +24,7 @@ test("runtime registries are seeded during database initialization", async () =>
   ]);
 
   assert.ok(workflows.some((row) => row.workflow_key === "eligibility_benefits_navigation"));
+  assert.ok(workflows.some((row) => row.workflow_key === "pharmacy_formulary"));
   assert.ok(workflows.some((row) => row.workflow_key === "denial_appeal_preparation"));
   assert.ok(tools.some((row) => row.tool_key === "openclaw_authenticated_browser"));
   assert.ok(tools.some((row) => row.tool_key === "hindsight_memory_adapter"));

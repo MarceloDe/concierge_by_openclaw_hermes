@@ -9895,3 +9895,35 @@ Proof:
 Remaining manual gate:
 
 - Actual post-login proof still requires the user to take control inside the AWS/Steel browser, sign in to Aetna manually, pass any 2FA/captcha challenge, return control, and run **Continue read-only claim scan**. That final live proof is intentionally human-gated; Codex/OpenClaw must not enter credentials, solve challenges, submit forms, upload payer documents, contact Aetna, or mutate account data.
+
+# Phase 76 — LLM-Primary General Planner Questions
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: stop brittle sentence-specific free-text routing, prove general user questions re-enter the LLM planner with context, and keep deterministic logic reserved for safety and UI-selected workflow controls.
+- Architecture: keep LangGraph as the workflow authority, but make medication-copay and claim questions planner-routed through the top-tier LLM orchestration decision node. Promote `pharmacy_formulary` from a journey-only concept to a workflow visible to the runtime registry, LLM decision contract, prompt contract, OpenClaw skill boundary, and AI2UI path.
+- Loop: added a focused deterministic harness that injects a fake LangChain model factory at the model boundary, then runs the full LangGraph orchestration for two general prompts: medication copay and claim inquiry.
+- Prove: tests assert the graph invokes the planner tier (`gpt-5`), includes route candidates and OpenClaw capability policy in the planner payload, adopts the planner workflow, and no longer relies on frontend phrase shortcuts like `interactiveFastPath` or “option B”.
+- Harden: planner-tier model selection no longer inherits a classifier-sized global `OPENAI_MODEL` fallback; classifier can still use `OPENAI_MODEL`, while planner/reasoner default to top-tier models unless explicitly configured.
+
+Implemented:
+
+- Added `pharmacy_formulary` to `LLM_DECISION_WORKFLOWS`, prompt contracts, reasoning schema workflow mapping, workflow registry seed data, Aetna member-portal source mapping, route scoring, and the insurance portal browser skill manifest.
+- Added `npm run test:planner:general`.
+- Added `src/tests/phase76-planner-general-questions.test.mjs`.
+- Updated the prior pharmacy-formulary LangGraph expectation from generic eligibility routing to first-class `pharmacy_formulary` workflow routing.
+- Added model-tier regression coverage proving planner/reasoner do not inherit `OPENAI_MODEL=gpt-5-mini`.
+
+Proof:
+
+- `npm run test:planner:general` passed: 3 tests.
+- Focused affected suite passed: `node --test src/tests/model-tier-policy.test.mjs src/tests/workflow-architecture.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/structured-intent-classifier.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/langgraph-runner.test.mjs src/tests/prompt-contracts.test.mjs src/tests/openclaw-skill-artifacts.test.mjs src/tests/openclaw-skill-invocation.test.mjs` passed: 48 tests.
+- `npm run test:journeys` passed: 19 tests.
+- `npm run test:openclaw:skills` passed: 14 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 77 must add Redis-backed runtime context/checkpoint pointers, prompt compaction, cache keys, and achieved-checkpoint injection so every chat or user action carries compact prior decisions without skipping planner reasoning.

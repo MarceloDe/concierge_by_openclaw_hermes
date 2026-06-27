@@ -441,7 +441,7 @@ test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", a
     });
 
     assert.equal(result.state.structured_intent.primary_intent, "pharmacy_formulary");
-    assert.equal(result.state.workflow, "eligibility_benefits_navigation");
+    assert.equal(result.state.workflow, "pharmacy_formulary");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
     assert.equal(result.state.workflow_outcome, "trusted_research_answered");
     assert.equal(result.state.source_pointers.length, 1);

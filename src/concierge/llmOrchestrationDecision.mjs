@@ -5,6 +5,7 @@ export const LLM_ORCHESTRATION_DECISION_VERSION = "2026-05-28.llm-orchestration-
 export const LLM_DECISION_WORKFLOWS = Object.freeze([
   "eligibility_benefits_navigation",
   "claim_status_navigation",
+  "pharmacy_formulary",
   "prior_authorization_navigation",
   "denial_appeal_preparation",
   "payer_portal_read_only_extraction",
