@@ -1,4 +1,5 @@
 import { audit } from "./audit.mjs";
+import { attachCapabilityPortfolio } from "./capabilityPortfolio.mjs";
 import { createId, nowIso } from "./database.mjs";
 import { classifyUntrustedTextRisk } from "./policy.mjs";
 import { buildPromptBundle } from "./promptContracts.mjs";
@@ -594,6 +595,7 @@ export async function buildContextPacket(store, { user, session = null, channel 
       promptCompaction: runtimeManifest.promptCompaction,
       capabilitySummary: runtimeManifest.capabilitySummary
     };
+    packet.capabilityPortfolio = await attachCapabilityPortfolio(packet);
   }
   packet.promptBundle = buildPromptBundle(packet);
 

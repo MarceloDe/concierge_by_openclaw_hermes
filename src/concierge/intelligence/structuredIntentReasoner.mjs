@@ -114,6 +114,13 @@ export function buildStructuredIntentReasoningMessages(state) {
           achieved_checkpoints: (state.context_packet.runtimeContext.achievedCheckpoints ?? []).slice(0, 6),
           prior_decision_pointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
           prompt_compaction: state.context_packet.runtimeContext.promptCompaction
+      }
+      : null,
+    capability_portfolio: state.context_packet?.capabilityPortfolio
+      ? {
+          cache_key: state.context_packet.capabilityPortfolio.cacheKey,
+          portfolio_hash: state.context_packet.capabilityPortfolio.portfolioHash,
+          prompt_table: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
         }
       : null,
     output_schema: {

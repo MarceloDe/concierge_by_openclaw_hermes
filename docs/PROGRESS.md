@@ -9959,3 +9959,36 @@ Proof:
 Remaining follow-up:
 
 - Phase 78 must add the Redis-backed capability portfolio: short planner-visible descriptions with portfolio IDs and cache pointers for skills, workflows, tools, graph paths, and available worker actions.
+
+# Phase 78 — Redis-Backed Capability Portfolio
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: provide the planner with a compact portfolio of available workflows, skills, tools, graph paths, and worker capabilities, backed by fast Redis-style pointers rather than a large prompt dump.
+- Architecture: added a capability portfolio manifest stored in the same Redis-compatible runtime cache. The planner sees a balanced short table with `portfolioId`, `kind`, `title`, `shortDescription`, `score`, and `pointer`; hydrated entries stay in the cache.
+- Loop: context-packet creation now attaches a portfolio every run. The LLM orchestration decision payload and structured-intent payload include the short table. The decision parser now preserves `selectedCapabilityPortfolioIds` and `selectedCapabilityPointers` returned by the planner.
+- Prove: tests hydrate the portfolio from cache, verify key workflow/skill/tool/graph entries are present, verify planner payloads omit hydrated entries, and verify selected portfolio IDs/pointers survive normalization.
+- Harden: the portfolio table is balanced and pins critical entries (`pharmacy_formulary`, `claim_status_navigation`, `insurance_portal_browser`, `openclaw_authenticated_browser`, and the LLM planner graph path) so high-value capabilities are not crowded out by lower-value entries.
+
+Implemented:
+
+- Added `src/concierge/capabilityPortfolio.mjs`.
+- Attached `capabilityPortfolio` to each context packet.
+- Added capability portfolio summaries to the structured-intent and LLM planner payloads.
+- Extended `normalizeLlmOrchestrationDecision()` with selected capability IDs/pointers.
+- Added `npm run test:capability:portfolio`.
+- Added `src/tests/phase78-capability-portfolio.test.mjs`.
+
+Proof:
+
+- `npm run test:capability:portfolio` passed: 3 tests.
+- `npm run test:planner:general` passed: 3 tests.
+- `npm run test:runtime:context` passed: 3 tests.
+- Related prompt/runtime suite passed: `node --test src/tests/workflow-architecture.test.mjs src/tests/llm-orchestration-decision.test.mjs src/tests/model-payload-policy.test.mjs src/tests/prompt-contracts.test.mjs src/tests/runtime-adapters.test.mjs` passed: 18 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 79 must index LLM outputs and planner decisions by pointer so downstream agents, checkpoints, and future prompts can cite prior model decisions without re-injecting full text.

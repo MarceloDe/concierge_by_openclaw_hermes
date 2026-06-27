@@ -16,6 +16,7 @@
     "test:llm:journeys": "node --test src/tests/llm-journeys-live.test.mjs",
     "test:planner:general": "node --test src/tests/phase76-planner-general-questions.test.mjs",
     "test:runtime:context": "node --test src/tests/phase77-redis-runtime-context.test.mjs",
+    "test:capability:portfolio": "node --test src/tests/phase78-capability-portfolio.test.mjs",
     "test:journeys": "node --test src/tests/graceful-degradation.test.mjs src/tests/intelligence-contracts.test.mjs src/tests/intelligence-default.test.mjs src/tests/model-tier-policy.test.mjs src/tests/structured-intent-classifier.test.mjs",
     "test:production:contract": "node --test src/tests/production-contract.test.mjs",
     "test:production:database": "node --test src/tests/production-database-readiness.test.mjs",

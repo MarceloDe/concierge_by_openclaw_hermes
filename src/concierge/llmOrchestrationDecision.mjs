@@ -160,6 +160,15 @@ export function buildLlmOrchestrationDecisionPayload(state) {
           priorDecisionPointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
           promptCompaction: state.context_packet.runtimeContext.promptCompaction,
           capabilitySummary: (state.context_packet.runtimeContext.capabilitySummary ?? []).slice(0, 5)
+      }
+      : null,
+    capabilityPortfolio: state.context_packet?.capabilityPortfolio
+      ? {
+          cacheBackend: state.context_packet.capabilityPortfolio.cacheBackend,
+          cacheKey: state.context_packet.capabilityPortfolio.cacheKey,
+          portfolioHash: state.context_packet.capabilityPortfolio.portfolioHash,
+          entryCount: state.context_packet.capabilityPortfolio.entryCount,
+          promptTable: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
         }
       : null,
     openclawCapabilityPolicy: {
@@ -183,7 +192,9 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       approvalScope: "read_only_observation or specific action scope",
       workerGoal: "specific OpenClaw task goal inside the selected workflow",
       responseStrategy: "how LangGraph should explain the next step to the user",
-      userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string"
+      userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string",
+      selectedCapabilityPortfolioIds: ["portfolio IDs from capabilityPortfolio.promptTable"],
+      selectedCapabilityPointers: ["cache pointers from capabilityPortfolio.promptTable"]
     }
   };
 }
@@ -270,6 +281,8 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     workerGoal: parsed.workerGoal ? compact(parsed.workerGoal, 1000) : null,
     responseStrategy: parsed.responseStrategy ? compact(parsed.responseStrategy, 1000) : null,
     userFacingNextQuestion: parsed.userFacingNextQuestion ? compact(parsed.userFacingNextQuestion, 500) : "",
+    selectedCapabilityPortfolioIds: asArray(parsed.selectedCapabilityPortfolioIds),
+    selectedCapabilityPointers: asArray(parsed.selectedCapabilityPointers),
     issues,
     warnings,
     rawDecision: parsed
