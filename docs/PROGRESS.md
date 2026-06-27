@@ -9927,3 +9927,35 @@ Proof:
 Remaining follow-up:
 
 - Phase 77 must add Redis-backed runtime context/checkpoint pointers, prompt compaction, cache keys, and achieved-checkpoint injection so every chat or user action carries compact prior decisions without skipping planner reasoning.
+
+# Phase 77 — Redis-Compatible Runtime Context And Checkpoint Pointers
+
+Date: 2026-06-26
+
+RALPH state:
+
+- Requirements: reduce long-context latency without skipping reasoning, add Redis-style fast runtime context, and ensure each chat/user action carries achieved checkpoint pointers and prior decisions.
+- Architecture: added a `runtimeContextCache` adapter with optional real Redis via `BRAINSTY_REDIS_URL` / `REDIS_URL` and deterministic in-memory fallback for local/test. The cache stores hydratable manifests only; authoritative user/session/checkpoint state stays in the database.
+- Loop: context-packet creation now reads the previous manifest, builds a compact pointer manifest from durable session checkpoints, writes it to the fast cache, and injects only safe pointers into the context packet. After each LangGraph completion checkpoint, the cache is refreshed from the durable session checkpoint state.
+- Prove: new tests run two chats in the same session and prove the second chat includes the first run's achieved checkpoint pointers, prior workflow/route decisions, cache key, manifest hash, and prompt-compaction metadata.
+- Harden: runtime context does not carry raw prior chat text; it uses hashes, checkpoint IDs, workflow pointers, source-pointer counts, and context-packet IDs.
+
+Implemented:
+
+- Added `src/concierge/runtimeContextCache.mjs` with `memory` and minimal RESP-compatible `redis` adapters.
+- Added runtime context manifests to `buildContextPacket()`.
+- Added runtime context summaries to structured-intent and LLM orchestration decision payloads.
+- Added post-checkpoint cache refresh in `runLangGraphOrchestration()`.
+- Added `npm run test:runtime:context`.
+- Added `src/tests/phase77-redis-runtime-context.test.mjs`.
+
+Proof:
+
+- `npm run test:runtime:context` passed: 3 tests.
+- Affected context/session/payload suite passed: `node --test src/tests/model-payload-policy.test.mjs src/tests/session-manager.test.mjs src/tests/session-continuity.test.mjs src/tests/runtime-events.test.mjs src/tests/runtime-adapters.test.mjs src/tests/workflow-architecture.test.mjs src/tests/llm-orchestration-decision.test.mjs` passed: 28 tests.
+- `npm run test:egress` passed: 4 tests.
+- `npm run build` passed.
+
+Remaining follow-up:
+
+- Phase 78 must add the Redis-backed capability portfolio: short planner-visible descriptions with portfolio IDs and cache pointers for skills, workflows, tools, graph paths, and available worker actions.

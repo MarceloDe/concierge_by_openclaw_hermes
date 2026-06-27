@@ -28,7 +28,13 @@ import {
 } from "./portalEvidenceVerifier.mjs";
 import { persistPortalPageScan } from "./portalScan.mjs";
 import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./runtimeAdapters.mjs";
-import { checkpointSession } from "./sessionManager.mjs";
+import { checkpointSession, getManagedSessionState } from "./sessionManager.mjs";
+import {
+  buildRuntimeContextManifest,
+  createRuntimeContextCache,
+  runtimeContextKey,
+  storeRuntimeContextManifest
+} from "./runtimeContextCache.mjs";
 import { classifyHealthcareIntent } from "./structuredIntentClassifier.mjs";
 import { WORKFLOWS } from "./types.mjs";
 import { composeUrgentEscalationResponse, createHumanHandoffItem } from "./humanHandoffs.mjs";
@@ -3318,7 +3324,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     },
     nativeHitlInterrupt: state.approval_interrupt?.status ?? null
   });
-  await checkpointSession(store, {
+  const checkpointResult = await checkpointSession(store, {
     session,
     stepName: "langgraph_run_completed",
     statePatch: {
@@ -3359,6 +3365,37 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       source: "live_langgraph_runtime",
       package: "@langchain/langgraph"
     }
+  });
+  const refreshedManagedSession = await getManagedSessionState(store, session.id);
+  const runtimeContextCache = createRuntimeContextCache();
+  const runtimeContextManifest = buildRuntimeContextManifest({
+    session,
+    contextPacket: context.packet,
+    managedSession: refreshedManagedSession,
+    previous: context.packet.runtimeContext ?? null
+  });
+  const runtimeContextStored = await storeRuntimeContextManifest({
+    cache: runtimeContextCache,
+    key: runtimeContextKey(session.id),
+    manifest: runtimeContextManifest
+  });
+  state.runtime_context_cache = {
+    version: runtimeContextManifest.version,
+    backend: runtimeContextCache.backend,
+    cacheKey: runtimeContextKey(session.id),
+    manifestHash: runtimeContextManifest.manifestHash,
+    stored: runtimeContextStored.ok,
+    storeError: runtimeContextStored.error ?? null,
+    checkpointId: checkpointResult.checkpointId,
+    achievedCheckpointCount: runtimeContextManifest.achievedCheckpoints.length,
+    promptCompaction: runtimeContextManifest.promptCompaction
+  };
+  state.proof = mergeProof(state, "runtime_context_cache", {
+    backend: runtimeContextCache.backend,
+    stored: runtimeContextStored.ok,
+    manifestHash: runtimeContextManifest.manifestHash,
+    checkpointId: checkpointResult.checkpointId,
+    achievedCheckpointCount: runtimeContextManifest.achievedCheckpoints.length
   });
   if (persistConversation && state.final_response) {
     await store.insert("conversation_messages", {

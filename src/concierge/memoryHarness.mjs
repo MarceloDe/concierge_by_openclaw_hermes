@@ -4,6 +4,11 @@ import { classifyUntrustedTextRisk } from "./policy.mjs";
 import { buildPromptBundle } from "./promptContracts.mjs";
 import { getManagedSessionState } from "./sessionManager.mjs";
 import { loadWorkflowArchitecture } from "./workflowArchitecture.mjs";
+import {
+  buildRuntimeContextManifest,
+  loadRuntimeContextForSession,
+  storeRuntimeContextManifest
+} from "./runtimeContextCache.mjs";
 
 const DEFAULT_HEARTBEAT_MINUTES = 60;
 
@@ -514,7 +519,8 @@ export async function buildContextPacket(store, { user, session = null, channel 
           title: session.title,
           currentStep: session.current_step,
           threadId: session.langgraph_thread_id,
-          stateVersion: managedSession?.state?.state_version ?? session.state_version
+          stateVersion: managedSession?.state?.state_version ?? session.state_version,
+          lastContextPacketId: session.last_context_packet_id ?? null
         }
       : null,
     request: {
@@ -560,6 +566,35 @@ export async function buildContextPacket(store, { user, session = null, channel 
       medicalAdvice: "not_allowed"
     }
   };
+  if (session) {
+    const runtimeContextLoad = await loadRuntimeContextForSession(session);
+    const runtimeManifest = buildRuntimeContextManifest({
+      session,
+      contextPacket: packet,
+      managedSession,
+      previous: runtimeContextLoad.previous
+    });
+    const runtimeStored = await storeRuntimeContextManifest({
+      cache: runtimeContextLoad.cache,
+      key: runtimeContextLoad.key,
+      manifest: runtimeManifest
+    });
+    packet.runtimeContext = {
+      version: runtimeManifest.version,
+      cacheBackend: runtimeContextLoad.cache.backend,
+      cacheStatus: runtimeContextLoad.status,
+      cacheKey: runtimeContextLoad.key,
+      manifestHash: runtimeManifest.manifestHash,
+      stored: runtimeStored.ok,
+      storeError: runtimeStored.error ?? null,
+      previousManifestHash: runtimeManifest.previousManifestHash,
+      latestCheckpoint: runtimeManifest.latestCheckpoint,
+      achievedCheckpoints: runtimeManifest.achievedCheckpoints,
+      priorDecisionPointers: runtimeManifest.priorDecisionPointers,
+      promptCompaction: runtimeManifest.promptCompaction,
+      capabilitySummary: runtimeManifest.capabilitySummary
+    };
+  }
   packet.promptBundle = buildPromptBundle(packet);
 
   const row = {

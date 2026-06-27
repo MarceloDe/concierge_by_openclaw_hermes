@@ -148,6 +148,20 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       enabled: Boolean(state.product_memory_recall?.enabled),
       facts: (state.product_memory_recall?.facts ?? []).slice(0, 6).map((fact) => compact(fact.fact ?? fact.name ?? fact.uuid, 360))
     },
+    runtimeContext: state.context_packet?.runtimeContext
+      ? {
+          cacheBackend: state.context_packet.runtimeContext.cacheBackend,
+          cacheStatus: state.context_packet.runtimeContext.cacheStatus,
+          cacheKey: state.context_packet.runtimeContext.cacheKey,
+          manifestHash: state.context_packet.runtimeContext.manifestHash,
+          previousManifestHash: state.context_packet.runtimeContext.previousManifestHash,
+          latestCheckpoint: state.context_packet.runtimeContext.latestCheckpoint,
+          achievedCheckpoints: (state.context_packet.runtimeContext.achievedCheckpoints ?? []).slice(0, 6),
+          priorDecisionPointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
+          promptCompaction: state.context_packet.runtimeContext.promptCompaction,
+          capabilitySummary: (state.context_packet.runtimeContext.capabilitySummary ?? []).slice(0, 5)
+        }
+      : null,
     openclawCapabilityPolicy: {
       workerMayChooseWorkflow: false,
       workerMayCreateSubtasks: true,

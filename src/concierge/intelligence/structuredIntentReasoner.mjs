@@ -107,6 +107,15 @@ export function buildStructuredIntentReasoningMessages(state) {
     curated_classifier: state.structured_intent ?? null,
     db_pointers: (contextPacket.dbPointers ?? []).slice(0, 20),
     memory_facts_advisory_only: (state.product_memory_recall?.facts ?? []).slice(0, 5).map((fact) => compact(fact.fact ?? fact.name ?? fact.uuid, 320)),
+    runtime_context: state.context_packet?.runtimeContext
+      ? {
+          cache_key: state.context_packet.runtimeContext.cacheKey,
+          manifest_hash: state.context_packet.runtimeContext.manifestHash,
+          achieved_checkpoints: (state.context_packet.runtimeContext.achievedCheckpoints ?? []).slice(0, 6),
+          prior_decision_pointers: (state.context_packet.runtimeContext.priorDecisionPointers ?? []).slice(0, 4),
+          prompt_compaction: state.context_packet.runtimeContext.promptCompaction
+        }
+      : null,
     output_schema: {
       primary_intent: "one allowed journey",
       candidate_journeys: [
