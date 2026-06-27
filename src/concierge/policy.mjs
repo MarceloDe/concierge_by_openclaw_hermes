@@ -44,7 +44,7 @@ const PROMPT_INJECTION_PATTERNS = [
 ];
 
 const HEALTHCARE_DOMAIN_PATTERNS = [
-  /\b(aetna|insurance|payer|portal|eligibility|benefit|coverage|deductible|claim|claims|prior auth|authorization|appeal|denial|eob|member id|plan|copay|coinsurance|out[- ]of[- ]pocket)\b/i,
+  /\b(aetna|insurance|payer|portal|eligibility|benefit|coverage|deductible|claim|claims|prior auth|authorization|appeal|denial|eob|member id|plan|copay|copayment|coinsurance|out[- ]of(?:[- ]the)?[- ]pocket|oop max|oopm)\b/i,
   /\b(sbc|summary of benefits|eoc|evidence of coverage|plan document|id card|mri|imaging)\b/i,
   /\b(cms|icd[- ]?10|cpt|hcpcs|clinical policy|coverage policy|medical policy)\b/i,
   /\b(enroll|session|thread|heartbeat|memory|openclaw|langchain|langgraph|hindsight|browser|chrome|remote debugger)\b/i,
@@ -71,7 +71,7 @@ export function detectUrgentEscalation(message) {
   };
 }
 
-export function evaluateInputPolicy(message) {
+export function evaluateInputPolicy(message, { llmScopesDomain = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS === "1" } = {}) {
   const checks = [];
   const credentialRequest = CREDENTIAL_PATTERNS.some((pattern) => pattern.test(message));
   const medicalAdvice = MEDICAL_ADVICE_PATTERNS.some((pattern) => pattern.test(message));
@@ -79,6 +79,11 @@ export function evaluateInputPolicy(message) {
   const externalAction = EXTERNAL_ACTION_PATTERNS.some((pattern) => pattern.test(message));
   const promptInjection = PROMPT_INJECTION_PATTERNS.some((pattern) => pattern.test(message));
   const inHealthcareDomain = urgentEscalation.required || HEALTHCARE_DOMAIN_PATTERNS.some((pattern) => pattern.test(message));
+  // When the LLM orchestrator scopes the domain (non-deterministic chat), the
+  // keyword domain gate is advisory only: it never hard-blocks free-text chat.
+  // Hard safety blocks (credentials, prompt injection, medical advice) stay.
+  const domainAdvisory = llmScopesDomain && !inHealthcareDomain;
+  const domainAllowed = inHealthcareDomain || domainAdvisory;
   const urgentEscalationRequired = urgentEscalation.required && !credentialRequest && !promptInjection;
 
   checks.push({
@@ -125,18 +130,22 @@ export function evaluateInputPolicy(message) {
   });
   checks.push({
     name: "healthcare_domain_boundary",
-    passed: inHealthcareDomain,
-    severity: inHealthcareDomain ? "ok" : "block",
+    passed: domainAllowed,
+    severity: inHealthcareDomain ? "ok" : domainAdvisory ? "advisory_llm_scoped" : "block",
     detail: inHealthcareDomain
       ? "Request is within the healthcare insurance concierge domain."
-      : "Request is outside the healthcare insurance concierge domain."
+      : domainAdvisory
+        ? "No domain keyword matched; the LLM orchestrator will decide scope and refuse out-of-scope itself."
+        : "Request is outside the healthcare insurance concierge domain."
   });
 
   return {
-    allowed: !credentialRequest && !promptInjection && inHealthcareDomain && (!medicalAdvice || urgentEscalationRequired),
+    allowed: !credentialRequest && !promptInjection && domainAllowed && (!medicalAdvice || urgentEscalationRequired),
     approvalRequired: externalAction,
     urgentEscalationRequired,
     urgentEscalation,
+    domainAdvisory,
+    inHealthcareDomain,
     checks
   };
 }

@@ -862,6 +862,10 @@ async function llmOrchestrationDecisionNode(state) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
+    // Under LLM-always, a missing key is a LOUD degraded-intelligence state, not a
+    // silent success: routing must not pretend the curated classifier is the
+    // planner. The router surfaces intelligence_status=degraded and a clarify path.
+    const llmAlways = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS === "1";
     return {
       llm_orchestration_decision: {
         mode: "skipped_missing_openai_api_key",
@@ -871,13 +875,17 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
+        degraded: llmAlways,
+        degradedReason: llmAlways ? "missing_openai_api_key" : null,
         workflow: state.structured_intent?.workflow ?? null,
         confidence: 0,
-        rationale: "OPENAI_API_KEY is not configured, so LangGraph fell back to the curated classifier.",
+        rationale: llmAlways
+          ? "OPENAI_API_KEY is not configured: orchestration intelligence is DEGRADED. The curated classifier is a safety hint only, not the planner."
+          : "OPENAI_API_KEY is not configured, so LangGraph fell back to the curated classifier.",
         issues: ["missing_openai_api_key"],
-        warnings: []
+        warnings: llmAlways ? ["intelligence_degraded_missing_key"] : []
       },
-      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_missing_openai_api_key" })
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_missing_openai_api_key", degraded: llmAlways })
     };
   }
 
@@ -3539,6 +3547,18 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     shadowRunCount: continuousIntelligencePersistence.aggregate.shadowRunCount,
     productionDrivingAllowed: false
   });
+  await store.update(
+    "sessions",
+    {
+      current_step: "langgraph_run_completed",
+      active_workflow_key: state.workflow ?? session.active_workflow_key ?? null,
+      journey_stage: state.workflow_route?.journeyStage ?? session.journey_stage ?? null,
+      last_context_packet_id: context.row?.id ?? session.last_context_packet_id ?? null,
+      state_version: Number(session.state_version ?? 0) + 1,
+      last_active_at: nowIso()
+    },
+    { id: session.id }
+  );
   await audit(store, session.id, "continuous_intelligence_shadow_persisted", {
     graphTraceId,
     shadowRunId: continuousIntelligencePersistence.shadowRun.id,

@@ -22,6 +22,9 @@ import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 
 await loadLocalEnvOnce();
 
+// Acceptance test exercises the non-deterministic (LLM-always) chat path.
+process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
+
 const HAS_KEY = Boolean(process.env.OPENAI_API_KEY);
 
 // Lay-person phrasings: deliberately avoid specialist keywords (claim, prior auth,
@@ -83,5 +86,34 @@ test("non-deterministic orchestrator: lay-person chat reaches the LLM planner an
 
     // Invariant 3: a workflow was selected (graph routed).
     assert.ok(s.workflow, `no workflow selected for: ${question}`);
+  }
+});
+
+// No mocks: real store + real graph. Proves missing key is a LOUD degraded state
+// under LLM-always, not a silent "classifier as planner" success. Runs offline
+// (no key => no network call).
+test("LLM-always: missing OPENAI_API_KEY surfaces degraded intelligence, not silent classifier success", async () => {
+  const prevKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
+  try {
+    const store = await freshStore();
+    const { user, session } = await enrollDefaultMember(store);
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "how much is my medicine going to cost me?",
+      rawMessage: { source: "degraded_missing_key_test", useLiveModel: true }
+    });
+    const d = result.state.llm_orchestration_decision;
+    assert.equal(d.mode, "skipped_missing_openai_api_key");
+    assert.equal(d.degraded, true, "missing key under LLM-always must mark degraded=true");
+    assert.ok(
+      (d.warnings ?? []).includes("intelligence_degraded_missing_key"),
+      "degraded intelligence must be surfaced as a warning"
+    );
+  } finally {
+    if (prevKey) process.env.OPENAI_API_KEY = prevKey;
   }
 });
