@@ -487,6 +487,14 @@ export class SqliteStore {
       ["event_hash", "ALTER TABLE audit_events ADD COLUMN event_hash TEXT;"],
       ["chain_version", "ALTER TABLE audit_events ADD COLUMN chain_version TEXT;"]
     ]);
+    // Capability/process portfolio: resumable-run support on workflow_runs. status
+    // gains 'resuming'/'partial' values (no column change); these columns let a run
+    // be reused across reruns and bound to a process + its last reached boundary.
+    await this.migrateColumns("workflow_runs", [
+      ["process_id", "ALTER TABLE workflow_runs ADD COLUMN process_id TEXT;"],
+      ["resume_count", "ALTER TABLE workflow_runs ADD COLUMN resume_count INTEGER NOT NULL DEFAULT 0;"],
+      ["last_checkpoint_boundary", "ALTER TABLE workflow_runs ADD COLUMN last_checkpoint_boundary TEXT;"]
+    ]);
   }
 
   async migrateColumns(table, migrations) {

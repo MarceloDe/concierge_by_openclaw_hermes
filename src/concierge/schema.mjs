@@ -67,7 +67,12 @@ export const TABLES = [
   "extraction_artifacts",
   "extraction_reviews",
   "approval_gates",
-  "audit_events"
+  "audit_events",
+  "capabilities",
+  "processes",
+  "process_steps",
+  "workflow_checkpoint_runs",
+  "capability_provenance"
 ];
 
 export const SCHEMA_SQL = `
@@ -1204,5 +1209,158 @@ CREATE TABLE IF NOT EXISTS audit_events (
   chain_version TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+
+-- Capability/process portfolio (pointer-based, checkpoint-resumable). Postgres
+-- authoritative; Redis mirrors. Each row splits a PLANNER-METADATA half (when/why,
+-- masked + PHI-gated; the only thing the planner prompt sees) from a HYDRATE-HOW half
+-- (resolved only after a pointer is dereferenced + verified). Backing tables
+-- (workflow_definitions/openclaw_skills/tool_registry) stay authoritative for
+-- title/enabled/status/risk and win at hydrate time.
+CREATE TABLE IF NOT EXISTS capabilities (
+  id TEXT PRIMARY KEY,
+  capability_key TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  lifecycle_state TEXT NOT NULL DEFAULT 'shadow',
+  short_description TEXT NOT NULL DEFAULT '',
+  when_to_use TEXT NOT NULL DEFAULT '',
+  why_use TEXT NOT NULL DEFAULT '',
+  best_used_for TEXT NOT NULL DEFAULT '',
+  not_for TEXT NOT NULL DEFAULT '',
+  planner_tags_json TEXT NOT NULL DEFAULT '[]',
+  planner_score INTEGER NOT NULL DEFAULT 0,
+  planner_metadata_json TEXT NOT NULL DEFAULT '{}',
+  rationale_hash TEXT,
+  rationale_preview TEXT NOT NULL DEFAULT '',
+  metadata_phi_cleared INTEGER NOT NULL DEFAULT 0,
+  pointer_cache_key TEXT,
+  how_kind_ref TEXT,
+  workflow_key TEXT,
+  skill_key TEXT,
+  tool_key TEXT,
+  graph_subpath_json TEXT,
+  how_config_json TEXT NOT NULL DEFAULT '{}',
+  how_config_hash TEXT,
+  config_version INTEGER NOT NULL DEFAULT 1,
+  last_hydrated_at TEXT,
+  hydrate_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (workflow_key) REFERENCES workflow_definitions(workflow_key),
+  FOREIGN KEY (skill_key) REFERENCES openclaw_skills(skill_key),
+  FOREIGN KEY (tool_key) REFERENCES tool_registry(tool_key)
+);
+
+CREATE TABLE IF NOT EXISTS processes (
+  id TEXT PRIMARY KEY,
+  process_key TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  journey_stage TEXT,
+  status TEXT NOT NULL DEFAULT 'draft',
+  lifecycle_state TEXT NOT NULL DEFAULT 'shadow',
+  offerable INTEGER NOT NULL DEFAULT 0,
+  display_order INTEGER NOT NULL DEFAULT 100,
+  short_description TEXT NOT NULL DEFAULT '',
+  when_to_use TEXT NOT NULL DEFAULT '',
+  why_use TEXT NOT NULL DEFAULT '',
+  best_used_for TEXT NOT NULL DEFAULT '',
+  planner_metadata_json TEXT NOT NULL DEFAULT '{}',
+  planner_score INTEGER NOT NULL DEFAULT 0,
+  rationale_hash TEXT,
+  rationale_preview TEXT NOT NULL DEFAULT '',
+  required_user_inputs_json TEXT NOT NULL DEFAULT '[]',
+  approval_scope TEXT NOT NULL DEFAULT 'read_only_observation',
+  worker_skill_capability_id TEXT,
+  graph_subpath_json TEXT,
+  ai2ui_actions_json TEXT NOT NULL DEFAULT '[]',
+  formulas_json TEXT NOT NULL DEFAULT '[]',
+  how_config_json TEXT NOT NULL DEFAULT '{}',
+  how_config_hash TEXT,
+  pointer_cache_key TEXT,
+  config_version INTEGER NOT NULL DEFAULT 1,
+  last_hydrated_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (worker_skill_capability_id) REFERENCES capabilities(id)
+);
+
+CREATE TABLE IF NOT EXISTS process_steps (
+  id TEXT PRIMARY KEY,
+  process_id TEXT NOT NULL,
+  step_order INTEGER NOT NULL,
+  step_key TEXT NOT NULL,
+  title TEXT,
+  checkpoint_boundary TEXT NOT NULL,
+  checkpoint_payload_schema_json TEXT NOT NULL DEFAULT '{}',
+  capability_id TEXT,
+  expected_source_pointer INTEGER NOT NULL DEFAULT 0,
+  requires_idempotency_key INTEGER NOT NULL DEFAULT 0,
+  ai2ui_action_ids_json TEXT NOT NULL DEFAULT '[]',
+  user_input_keys_json TEXT NOT NULL DEFAULT '[]',
+  on_failure_policy TEXT NOT NULL DEFAULT 'resume',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (process_id, step_order),
+  UNIQUE (process_id, step_key),
+  FOREIGN KEY (process_id) REFERENCES processes(id),
+  FOREIGN KEY (capability_id) REFERENCES capabilities(id)
+);
+
+-- Per-(run, step) status ledger: rerun executes ONLY the unfinished boundaries.
+-- process_step_id is NOT NULL (synthetic 'step:adhoc:<boundary>' for non-process runs)
+-- so UNIQUE(workflow_run_id, process_step_id) holds. idempotency_key UNIQUE enforces
+-- non-null dedupe only (SQLite allows multiple NULLs). Authoritative dedupe lives here;
+-- Redis SETNX is a losable fast-path.
+CREATE TABLE IF NOT EXISTS workflow_checkpoint_runs (
+  id TEXT PRIMARY KEY,
+  workflow_run_id TEXT NOT NULL,
+  process_id TEXT,
+  process_step_id TEXT NOT NULL,
+  checkpoint_boundary TEXT NOT NULL,
+  step_order INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  effect_stage TEXT NOT NULL DEFAULT 'before_effect',
+  idempotency_key TEXT UNIQUE,
+  input_hash TEXT,
+  output_pointer TEXT,
+  result_pointer TEXT,
+  session_checkpoint_id TEXT,
+  resume_pointer TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  failure_class TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (workflow_run_id, process_step_id),
+  FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id),
+  FOREIGN KEY (process_id) REFERENCES processes(id),
+  FOREIGN KEY (session_checkpoint_id) REFERENCES session_checkpoints(id)
+);
+
+-- Append-only provenance/lineage for capabilities & processes (no 'current' semantics;
+-- pems_candidate_maturity stays the maturity authority). Hash-chained alongside audit.
+CREATE TABLE IF NOT EXISTS capability_provenance (
+  id TEXT PRIMARY KEY,
+  capability_id TEXT,
+  process_id TEXT,
+  event_type TEXT NOT NULL,
+  source_kind TEXT,
+  from_status TEXT,
+  to_status TEXT,
+  pems_candidate_id TEXT,
+  generated_skill_queue_id TEXT,
+  graphiti_episode_ref TEXT,
+  session_checkpoint_id TEXT,
+  reviewer_user_id TEXT,
+  rationale_preview TEXT NOT NULL DEFAULT '',
+  rationale_hash TEXT,
+  source_pointer_ids_json TEXT NOT NULL DEFAULT '[]',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  previous_event_hash TEXT,
+  event_hash TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (capability_id) REFERENCES capabilities(id),
+  FOREIGN KEY (process_id) REFERENCES processes(id)
 );
 `;
