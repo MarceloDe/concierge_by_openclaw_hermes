@@ -54,9 +54,11 @@ function llmDecisionPayload() {
   };
 }
 
-test("LangGraph defaults to live structured-intent reasoning when a model key exists", async () => {
+test("legacy two-stage path: live structured-intent reasoning runs when LLM_ALWAYS=0", async () => {
   const originalKey = process.env.OPENAI_API_KEY;
+  const originalFlag = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS;
   process.env.OPENAI_API_KEY = "test-key";
+  process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "0"; // legacy path keeps the live structured-intent call
   const invokedSteps = [];
   setTieredChatModelFactoryForTests(({ step }) => ({
     invoke: async () => {
@@ -87,12 +89,91 @@ test("LangGraph defaults to live structured-intent reasoning when a model key ex
     resetTieredChatModelFactoryForTests();
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
+    if (originalFlag === undefined) delete process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS;
+    else process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = originalFlag;
   }
 });
 
-test("LangGraph falls back to curated structured intent when the live reasoner fails", async () => {
+test("out-of-pocket status questions reach the LLM planner instead of policy refusal", async () => {
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
+  const invokedSteps = [];
+  setTieredChatModelFactoryForTests(({ step }) => ({
+    invoke: async () => {
+      invokedSteps.push(step);
+      if (step === "structured_intent") {
+        return {
+          content: JSON.stringify({
+            primary_intent: "benefits_eligibility",
+            candidate_journeys: [
+              {
+                journey: "benefits_eligibility",
+                confidence: 0.9,
+                rationale: "The user is asking about insurance out-of-pocket status.",
+                required_evidence: ["current_plan_benefits_or_member_portal_balance"],
+                missing_evidence: ["current_plan_benefits_or_member_portal_balance"],
+                safe_next_action: "offer_portal_guidance_or_read_only_observation",
+                requires_approval: false,
+                requires_human_handoff: false
+              }
+            ],
+            complexity: "moderate",
+            ambiguities: [],
+            policy_flags: [],
+            unsafe_action_requested: false
+          })
+        };
+      }
+      if (step === "llm_orchestration_decision") {
+        return {
+          content: JSON.stringify({
+            workflow: "eligibility_benefits_navigation",
+            intent: "out_of_pocket_status_question",
+            confidence: 0.86,
+            rationale: "The user's request belongs to benefits and cost-sharing navigation.",
+            requiredEvidence: ["current_plan_benefits_or_member_portal_balance"],
+            missingEvidence: ["current_plan_benefits_or_member_portal_balance"],
+            approvalRequired: false,
+            approvalScope: "read_only_observation",
+            workerGoal: "Help the user locate out-of-pocket maximum/status evidence.",
+            responseStrategy: "Support the user and offer portal guidance or read-only observation.",
+            userFacingNextQuestion: "Would you like me to open the live Aetna portal so you can sign in?"
+          })
+        };
+      }
+      return { content: "advisory model response" };
+    }
+  }));
+  try {
+    const store = await createStore();
+    const { user, session } = await enrollDefaultMember(store);
+    const result = await runLangGraphOrchestration(store, {
+      user,
+      session,
+      channel: session.channel,
+      userInput: "Can you help me to discovery my specific out of the pocket status?",
+      rawMessage: { source: "out_of_pocket_policy_regression", executeEvidenceObservation: false }
+    });
+
+    // Under LLM-primary default the redundant live structured_intent call is
+    // skipped; the orchestration planner is the authority that must run.
+    assert.ok(invokedSteps.includes("llm_orchestration_decision"));
+    assert.equal(result.state.policy_result.allowed, true);
+    assert.notEqual(result.state.workflow, "refuse_out_of_scope");
+    assert.equal(result.state.workflow, "eligibility_benefits_navigation");
+    assert.equal(result.state.route_reason, "llm_orchestration_decision");
+  } finally {
+    resetTieredChatModelFactoryForTests();
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalKey;
+  }
+});
+
+test("legacy two-stage path: falls back to curated structured intent when the live reasoner fails (LLM_ALWAYS=0)", async () => {
+  const originalKey = process.env.OPENAI_API_KEY;
+  const originalFlag = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS;
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "0"; // legacy path runs the live structured-intent call
   setTieredChatModelFactoryForTests(({ step }) => ({
     invoke: async () => {
       if (step === "structured_intent") throw new Error("simulated model failure");
@@ -118,5 +199,7 @@ test("LangGraph falls back to curated structured intent when the live reasoner f
     resetTieredChatModelFactoryForTests();
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
+    if (originalFlag === undefined) delete process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS;
+    else process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = originalFlag;
   }
 });

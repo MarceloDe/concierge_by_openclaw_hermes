@@ -6,10 +6,14 @@ import { safe_metadata, safeSummaryFromPayload } from "../observability/redactio
 export const MODEL_TIER_POLICY_VERSION = "2026-06-21.phase53-model-tier-policy.v1";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
+// Latency (benchmark 2026-06-27, real orchestration prompt): gpt-5 minimal ~38s,
+// gpt-5-mini ~14s, gpt-4.1 ~3.6s. The interactive chat path must stay snappy, so
+// default to the fast flagship gpt-4.1 (non-reasoning). Override per tier via
+// BRAINSTY_<TIER>_MODEL / BRAINSTY_REASONER_MODEL to use gpt-5 for deep/offline work.
 const DEFAULT_MODELS = Object.freeze({
-  classifier: "gpt-5-mini",
-  reasoner: "gpt-5",
-  planner: "gpt-5"
+  classifier: "gpt-4.1-mini",
+  reasoner: "gpt-4.1",
+  planner: "gpt-4.1"
 });
 
 const STEP_TIERS = Object.freeze({
@@ -154,6 +158,24 @@ export function selectModelForStep(step, context = {}) {
   };
 }
 
+// Benchmark (2026-06-27): on gpt-5, effort "minimal" (~4s) is FASTER than "low"
+// (~7s); default is ~4s. Use minimal everywhere for the latency-sensitive chat path.
+const TIER_REASONING_EFFORT = Object.freeze({ classifier: "minimal", planner: "minimal", reasoner: "minimal" });
+
+// Latency control: gpt-5/o-series are reasoning models whose default effort is
+// slow. Routing/classification need minimal reasoning; composition a little more.
+// Configurable via BRAINSTY_MODEL_REASONING_EFFORT (global) or per-tier env.
+function reasoningEffortForTier(tier, context = {}) {
+  const env = context.env ?? process.env;
+  return (
+    context.reasoningEffort ??
+    env.BRAINSTY_MODEL_REASONING_EFFORT ??
+    env[`BRAINSTY_${tier.toUpperCase()}_REASONING_EFFORT`] ??
+    TIER_REASONING_EFFORT[tier] ??
+    "low"
+  );
+}
+
 export function createTieredChatModel(step, context = {}) {
   const selection = selectModelForStep(step, context);
   const options = {
@@ -162,6 +184,10 @@ export function createTieredChatModel(step, context = {}) {
     maxRetries: context.maxRetries ?? 1,
     configuration: { baseURL: selection.baseURL }
   };
+  // Only reasoning-capable models accept reasoningEffort.
+  if (/^(gpt-5|o\d)/i.test(selection.model)) {
+    options.reasoningEffort = reasoningEffortForTier(selection.tier, context);
+  }
   const llm = testChatModelFactory
     ? testChatModelFactory({ step, selection, options, context })
     : new ChatOpenAI(options);

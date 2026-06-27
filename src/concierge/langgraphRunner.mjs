@@ -745,7 +745,16 @@ async function structuredIntentNode(state) {
   const user = userFromContext(state.context_packet);
   let liveReasoner = null;
   let reasoning = deterministicReasoning;
-  if (state.raw_message?.useLiveModel !== false && !state.policy_result?.urgentEscalationRequired && state.policy_result?.allowed !== false) {
+  // Latency: under LLM-primary routing the live structured-intent call is redundant
+  // (its output is only a hint; the orchestration LLM is authority). Skip it and use
+  // deterministic reasoning as the hint, removing one sequential gpt-5 call per turn.
+  const llmPrimary = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
+  if (
+    !llmPrimary &&
+    state.raw_message?.useLiveModel !== false &&
+    !state.policy_result?.urgentEscalationRequired &&
+    state.policy_result?.allowed !== false
+  ) {
     try {
       liveReasoner = await invokeLiveStructuredIntentReasoner({
         state: {
@@ -773,7 +782,11 @@ async function structuredIntentNode(state) {
     }
   } else {
     liveReasoner = {
-      mode: state.raw_message?.useLiveModel === false ? "explicitly_disabled_by_request" : "skipped_by_deterministic_safety_gate",
+      mode: llmPrimary
+        ? "skipped_llm_primary_orchestrator_authority"
+        : state.raw_message?.useLiveModel === false
+          ? "explicitly_disabled_by_request"
+          : "skipped_by_deterministic_safety_gate",
       valid: false,
       issues: []
     };

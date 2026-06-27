@@ -35,8 +35,10 @@ test("planner tier does not inherit classifier-sized OPENAI_MODEL fallback", () 
   const env = { OPENAI_MODEL: "gpt-5-mini" };
 
   assert.equal(selectModelForStep("structured_intent", { env }).model, "gpt-5-mini");
-  assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "gpt-5");
-  assert.equal(selectModelForStep("sourced_answer", { env }).model, "gpt-5");
+  // Planner/reasoner default to the fast flagship gpt-4.1 (latency), and must NOT
+  // inherit the classifier-sized OPENAI_MODEL fallback.
+  assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "gpt-4.1");
+  assert.equal(selectModelForStep("sourced_answer", { env }).model, "gpt-4.1");
 });
 
 test("model tier policy keeps edge SLM as a pinned not-implemented interface", () => {
