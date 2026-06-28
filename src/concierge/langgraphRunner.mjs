@@ -856,7 +856,25 @@ async function hydrateDecisionCapabilities(state, decision) {
       },
       input: { requestedPointerCount: selectedPointers.length }
     },
-    async () => hydrateCapabilityPointers(state.session_id, selectedPointers)
+    async () => {
+      // go-live 3/3: when the DB catalog is the planner surface, resolve selected
+      // pointers via the authoritative catalog hydrator (by key, backing-precedence).
+      if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0") {
+        const store = activeStores.get(state.session_id);
+        const { hydrateCapabilityPointer } = await import("./capabilityCatalog.mjs");
+        const resolved = [];
+        const missing = [];
+        for (const pointer of selectedPointers) {
+          const r = await hydrateCapabilityPointer(store, { pointer });
+          if (r.resolved) resolved.push({ portfolioId: r.capabilityKey, kind: r.kind, title: r.hydrate?.title ?? r.capabilityKey, pointer, hydrate: r.hydrate });
+          else missing.push(pointer);
+        }
+        if (resolved.length || missing.length) {
+          return { cacheBackend: "db_catalog", requested: selectedPointers.length, resolvedCount: resolved.length, cacheHit: resolved.length > 0, missing, resolved };
+        }
+      }
+      return hydrateCapabilityPointers(state.session_id, selectedPointers);
+    }
   );
 }
 
@@ -971,19 +989,36 @@ async function llmOrchestrationDecisionNode(state) {
   }
 
   const store = activeStores.get(state.session_id);
-  // Phase B: give the planner the DB-catalog offerable processes (metadata + id only)
-  // so it can populate offeredProcessIds/recommendedProcessId.
+  // Phase B + go-live 3/3: feed the planner the DB-catalog. offerableProcesses lets it
+  // populate offeredProcessIds; when BRAINSTY_PLANNER_DB_CATALOG!=0 and the catalog is
+  // non-empty, the DB catalog promptTable REPLACES the legacy per-turn portfolio as the
+  // planner's surface (legacy remains the fallback when the catalog is empty).
   let offerableProcesses = [];
+  let dbCatalogPortfolio = null;
   try {
     const { loadSessionPortfolio } = await import("./capabilityCatalog.mjs");
     const portfolio = await loadSessionPortfolio(store, { sessionId: state.session_id });
-    offerableProcesses = (portfolio.manifest?.promptTable ?? [])
+    const table = portfolio.manifest?.promptTable ?? [];
+    offerableProcesses = table
       .filter((row) => row.kind === "process")
       .map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope }));
+    if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0" && table.length > 0) {
+      dbCatalogPortfolio = {
+        cacheBackend: portfolio.backend,
+        cacheKey: portfolio.cacheKey,
+        portfolioHash: portfolio.manifest?.version ?? "db_catalog",
+        entryCount: table.length,
+        promptTable: table,
+        source: "db_catalog"
+      };
+    }
   } catch {
     offerableProcesses = [];
   }
-  const messages = buildLlmOrchestrationDecisionMessages({ ...state, offerable_processes: offerableProcesses });
+  const plannerState = dbCatalogPortfolio
+    ? { ...state, offerable_processes: offerableProcesses, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
+    : { ...state, offerable_processes: offerableProcesses };
+  const messages = buildLlmOrchestrationDecisionMessages(plannerState);
   const payloadObservation = store
     ? await recordOutboundPayloadObservation(store, {
         sessionId: state.session_id,
@@ -1061,6 +1096,8 @@ async function llmOrchestrationDecisionNode(state) {
         confidence: decision.confidence,
         confidenceBand: confidenceBand(decision),
         issues: decision.issues,
+        plannerSurface: dbCatalogPortfolio ? "db_catalog" : "legacy",
+        offerableProcessCount: offerableProcesses.length,
         capabilityHydration: summarizeHydration(hydratedCapabilities)
       })
     };
