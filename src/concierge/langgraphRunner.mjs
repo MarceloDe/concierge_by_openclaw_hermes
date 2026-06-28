@@ -1048,7 +1048,13 @@ async function llmOrchestrationDecisionNode(state) {
       : { promptMessageCount: messages.length }
   );
   try {
-    const { llm } = createTieredChatModel("llm_orchestration_decision", { timeout: 60000, maxRetries: 1 });
+    // Planner is gpt-4.1 (~3-4s, 45s hard timeout). The earlier llm_unavailable under
+    // rapid calls was transient rate-limiting (429), not latency -> retry with backoff
+    // (LangChain exponential backoff on 429/5xx) before ever failing loud.
+    const { llm } = createTieredChatModel("llm_orchestration_decision", {
+      timeout: 60000,
+      maxRetries: Number(process.env.BRAINSTY_PLANNER_MAX_RETRIES || 3)
+    });
     const response = await llm.invoke(messages);
     const decision = normalizeLlmOrchestrationDecision(response.content, {
       mode: "openai_chatopenai_invoked",
