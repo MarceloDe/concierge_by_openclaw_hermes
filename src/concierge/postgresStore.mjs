@@ -94,8 +94,14 @@ function normalizeStatement(sql) {
   return toPostgresSql(trimmed);
 }
 
+// Strip leading SQL line-comments + whitespace so a CREATE preceded by `-- ...` lines
+// (as the capability/process tables are) is still recognized for FK-dependency ordering.
+function stripLeadingComments(statement) {
+  return String(statement).replace(/^(?:\s*--[^\n]*\n)+/g, "").trimStart();
+}
+
 function tableNameForCreate(statement) {
-  return statement.match(/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)/i)?.[1] ?? null;
+  return stripLeadingComments(statement).match(/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z_][A-Za-z0-9_]*)/i)?.[1] ?? null;
 }
 
 function referencedTables(statement) {
@@ -199,7 +205,11 @@ export class PostgresStore {
 
   async exec(sql) {
     await this.open();
-    for (const statement of orderCreateTableStatements(splitSqlStatements(sql))) {
+    // Strip SQL line-comments before splitting: comment lines with apostrophes (e.g.
+    // 'step:adhoc:<boundary>') otherwise poison single-quote tracking and cascade the
+    // statement split. Safe here because no string literal in the schema contains '--'.
+    const withoutComments = String(sql).replace(/--[^\n]*/g, "");
+    for (const statement of orderCreateTableStatements(splitSqlStatements(withoutComments))) {
       const normalized = normalizeStatement(statement);
       if (normalized) await this.query(normalized);
     }

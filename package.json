@@ -95,7 +95,8 @@
     "test:redis:portfolio": "node --test src/tests/capability-portfolio-mirror-redis.test.mjs",
     "test:redis:provenance": "node --test src/tests/capability-provenance-redis.test.mjs",
     "test:redis:idempotency": "node --test src/tests/dispatch-idempotency-redis.test.mjs",
-    "test:type-ii:phasea": "node --test src/tests/type-ii-process-offer-live.test.mjs"
+    "test:type-ii:phasea": "node --test src/tests/type-ii-process-offer-live.test.mjs",
+    "test:pg:parity": "node --test src/tests/capability-postgres-parity.test.mjs"
   },
   "engines": {
     "node": ">=25"
