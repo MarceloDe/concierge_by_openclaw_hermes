@@ -107,7 +107,13 @@ function wrapModelWithObservability(llm, { step, selection, context }) {
             },
             input: {
               input_summary: safeSummaryFromPayload(input, "llm_input"),
-              message_count: Array.isArray(input) ? input.length : null
+              message_count: Array.isArray(input) ? input.length : null,
+              // Debug trace mode: capture the FULL prompt (identifier-redacted by the
+              // checkpoint layer, not truncated) so every LLM call's exact input is
+              // inspectable in Langfuse. Off by default (lean + PHI-safe in prod).
+              ...(process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+                ? { full_prompt: (Array.isArray(input) ? input : [input]).map((m) => ({ role: m?.role ?? m?._getType?.() ?? "message", content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? m) })) }
+                : {})
             }
           },
           async () => invokeWithHardTimeout(target, input, mergedConfig, modelHardTimeoutMs(), step)

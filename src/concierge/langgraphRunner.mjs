@@ -1041,7 +1041,11 @@ async function llmOrchestrationDecisionNode(state) {
       prompt_message_count: messages.length,
       capability_rows: state.context_packet?.capabilityPortfolio?.promptTable?.length ?? 0
     },
-    { promptMessageCount: messages.length }
+    // Debug trace mode: capture the FULL hydrated planner prompt (system + the payload
+    // with capability portfolio text, pointers, runtime context) as the span input.
+    process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+      ? { promptMessageCount: messages.length, full_prompt: messages.map((m) => ({ role: m.role, content: m.content })) }
+      : { promptMessageCount: messages.length }
   );
   try {
     const { llm } = createTieredChatModel("llm_orchestration_decision", { timeout: 60000, maxRetries: 1 });
@@ -1053,7 +1057,11 @@ async function llmOrchestrationDecisionNode(state) {
       fallbackWorkflow: state.structured_intent?.workflow
     });
     plannerCheckpoint.end_checkpoint(
-      { workflow: decision.workflow, confidence: decision.confidence, valid: decision.valid },
+      // Debug trace mode: capture the FULL normalized decision (every contract field +
+      // selected pointers) as the span output; summary-only when off.
+      process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+        ? { decision }
+        : { workflow: decision.workflow, confidence: decision.confidence, valid: decision.valid },
       { checkpoint_name: "planner.output", output_summary: { workflow: decision.workflow, confidence: decision.confidence, selectedPointerCount: (decision.selectedCapabilityPointers ?? []).length } }
     );
     const llmOutputIndex = await indexLlmOutput({
