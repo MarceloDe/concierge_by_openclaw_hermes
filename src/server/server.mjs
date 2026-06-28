@@ -3095,17 +3095,20 @@ async function serveStatic(req, res) {
       : isUserAppRoute(path)
         ? USERAPP_SHELL
         : path.slice(1);
+  // Test clean-slate mode: never let Chrome serve a stale bundle (no browser cache).
+  const noStore = process.env.BRAINSTY_FRESH_SESSION_PER_LOAD === "1" || process.env.BRAINSTY_NO_BROWSER_CACHE === "1";
+  const cacheHeader = noStore ? { "cache-control": "no-store, no-cache, must-revalidate", pragma: "no-cache", expires: "0" } : {};
   const filePath = join(APP_DIR, fileName);
   try {
     const content = await readFile(filePath);
-    res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream" });
+    res.writeHead(200, { "content-type": MIME[extname(filePath)] ?? "application/octet-stream", ...cacheHeader });
     res.end(content);
   } catch {
     // SPA fallback: unknown sub-paths under the user app resolve to its shell.
     if (path.startsWith("/userapp/") || path.startsWith("/app/")) {
       try {
         const shell = await readFile(join(APP_DIR, USERAPP_SHELL));
-        res.writeHead(200, { "content-type": MIME[".html"] });
+        res.writeHead(200, { "content-type": MIME[".html"], ...cacheHeader });
         res.end(shell);
         return;
       } catch { /* fall through to 404 */ }
@@ -3746,13 +3749,16 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/orchestrator/auth-start") {
     const body = await readJson(req);
+    // Test clean-slate mode: ignore any resumed/stored session so every app (re)load
+    // starts a brand-new session (no carried-over evidence/context). Default off.
+    const freshSessionPerLoad = process.env.BRAINSTY_FRESH_SESSION_PER_LOAD === "1";
     sendJson(
       res,
       200,
       await authenticatePlannedUser(store, {
         member: body.member ?? {},
-        sessionId: body.sessionId ?? null,
-        resumeLatestSession: Boolean(body.resumeLatestSession)
+        sessionId: freshSessionPerLoad ? null : (body.sessionId ?? null),
+        resumeLatestSession: freshSessionPerLoad ? false : Boolean(body.resumeLatestSession)
       })
     );
     return;
