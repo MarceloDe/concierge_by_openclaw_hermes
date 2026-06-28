@@ -1,0 +1,967 @@
+{
+  "capturedAt": "2026-06-28T21:58:46.937Z",
+  "note": "Real runtime capture — fresh/clean first-turn session, identifier-masked.",
+  "graphTraceId": "thread:user_c3763a78-d224-4252-ae89-882e1af00b7c:716100be-2176-4262-b61d-f39c07d2646a",
+  "sessionId": "session_aa08f90d-cc16-49bf-89f9-64c397745657",
+  "model": "2026-05-28.llm-orchestration-decision.v1",
+  "systemPrompt": "You are the live GPT orchestration intelligence inside Brainstyworkers' LangGraph healthcare insurance concierge.\nReturn strict JSON only. Do not include markdown.\nLangGraph is the healthcare workflow master. You advise LangGraph, and LangGraph will enforce safety, approval, worker, and memory rules.\nAllowed workflows: eligibility_benefits_navigation, claim_status_navigation, pharmacy_formulary, prior_authorization_navigation, denial_appeal_preparation, payer_portal_read_only_extraction, document_or_trace_review, human_approval_escalation.\nNever select a workflow outside that list.\nNever authorize credential entry, SSN entry, 2FA/passkey handling, payer contact, external messaging, form submission, payment, cancellation, record change, or medical advice.\nOpenClaw workers may be powerful inside the delegated read-only task, but they do not choose the healthcare workflow.\nIf authenticated portal evidence is needed, ask for manual login/readiness and read-only approval rather than claiming evidence exists.\nIf source pointers are absent, say what evidence is missing.\nReason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).\nA member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence; they require authenticated portal evidence. For ANY such current-balance/amount question, set canAnswerNow=false and responseStrategy='offer_process_and_ask' (offer the portal-lookup process) EVEN IF research or policy evidence is present. Research/policy evidence supports only general coverage explanations, never a live balance.\nIf you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'.",
+  "hydratedPlannerInput": {
+    "contractVersion": "2026-05-28.llm-orchestration-decision.v1",
+    "purpose": "Choose the healthcare insurance workflow and worker strategy for LangGraph. Deterministic safety gates already ran first.",
+    "userInput": "hey, can you help me to discover my current out of the pocket?",
+    "deterministicPolicy": {
+      "allowed": true,
+      "approvalRequired": false,
+      "failedChecks": []
+    },
+    "curatedClassifier": {
+      "schemaVersion": 1,
+      "classifier": "curated_healthcare_intent_v1",
+      "intent": "eligibility_benefits_question",
+      "workflow": "eligibility_benefits_navigation",
+      "confidence": 0.42,
+      "requiredEvidence": [
+        "portal_account",
+        "eligibility_snapshot_or_authenticated_portal_page"
+      ],
+      "missingEvidence": [
+        "eligibility_snapshot_or_authenticated_portal_page"
+      ],
+      "refusalOrEscalationFlag": "none",
+      "rationale": "No high-specificity workflow signal matched; defaulted to eligibility and benefits as the first MVP journey.",
+      "reasoning": {
+        "contractVersion": "2026-06-15.brainsty-intelligence.v1",
+        "primary_intent": "benefits_eligibility",
+        "candidate_journeys": [
+          {
+            "journey": "benefits_eligibility",
+            "confidence": 0.55,
+            "rationale": "No high-specificity workflow signal matched; defaulted to eligibility and benefits as the first MVP journey.",
+            "required_evidence": [
+              "plan_terms",
+              "member_benefits",
+              "deductible_or_accumulator_if_available"
+            ],
+            "missing_evidence": [
+              "plan_terms",
+              "member_benefits",
+              "deductible_or_accumulator_if_available"
+            ],
+            "safe_next_action": "request_or_retrieve_evidence",
+            "requires_approval": true,
+            "requires_human_handoff": false
+          }
+        ],
+        "complexity": "high",
+        "ambiguities": [],
+        "policy_flags": [],
+        "unsafe_action_requested": false,
+        "reasoning_source": "curated_fallback"
+      },
+      "primary_intent": "benefits_eligibility",
+      "candidate_journeys": [
+        {
+          "journey": "benefits_eligibility",
+          "confidence": 0.55,
+          "rationale": "No high-specificity workflow signal matched; defaulted to eligibility and benefits as the first MVP journey.",
+          "required_evidence": [
+            "plan_terms",
+            "member_benefits",
+            "deductible_or_accumulator_if_available"
+          ],
+          "missing_evidence": [
+            "plan_terms",
+            "member_benefits",
+            "deductible_or_accumulator_if_available"
+          ],
+          "safe_next_action": "request_or_retrieve_evidence",
+          "requires_approval": true,
+          "requires_human_handoff": false
+        }
+      ],
+      "reasoning_source": "curated_fallback",
+      "liveReasoner": {
+        "mode": "skipped_llm_primary_orchestrator_authority",
+        "valid": false,
+        "issues": []
+      }
+    },
+    "routeCandidates": [
+      {
+        "workflowKey": "claim_status_navigation",
+        "journeyStage": "service_use_claim",
+        "executableNow": true,
+        "routeScore": 0,
+        "missingUserFields": [],
+        "missingDataPointers": [
+          "claim_items",
+          "eligibility_snapshots"
+        ],
+        "disabledTools": []
+      },
+      {
+        "workflowKey": "denial_appeal_preparation",
+        "journeyStage": "denial_resolution",
+        "executableNow": true,
+        "routeScore": 0,
+        "missingUserFields": [],
+        "missingDataPointers": [
+          "claim_items",
+          "eligibility_snapshots"
+        ],
+        "disabledTools": []
+      },
+      {
+        "workflowKey": "document_or_trace_review",
+        "journeyStage": "evidence_review",
+        "executableNow": true,
+        "routeScore": 0,
+        "missingUserFields": [],
+        "missingDataPointers": [
+          "extraction_artifacts",
+          "audit_events"
+        ],
+        "disabledTools": []
+      },
+      {
+        "workflowKey": "eligibility_benefits_navigation",
+        "journeyStage": "coverage_understanding",
+        "executableNow": true,
+        "routeScore": 0,
+        "missingUserFields": [],
+        "missingDataPointers": [
+          "portal_accounts"
+        ],
+        "disabledTools": []
+      },
+      {
+        "workflowKey": "human_approval_escalation",
+        "journeyStage": "approval_gate",
+        "executableNow": true,
+        "routeScore": 0,
+        "missingUserFields": [],
+        "missingDataPointers": [
+          "approval_gates"
+        ],
+        "disabledTools": []
+      }
+    ],
+    "sourcePointers": [],
+    "dynamicSkills": {
+      "selected": {
+        "insuranceSkillKey": "insurance_plan_aetna_temporary",
+        "journeySkillKey": "claim_journey_temporary",
+        "executionSkillKey": "insurance_portal_browser"
+      },
+      "successEstimate": {
+        "insurance": {
+          "chance": 0.61,
+          "missingData": [
+            "plan_name_or_plan_pointer",
+            "source_pointer_or_trusted_evidence"
+          ],
+          "blockers": [
+            "no_source_pointer"
+          ]
+        },
+        "journey": {
+          "chance": 0.32,
+          "missingData": [
+            "claim_identifier_or_visit_description",
+            "service_date_or_time_window",
+            "claim_source_pointer"
+          ],
+          "blockers": [
+            "no_source_pointer"
+          ]
+        },
+        "overallChance": 0.45
+      },
+      "matches": [
+        {
+          "skillKey": "claim_journey_temporary",
+          "skillKind": "journey_specific",
+          "title": "Temporary Claim Journey Skill",
+          "fitScore": 25,
+          "successChance": 0.32,
+          "questionsToSolve": [
+            "Which claim or visit is the user asking about?",
+            "Is there a stored claim item, EOB/document pointer, portal page pointer, or trusted reviewed evidence?",
+            "What is the claim status, service date, billed/allowed/paid/share amount, and denial or adjustment reason?",
+            "Does the result require more evidence, human review, or an approval-gated next action?"
+          ],
+          "dataNeeded": {
+            "required": [
+              "claim_identifier_or_visit_description",
+              "service_date_or_time_window",
+              "claim_source_pointer"
+            ],
+            "optional": [
+              "provider_or_facility",
+              "eob_document",
+              "denial_reason",
+              "patient_responsibility",
+              "appeal_deadline"
+            ]
+          },
+          "requiredWorkers": {
+            "openclaw_tasks": [
+              "insurance_portal_browser.read_only_claims_observation",
+              "insurance_portal_browser.read_only_eob_document_candidate_discovery"
+            ],
+            "worker_mode": "only_after_read_only_approval_when_claim_rows_are_missing"
+          },
+          "requiredSearch": {
+            "engines": [
+              "trusted_research_retrieval"
+            ],
+            "preferred_sources": [
+              "stored_claim_items",
+              "portal_page_snapshots",
+              "approved_eob_document"
+            ]
+          },
+          "requiredApis": {
+            "connectors": [
+              "graphiti_recall",
+              "local_sqlite_claim_lookup",
+              "document_candidate_approval"
+            ]
+          }
+        },
+        {
+          "skillKey": "insurance_plan_aetna_temporary",
+          "skillKind": "insurance_specific",
+          "title": "Temporary Aetna Insurance Plan Skill",
+          "fitScore": 96,
+          "successChance": 0.61,
+          "questionsToSolve": [
+            "What Aetna plan evidence is needed to answer this user question?",
+            "Can existing session, memory, source-pointer, or trusted research evidence answer the question?",
+            "Does the user need authenticated portal evidence before LangGraph can answer?",
+            "Which source hierarchy should govern conflicting Aetna evidence?"
+          ],
+          "dataNeeded": {
+            "required": [
+              "payer",
+              "plan_name_or_plan_pointer",
+              "source_pointer_or_trusted_evidence"
+            ],
+            "optional": [
+              "plan_year",
+              "state",
+              "market",
+              "network",
+              "benefit_category",
+              "member_portal_page",
+              "sbc_or_spd_document"
+            ]
+          },
+          "requiredWorkers": {
+            "openclaw_tasks": [
+              "insurance_portal_browser.read_only_observation"
+            ],
+            "worker_mode": "only_when_account_specific_evidence_is_missing"
+          },
+          "requiredSearch": {
+            "engines": [
+              "trusted_research_retrieval",
+              "authoritative_web_source_lookup"
+            ],
+            "preferred_sources": [
+              "aetna.com",
+              "cms.gov",
+              "healthcare.gov",
+              "state_doi"
+            ]
+          },
+          "requiredApis": {
+            "connectors": [
+              "graphiti_recall",
+              "local_sqlite_source_pointer_lookup",
+              "research_trusted_retrieval"
+            ]
+          }
+        },
+        {
+          "skillKey": "insurance_portal_browser",
+          "skillKind": "execution_specific",
+          "title": "Insurance Portal Browser Execution Skill",
+          "fitScore": 63,
+          "successChance": 0.45,
+          "questionsToSolve": [],
+          "dataNeeded": {
+            "required": [
+              "approval_scope",
+              "source_pointer"
+            ],
+            "optional": [
+              "portal_url",
+              "authenticated_current_tab",
+              "document_candidate"
+            ]
+          },
+          "requiredWorkers": {
+            "openclaw_tasks": [
+              "insurance_portal_browser.read_only_observation",
+              "insurance_portal_browser.read_only_claims_observation",
+              "insurance_portal_browser.read_only_prior_authorization_observation"
+            ]
+          },
+          "requiredSearch": {
+            "engines": [
+              "portal_search_when_available",
+              "official_payer_read_only_sections"
+            ]
+          },
+          "requiredApis": {
+            "connectors": [
+              "local_sqlite_source_pointer_lookup"
+            ]
+          }
+        }
+      ],
+      "requiredOpenClawTasks": [
+        "insurance_portal_browser.read_only_claims_observation",
+        "insurance_portal_browser.read_only_eob_document_candidate_discovery",
+        "insurance_portal_browser.read_only_observation",
+        "insurance_portal_browser.read_only_prior_authorization_observation"
+      ],
+      "requiredSearch": [
+        "trusted_research_retrieval",
+        "authoritative_web_source_lookup"
+      ],
+      "requiredApis": [
+        "graphiti_recall",
+        "local_sqlite_source_pointer_lookup",
+        "research_trusted_retrieval",
+        "local_sqlite_claim_lookup",
+        "document_candidate_approval"
+      ]
+    },
+    "memorySkillTree": {
+      "version": "2026-06-22.phase60-memory-skill-tree-selector.v1",
+      "status": "phase60_memory_skill_tree_attention",
+      "workflow": "eligibility_benefits_navigation",
+      "payer": "Aetna",
+      "dbAuthority": {
+        "authoritativeFor": [
+          "users",
+          "sessions",
+          "tasks",
+          "approvals",
+          "audit",
+          "source_pointers"
+        ],
+        "graphitiMayOverrideDb": false,
+        "sessionControlInGraphiti": false
+      },
+      "memoryUsePolicy": {
+        "graphitiRole": "advisory_retrieval_and_consolidation_signal",
+        "useWhen": [
+          "non_standard_journey",
+          "new_demand",
+          "unknown_or_new_plan",
+          "personal_case_pattern",
+          "skill_pool_gap"
+        ],
+        "directIdentifierStorageAllowed": false,
+        "rawPhiStorageAllowed": false,
+        "productionDrivingAllowed": false
+      },
+      "selectedProcedureMemory": {
+        "selectedSkillKey": "claim_journey_temporary",
+        "bestDynamicSkillScore": 96,
+        "nonStandardDemand": false,
+        "selectedSkillRefs": [
+          {
+            "kind": "insurance_specific",
+            "key": "insurance_plan_aetna_temporary"
+          },
+          {
+            "kind": "journey_specific",
+            "key": "claim_journey_temporary"
+          },
+          {
+            "kind": "execution_specific",
+            "key": "insurance_portal_browser"
+          }
+        ],
+        "sourcePointerCount": 0,
+        "productMemoryFactCount": 0
+      },
+      "ralphLoop": {
+        "loopStyle": "ralph_rigg_sequential_goal_loop",
+        "stepIds": [
+          "requirements",
+          "target_plan",
+          "implementation",
+          "testing",
+          "visual_sensor",
+          "agentic_goal_evaluation",
+          "decision"
+        ],
+        "passDecision": {
+          "targetScore": 85,
+          "ifNo": "repeat_current_case_loop_with_more_evidence",
+          "ifYes": "submit_skill_candidate_for_human_reviewer_promotion",
+          "automaticProductionPromotion": false
+        }
+      },
+      "consolidationCandidate": {
+        "status": "needs_more_shadow_memory",
+        "readyForReviewer": false,
+        "worktreeWriteAllowed": false,
+        "productionDrivingAllowed": false
+      },
+      "safety": {
+        "dbRemainsSourceOfTruth": true,
+        "noRawPhiReturned": true,
+        "noCredentialHandling": true,
+        "humanReviewRequiredForNewSkills": true,
+        "productionDrivingAllowed": false
+      }
+    },
+    "productMemory": {
+      "adapter": "graphiti",
+      "enabled": true,
+      "facts": []
+    },
+    "runtimeContext": {
+      "cacheBackend": "redis",
+      "cacheStatus": "miss",
+      "cacheKey": "brainsty:runtime-context:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "manifestHash": "02a7ee862f7024e85b7df57d",
+      "previousManifestHash": null,
+      "latestCheckpoint": null,
+      "achievedCheckpoints": [],
+      "priorDecisionPointers": [],
+      "promptCompaction": {
+        "strategy": "short_pointer_manifest_with_hydratable_cache_payload",
+        "checkpointLimit": 0,
+        "contextPacketId": null,
+        "userInputHash": "538d191892211fbe"
+      },
+      "capabilitySummary": [
+        {
+          "workflowKey": "claim_status_navigation",
+          "routeScore": 0,
+          "executableNow": true,
+          "missingDataPointerCount": 2,
+          "disabledToolCount": 0
+        },
+        {
+          "workflowKey": "denial_appeal_preparation",
+          "routeScore": 0,
+          "executableNow": true,
+          "missingDataPointerCount": 2,
+          "disabledToolCount": 0
+        },
+        {
+          "workflowKey": "document_or_trace_review",
+          "routeScore": 0,
+          "executableNow": true,
+          "missingDataPointerCount": 2,
+          "disabledToolCount": 0
+        },
+        {
+          "workflowKey": "eligibility_benefits_navigation",
+          "routeScore": 0,
+          "executableNow": true,
+          "missingDataPointerCount": 1,
+          "disabledToolCount": 0
+        },
+        {
+          "workflowKey": "human_approval_escalation",
+          "routeScore": 0,
+          "executableNow": true,
+          "missingDataPointerCount": 1,
+          "disabledToolCount": 0
+        }
+      ]
+    },
+    "capabilityPortfolio": {
+      "cacheBackend": "redis",
+      "cacheKey": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "portfolioHash": "2026-06-27.catalog-portfolio-mirror.v1",
+      "entryCount": 19,
+      "promptTable": [
+        {
+          "portfolioId": "process:portal_readonly_lookup",
+          "kind": "process",
+          "title": "Read-only insurer portal lookup",
+          "whenToUse": "a payer-portal data request when a portal account exists but no fresh evidence is cached",
+          "whyUse": "the default spine to obtain plan-specific data without the agent ever entering credentials",
+          "shortDescription": "You log in yourself; I read and cite what's on screen.",
+          "approvalScope": "read_only_observation",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#process:portal_readonly_lookup",
+          "score": 26
+        },
+        {
+          "portfolioId": "workflow:claim_status_navigation",
+          "kind": "workflow",
+          "title": "Claim status, EOB, patient responsibility, why-billed.",
+          "whenToUse": "user asks status of a claim / why was I billed / patient responsibility",
+          "whyUse": "routes claim/EOB questions to the claim journey",
+          "shortDescription": "Claim status, EOB, patient responsibility, why-billed.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:claim_status_navigation",
+          "score": 30
+        },
+        {
+          "portfolioId": "workflow:eligibility_benefits_navigation",
+          "kind": "workflow",
+          "title": "Coverage, deductible, OOP max, copay lookup.",
+          "whenToUse": "user asks about coverage / what they owe / deductible / OOP / effective dates",
+          "whyUse": "routes benefit + cost-sharing questions to the eligibility journey",
+          "shortDescription": "Coverage, deductible, OOP max, copay lookup.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation",
+          "score": 30
+        },
+        {
+          "portfolioId": "workflow:pharmacy_formulary",
+          "kind": "workflow",
+          "title": "Drug coverage, tier, step therapy, alternatives.",
+          "whenToUse": "user asks is my drug covered / tier / copay / alternatives",
+          "whyUse": "routes pharmacy/formulary questions",
+          "shortDescription": "Drug coverage, tier, step therapy, alternatives.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:pharmacy_formulary",
+          "score": 28
+        },
+        {
+          "portfolioId": "workflow:prior_authorization_navigation",
+          "kind": "workflow",
+          "title": "Prior-auth status and payer requirements.",
+          "whenToUse": "user asks do I need pre-auth / PA status / approval requirement",
+          "whyUse": "routes PA questions; never submits",
+          "shortDescription": "Prior-auth status and payer requirements.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:prior_authorization_navigation",
+          "score": 28
+        },
+        {
+          "portfolioId": "workflow:document_or_trace_review",
+          "kind": "workflow",
+          "title": "Interpret uploaded EOB/SBC/ID/denial documents.",
+          "whenToUse": "user uploads a document to interpret; no login needed",
+          "whyUse": "routes to local document extraction + review",
+          "shortDescription": "Interpret uploaded EOB/SBC/ID/denial documents.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:document_or_trace_review",
+          "score": 26
+        },
+        {
+          "portfolioId": "workflow:payer_portal_read_only_extraction",
+          "kind": "workflow",
+          "title": "Read-only structured extraction from an authenticated portal.",
+          "whenToUse": "specific plan data only available behind portal login",
+          "whyUse": "drives the read-only observation after user takeover login",
+          "shortDescription": "Read-only structured extraction from an authenticated portal.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:payer_portal_read_only_extraction",
+          "score": 26
+        },
+        {
+          "portfolioId": "workflow:denial_appeal_preparation",
+          "kind": "workflow",
+          "title": "Understand a denial and assemble appeal support (draft only).",
+          "whenToUse": "denied claim/PA; understand grounds and assemble support",
+          "whyUse": "composes claim + document + policy lookups; draft only, never sends",
+          "shortDescription": "Understand a denial and assemble appeal support (draft only).",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:denial_appeal_preparation",
+          "score": 24
+        },
+        {
+          "portfolioId": "skill:insurance_portal_browser",
+          "kind": "skill",
+          "title": "Execution arm: OBSERVE a user-authenticated portal (read-only).",
+          "whenToUse": "portal evidence is needed after the user logs in",
+          "whyUse": "the OpenClaw read-only browser skill; never enters credentials",
+          "shortDescription": "Execution arm: OBSERVE a user-authenticated portal (read-only).",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#skill:insurance_portal_browser",
+          "score": 22
+        },
+        {
+          "portfolioId": "skill:insurance_knowledge_research",
+          "kind": "skill",
+          "title": "Research authoritative published insurance/policy sources.",
+          "whenToUse": "a fact is published (formulary/SBC/policy) and not behind login",
+          "whyUse": "retrieves + cites authoritative sources",
+          "shortDescription": "Research authoritative published insurance/policy sources.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#skill:insurance_knowledge_research",
+          "score": 16
+        },
+        {
+          "portfolioId": "tool:openclaw_authenticated_browser",
+          "kind": "tool",
+          "title": "Dispatch handle for the OpenClaw browser arm.",
+          "whenToUse": "a worker dispatch to the read-only browser is required",
+          "whyUse": "bridges worker dispatch + idempotency + lease",
+          "shortDescription": "Dispatch handle for the OpenClaw browser arm.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#tool:openclaw_authenticated_browser",
+          "score": 14
+        },
+        {
+          "portfolioId": "tool:payer_portal_reader",
+          "kind": "tool",
+          "title": "Structured read-only portal extraction to source pointers.",
+          "whenToUse": "portal page content must be turned into cited evidence",
+          "whyUse": "produces portal_page_snapshots + extraction_artifacts",
+          "shortDescription": "Structured read-only portal extraction to source pointers.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#tool:payer_portal_reader",
+          "score": 14
+        },
+        {
+          "portfolioId": "tool:aetna_cpb_lookup",
+          "kind": "tool",
+          "title": "Aetna clinical policy bulletin criteria.",
+          "whenToUse": "PA/appeal needs payer clinical policy criteria",
+          "whyUse": "retrieves CPB criteria with citation, no PHI sent",
+          "shortDescription": "Aetna clinical policy bulletin criteria.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#tool:aetna_cpb_lookup",
+          "score": 12
+        },
+        {
+          "portfolioId": "tool:cms_mcd_lookup",
+          "kind": "tool",
+          "title": "Medicare NCD/LCD coverage determinations.",
+          "whenToUse": "coverage determination requires CMS NCD/LCD",
+          "whyUse": "retrieves CMS coverage determinations + citation",
+          "shortDescription": "Medicare NCD/LCD coverage determinations.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#tool:cms_mcd_lookup",
+          "score": 12
+        },
+        {
+          "portfolioId": "tool:document_trace_parser",
+          "kind": "tool",
+          "title": "Parse uploaded EOB/SBC/denial artifacts.",
+          "whenToUse": "an uploaded document must be parsed to structured fields",
+          "whyUse": "structured extraction over extraction_artifacts",
+          "shortDescription": "Parse uploaded EOB/SBC/denial artifacts.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#tool:document_trace_parser",
+          "score": 12
+        },
+        {
+          "portfolioId": "graph_path:approval_interrupt_resume",
+          "kind": "graph_path",
+          "title": "Native HITL approval pause before worker/write.",
+          "whenToUse": "read-only worker execution needs explicit human approval",
+          "whyUse": "native LangGraph interrupt + resume on approval token",
+          "shortDescription": "Native HITL approval pause before worker/write.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#graph_path:approval_interrupt_resume",
+          "score": 10
+        },
+        {
+          "portfolioId": "graph_path:evidence_to_sourced_answer",
+          "kind": "graph_path",
+          "title": "Cited answer once trusted source pointers exist.",
+          "whenToUse": "trusted source pointers exist and can be cited",
+          "whyUse": "evidence -> case shadow -> cited compose",
+          "shortDescription": "Cited answer once trusted source pointers exist.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#graph_path:evidence_to_sourced_answer",
+          "score": 10
+        },
+        {
+          "portfolioId": "graph_path:input_policy_to_llm_planner",
+          "kind": "graph_path",
+          "title": "Safety-gated LLM planner entry path.",
+          "whenToUse": "entry path for any chat after safety gates pass",
+          "whyUse": "the deterministic-rails -> LLM planner spine",
+          "shortDescription": "Safety-gated LLM planner entry path.",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#graph_path:input_policy_to_llm_planner",
+          "score": 10
+        }
+      ]
+    },
+    "offerableProcesses": [
+      {
+        "id": "process:portal_readonly_lookup",
+        "title": "Read-only insurer portal lookup",
+        "whenToUse": "a payer-portal data request when a portal account exists but no fresh evidence is cached",
+        "whyUse": "the default spine to obtain plan-specific data without the agent ever entering credentials",
+        "approvalScope": "read_only_observation"
+      }
+    ],
+    "llmOutputIndex": {
+      "cacheBackend": "redis",
+      "cacheKey": "brainsty:llm-output-index:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "status": "miss",
+      "latestOutputId": null,
+      "entries": []
+    },
+    "runtimeVectorContext": {
+      "cacheBackend": "redis",
+      "cacheKey": "brainsty:runtime-vector-index:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "method": "deterministic_lexical_term_vector",
+      "embeddingProvider": "none_local_fallback",
+      "queryHash": "538d191892211fbe",
+      "topMatches": [
+        {
+          "docId": "portfolio:workflow:eligibility_benefits_navigation",
+          "kind": "capability_portfolio",
+          "pointer": "brainsty:capability-portfolio:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation",
+          "label": "Eligibility and benefits navigation",
+          "sourceId": "workflow:eligibility_benefits_navigation",
+          "textHash": "029f71bb96ace627",
+          "score": 0.1029
+        },
+        {
+          "docId": "portfolio:graph:approval_interrupt_resume",
+          "kind": "capability_portfolio",
+          "pointer": "brainsty:capability-portfolio:session_aa08f90d-cc16-49bf-89f9-64c397745657#graph:approval_interrupt_resume",
+          "label": "Native human-in-the-loop approval resume",
+          "sourceId": "graph:approval_interrupt_resume",
+          "textHash": "d13b5502a950e8c3",
+          "score": 0.0467
+        },
+        {
+          "docId": "portfolio:skill:insurance_portal_browser",
+          "kind": "capability_portfolio",
+          "pointer": "brainsty:capability-portfolio:session_aa08f90d-cc16-49bf-89f9-64c397745657#skill:insurance_portal_browser",
+          "label": "Insurance portal browser",
+          "sourceId": "skill:insurance_portal_browser",
+          "textHash": "aeb0567a6648545b",
+          "score": 0.0393
+        }
+      ]
+    },
+    "checkpointResumePlan": {
+      "requested": false,
+      "available": false,
+      "strategy": "start_without_prior_checkpoint",
+      "cacheKey": "brainsty:runtime-context:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "resumeCheckpointId": null,
+      "latestCompletedStep": null,
+      "priorWorkflow": null,
+      "priorRouteReason": null,
+      "priorEvidenceObservationStatus": null,
+      "priorSourcePointerCount": 0,
+      "priorLlmOutputPointers": [],
+      "safeToResumeWithoutReplayingPriorSteps": false
+    },
+    "openclawCapabilityPolicy": {
+      "workerMayChooseWorkflow": false,
+      "workerMayCreateSubtasks": true,
+      "workerMayRunTaskScopedSubagents": true,
+      "workerMayChooseToolPathWithinAssignedTask": true,
+      "workerMustReportEverySeconds": 30,
+      "workerMayEnterCredentials": false,
+      "workerMaySubmitForms": false,
+      "workerMayContactPayer": false
+    },
+    "expectedJsonShape": {
+      "workflow": "one of the allowed workflow keys",
+      "intent": "short snake_case intent",
+      "confidence": "number from 0 to 1",
+      "rationale": "short reason based on user message, memory, and available evidence",
+      "requiredEvidence": [
+        "evidence names"
+      ],
+      "missingEvidence": [
+        "missing evidence names"
+      ],
+      "approvalRequired": "boolean",
+      "approvalScope": "read_only_observation or specific action scope",
+      "workerGoal": "specific OpenClaw task goal inside the selected workflow",
+      "responseStrategy": "one of: answer_from_evidence | offer_process_and_ask | honest_capability_decline | degraded_best_effort",
+      "userFacingNextQuestion": "REQUIRED non-empty question when clarificationNeeded is true; otherwise empty string",
+      "capabilityAssessment": {
+        "canAnswerNow": "boolean: can you answer from existing evidence now?",
+        "reason": "short reason",
+        "limitations": [
+          "what you cannot do"
+        ]
+      },
+      "userDataSufficiency": "one of: sufficient | insufficient | none",
+      "missingPlanDetails": [
+        "specific user/plan details you still need, e.g. which_payer_portal, member_id"
+      ],
+      "clarificationNeeded": "boolean: do you need to ask the user something before proceeding?",
+      "offeredProcessIds": [
+        "process ids chosen from offerableProcesses to OFFER the user"
+      ],
+      "recommendedProcessId": "the single best process id from offerableProcesses, or empty",
+      "answerComposerMode": "one of: evidence_sourced | capability_meta | degraded",
+      "selectedCapabilityPortfolioIds": [
+        "portfolio IDs from capabilityPortfolio.promptTable"
+      ],
+      "selectedCapabilityPointers": [
+        "cache pointers from capabilityPortfolio.promptTable"
+      ],
+      "priorLlmOutputPointersUsed": [
+        "LLM output index pointers consulted, if any"
+      ]
+    }
+  },
+  "plannerDecisionOutput": {
+    "contractVersion": "2026-05-28.llm-orchestration-decision.v1",
+    "mode": "openai_chatopenai_invoked",
+    "provider": "openai",
+    "model": "gpt-4.1",
+    "valid": true,
+    "usedByRouter": true,
+    "workflow": "eligibility_benefits_navigation",
+    "confidence": 0.97,
+    "intent": "current_out_of_pocket_lookup",
+    "rationale": "User is asking about their current out-of-pocket amount, which always requires authenticated portal evidence because it is a live, member-specific figure not available from general research or policy sources.",
+    "requiredEvidence": [
+      "portal_account",
+      "eligibility_snapshot_or_authenticated_portal_page"
+    ],
+    "missingEvidence": [
+      "eligibility_snapshot_or_authenticated_portal_page"
+    ],
+    "approvalRequired": true,
+    "approvalScope": "read_only_observation",
+    "workerGoal": "Observe the authenticated member portal in read-only mode to retrieve the current out-of-pocket amount.",
+    "responseStrategy": "offer_process_and_ask",
+    "userFacingNextQuestion": "To see your current out-of-pocket amount, can you log in to your insurer’s portal and approve a read-only observation? I’ll guide you through the secure read-only lookup.",
+    "capabilityAssessment": {
+      "canAnswerNow": false,
+      "reason": "Live out-of-pocket balances are never available from research or policy documentation; they require a current authenticated portal lookup.",
+      "limitations": [
+        "Cannot state your current out-of-pocket balance without authenticated portal evidence.",
+        "General coverage, deductible, or OOP maximums can be explained if requested, but will not reflect your real-time status."
+      ]
+    },
+    "userDataSufficiency": "insufficient",
+    "missingPlanDetails": [
+      "which_payer_portal",
+      "portal login readiness"
+    ],
+    "clarificationNeeded": true,
+    "offeredProcessIds": [
+      "process:portal_readonly_lookup"
+    ],
+    "recommendedProcessId": "process:portal_readonly_lookup",
+    "answerComposerMode": "capability_meta",
+    "selectedCapabilityPortfolioIds": [
+      "workflow:eligibility_benefits_navigation",
+      "process:portal_readonly_lookup"
+    ],
+    "selectedCapabilityPointers": [
+      "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation",
+      "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#process:portal_readonly_lookup"
+    ],
+    "priorLlmOutputPointersUsed": [],
+    "issues": [],
+    "warnings": [],
+    "rawDecision": {
+      "workflow": "eligibility_benefits_navigation",
+      "intent": "current_out_of_pocket_lookup",
+      "confidence": 0.97,
+      "rationale": "User is asking about their current out-of-pocket amount, which always requires authenticated portal evidence because it is a live, member-specific figure not available from general research or policy sources.",
+      "requiredEvidence": [
+        "portal_account",
+        "eligibility_snapshot_or_authenticated_portal_page"
+      ],
+      "missingEvidence": [
+        "eligibility_snapshot_or_authenticated_portal_page"
+      ],
+      "approvalRequired": true,
+      "approvalScope": "read_only_observation",
+      "workerGoal": "Observe the authenticated member portal in read-only mode to retrieve the current out-of-pocket amount.",
+      "responseStrategy": "offer_process_and_ask",
+      "userFacingNextQuestion": "To see your current out-of-pocket amount, can you log in to your insurer’s portal and approve a read-only observation? I’ll guide you through the secure read-only lookup.",
+      "capabilityAssessment": {
+        "canAnswerNow": false,
+        "reason": "Live out-of-pocket balances are never available from research or policy documentation; they require a current authenticated portal lookup.",
+        "limitations": [
+          "Cannot state your current out-of-pocket balance without authenticated portal evidence.",
+          "General coverage, deductible, or OOP maximums can be explained if requested, but will not reflect your real-time status."
+        ]
+      },
+      "userDataSufficiency": "insufficient",
+      "missingPlanDetails": [
+        "which_payer_portal",
+        "portal login readiness"
+      ],
+      "clarificationNeeded": true,
+      "offeredProcessIds": [
+        "process:portal_readonly_lookup"
+      ],
+      "recommendedProcessId": "process:portal_readonly_lookup",
+      "answerComposerMode": "capability_meta",
+      "selectedCapabilityPortfolioIds": [
+        "workflow:eligibility_benefits_navigation",
+        "process:portal_readonly_lookup"
+      ],
+      "selectedCapabilityPointers": [
+        "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation",
+        "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#process:portal_readonly_lookup"
+      ],
+      "priorLlmOutputPointersUsed": []
+    },
+    "baseURL": "https://api.openai.com/v1",
+    "modelTier": {
+      "policyVersion": "2026-06-21.phase53-model-tier-policy.v1",
+      "step": "llm_orchestration_decision",
+      "tier": "planner",
+      "model": "gpt-4.1",
+      "baseURL": "https://api.openai.com/v1"
+    },
+    "llmOutputIndex": {
+      "ok": true,
+      "cacheBackend": "redis",
+      "key": "brainsty:llm-output-index:session_aa08f90d-cc16-49bf-89f9-64c397745657",
+      "outputId": "llmout_34c46417db2c0af92a26",
+      "pointer": "brainsty:llm-output-index:session_aa08f90d-cc16-49bf-89f9-64c397745657#llmout_34c46417db2c0af92a26",
+      "outputHash": "7e24ec5af84eaded6021449d15e3e3a307370241b17e27b561511590cf046e7c",
+      "rawOutputStored": false
+    },
+    "hydratedCapabilities": {
+      "cacheBackend": "db_catalog",
+      "requested": 4,
+      "resolvedCount": 2,
+      "cacheHit": true,
+      "missing": [
+        "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#process:portal_readonly_lookup",
+        "process:portal_readonly_lookup"
+      ],
+      "resolved": [
+        {
+          "portfolioId": "workflow:eligibility_benefits_navigation",
+          "kind": "workflow",
+          "title": "Eligibility and benefits navigation",
+          "pointer": "brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation",
+          "hydrate": {
+            "capabilityKey": "workflow:eligibility_benefits_navigation",
+            "kind": "workflow",
+            "title": "Eligibility and benefits navigation",
+            "workflowKey": "eligibility_benefits_navigation",
+            "skillKey": null,
+            "toolKey": null,
+            "graphSubpath": null,
+            "howConfig": {},
+            "approvalScope": null,
+            "riskLevel": null
+          }
+        },
+        {
+          "portfolioId": "workflow:eligibility_benefits_navigation",
+          "kind": "workflow",
+          "title": "Eligibility and benefits navigation",
+          "pointer": "workflow:eligibility_benefits_navigation",
+          "hydrate": {
+            "capabilityKey": "workflow:eligibility_benefits_navigation",
+            "kind": "workflow",
+            "title": "Eligibility and benefits navigation",
+            "workflowKey": "eligibility_benefits_navigation",
+            "skillKey": null,
+            "toolKey": null,
+            "graphSubpath": null,
+            "howConfig": {},
+            "approvalScope": null,
+            "riskLevel": null
+          }
+        }
+      ]
+    },
+    "confidenceBand": "high",
+    "response": "{\n  \"workflow\": \"eligibility_benefits_navigation\",\n  \"intent\": \"current_out_of_pocket_lookup\",\n  \"confidence\": 0.97,\n  \"rationale\": \"User is asking about their current out-of-pocket amount, which always requires authenticated portal evidence because it is a live, member-specific figure not available from general research or policy sources.\",\n  \"requiredEvidence\": [\n    \"portal_account\",\n    \"eligibility_snapshot_or_authenticated_portal_page\"\n  ],\n  \"missingEvidence\": [\n    \"eligibility_snapshot_or_authenticated_portal_page\"\n  ],\n  \"approvalRequired\": true,\n  \"approvalScope\": \"read_only_observation\",\n  \"workerGoal\": \"Observe the authenticated member portal in read-only mode to retrieve the current out-of-pocket amount.\",\n  \"responseStrategy\": \"offer_process_and_ask\",\n  \"userFacingNextQuestion\": \"To see your current out-of-pocket amount, can you log in to your insurer’s portal and approve a read-only observation? I’ll guide you through the secure read-only lookup.\",\n  \"capabilityAssessment\": {\n    \"canAnswerNow\": false,\n    \"reason\": \"Live out-of-pocket balances are never available from research or policy documentation; they require a current authenticated portal lookup.\",\n    \"limitations\": [\n      \"Cannot state your current out-of-pocket balance without authenticated portal evidence.\",\n      \"General coverage, deductible, or OOP maximums can be explained if requested, but will not reflect your real-time status.\"\n    ]\n  },\n  \"userDataSufficiency\": \"insufficient\",\n  \"missingPlanDetails\": [\n    \"which_payer_portal\",\n    \"portal login readiness\"\n  ],\n  \"clarificationNeeded\": true,\n  \"offeredProcessIds\": [\"process:portal_readonly_lookup\"],\n  \"recommendedProcessId\": \"process:portal_readonly_lookup\",\n  \"answerComposerMode\": \"capability_meta\",\n  \"selectedCapabilityPortfolioIds\": [\n    \"workflow:eligibility_benefits_navigation\",\n    \"process:portal_readonly_lookup\"\n  ],\n  \"selectedCapabilityPointers\": [\n    \"brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#workflow:eligibility_benefits_navigation\",\n    \"brainsty:capability-catalog:session_aa08f90d-cc16-49bf-89f9-64c397745657#process:portal_readonly_lookup\"\n  ],\n  \"priorLlmOutputPointersUsed\": []\n}",
+    "outboundPayloadObservation": {
+      "eventType": "outbound_payload_observed",
+      "payloadHash": "18e20ecec3b4252454e7e2427e5935c6e0928b6ebe8f6ef7c60f87341092a856",
+      "containsPortalText": false,
+      "containsDirectIdentifier": false,
+      "containsSourcePointers": true,
+      "enforcementMode": "enforced"
+    }
+  }
+}
