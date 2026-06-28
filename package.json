@@ -107,7 +107,9 @@
     "test:pg:migrate": "node --test src/tests/gate-pg-migration.test.mjs",
     "test:gate:redis-targets": "node --test src/tests/gate-redis-targets.test.mjs",
     "test:gate:llm-index": "node --test src/tests/gate-llm-output-index.test.mjs",
-    "test:gate:graphiti": "node --test src/tests/gate-graphiti-memory.test.mjs"
+    "test:gate:graphiti": "node --test src/tests/gate-graphiti-memory.test.mjs",
+    "dev:test": "PORT=4226 HOST=127.0.0.1 BRAINSTY_TYPE_II_COMPOSER=1 BRAINSTY_FRESH_SESSION_PER_LOAD=1 BRAINSTY_TRACE_FULL_PROMPTS=1 node src/server/server.mjs",
+    "dev:test:full": "BRAINSTY_REQUIRE_REDIS=1 BRAINSTY_OPENCLAW_VERIFY_LLM=1 PORT=4226 HOST=127.0.0.1 BRAINSTY_TYPE_II_COMPOSER=1 BRAINSTY_FRESH_SESSION_PER_LOAD=1 BRAINSTY_TRACE_FULL_PROMPTS=1 node src/server/server.mjs"
   },
   "engines": {
     "node": ">=25"
