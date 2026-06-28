@@ -214,6 +214,37 @@ class RedisRuntimeCache {
   }
 }
 
+// Process-global cache hit/miss metrics. Real Redis design requires an observable
+// hit/miss signal — these counters are surfaced at /api/health and proven in tests.
+const runtimeCacheMetrics = { hits: 0, misses: 0, sets: 0, deletes: 0, errors: 0, lastBackend: null };
+export function getRuntimeCacheMetrics() {
+  const total = runtimeCacheMetrics.hits + runtimeCacheMetrics.misses;
+  return { ...runtimeCacheMetrics, total, hitRate: total ? Number((runtimeCacheMetrics.hits / total).toFixed(4)) : null };
+}
+export function resetRuntimeCacheMetrics() {
+  Object.assign(runtimeCacheMetrics, { hits: 0, misses: 0, sets: 0, deletes: 0, errors: 0 });
+}
+
+// Wrap an adapter so every get records a hit/miss and errors are counted (not hidden).
+function instrument(adapter, backend) {
+  runtimeCacheMetrics.lastBackend = backend;
+  return {
+    backend,
+    async get(key) {
+      try {
+        const value = await adapter.get(key);
+        if (value === null || value === undefined) runtimeCacheMetrics.misses += 1;
+        else runtimeCacheMetrics.hits += 1;
+        return value;
+      } catch (error) { runtimeCacheMetrics.errors += 1; throw error; }
+    },
+    async set(key, value, options) { runtimeCacheMetrics.sets += 1; return adapter.set(key, value, options); },
+    async setNX(key, value, options) { return adapter.setNX(key, value, options); },
+    async del(key) { runtimeCacheMetrics.deletes += 1; return adapter.del(key); },
+    ping() { return adapter.ping(); }
+  };
+}
+
 export function createRuntimeContextCache({ env = process.env } = {}) {
   const url = env.BRAINSTY_REDIS_URL || env.REDIS_URL || "";
   if (url) {
@@ -221,15 +252,66 @@ export function createRuntimeContextCache({ env = process.env } = {}) {
       version: RUNTIME_CONTEXT_CACHE_VERSION,
       backend: "redis",
       urlHash: sha(url).slice(0, 16),
-      adapter: new RedisRuntimeCache(url)
+      adapter: instrument(new RedisRuntimeCache(url), "redis")
     };
   }
   return {
     version: RUNTIME_CONTEXT_CACHE_VERSION,
     backend: "memory",
     urlHash: null,
-    adapter: new MemoryRuntimeCache()
+    adapter: instrument(new MemoryRuntimeCache(), "memory")
   };
+}
+
+// Whether a real Redis is mandatory in this environment (production, or explicit opt-in).
+export function redisRequired(env = process.env) {
+  if (String(env.BRAINSTY_REQUIRE_REDIS ?? "") === "1") return true;
+  if (String(env.BRAINSTY_REQUIRE_REDIS ?? "") === "0") return false;
+  const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").toLowerCase();
+  return ["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
+}
+
+// Boot-time Redis runtime: verify startup connectivity (PING), prove a real write->read
+// round-trip, and FAIL LOUD when Redis is required but unavailable or scored as memory.
+// Returns a readiness object; never silently scores a process-local Map as Redis-backed.
+export async function initializeRuntimeCache({ env = process.env } = {}) {
+  const required = redisRequired(env);
+  const cache = createRuntimeContextCache({ env });
+  const ping = await cache.adapter.ping().catch((error) => ({ healthy: false, error: error.message }));
+  const productionReady = cache.backend === "redis" && ping.healthy === true;
+
+  let writeReadProbe = { ok: false };
+  if (cache.backend === "redis" && ping.healthy) {
+    const probeKey = `brainsty:runtime:boot-probe:${sha(String(Date.now() + Math.random())).slice(0, 10)}`;
+    const token = sha(String(env.BRAINSTY_REDIS_URL ?? "") + probeKey).slice(0, 24);
+    try {
+      await cache.adapter.set(probeKey, { token, at: new Date().toISOString() }, { ttlSeconds: 60 });
+      const readBack = await cache.adapter.get(probeKey);
+      await cache.adapter.del(probeKey);
+      writeReadProbe = { ok: readBack?.token === token, key: probeKey, wrote: token, readBack: readBack?.token ?? null };
+    } catch (error) {
+      writeReadProbe = { ok: false, error: error.message };
+    }
+  }
+
+  const readiness = {
+    version: RUNTIME_CONTEXT_CACHE_VERSION,
+    backend: cache.backend,
+    required,
+    urlHash: cache.urlHash,
+    ping,
+    productionReady,
+    writeReadProbe,
+    metrics: getRuntimeCacheMetrics()
+  };
+
+  if (required && (!productionReady || !writeReadProbe.ok)) {
+    const reason = cache.backend !== "redis" ? "no_redis_url_configured" : !ping.healthy ? "redis_ping_failed" : "redis_write_read_probe_failed";
+    const error = new Error(`[runtime] Redis is required but not live (${reason}). Set BRAINSTY_REDIS_URL to a reachable Redis. Readiness: ${JSON.stringify(readiness)}`);
+    error.readiness = readiness;
+    throw error;
+  }
+  return readiness;
 }
 
 export function runtimeContextKey(sessionId) {

@@ -73,7 +73,7 @@ import {
   runOperatorAssistant
 } from "../concierge/operatorAssistant.mjs";
 import { authenticatePlannedUser, runOrchestratorChat, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
-import { createRuntimeContextCache } from "../concierge/runtimeContextCache.mjs";
+import { createRuntimeContextCache, getRuntimeCacheMetrics } from "../concierge/runtimeContextCache.mjs";
 import { classifyBrowserRemoteReadiness } from "../concierge/browserRemoteReadiness.mjs";
 import {
   getProductMemoryConfig,
@@ -203,6 +203,13 @@ const MIME = {
   ".woff2": "font/woff2",
   ".map": "application/json; charset=utf-8"
 };
+
+// Redis runtime: verify startup connectivity + a real write->read probe, and FAIL LOUD
+// when Redis is required (production / BRAINSTY_REQUIRE_REDIS=1) but not live. Never
+// silently scores a process-local Map as Redis-backed.
+const { initializeRuntimeCache } = await import("../concierge/runtimeContextCache.mjs");
+const redisRuntimeReadiness = await initializeRuntimeCache({ env: process.env });
+console.log(`[runtime] redis backend=${redisRuntimeReadiness.backend} required=${redisRuntimeReadiness.required} productionReady=${redisRuntimeReadiness.productionReady} writeRead=${redisRuntimeReadiness.writeReadProbe.ok} pingMs=${redisRuntimeReadiness.ping?.pingMs ?? "n/a"}`);
 
 const store = await createDatabaseStore(process.env).initialize();
 // Seed the capability/process catalog (idempotent) so the Type-II process-offer
@@ -3113,7 +3120,15 @@ async function handleApi(req, res, url) {
         model: getOpenAiConfig().model
       },
       productMemory: await safeProductMemoryStatus(),
-      storage: getStorageReadiness({ deployment: await safeDeploymentContractStatus() })
+      storage: getStorageReadiness({ deployment: await safeDeploymentContractStatus() }),
+      redisRuntime: {
+        backend: redisRuntimeReadiness.backend,
+        required: redisRuntimeReadiness.required,
+        productionReady: redisRuntimeReadiness.productionReady,
+        pingMs: redisRuntimeReadiness.ping?.pingMs ?? null,
+        writeReadProbe: redisRuntimeReadiness.writeReadProbe?.ok ?? false,
+        cacheMetrics: getRuntimeCacheMetrics()
+      }
     });
     return;
   }
