@@ -32,6 +32,7 @@ import { persistPortalPageScan } from "./portalScan.mjs";
 import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./runtimeAdapters.mjs";
 import { checkpointSession, getManagedSessionState } from "./sessionManager.mjs";
 import { runLedgerMode, writeShadowCheckpointLedger } from "./checkpointRunLedger.mjs";
+import { composeProcessOfferResponse } from "./plannerResponseComposer.mjs";
 import {
   buildRuntimeContextManifest,
   createRuntimeContextCache,
@@ -2933,6 +2934,35 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
+  // Type-II Phase A (gated): with no stored evidence, reason as a PROCESS — offer the
+  // most relevant catalog process instead of a flat template. Templates remain the
+  // fallback (composer invalid/failed). Fires only when source_pointers is empty.
+  if (
+    process.env.BRAINSTY_TYPE_II_COMPOSER === "1" &&
+    sourcePointers.length === 0 &&
+    state.raw_message?.useLiveModel !== false &&
+    state.llm_orchestration_decision
+  ) {
+    const offer = await withCheckpoint(
+      "final.response",
+      { kind: "final.response", metadata: { trace_id: state.graph_trace_id, session_id: state.session_id, mode: "type_ii_process_offer" } },
+      async () => composeProcessOfferResponse({ store: activeStores.get(state.session_id), state, sessionId: state.session_id })
+    );
+    if (offer.valid) {
+      return {
+        final_response: offer.finalResponse,
+        workflow_outcome: "capability_reasoned_offer",
+        memory_type: "capability_offer_event",
+        should_remember: false,
+        proof: appendProof(state, "response_policy", {
+          typeIIComposer: true,
+          mode: offer.mode,
+          offeredProcessCount: offer.offeredProcessIds?.length ?? 0,
+          offeredProcessIds: offer.offeredProcessIds ?? []
+        })
+      };
+    }
+  }
   if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
     const degraded = await composeBestEffortAnswer(state, {
       reason: state.evidence_observation.reason ?? "authenticated_portal_evidence_unavailable",

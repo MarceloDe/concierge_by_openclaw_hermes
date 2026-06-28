@@ -205,6 +205,15 @@ const MIME = {
 };
 
 const store = await createDatabaseStore(process.env).initialize();
+// Seed the capability/process catalog (idempotent) so the Type-II process-offer
+// composer has offerable processes to reason over.
+try {
+  const { seedCapabilityCatalog } = await import("../concierge/capabilityCatalogSeed.mjs");
+  const { nowIso, createId } = await import("../concierge/database.mjs");
+  await seedCapabilityCatalog(store, { nowIso, createId });
+} catch (error) {
+  console.log(`[runtime] capability catalog seed skipped: ${error?.message ?? "unknown"}`);
+}
 const researchSchedulerDaemon = createResearchSchedulerDaemon(store);
 const retentionSweepDaemon = createRetentionSweepDaemon(store);
 await researchSchedulerDaemon.start();
