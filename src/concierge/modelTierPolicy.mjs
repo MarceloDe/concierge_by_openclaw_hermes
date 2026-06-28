@@ -59,6 +59,17 @@ function modelHardTimeoutMs() {
   return Number.isFinite(value) && value > 0 ? value : 45000;
 }
 
+// Full-prompt trace capture: ON by default for ALL dev runs (so it's never forgotten),
+// OFF in production unless explicitly enabled. Force with BRAINSTY_TRACE_FULL_PROMPTS=1,
+// disable with =0.
+export function traceFullPromptsEnabled(env = process.env) {
+  const flag = String(env.BRAINSTY_TRACE_FULL_PROMPTS ?? "");
+  if (flag === "1") return true;
+  if (flag === "0") return false;
+  const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").toLowerCase();
+  return !["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
+}
+
 // Bound every model call so a stalled provider/reasoning call fails loud and
 // classified (LLM_TIMEOUT) instead of hanging the orchestration. Aborts the
 // request via AbortSignal and races a hard rejection as a backstop.
@@ -111,7 +122,7 @@ function wrapModelWithObservability(llm, { step, selection, context }) {
               // Debug trace mode: capture the FULL prompt (identifier-redacted by the
               // checkpoint layer, not truncated) so every LLM call's exact input is
               // inspectable in Langfuse. Off by default (lean + PHI-safe in prod).
-              ...(process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+              ...(traceFullPromptsEnabled()
                 ? { full_prompt: (Array.isArray(input) ? input : [input]).map((m) => ({ role: m?.role ?? m?._getType?.() ?? "message", content: typeof m?.content === "string" ? m.content : JSON.stringify(m?.content ?? m) })) }
                 : {})
             }

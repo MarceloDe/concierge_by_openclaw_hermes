@@ -61,7 +61,7 @@ import {
   buildDeterministicStructuredReasoning,
   invokeLiveStructuredIntentReasoner
 } from "./intelligence/structuredIntentReasoner.mjs";
-import { createTieredChatModel, selectModelForStep } from "./modelTierPolicy.mjs";
+import { createTieredChatModel, selectModelForStep, traceFullPromptsEnabled } from "./modelTierPolicy.mjs";
 import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
 import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
@@ -1043,7 +1043,7 @@ async function llmOrchestrationDecisionNode(state) {
     },
     // Debug trace mode: capture the FULL hydrated planner prompt (system + the payload
     // with capability portfolio text, pointers, runtime context) as the span input.
-    process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+    traceFullPromptsEnabled()
       ? { promptMessageCount: messages.length, full_prompt: messages.map((m) => ({ role: m.role, content: m.content })) }
       : { promptMessageCount: messages.length }
   );
@@ -1065,7 +1065,7 @@ async function llmOrchestrationDecisionNode(state) {
     plannerCheckpoint.end_checkpoint(
       // Debug trace mode: capture the FULL normalized decision (every contract field +
       // selected pointers) as the span output; summary-only when off.
-      process.env.BRAINSTY_TRACE_FULL_PROMPTS === "1"
+      traceFullPromptsEnabled()
         ? { decision }
         : { workflow: decision.workflow, confidence: decision.confidence, valid: decision.valid },
       { checkpoint_name: "planner.output", output_summary: { workflow: decision.workflow, confidence: decision.confidence, selectedPointerCount: (decision.selectedCapabilityPointers ?? []).length } }
