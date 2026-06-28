@@ -104,7 +104,8 @@
     "test:gate:portfolio": "node --test src/tests/gate-capability-portfolio.test.mjs",
     "test:gate:memory": "node --test src/tests/gate-memory-learning.test.mjs",
     "test:gate:langfuse": "node --test src/tests/gate-langfuse.test.mjs",
-    "test:pg:migrate": "node --test src/tests/gate-pg-migration.test.mjs"
+    "test:pg:migrate": "node --test src/tests/gate-pg-migration.test.mjs",
+    "test:gate:redis-targets": "node --test src/tests/gate-redis-targets.test.mjs"
   },
   "engines": {
     "node": ">=25"
