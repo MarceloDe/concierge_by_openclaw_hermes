@@ -131,6 +131,7 @@ const BrainstyState = Annotation.Root({
   llm_orchestration_decision: field(null),
   hydrated_capabilities: field(null),
   worker_runtime_state: field(null),
+  capability_offer: field(null),
   dynamic_skill_context: field(null),
   memory_skill_tree: field(null),
   workflow: field(null),
@@ -2998,11 +2999,23 @@ async function composeResponseNode(state) {
       async () => composeProcessOfferResponse({ store: activeStores.get(state.session_id), state, sessionId: state.session_id })
     );
     if (offer.valid) {
+      // Build the AI2UI accept affordance from the offered processes' catalog HOW.
+      const offeredProcesses = [];
+      try {
+        const { hydrateProcess } = await import("./capabilityCatalog.mjs");
+        for (const pid of offer.offeredProcessIds ?? []) {
+          const h = await hydrateProcess(activeStores.get(state.session_id), pid);
+          if (h.ok) offeredProcesses.push({ processId: pid, title: h.process.title, approvalScope: h.approvalScope, requiredUserInputs: h.requiredUserInputs, workerSkillKey: h.workerSkillKey });
+        }
+      } catch {
+        /* offer still returned even if metadata enrichment fails */
+      }
       return {
         final_response: offer.finalResponse,
         workflow_outcome: "capability_reasoned_offer",
         memory_type: "capability_offer_event",
         should_remember: false,
+        capability_offer: { offeredProcessIds: offer.offeredProcessIds ?? [], recommendedProcessId: state.llm_orchestration_decision?.recommendedProcessId ?? null, processes: offeredProcesses },
         proof: appendProof(state, "response_policy", {
           typeIIComposer: true,
           mode: offer.mode,

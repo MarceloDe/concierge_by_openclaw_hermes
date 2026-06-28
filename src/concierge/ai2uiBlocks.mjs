@@ -17,6 +17,7 @@ export const AI2UI_BLOCK_TYPES = Object.freeze({
   HUMAN_HANDOFF: "human_handoff",
   SAFETY_NOTICE: "safety_notice",
   NEXT_STEPS: "next_steps",
+  CAPABILITY_PROCESS_OFFER: "capability_process_offer",
   UNKNOWN: "unknown"
 });
 
@@ -743,6 +744,26 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       },
       renderHints: { priority: "primary" }
     },
+    ...(state.capability_offer?.processes?.length
+      ? [
+          {
+            id: blockId(state, AI2UI_BLOCK_TYPES.CAPABILITY_PROCESS_OFFER, 1),
+            type: AI2UI_BLOCK_TYPES.CAPABILITY_PROCESS_OFFER,
+            title: "Available process",
+            payload: {
+              recommendedProcessId: state.capability_offer.recommendedProcessId ?? null,
+              processes: state.capability_offer.processes.map((p) => ({
+                processId: p.processId,
+                title: p.title,
+                approvalScope: p.approvalScope,
+                requiredUserInputs: p.requiredUserInputs ?? [],
+                acceptAction: { action: "accept_process_offer", processId: p.processId }
+              }))
+            },
+            renderHints: { priority: "secondary", severity: "info" }
+          }
+        ]
+      : []),
     ...(costComparison
       ? [
           {

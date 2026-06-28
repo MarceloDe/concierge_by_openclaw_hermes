@@ -507,3 +507,24 @@ export async function acceptProcessOffer(store, { sessionId, processKey, workflo
     dispatch
   };
 }
+
+// go-live 2/3: execute an accepted process by dispatching the REAL OpenClaw read-only
+// observation (no mock). The live portal capture requires the user's takeover login +
+// a live browser session; without one the observation returns a status. Dispatch is
+// idempotent via acceptProcessOffer (no second portal session).
+export async function executeAcceptedProcess(store, { user, session, processKey, workflowRunId, sessionCheckpointId = null } = {}) {
+  const { runOfficialOpenClawReadOnlyObservation } = await import("./openclawOfficialRuntime.mjs");
+  return acceptProcessOffer(
+    store,
+    { sessionId: session?.id, processKey, workflowRunId, sessionCheckpointId },
+    async () => {
+      const observation = await runOfficialOpenClawReadOnlyObservation({
+        store,
+        user,
+        session,
+        approval: { status: "user_approved_read_only", graphTraceId: session?.langgraph_thread_id ?? null }
+      });
+      return { resultPointer: `openclaw_observation:${processKey}`, observation };
+    }
+  );
+}
