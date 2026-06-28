@@ -430,3 +430,80 @@ export async function feedCapabilityFromPemsEpisode(store, { candidateId, skillR
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Type-II Phase C: accept an offered process -> hydrate its graph subpath + worker
+// skill, validate scope (byte-for-byte vs the safety policy), and dispatch the
+// read-only observation idempotently through the Steps 7-9 ledger/resume machinery.
+// ---------------------------------------------------------------------------
+
+const SAFE_APPROVAL_SCOPES = new Set(["read_only_observation", "read_only", "login_takeover", "local", "none"]);
+
+// Read the authoritative process HOW (steps + worker skill + graph subpath).
+export async function hydrateProcess(store, processKey) {
+  const proc = await store.findOne("processes", { process_key: processKey });
+  if (!proc) return { ok: false, reason: "process_not_found" };
+  if (proc.status !== "active" || proc.lifecycle_state !== "production") return { ok: false, reason: `process_${proc.status}` };
+  const steps = await store.all("SELECT step_key, checkpoint_boundary, capability_id, requires_idempotency_key, step_order FROM process_steps WHERE process_id = ? ORDER BY step_order;", [proc.id]);
+  let workerSkillKey = null;
+  if (proc.worker_skill_capability_id) {
+    const cap = await store.findOne("capabilities", { id: proc.worker_skill_capability_id });
+    workerSkillKey = cap?.skill_key ?? null;
+  }
+  return {
+    ok: true,
+    process: { id: proc.id, processKey, title: proc.title },
+    approvalScope: proc.approval_scope,
+    graphSubpath: proc.graph_subpath_json ? JSON.parse(proc.graph_subpath_json) : [],
+    requiredUserInputs: proc.required_user_inputs_json ? JSON.parse(proc.required_user_inputs_json) : [],
+    workerSkillKey,
+    steps
+  };
+}
+
+const COVERAGE_NUMBER_RE = /\$\s?\d|\b\d+(?:\.\d+)?\s?(?:usd|dollars)\b/i;
+
+// Deterministic guard AFTER the LLM: offered processes must exist + be read-only-safe,
+// no credential-entry step, and any coverage number must be source-pointer-backed.
+export async function validateCapabilityAnswer(store, { offeredProcessIds = [], answer = "", sourcePointers = [] } = {}) {
+  const issues = [];
+  for (const processKey of offeredProcessIds) {
+    const h = await hydrateProcess(store, processKey);
+    if (!h.ok) { issues.push(`offered_process_invalid:${processKey}:${h.reason}`); continue; }
+    if (!SAFE_APPROVAL_SCOPES.has(h.approvalScope)) issues.push(`scope_inflation:${processKey}:${h.approvalScope}`);
+    if (h.steps.some((s) => /credential|password|2fa|passkey|login_submit/i.test(s.step_key))) issues.push(`credential_step_forbidden:${processKey}`);
+  }
+  if (COVERAGE_NUMBER_RE.test(String(answer)) && !(sourcePointers.length > 0)) {
+    issues.push("coverage_number_without_source_pointer");
+  }
+  return { valid: issues.length === 0, issues };
+}
+
+// Accept an offered process: hydrate, enforce safe scope, dispatch the read-only worker
+// once (idempotent -> no second portal session), and record the ledger boundary.
+export async function acceptProcessOffer(store, { sessionId, processKey, workflowRunId, sessionCheckpointId = null }, dispatchFn) {
+  const h = await hydrateProcess(store, processKey);
+  if (!h.ok) return { accepted: false, reason: h.reason };
+  if (!SAFE_APPROVAL_SCOPES.has(h.approvalScope)) return { accepted: false, reason: `scope_inflation:${h.approvalScope}` };
+
+  const { computeDispatchIdempotencyKey, workerPlanSignature, dispatchOnce } = await import("./dispatchIdempotency.mjs");
+  const idempotencyKey = computeDispatchIdempotencyKey({
+    runId: workflowRunId,
+    beforeWorkerCheckpointId: sessionCheckpointId ?? "",
+    workerPlanSignature: workerPlanSignature([processKey, h.workerSkillKey])
+  });
+  const dispatch = await dispatchOnce(
+    store,
+    { workflowRunId, idempotencyKey, sessionCheckpointId },
+    dispatchFn ?? (async () => ({ resultPointer: `observe:${processKey}` }))
+  );
+  return {
+    accepted: true,
+    processKey,
+    approvalScope: h.approvalScope,
+    workerSkillKey: h.workerSkillKey,
+    graphSubpath: h.graphSubpath,
+    requiredUserInputs: h.requiredUserInputs,
+    dispatch
+  };
+}
