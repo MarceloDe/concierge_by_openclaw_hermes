@@ -1016,9 +1016,29 @@ async function llmOrchestrationDecisionNode(state) {
   } catch {
     offerableProcesses = [];
   }
+  // Recent conversation turns so the planner does NOT re-offer / re-ask, and can ADVANCE
+  // when the user accepts a prior offer. Excludes the current user message (just persisted).
+  let conversationHistory = [];
+  try {
+    const rows = await store.all(
+      "SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 8;",
+      [state.session_id]
+    );
+    conversationHistory = rows
+      .reverse()
+      .map((r) => ({ role: r.role, content: String(r.content ?? "").slice(0, 500) }));
+    // drop the trailing current-turn user message (already in userInput)
+    const last = conversationHistory[conversationHistory.length - 1];
+    if (last && last.role === "user" && last.content === String(state.user_input ?? "").slice(0, 500)) {
+      conversationHistory.pop();
+    }
+    conversationHistory = conversationHistory.slice(-6);
+  } catch {
+    conversationHistory = [];
+  }
   const plannerState = dbCatalogPortfolio
-    ? { ...state, offerable_processes: offerableProcesses, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
-    : { ...state, offerable_processes: offerableProcesses };
+    ? { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
+    : { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory };
   const messages = buildLlmOrchestrationDecisionMessages(plannerState);
   const payloadObservation = store
     ? await recordOutboundPayloadObservation(store, {

@@ -133,6 +133,7 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     purpose:
       "Choose the healthcare insurance workflow and worker strategy for LangGraph. Deterministic safety gates already ran first.",
     userInput: maskDirectIdentifiers(state.user_input, state),
+    conversationHistory: (state.conversation_history ?? []).slice(-6),
     deterministicPolicy: {
       allowed: state.policy_result?.allowed ?? null,
       approvalRequired: state.policy_result?.approvalRequired ?? null,
@@ -262,7 +263,9 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "If source pointers are absent, say what evidence is missing.",
         "Reason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).",
         "A member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence; they require authenticated portal evidence. For ANY such current-balance/amount question, set canAnswerNow=false and responseStrategy='offer_process_and_ask' (offer the portal-lookup process) EVEN IF research or policy evidence is present. Research/policy evidence supports only general coverage explanations, never a live balance.",
-        "If you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'."
+        "If you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'.",
+        "Use conversationHistory (recent prior turns). NEVER re-ask for information the user already gave (payer name, the data they want) and NEVER repeat an offer you already made. If you ALREADY offered the portal-lookup process in a prior turn AND the user's latest message accepts/confirms/proceeds (e.g. 'ready', 'yes', 'ok', 'let's go', names the payer, names the data), DO NOT re-explain the offer — keep responseStrategy='offer_process_and_ask' with the offeredProcessIds set, set clarificationNeeded=false, and set userFacingNextQuestion to a SINGLE short instruction to use the live portal action (the UI shows a 'Connect portal (live)' button).",
+        "BREVITY: keep userFacingNextQuestion and rationale short and direct — at most one or two short sentences. No preamble, no repeating caveats already stated earlier in the conversation."
       ].join("\n")
     },
     {

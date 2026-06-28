@@ -22,6 +22,19 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
   const decision = state.llm_orchestration_decision ?? {};
   const hydrated = (state.hydrated_capabilities?.resolved ?? []).map((r) => ({ id: r.portfolioId, kind: r.kind, title: r.title }));
 
+  // Recent turns so we don't re-offer/re-explain and can advance on acceptance.
+  let conversationHistory = state.conversation_history ?? [];
+  if (!conversationHistory.length) {
+    try {
+      const rows = await store.all("SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 8;", [sessionId]);
+      conversationHistory = rows.reverse().map((r) => ({ role: r.role, content: String(r.content ?? "").slice(0, 400) }));
+      const last = conversationHistory[conversationHistory.length - 1];
+      if (last && last.role === "user" && last.content === String(state.user_input ?? "").slice(0, 400)) conversationHistory.pop();
+      conversationHistory = conversationHistory.slice(-6);
+    } catch { conversationHistory = []; }
+  }
+  const alreadyOfferedPortal = conversationHistory.some((m) => m.role === "assistant" && /portal|read-only|log in|sign in/i.test(m.content));
+
   // Phase B: prefer the processes the planner explicitly offered (recommended first),
   // falling back to all offerable processes if the planner did not select any.
   const offeredIds = new Set([...(decision.offeredProcessIds ?? []), decision.recommendedProcessId].filter(Boolean));
@@ -39,18 +52,19 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
     plannerRecommendedProcessId: decision.recommendedProcessId ?? null,
     plannerOfferedProcessIds: [...offeredIds],
     offerableProcesses: ranked.map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope })),
-    hydratedCapabilities: hydrated
+    hydratedCapabilities: hydrated,
+    conversationHistory,
+    alreadyOfferedPortalEarlier: alreadyOfferedPortal
   };
 
   const messages = [
     {
       role: "system",
       content: [
-        "You are the Brainstyworkers healthcare insurance concierge composing a short user-facing reply.",
-        "REASON AS A PROCESS: there is no stored evidence to answer from yet, so do not refuse flatly and do not invent facts. Pick the single most relevant offerable process and OFFER it.",
-        "Honest scope: you cannot log into the insurer website for the user and never enter credentials, passwords, or 2FA. The USER signs in themselves in a secure browser; then you observe read-only and cite what is on screen.",
-        "Always do three things: (1) answer the user's actual question about what you can and cannot do; (2) OFFER the most relevant process from offerableProcesses — name what it does, that the user logs in, and that it is read-only with their approval; (3) ask the single most useful missing detail (e.g., which payer/plan).",
-        "HARD RULES: never state a coverage amount, dollar figure, deductible/out-of-pocket/copay number, or any plan-specific fact — you have no evidence yet; offer the path to obtain it. Plain text, concise, no markdown headers."
+        "You are the Brainstyworkers healthcare insurance concierge. Reply in AT MOST 2 short sentences — direct, concise, plain text, no markdown, no preamble.",
+        "There is no stored evidence yet, so do not invent facts and never state a coverage amount, dollar figure, or deductible/out-of-pocket/copay number. Offer the path to obtain it instead.",
+        "If alreadyOfferedPortalEarlier is false: in ONE sentence say you can't see it directly but can do a secure read-only portal lookup (the user logs in; you observe with approval), then in a short second sentence ask only for the single missing detail you don't already have from conversationHistory.",
+        "If alreadyOfferedPortalEarlier is true OR the user's latest message accepts/confirms/proceeds (e.g. 'ready', 'yes', 'ok', names the payer/data): DO NOT re-explain the offer. Reply in ONE short sentence telling them to tap the 'Connect portal (live)' button below, log in, and approve the read-only lookup. Never re-ask for information already in conversationHistory (e.g. the payer or the data they want)."
       ].join("\n")
     },
     { role: "user", content: JSON.stringify(payload) }
