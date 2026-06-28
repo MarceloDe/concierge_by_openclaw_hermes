@@ -2950,7 +2950,7 @@ async function composeResponseNode(state) {
   // most relevant catalog process instead of a flat template. Templates remain the
   // fallback (composer invalid/failed). Fires only when source_pointers is empty.
   if (
-    process.env.BRAINSTY_TYPE_II_COMPOSER === "1" &&
+    process.env.BRAINSTY_TYPE_II_COMPOSER !== "0" &&
     sourcePointers.length === 0 &&
     state.raw_message?.useLiveModel !== false &&
     state.llm_orchestration_decision
