@@ -1,4 +1,5 @@
 import { nowIso } from "./database.mjs";
+import { dispatchOnce } from "./dispatchIdempotency.mjs";
 
 // Per-(run, boundary) checkpoint ledger. In SHADOW mode it is write-only (records the
 // boundaries a run reached) and never affects control flow; AUTHORITATIVE mode (Step 9)
@@ -75,4 +76,77 @@ export async function writeShadowCheckpointLedger(store, { user, session, state,
   }
   await store.update("workflow_runs", { last_checkpoint_boundary: reached.at(-1) ?? null, updated_at: nowIso() }, { id: runId });
   return { mode: "shadow", runId, boundaries: reached };
+}
+
+// ---------------------------------------------------------------------------
+// Step 9: authoritative resume. Rerun ONLY unfinished boundaries; skip completed;
+// a since-quarantined selected capability invalidates after_planner (re-plan);
+// re-dispatch is idempotent (no second worker/portal session).
+// ---------------------------------------------------------------------------
+
+async function selectedCapabilitiesInvalid(store, selectedCapabilityKeys = []) {
+  const invalid = [];
+  for (const key of selectedCapabilityKeys) {
+    const cap = await store.findOne("capabilities", { capability_key: key });
+    if (!cap || cap.status !== "active" || cap.lifecycle_state !== "production") invalid.push(key);
+  }
+  return invalid;
+}
+
+export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dispatchFn = null } = {}) {
+  const run = await store.findOne("workflow_runs", { id: runId });
+  if (!run) return { ok: false, reason: "run_not_found" };
+  await store.update("workflow_runs", { status: "resuming", updated_at: nowIso() }, { id: runId });
+
+  const rows = await store.all(
+    "SELECT * FROM workflow_checkpoint_runs WHERE workflow_run_id = ? ORDER BY step_order;",
+    [runId]
+  );
+  const byBoundary = new Map(rows.map((r) => [r.checkpoint_boundary, r]));
+  const isDone = (b) => ["completed", "skipped"].includes(byBoundary.get(b)?.status);
+
+  // Re-plan trigger: a previously-selected capability is now quarantined/non-production.
+  const invalidCaps = await selectedCapabilitiesInvalid(store, selectedCapabilityKeys);
+  const rePlanned = invalidCaps.length > 0;
+  if (rePlanned) {
+    const planner = byBoundary.get("after_planner");
+    if (planner) {
+      await store.update("workflow_checkpoint_runs", { status: "pending", updated_at: nowIso() }, { id: planner.id });
+      planner.status = "pending";
+    }
+  }
+
+  // Resume target R = first boundary not done.
+  const resumeTarget = RUN_LEDGER_BOUNDARIES.find((b) => !isDone(b)) ?? null;
+  if (!resumeTarget) {
+    await store.update("workflow_runs", { status: "completed", updated_at: nowIso() }, { id: runId });
+    return { ok: true, resumeTarget: null, skipped: [...RUN_LEDGER_BOUNDARIES], toReplay: [], rePlanned, invalidCaps, alreadyComplete: true };
+  }
+  const startIdx = RUN_LEDGER_BOUNDARIES.indexOf(resumeTarget);
+  const skipped = RUN_LEDGER_BOUNDARIES.slice(0, startIdx).filter(isDone);
+  const toReplay = RUN_LEDGER_BOUNDARIES.slice(startIdx);
+
+  // Replay downstream only. before_worker re-dispatch is idempotent (no duplicate effect).
+  let dispatch = null;
+  for (const boundary of toReplay) {
+    if (boundary === "before_worker" && dispatchFn) {
+      const existing = byBoundary.get("before_worker");
+      dispatch = await dispatchOnce(
+        store,
+        { workflowRunId: runId, idempotencyKey: existing?.idempotency_key ?? `resume:${runId}:before_worker`, sessionCheckpointId: existing?.session_checkpoint_id ?? null },
+        dispatchFn
+      );
+    } else {
+      const row = byBoundary.get(boundary);
+      if (row) {
+        await store.update("workflow_checkpoint_runs", { status: "completed", effect_stage: "after_effect", updated_at: nowIso() }, { id: row.id });
+      }
+    }
+  }
+  await store.update(
+    "workflow_runs",
+    { status: "completed", resume_count: (run.resume_count ?? 0) + 1, last_checkpoint_boundary: "after_response", updated_at: nowIso() },
+    { id: runId }
+  );
+  return { ok: true, resumeTarget, skipped, toReplay, rePlanned, invalidCaps, dispatch };
 }
