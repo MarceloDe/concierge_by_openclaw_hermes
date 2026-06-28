@@ -1367,3 +1367,70 @@ CREATE TABLE IF NOT EXISTS capability_provenance (
   FOREIGN KEY (process_id) REFERENCES processes(id)
 );
 `;
+
+// Single source of truth for incremental ADD COLUMN migrations applied to BOTH engines
+// (SqliteStore.migrate + PostgresStore.initialize). Each ALTER is dialect-neutral
+// (TEXT/INTEGER, NOT NULL DEFAULT). Keeping one list prevents engine drift — the root
+// cause of the earlier Postgres-missing-column bug. Append new columns here only.
+export const COLUMN_MIGRATIONS = [
+  ["sessions", [
+    ["title", "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT 'Eligibility and benefits session';"],
+    ["current_step", "ALTER TABLE sessions ADD COLUMN current_step TEXT NOT NULL DEFAULT 'created';"],
+    ["last_intent", "ALTER TABLE sessions ADD COLUMN last_intent TEXT;"],
+    ["active_workflow_key", "ALTER TABLE sessions ADD COLUMN active_workflow_key TEXT;"],
+    ["journey_stage", "ALTER TABLE sessions ADD COLUMN journey_stage TEXT;"],
+    ["last_context_packet_id", "ALTER TABLE sessions ADD COLUMN last_context_packet_id TEXT;"],
+    ["state_version", "ALTER TABLE sessions ADD COLUMN state_version INTEGER NOT NULL DEFAULT 0;"],
+    ["metadata_json", "ALTER TABLE sessions ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';"],
+    ["last_active_at", "ALTER TABLE sessions ADD COLUMN last_active_at TEXT;"],
+    ["expires_at", "ALTER TABLE sessions ADD COLUMN expires_at TEXT;"],
+    ["closed_at", "ALTER TABLE sessions ADD COLUMN closed_at TEXT;"]
+  ]],
+  ["memory_items", [
+    ["occurred_at", "ALTER TABLE memory_items ADD COLUMN occurred_at TEXT;"],
+    ["valid_from_at", "ALTER TABLE memory_items ADD COLUMN valid_from_at TEXT;"],
+    ["valid_until_at", "ALTER TABLE memory_items ADD COLUMN valid_until_at TEXT;"],
+    ["last_verified_at", "ALTER TABLE memory_items ADD COLUMN last_verified_at TEXT;"],
+    ["temporal_metadata_json", "ALTER TABLE memory_items ADD COLUMN temporal_metadata_json TEXT NOT NULL DEFAULT '{}';"]
+  ]],
+  ["context_packets", [
+    ["generated_at", "ALTER TABLE context_packets ADD COLUMN generated_at TEXT;"]
+  ]],
+  ["openclaw_instances", [
+    ["last_context_packet_id", "ALTER TABLE openclaw_instances ADD COLUMN last_context_packet_id TEXT;"],
+    ["heartbeat_prompt_json", "ALTER TABLE openclaw_instances ADD COLUMN heartbeat_prompt_json TEXT NOT NULL DEFAULT '{}';"]
+  ]],
+  ["agent_tasks", [
+    ["workflow_key", "ALTER TABLE agent_tasks ADD COLUMN workflow_key TEXT;"],
+    ["journey_stage", "ALTER TABLE agent_tasks ADD COLUMN journey_stage TEXT;"]
+  ]],
+  ["knowledge_sources", [
+    ["priority", "ALTER TABLE knowledge_sources ADD COLUMN priority INTEGER NOT NULL DEFAULT 100;"],
+    ["last_run_at", "ALTER TABLE knowledge_sources ADD COLUMN last_run_at TEXT;"],
+    ["last_status", "ALTER TABLE knowledge_sources ADD COLUMN last_status TEXT;"],
+    ["metadata_json", "ALTER TABLE knowledge_sources ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';"],
+    ["proposed_by", "ALTER TABLE knowledge_sources ADD COLUMN proposed_by TEXT;"],
+    ["approved_by", "ALTER TABLE knowledge_sources ADD COLUMN approved_by TEXT;"],
+    ["reviewed_at", "ALTER TABLE knowledge_sources ADD COLUMN reviewed_at TEXT;"]
+  ]],
+  ["scheduled_jobs", [
+    ["workflow_key", "ALTER TABLE scheduled_jobs ADD COLUMN workflow_key TEXT;"],
+    ["journey_stage", "ALTER TABLE scheduled_jobs ADD COLUMN journey_stage TEXT;"]
+  ]],
+  ["pems_candidate_maturity", [
+    ["supervised_advisory_allowed", "ALTER TABLE pems_candidate_maturity ADD COLUMN supervised_advisory_allowed INTEGER NOT NULL DEFAULT 0;"],
+    ["promotion_status", "ALTER TABLE pems_candidate_maturity ADD COLUMN promotion_status TEXT NOT NULL DEFAULT 'shadow_review_required';"],
+    ["last_reviewed_at", "ALTER TABLE pems_candidate_maturity ADD COLUMN last_reviewed_at TEXT;"],
+    ["promotion_json", "ALTER TABLE pems_candidate_maturity ADD COLUMN promotion_json TEXT NOT NULL DEFAULT '{}';"]
+  ]],
+  ["audit_events", [
+    ["previous_event_hash", "ALTER TABLE audit_events ADD COLUMN previous_event_hash TEXT;"],
+    ["event_hash", "ALTER TABLE audit_events ADD COLUMN event_hash TEXT;"],
+    ["chain_version", "ALTER TABLE audit_events ADD COLUMN chain_version TEXT;"]
+  ]],
+  ["workflow_runs", [
+    ["process_id", "ALTER TABLE workflow_runs ADD COLUMN process_id TEXT;"],
+    ["resume_count", "ALTER TABLE workflow_runs ADD COLUMN resume_count INTEGER NOT NULL DEFAULT 0;"],
+    ["last_checkpoint_boundary", "ALTER TABLE workflow_runs ADD COLUMN last_checkpoint_boundary TEXT;"]
+  ]]
+];

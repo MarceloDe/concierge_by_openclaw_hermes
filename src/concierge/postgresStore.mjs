@@ -1,5 +1,5 @@
 import pg from "pg";
-import { SCHEMA_SQL, TABLES } from "./schema.mjs";
+import { COLUMN_MIGRATIONS, SCHEMA_SQL, TABLES } from "./schema.mjs";
 import { seedRuntimeRegistries } from "./workflowArchitecture.mjs";
 import { assertSafeSqlIdentifier, assertSafeTableName, createId, nowIso } from "./database.mjs";
 
@@ -154,6 +154,11 @@ export class PostgresStore {
     await this.open();
     await this.exec(SCHEMA_SQL);
     await this.recordMigration("schema:base", { adapterVersion: this.adapterVersion });
+    // Incremental ADD COLUMN migrations on EXISTING tables (CREATE TABLE IF NOT EXISTS
+    // never alters an existing table). Single source: schema COLUMN_MIGRATIONS.
+    for (const [table, migrations] of COLUMN_MIGRATIONS) {
+      await this.migrateColumns(table, migrations);
+    }
     if (seed) await seedRuntimeRegistries(this, { nowIso, createId });
     return this;
   }
