@@ -171,6 +171,9 @@ export function buildLlmOrchestrationDecisionPayload(state) {
           promptTable: (state.context_packet.capabilityPortfolio.promptTable ?? []).slice(0, 18)
       }
       : null,
+    // DB-catalog processes the planner may OFFER (when/why metadata + id only; HOW is
+    // hydrated by pointer). Populated by the orchestration node from loadSessionPortfolio.
+    offerableProcesses: (state.offerable_processes ?? []).slice(0, 12),
     llmOutputIndex: state.context_packet?.llmOutputIndex
       ? {
           cacheBackend: state.context_packet.llmOutputIndex.cacheBackend,
@@ -226,8 +229,15 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       approvalRequired: "boolean",
       approvalScope: "read_only_observation or specific action scope",
       workerGoal: "specific OpenClaw task goal inside the selected workflow",
-      responseStrategy: "how LangGraph should explain the next step to the user",
-      userFacingNextQuestion: "one concise question if more information is needed, otherwise empty string",
+      responseStrategy: "one of: answer_from_evidence | offer_process_and_ask | honest_capability_decline | degraded_best_effort",
+      userFacingNextQuestion: "REQUIRED non-empty question when clarificationNeeded is true; otherwise empty string",
+      capabilityAssessment: { canAnswerNow: "boolean: can you answer from existing evidence now?", reason: "short reason", limitations: ["what you cannot do"] },
+      userDataSufficiency: "one of: sufficient | insufficient | none",
+      missingPlanDetails: ["specific user/plan details you still need, e.g. which_payer_portal, member_id"],
+      clarificationNeeded: "boolean: do you need to ask the user something before proceeding?",
+      offeredProcessIds: ["process ids chosen from offerableProcesses to OFFER the user"],
+      recommendedProcessId: "the single best process id from offerableProcesses, or empty",
+      answerComposerMode: "one of: evidence_sourced | capability_meta | degraded",
       selectedCapabilityPortfolioIds: ["portfolio IDs from capabilityPortfolio.promptTable"],
       selectedCapabilityPointers: ["cache pointers from capabilityPortfolio.promptTable"],
       priorLlmOutputPointersUsed: ["LLM output index pointers consulted, if any"]
@@ -249,7 +259,9 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "Never authorize credential entry, SSN entry, 2FA/passkey handling, payer contact, external messaging, form submission, payment, cancellation, record change, or medical advice.",
         "OpenClaw workers may be powerful inside the delegated read-only task, but they do not choose the healthcare workflow.",
         "If authenticated portal evidence is needed, ask for manual login/readiness and read-only approval rather than claiming evidence exists.",
-        "If source pointers are absent, say what evidence is missing."
+        "If source pointers are absent, say what evidence is missing.",
+        "Reason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).",
+        "If you can answer from cited evidence, set canAnswerNow=true and responseStrategy='answer_from_evidence'."
       ].join("\n")
     },
     {
@@ -284,6 +296,13 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
       workerGoal: null,
       responseStrategy: null,
       userFacingNextQuestion: "",
+      capabilityAssessment: { canAnswerNow: false, reason: "invalid_response", limitations: [] },
+      userDataSufficiency: "none",
+      missingPlanDetails: [],
+      clarificationNeeded: false,
+      offeredProcessIds: [],
+      recommendedProcessId: null,
+      answerComposerMode: "degraded",
       issues: [error.message],
       warnings,
       rawDecision: null
@@ -298,6 +317,21 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
   if (confidence < 0.5) warnings.push("low_confidence_llm_decision");
   if (!parsed.rationale) warnings.push("missing_rationale");
   if (!parsed.workerGoal) warnings.push("missing_worker_goal");
+
+  // Phase B contract (fail-closed defaults).
+  const canAnswerNow = parsed.capabilityAssessment?.canAnswerNow === true; // default false
+  const allowedSufficiency = ["sufficient", "insufficient", "none"];
+  const userDataSufficiency = allowedSufficiency.includes(String(parsed.userDataSufficiency))
+    ? String(parsed.userDataSufficiency)
+    : "none";
+  const clarificationNeeded = Boolean(parsed.clarificationNeeded);
+  const offeredProcessIds = asArray(parsed.offeredProcessIds);
+  const userFacingNextQuestion = parsed.userFacingNextQuestion ? compact(parsed.userFacingNextQuestion, 500) : "";
+  const allowedStrategies = ["answer_from_evidence", "offer_process_and_ask", "honest_capability_decline", "degraded_best_effort"];
+  const responseStrategyRaw = String(parsed.responseStrategy ?? "");
+  const responseStrategy = allowedStrategies.includes(responseStrategyRaw) ? responseStrategyRaw : (responseStrategyRaw ? compact(responseStrategyRaw, 1000) : null);
+  if (clarificationNeeded && !userFacingNextQuestion) warnings.push("clarification_needed_without_question");
+  if (["offer_process_and_ask", "honest_capability_decline"].includes(responseStrategy) && offeredProcessIds.length === 0) warnings.push("capability_question_without_offer");
 
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
@@ -315,8 +349,19 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     approvalRequired: Boolean(parsed.approvalRequired),
     approvalScope: parsed.approvalScope ? String(parsed.approvalScope) : null,
     workerGoal: parsed.workerGoal ? compact(parsed.workerGoal, 1000) : null,
-    responseStrategy: parsed.responseStrategy ? compact(parsed.responseStrategy, 1000) : null,
-    userFacingNextQuestion: parsed.userFacingNextQuestion ? compact(parsed.userFacingNextQuestion, 500) : "",
+    responseStrategy,
+    userFacingNextQuestion,
+    capabilityAssessment: {
+      canAnswerNow,
+      reason: parsed.capabilityAssessment?.reason ? compact(parsed.capabilityAssessment.reason, 400) : null,
+      limitations: asArray(parsed.capabilityAssessment?.limitations)
+    },
+    userDataSufficiency,
+    missingPlanDetails: asArray(parsed.missingPlanDetails),
+    clarificationNeeded,
+    offeredProcessIds,
+    recommendedProcessId: parsed.recommendedProcessId ? String(parsed.recommendedProcessId) : (offeredProcessIds[0] ?? null),
+    answerComposerMode: ["evidence_sourced", "capability_meta", "degraded"].includes(String(parsed.answerComposerMode)) ? String(parsed.answerComposerMode) : (canAnswerNow ? "evidence_sourced" : "capability_meta"),
     selectedCapabilityPortfolioIds: asArray(parsed.selectedCapabilityPortfolioIds),
     selectedCapabilityPointers: asArray(parsed.selectedCapabilityPointers),
     priorLlmOutputPointersUsed: asArray(parsed.priorLlmOutputPointersUsed),

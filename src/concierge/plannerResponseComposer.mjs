@@ -22,13 +22,23 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
   const decision = state.llm_orchestration_decision ?? {};
   const hydrated = (state.hydrated_capabilities?.resolved ?? []).map((r) => ({ id: r.portfolioId, kind: r.kind, title: r.title }));
 
+  // Phase B: prefer the processes the planner explicitly offered (recommended first),
+  // falling back to all offerable processes if the planner did not select any.
+  const offeredIds = new Set([...(decision.offeredProcessIds ?? []), decision.recommendedProcessId].filter(Boolean));
+  const ranked = offeredIds.size > 0
+    ? [...processes].sort((a, b) => (offeredIds.has(b.portfolioId) ? 1 : 0) - (offeredIds.has(a.portfolioId) ? 1 : 0))
+    : processes;
+
   const payload = {
     userRequest: String(state.user_input ?? "").slice(0, 300),
     plannerResponseStrategy: decision.responseStrategy ?? null,
     plannerClarifyingQuestion: decision.userFacingNextQuestion || null,
-    plannerMissingEvidence: decision.missingEvidence ?? [],
+    plannerClarificationNeeded: Boolean(decision.clarificationNeeded),
+    plannerMissingPlanDetails: decision.missingPlanDetails ?? decision.missingEvidence ?? [],
     plannerApprovalScope: decision.approvalScope ?? null,
-    offerableProcesses: processes.map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope })),
+    plannerRecommendedProcessId: decision.recommendedProcessId ?? null,
+    plannerOfferedProcessIds: [...offeredIds],
+    offerableProcesses: ranked.map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope })),
     hydratedCapabilities: hydrated
   };
 
@@ -53,7 +63,7 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
     if (!text) return { valid: false, mode: "empty_composition" };
     // Deterministic safety guard: an offer must not contain coverage numbers (no evidence).
     if (COVERAGE_NUMBER.test(text)) return { valid: false, mode: "coverage_number_without_evidence" };
-    return { valid: true, mode: "process_offer", finalResponse: text, offeredProcessIds: processes.map((p) => p.portfolioId) };
+    return { valid: true, mode: "process_offer", finalResponse: text, offeredProcessIds: [...offeredIds].length ? [...offeredIds] : ranked.map((p) => p.portfolioId) };
   } catch (error) {
     return { valid: false, mode: "composer_failed", error: error.message };
   }

@@ -970,8 +970,20 @@ async function llmOrchestrationDecisionNode(state) {
     };
   }
 
-  const messages = buildLlmOrchestrationDecisionMessages(state);
   const store = activeStores.get(state.session_id);
+  // Phase B: give the planner the DB-catalog offerable processes (metadata + id only)
+  // so it can populate offeredProcessIds/recommendedProcessId.
+  let offerableProcesses = [];
+  try {
+    const { loadSessionPortfolio } = await import("./capabilityCatalog.mjs");
+    const portfolio = await loadSessionPortfolio(store, { sessionId: state.session_id });
+    offerableProcesses = (portfolio.manifest?.promptTable ?? [])
+      .filter((row) => row.kind === "process")
+      .map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope }));
+  } catch {
+    offerableProcesses = [];
+  }
+  const messages = buildLlmOrchestrationDecisionMessages({ ...state, offerable_processes: offerableProcesses });
   const payloadObservation = store
     ? await recordOutboundPayloadObservation(store, {
         sessionId: state.session_id,
