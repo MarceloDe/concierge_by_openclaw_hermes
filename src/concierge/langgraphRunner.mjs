@@ -3088,6 +3088,10 @@ async function composeResponseNode(state) {
     if (offered) return offered;
   }
   if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
+    // Couldn't get authenticated evidence -> offer the read-only portal process instead
+    // of a "consult your documents" degrade (degrade remains the fallback).
+    const offered = await attemptCapabilityProcessOffer(state);
+    if (offered) return offered;
     const degraded = await composeBestEffortAnswer(state, {
       reason: state.evidence_observation.reason ?? "authenticated_portal_evidence_unavailable",
       missingEvidence: ["authenticated portal evidence", "current source pointers"],
@@ -3173,6 +3177,10 @@ async function composeResponseNode(state) {
   if (
     ["blocked_pending_research_evidence_review", "blocked_no_trusted_research_evidence"].includes(state.evidence_observation?.status)
   ) {
+    // No trusted research evidence to answer from -> offer the portal process instead of
+    // a deterministic degrade (degrade remains the fallback).
+    const offered = await attemptCapabilityProcessOffer(state);
+    if (offered) return offered;
     const degraded = await composeBestEffortAnswer(state, {
       reason: state.evidence_observation.reason ?? state.evidence_observation.status,
       missingEvidence: [

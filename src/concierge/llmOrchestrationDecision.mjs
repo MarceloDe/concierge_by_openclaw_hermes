@@ -261,7 +261,8 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "If authenticated portal evidence is needed, ask for manual login/readiness and read-only approval rather than claiming evidence exists.",
         "If source pointers are absent, say what evidence is missing.",
         "Reason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).",
-        "If you can answer from cited evidence, set canAnswerNow=true and responseStrategy='answer_from_evidence'."
+        "A member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence; they require authenticated portal evidence. For ANY such current-balance/amount question, set canAnswerNow=false and responseStrategy='offer_process_and_ask' (offer the portal-lookup process) EVEN IF research or policy evidence is present. Research/policy evidence supports only general coverage explanations, never a live balance.",
+        "If you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'."
       ].join("\n")
     },
     {
