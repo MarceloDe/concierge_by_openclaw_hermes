@@ -2993,6 +2993,58 @@ function composeMissingTrustedResearchEvidenceResponse(state, routeSummary) {
   ].join("\n\n");
 }
 
+// Type-II: compose an honest PROCESS OFFER from the catalog. Returns the full node-return
+// object, or null if the composer can't offer (disabled, no live model, no decision, or
+// the offer was invalid). Reused both when there is no evidence AND when evidence exists
+// but couldn't ground an answer to the user's question.
+async function attemptCapabilityProcessOffer(state) {
+  if (process.env.BRAINSTY_TYPE_II_COMPOSER === "0") return null;
+  if (state.raw_message?.useLiveModel === false) return null;
+  if (!state.llm_orchestration_decision) return null;
+  const store = activeStores.get(state.session_id);
+  const offer = await withCheckpoint(
+    "final.response",
+    { kind: "final.response", metadata: { trace_id: state.graph_trace_id, session_id: state.session_id, mode: "type_ii_process_offer" } },
+    async () => composeProcessOfferResponse({ store, state, sessionId: state.session_id })
+  );
+  if (!offer.valid) return null;
+  const offeredProcesses = [];
+  try {
+    const { hydrateProcess } = await import("./capabilityCatalog.mjs");
+    for (const pid of offer.offeredProcessIds ?? []) {
+      const h = await hydrateProcess(store, pid);
+      if (h.ok) offeredProcesses.push({ processId: pid, title: h.process.title, approvalScope: h.approvalScope, requiredUserInputs: h.requiredUserInputs, workerSkillKey: h.workerSkillKey });
+    }
+  } catch {
+    /* offer still returned even if metadata enrichment fails */
+  }
+  return {
+    final_response: offer.finalResponse,
+    workflow_outcome: "capability_reasoned_offer",
+    memory_type: "capability_offer_event",
+    should_remember: false,
+    capability_offer: { offeredProcessIds: offer.offeredProcessIds ?? [], recommendedProcessId: state.llm_orchestration_decision?.recommendedProcessId ?? null, processes: offeredProcesses },
+    proof: appendProof(state, "response_policy", {
+      typeIIComposer: true,
+      mode: offer.mode,
+      offeredProcessCount: offer.offeredProcessIds?.length ?? 0,
+      offeredProcessIds: offer.offeredProcessIds ?? []
+    })
+  };
+}
+
+// Does the planner explicitly want to offer a process (vs answer from evidence)?
+export function plannerWantsProcessOffer(decision) {
+  if (!decision) return false;
+  return (
+    decision.responseStrategy === "offer_process_and_ask" ||
+    decision.responseStrategy === "honest_capability_decline" ||
+    decision.capabilityAssessment?.canAnswerNow === false ||
+    (decision.offeredProcessIds?.length ?? 0) > 0 ||
+    Boolean(decision.recommendedProcessId)
+  );
+}
+
 async function composeResponseNode(state) {
   if (state.final_response) {
     return {
@@ -3018,46 +3070,14 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
-  // Type-II Phase A (gated): with no stored evidence, reason as a PROCESS — offer the
-  // most relevant catalog process instead of a flat template. Templates remain the
-  // fallback (composer invalid/failed). Fires only when source_pointers is empty.
-  if (
-    process.env.BRAINSTY_TYPE_II_COMPOSER !== "0" &&
-    sourcePointers.length === 0 &&
-    state.raw_message?.useLiveModel !== false &&
-    state.llm_orchestration_decision
-  ) {
-    const offer = await withCheckpoint(
-      "final.response",
-      { kind: "final.response", metadata: { trace_id: state.graph_trace_id, session_id: state.session_id, mode: "type_ii_process_offer" } },
-      async () => composeProcessOfferResponse({ store: activeStores.get(state.session_id), state, sessionId: state.session_id })
-    );
-    if (offer.valid) {
-      // Build the AI2UI accept affordance from the offered processes' catalog HOW.
-      const offeredProcesses = [];
-      try {
-        const { hydrateProcess } = await import("./capabilityCatalog.mjs");
-        for (const pid of offer.offeredProcessIds ?? []) {
-          const h = await hydrateProcess(activeStores.get(state.session_id), pid);
-          if (h.ok) offeredProcesses.push({ processId: pid, title: h.process.title, approvalScope: h.approvalScope, requiredUserInputs: h.requiredUserInputs, workerSkillKey: h.workerSkillKey });
-        }
-      } catch {
-        /* offer still returned even if metadata enrichment fails */
-      }
-      return {
-        final_response: offer.finalResponse,
-        workflow_outcome: "capability_reasoned_offer",
-        memory_type: "capability_offer_event",
-        should_remember: false,
-        capability_offer: { offeredProcessIds: offer.offeredProcessIds ?? [], recommendedProcessId: state.llm_orchestration_decision?.recommendedProcessId ?? null, processes: offeredProcesses },
-        proof: appendProof(state, "response_policy", {
-          typeIIComposer: true,
-          mode: offer.mode,
-          offeredProcessCount: offer.offeredProcessIds?.length ?? 0,
-          offeredProcessIds: offer.offeredProcessIds ?? []
-        })
-      };
-    }
+  // Type-II (gated): reason as a PROCESS and OFFER the relevant catalog process instead
+  // of a flat template/degrade. Fires when there is NO stored evidence OR when the
+  // planner explicitly wants to offer (canAnswerNow=false / offer_process_and_ask /
+  // offeredProcessIds) — so tangential prior evidence (source_pointers>0) no longer
+  // gates the offer out. Sourced answers with real grounded claims are unaffected.
+  if (sourcePointers.length === 0 || plannerWantsProcessOffer(state.llm_orchestration_decision)) {
+    const offered = await attemptCapabilityProcessOffer(state);
+    if (offered) return offered;
   }
   if (state.evidence_observation?.status === "blocked_no_authenticated_evidence") {
     const degraded = await composeBestEffortAnswer(state, {
@@ -3097,6 +3117,10 @@ async function composeResponseNode(state) {
   ) {
     const deterministicResponse = composeUploadedDocumentResponse(state, routeSummary);
     const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
+    if ((composed.answerClaims?.length ?? 0) === 0) {
+      const offered = await attemptCapabilityProcessOffer(state);
+      if (offered) return offered;
+    }
     return {
       final_response: composed.finalResponse,
       sourced_answer: composed.sourcedAnswer,
@@ -3117,6 +3141,12 @@ async function composeResponseNode(state) {
   if (state.evidence_observation?.status === "captured_trusted_research_evidence") {
     const deterministicResponse = composeTrustedResearchEvidenceResponse(state, routeSummary);
     const composed = await maybeComposeLiveSourcedAnswer(state, deterministicResponse);
+    // Evidence existed but couldn't ground an answer to THIS question (no claims) -> offer
+    // the read-only portal process instead of a "consult your documents" degrade.
+    if ((composed.answerClaims?.length ?? 0) === 0) {
+      const offered = await attemptCapabilityProcessOffer(state);
+      if (offered) return offered;
+    }
     return {
       final_response: composed.finalResponse,
       sourced_answer: composed.sourcedAnswer,
