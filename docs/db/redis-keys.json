@@ -1,0 +1,160 @@
+{
+  "$schema": "internal://brainsty/redis-keys.v1",
+  "description": "Machine-readable map of the Redis runtime-mirror namespaces for the healthcare AI concierge. Redis is the fast runtime mirror; Postgres/SQLite is authoritative. jsonShape values are the REAL top-level value shapes captured from the live Redis (127.0.0.1:6381); 'object'/'array[n] of {...}' annotations are summaries of nested structure, not invented fields.",
+  "backendSelection": {
+    "redisUrlEnv": ["BRAINSTY_REDIS_URL", "REDIS_URL"],
+    "fallback": "in-process Map (backend=\"memory\", productionReady=false)",
+    "requireRedisEnv": "BRAINSTY_REQUIRE_REDIS=1 (or runtime env production/prod/staging/production-candidate) makes Redis mandatory; initializeRuntimeCache fails loud otherwise",
+    "factory": "createRuntimeContextCache (src/concierge/runtimeContextCache.mjs)",
+    "metricsEndpoint": "/api/health -> redisRuntime.cacheMetrics (getRuntimeCacheMetrics: hits, misses, sets, deletes, errors, total, hitRate, lastBackend)"
+  },
+  "namespaces": {
+    "brainsty:capability-catalog": {
+      "keyPattern": "brainsty:capability-catalog:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "mirrorCapabilityPortfolioToRedis / loadSessionPortfolio (on miss) — src/concierge/capabilityCatalog.mjs",
+      "reader": "loadSessionPortfolio — src/concierge/capabilityCatalog.mjs",
+      "purpose": "Postgres-sourced planner-facing capability/process catalog mirror (metadata-only promptTable + pointer entries; the HOW is hydrated separately via hydrateCapabilityPointer). Evicted on capability quarantine/demote/lifecycle-sync.",
+      "jsonShape": {
+        "version": "string",
+        "cacheKey": "string",
+        "sessionId": "string",
+        "promptTable": "array[19] of {portfolioId, kind, title, whenToUse, whyUse, shortDescription, approvalScope, pointer, score}",
+        "entries": "object map of portfolioId -> {portfolioId, kind, pointer} (e.g. process:portal_readonly_lookup, workflow:claim_status_navigation, skill:insurance_portal_browser, tool:openclaw_authenticated_browser, graph_path:approval_interrupt_resume)",
+        "capabilityCount": "number",
+        "processCount": "number"
+      }
+    },
+    "brainsty:capability-portfolio": {
+      "keyPattern": "brainsty:capability-portfolio:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "attachCapabilityPortfolio — src/concierge/capabilityPortfolio.mjs",
+      "reader": "loadCapabilityPortfolio / hydrateCapabilityPointers — src/concierge/capabilityPortfolio.mjs",
+      "purpose": "Per-turn capability portfolio fullPayload built from the context packet's workflowArchitecture (workflows, skills, tools, graph paths). Read back to dereference LLM-planner-selected pointers into full hydrated entries.",
+      "jsonShape": {
+        "version": "string",
+        "cacheKey": "string",
+        "generatedAt": "string",
+        "sessionId": "string",
+        "entryCount": "number",
+        "entries": "object map of portfolioId -> entry object (workflow:*, skill:*, tool:*, graph:* keys; each entry carries kind/title/pointer/score and a nested hydrate payload)"
+      }
+    },
+    "brainsty:llm-output-index": {
+      "keyPattern": "brainsty:llm-output-index:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "indexLlmOutput — src/concierge/llmOutputIndex.mjs",
+      "reader": "loadLlmOutputIndex — src/concierge/llmOutputIndex.mjs",
+      "purpose": "Bounded (max 20) index of LLM outputs per session: output hash + pointer + parsed summary per step. rawOutputStored is always false (only hashes/summaries kept, not raw PHI-bearing output).",
+      "jsonShape": {
+        "version": "string",
+        "sessionId": "string",
+        "cacheBackend": "string",
+        "key": "string",
+        "latestOutputId": "string",
+        "entries": "array[1] of {outputId, pointer, step, graphTraceId, model, modelTier, mode, outputHash, rawOutputStored, parsedSummary, createdAt}"
+      }
+    },
+    "brainsty:runtime-context": {
+      "keyPattern": "brainsty:runtime-context:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "storeRuntimeContextManifest — src/concierge/runtimeContextCache.mjs",
+      "reader": "loadRuntimeContextForSession — src/concierge/runtimeContextCache.mjs",
+      "purpose": "Cross-turn runtime context manifest: compacted achieved checkpoints (merged with prior cached checkpoints for resume), latest checkpoint, prior decision pointers, prompt compaction settings, and capability summary. Source of cross-turn hydration.",
+      "jsonShape": {
+        "version": "string",
+        "cacheKey": "string",
+        "sessionId": "string",
+        "threadId": "string",
+        "generatedAt": "string",
+        "previousManifestHash": "string",
+        "mergedFromPreviousCount": "number",
+        "latestCheckpoint": {
+          "checkpointId": "string",
+          "stepName": "string",
+          "createdAt": "string",
+          "stateVersion": "object",
+          "workflow": "string",
+          "routeReason": "string",
+          "contextPacketId": "string",
+          "sourcePointerCount": "number",
+          "evidenceObservationStatus": "string"
+        },
+        "achievedCheckpoints": "array[1] of {checkpointId, stepName, createdAt, stateVersion, workflow, routeReason, contextPacketId, sourcePointerCount, evidenceObservationStatus}",
+        "priorDecisionPointers": "array[1] of {checkpointId, stepName, workflow, routeReason, sourcePointerCount, contextPacketId}",
+        "promptCompaction": {
+          "strategy": "string",
+          "checkpointLimit": "number",
+          "contextPacketId": "object",
+          "userInputHash": "string"
+        },
+        "capabilitySummary": "array[5] of {workflowKey, routeScore, executableNow, missingDataPointerCount, disabledToolCount}",
+        "manifestHash": "string"
+      }
+    },
+    "brainsty:runtime-vector-index": {
+      "keyPattern": "brainsty:runtime-vector-index:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "attachRuntimeVectorIndex — src/concierge/runtimeVectorIndex.mjs",
+      "reader": "loadRuntimeVectorIndex — src/concierge/runtimeVectorIndex.mjs",
+      "purpose": "Deterministic local lexical term-vector index over portfolio/checkpoint/llm-output documents, scored (cosine) against the current user input. No external embedding provider (embeddingProvider=none_local_fallback).",
+      "jsonShape": {
+        "version": "string",
+        "cacheKey": "string",
+        "sessionId": "string",
+        "generatedAt": "string",
+        "queryHash": "string",
+        "method": "string",
+        "embeddingProvider": "string",
+        "docCount": "number",
+        "topMatches": "array[2] of {docId, kind, pointer, label, sourceId, textHash, score}",
+        "docs": "array[18] of {docId, kind, pointer, label, sourceId, textHash, score}"
+      }
+    },
+    "brainsty:worker-state": {
+      "keyPattern": "brainsty:worker-state:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": 1800,
+      "writer": "recordWorkerDispatchState — src/concierge/workerRuntimeState.mjs",
+      "reader": "readWorkerRuntimeState — src/concierge/workerRuntimeState.mjs",
+      "purpose": "Per-session stateful OpenClaw worker runtime read back across dispatches/turns: bounded (max 10) dispatch history + latest dispatch (workflow, skill, execution mode, browser readiness). Authoritative record remains the DB (worker_continuations, source pointers, audit).",
+      "jsonShape": {
+        "version": "string",
+        "sessionId": "string",
+        "threadId": "string",
+        "dispatchCount": "number",
+        "latestDispatch": {
+          "dispatchedAt": "string",
+          "workflow": "string",
+          "skillKey": "string",
+          "executionMode": "string",
+          "plannerSelectedSkillKeys": "array[0]",
+          "hydratedCapabilityCount": "number",
+          "workerPlanId": "string",
+          "browserReadinessTier": "string",
+          "browserProductionReady": "boolean",
+          "browserCdpUrl": "string"
+        },
+        "dispatchHistory": "array[1] of {dispatchedAt, workflow, skillKey, executionMode, plannerSelectedSkillKeys, hydratedCapabilityCount, workerPlanId, browserReadinessTier, browserProductionReady, browserCdpUrl}",
+        "updatedAt": "string"
+      }
+    },
+    "brainsty:idempotency": {
+      "keyPattern": "brainsty:idempotency:<idempotencyKey>",
+      "valueType": "JSON object (string-encoded) via SETNX",
+      "ttlSeconds": 600,
+      "writer": "dispatchOnce (cache.adapter.setNX) — src/concierge/dispatchIdempotency.mjs",
+      "reader": "(none, by design) — authoritative dedupe is the Postgres UNIQUE(idempotency_key) on workflow_checkpoint_runs",
+      "purpose": "Losable fast-path SETNX lock for exactly-once worker dispatch. NOT load-bearing: the Redis lock is best-effort; correctness is enforced by the Postgres UNIQUE constraint. NOTE: this namespace may not be present in a live dump because the lock is short-lived (600s) and only exists during an in-flight dispatch; documented from dispatchIdempotency.mjs source.",
+      "jsonShape": {
+        "status": "string (e.g. \"in_progress\")",
+        "runId": "string (workflowRunId)"
+      }
+    }
+  }
+}
