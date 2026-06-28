@@ -1267,6 +1267,40 @@ async function workflowRouterNode(state) {
     };
   }
   const llmDecisionUsed = shouldUseLlmDecision(state.llm_orchestration_decision);
+  // GATE (LLM planner): in LLM-primary mode an UNAVAILABLE planner (no key / invocation
+  // failure / unparseable) must NOT silently fall back to the deterministic regex
+  // classifier and route confidently. Fail loud: degrade honestly, emit an audit event.
+  const llmPrimaryRouting = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
+  const llmDecisionMode = String(state.llm_orchestration_decision?.mode ?? "");
+  const llmUnavailable =
+    ["openai_chatopenai_failed", "invalid_response", "skipped_missing_openai_api_key"].includes(llmDecisionMode) ||
+    /missing_openai|api_key|unavailable/i.test(llmDecisionMode);
+  if (llmPrimaryRouting && llmUnavailable && !llmDecisionUsed) {
+    const store = activeStores.get(state.session_id);
+    if (store) {
+      await audit(store, state.session_id, "llm_planner_unavailable_no_silent_regex", {
+        trace_id: state.graph_trace_id,
+        mode: state.llm_orchestration_decision?.mode,
+        issues: state.llm_orchestration_decision?.issues ?? []
+      }).catch(() => {});
+    }
+    return {
+      workflow: "human_approval_escalation",
+      workflow_route: null,
+      route_reason: "llm_unavailable_no_silent_regex",
+      workflow_outcome: "llm_unavailable",
+      final_response:
+        "I can't complete the reasoning for this request right now because the planning model is unavailable. I won't guess with a keyword shortcut — please try again in a moment, or I can connect you with a human.",
+      llm_orchestration_decision: { ...state.llm_orchestration_decision, usedByRouter: false },
+      should_remember: false,
+      proof: appendProof(state, "workflow_router", {
+        route: "human_approval_escalation",
+        reason: "llm_unavailable_no_silent_regex",
+        llmMode: state.llm_orchestration_decision?.mode ?? null,
+        silentRegexRoutePrevented: true
+      })
+    };
+  }
   const lowConfidenceLlmDecision =
     state.llm_orchestration_decision?.valid &&
     state.llm_orchestration_decision?.workflow &&
