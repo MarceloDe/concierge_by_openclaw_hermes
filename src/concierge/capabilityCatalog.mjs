@@ -346,3 +346,87 @@ export async function syncCapabilityLifecycleFromPems(store, { capabilityId, can
   const evicted = await evictSessions(cache, sessionIds);
   return { ok: true, capabilityKey: cap.capability_key, toStatus, toLifecycle, redisEvicted: evicted };
 }
+
+// ---------------------------------------------------------------------------
+// Step 10: continuous-learning feed. PEMS-matured + reviewer-approved candidate ->
+// ingest into the authoritative catalog -> appears in the planner select; a later
+// PEMS demotion is projected back out (write -> read-back -> affects planner).
+// ---------------------------------------------------------------------------
+
+// READ-only gate (no writes). pems_candidate_maturity is the maturity authority.
+export async function evaluateCapabilityPromotionGate(store, { candidateId, skillReviewQueueId = null } = {}) {
+  const maturity = await store.findOne("pems_candidate_maturity", { candidate_id: candidateId });
+  const review = skillReviewQueueId ? await store.findOne("generated_skill_review_queue", { id: skillReviewQueueId }) : null;
+  const reviewApproved = !skillReviewQueueId || /approved|merged|accepted/i.test(String(review?.review_decision ?? review?.status ?? ""));
+  const matureForProduction = Boolean(maturity) && (maturity.production_driving_allowed === 1 || /production|promoted|trusted/i.test(String(maturity.promotion_status ?? "")));
+  const passed = matureForProduction && reviewApproved && !(/demot|quarantin|reject|revok/i.test(String(maturity?.promotion_status ?? "")));
+  return {
+    passed,
+    lifecycleEligible: passed ? "production" : maturity ? "supervised_advisory" : "rejected",
+    maturity: maturity ? { promotionStatus: maturity.promotion_status, productionDrivingAllowed: maturity.production_driving_allowed, trusted: maturity.trusted } : null,
+    review: review ? { reviewDecision: review.review_decision, status: review.status } : null,
+    reasons: [matureForProduction ? "mature" : "not_mature", reviewApproved ? "review_ok" : "review_not_approved"]
+  };
+}
+
+// Ingest a matured capability into the authoritative catalog (PHI-masked metadata +
+// HOW behind how_config_json), then record provenance and project PEMS lifecycle.
+export async function ingestMaturedCapability(store, {
+  candidateId, skillReviewQueueId = null, capabilityKey, kind = "workflow", backingKey = null,
+  rawMetadata = {}, hydratePayload = {}, sourcePointerIds = [], graphitiEpisodeRef = null, reviewerUserId = null
+} = {}) {
+  const gate = await evaluateCapabilityPromotionGate(store, { candidateId, skillReviewQueueId });
+  if (!gate.passed) return { ingested: false, gate };
+
+  const masked = maskPlannerMetadata(rawMetadata);
+  assertPlannerMetadataSafe([masked.shortDescription, masked.whenToUse, masked.whyUse, masked.bestUsedFor].join(" "));
+
+  const capabilityId = `cap:${capabilityKey}`;
+  const howConfigJson = JSON.stringify(hydratePayload ?? {});
+  const baseRow = {
+    capability_key: capabilityKey,
+    kind,
+    status: "active",
+    lifecycle_state: "production",
+    short_description: masked.shortDescription,
+    when_to_use: masked.whenToUse,
+    why_use: masked.whyUse,
+    best_used_for: masked.bestUsedFor,
+    planner_score: rawMetadata.plannerScore ?? 15,
+    rationale_hash: masked.rationaleHash,
+    rationale_preview: masked.rationalePreview,
+    metadata_phi_cleared: masked.phiCleared ? 1 : 0,
+    how_kind_ref: backingKey ? (kind === "skill" ? "openclaw_skills" : kind === "tool" ? "tool_registry" : "workflow_definitions") : "self",
+    workflow_key: backingKey && kind === "workflow" ? backingKey : null,
+    skill_key: backingKey && kind === "skill" ? backingKey : null,
+    tool_key: backingKey && kind === "tool" ? backingKey : null,
+    how_config_json: howConfigJson,
+    how_config_hash: stableHash(howConfigJson, "howcfg")
+  };
+  const existing = await store.findOne("capabilities", { capability_key: capabilityKey });
+  if (existing) {
+    await store.update("capabilities", { ...baseRow, updated_at: nowIso() }, { id: existing.id });
+  } else {
+    await store.insert("capabilities", { id: capabilityId, ...baseRow, created_at: nowIso(), updated_at: nowIso() });
+  }
+
+  await recordCapabilityProvenance(store, {
+    capabilityId, event_type: existing ? "promoted" : "created", source_kind: "pems",
+    fromStatus: existing?.status ?? null, toStatus: "active",
+    pemsCandidateId: candidateId, generatedSkillQueueId: skillReviewQueueId, graphitiEpisodeRef,
+    reviewerUserId, rationale: rawMetadata.rationale ?? "matured capability ingested", sourcePointerIds
+  });
+  // Project the PEMS authority onto lifecycle (idempotent + future-proof).
+  await syncCapabilityLifecycleFromPems(store, { capabilityId, candidateId });
+
+  return { ingested: true, capabilityId, lifecycleState: gate.lifecycleEligible, gate };
+}
+
+// Thin orchestrator: given a matured candidate, ingest it and (best-effort) mirror.
+export async function feedCapabilityFromPemsEpisode(store, { candidateId, skillReviewQueueId = null, capabilityKey, kind = "workflow", backingKey = null, rawMetadata = {}, hydratePayload = {}, sourcePointerIds = [], graphitiEpisodeRef = null, sessionId = null } = {}) {
+  const result = await ingestMaturedCapability(store, { candidateId, skillReviewQueueId, capabilityKey, kind, backingKey, rawMetadata, hydratePayload, sourcePointerIds, graphitiEpisodeRef });
+  if (result.ingested && sessionId) {
+    try { await mirrorCapabilityPortfolioToRedis(store, { sessionId }); } catch { /* mirror is best-effort */ }
+  }
+  return result;
+}
