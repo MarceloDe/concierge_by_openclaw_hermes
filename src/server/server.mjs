@@ -211,6 +211,15 @@ const { initializeRuntimeCache } = await import("../concierge/runtimeContextCach
 const redisRuntimeReadiness = await initializeRuntimeCache({ env: process.env });
 console.log(`[runtime] redis backend=${redisRuntimeReadiness.backend} required=${redisRuntimeReadiness.required} productionReady=${redisRuntimeReadiness.productionReady} writeRead=${redisRuntimeReadiness.writeReadProbe.ok} pingMs=${redisRuntimeReadiness.ping?.pingMs ?? "n/a"}`);
 
+// OpenClaw always-on runtime: ensure the app's isolated gateway (+ wired LLM credential)
+// is running at startup, independent of LangGraph/user demand. Fail-loud only when required.
+const { initializeOpenClawRuntime } = await import("../concierge/openclawRuntime.mjs");
+const openClawRuntimeReadiness = await initializeOpenClawRuntime({ env: process.env }).catch((error) => {
+  if (String(process.env.BRAINSTY_REQUIRE_OPENCLAW ?? "0") === "1") throw error;
+  return { gatewayReachable: false, error: error.message };
+});
+console.log(`[runtime] openclaw gateway reachable=${openClawRuntimeReadiness.gatewayReachable} port=${openClawRuntimeReadiness.gatewayPort ?? "n/a"} startedPid=${openClawRuntimeReadiness.startedPid ?? "existing"} llmCredential=${openClawRuntimeReadiness.llmCredentialPresent ?? false}`);
+
 const store = await createDatabaseStore(process.env).initialize();
 // Seed the capability/process catalog (idempotent) so the Type-II process-offer
 // composer has offerable processes to reason over.
@@ -3128,6 +3137,14 @@ async function handleApi(req, res, url) {
         pingMs: redisRuntimeReadiness.ping?.pingMs ?? null,
         writeReadProbe: redisRuntimeReadiness.writeReadProbe?.ok ?? false,
         cacheMetrics: getRuntimeCacheMetrics()
+      },
+      openClawRuntime: {
+        gatewayReachable: openClawRuntimeReadiness.gatewayReachable ?? false,
+        gatewayPort: openClawRuntimeReadiness.gatewayPort ?? null,
+        stateDir: openClawRuntimeReadiness.stateDir ?? null,
+        agentId: openClawRuntimeReadiness.agentId ?? null,
+        llmCredentialPresent: openClawRuntimeReadiness.llmCredentialPresent ?? false,
+        llm: openClawRuntimeReadiness.llm ?? null
       }
     });
     return;

@@ -97,7 +97,8 @@
     "test:redis:idempotency": "node --test src/tests/dispatch-idempotency-redis.test.mjs",
     "test:type-ii:phasea": "node --test src/tests/type-ii-process-offer-live.test.mjs",
     "test:pg:parity": "node --test src/tests/capability-postgres-parity.test.mjs",
-    "test:redis:runtime": "node --test src/tests/redis-runtime.test.mjs"
+    "test:redis:runtime": "node --test src/tests/redis-runtime.test.mjs",
+    "test:openclaw:runtime": "node --test src/tests/openclaw-runtime.test.mjs"
   },
   "engines": {
     "node": ">=25"

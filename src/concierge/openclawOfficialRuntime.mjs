@@ -631,26 +631,33 @@ async function readDomEvidenceViaCdp(client) {
   }
 }
 
+// OpenClaw 2026.x isolates via OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH/OPENCLAW_GATEWAY_PORT
+// env vars, NOT a global --profile flag (which this version rejects for several
+// subcommands). Inject the isolated state-dir + the wired LLM credential so the app
+// drives its OWN gateway/agent, never the operator's personal ~/.openclaw instance.
+export function openClawProcessEnv(config = getOfficialOpenClawConfig()) {
+  const env = {
+    ...process.env,
+    OPENCLAW_STATE_DIR: config.stateDir,
+    OPENCLAW_CONFIG_PATH: config.configPath,
+    OPENCLAW_GATEWAY_PORT: String(config.gatewayPort)
+  };
+  const llmKey = process.env.BRAINSTY_OPENCLAW_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+  if (llmKey) env.OPENAI_API_KEY = llmKey;
+  return env;
+}
+
 async function execOpenClaw(args, { config = getOfficialOpenClawConfig(), timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const command = `OPENCLAW_STATE_DIR=${config.stateDir} ${config.binary} ${args.join(" ")}`;
   try {
-    const result = await execFileAsync(config.binary, ["--profile", config.profile, ...args], {
+    const result = await execFileAsync(config.binary, args, {
       timeout: timeoutMs,
-      maxBuffer: 1024 * 1024 * 20
+      maxBuffer: 1024 * 1024 * 20,
+      env: openClawProcessEnv(config)
     });
-    return {
-      ok: true,
-      command: `${config.binary} --profile ${config.profile} ${args.join(" ")}`,
-      stdout: result.stdout,
-      stderr: result.stderr
-    };
+    return { ok: true, command, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
-    return {
-      ok: false,
-      command: `${config.binary} --profile ${config.profile} ${args.join(" ")}`,
-      stdout: error.stdout ?? "",
-      stderr: error.stderr ?? "",
-      error: error.message
-    };
+    return { ok: false, command, stdout: error.stdout ?? "", stderr: error.stderr ?? "", error: error.message };
   }
 }
 
