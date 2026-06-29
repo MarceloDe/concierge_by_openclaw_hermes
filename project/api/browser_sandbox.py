@@ -498,6 +498,16 @@ class SteelUnifiedBridge:
         q: "asyncio.Queue" = asyncio.Queue(maxsize=4)
         self._frame_subs.add(q)
         try:
+            # Paint the current page immediately: Page.startScreencast is change-driven, so a
+            # static page (e.g. reconnecting to a logged-in session) would otherwise stay blank
+            # until something changes. A one-shot capture is a single CDP command and does not
+            # disturb the running screencast.
+            try:
+                cap = await self.request("capture", {"quality": 60}, timeout=8)
+                if cap.get("data"):
+                    yield {"t": "frame", "data": cap["data"], "metadata": cap.get("metadata") or {}}
+            except Exception:
+                pass
             while self.alive():
                 try:
                     msg = await asyncio.wait_for(q.get(), timeout=20)
