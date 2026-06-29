@@ -161,6 +161,371 @@ def _node_error_detail(stderr: bytes | None, stdout: bytes | None) -> str:
     return lines[-1]
 
 
+# ---------------------------------------------------------------------------
+# Unified persistent CDP bridge (ONE node subprocess per browser session).
+# Steel self-host tolerates only one page debugger client at a time, so separate
+# subprocesses (screencast + per-call input) competed for the page session and the
+# input one timed out. This single long-lived bridge holds ONE flat CDP session,
+# streams Page.screencastFrame -> stdout, and reads operation requests on stdin
+# (input/navigate/observe/extract/interact/capture) dispatching them over the SAME
+# session. The user-controlled login + worker read-only observation share it.
+# ---------------------------------------------------------------------------
+STEEL_UNIFIED_BRIDGE_SCRIPT = r"""
+const [cdpUrl, quality, everyNth] = process.argv.slice(1);
+const cdpBase = new URL(cdpUrl.replace(/^ws:/, "http:").replace(/^wss:/, "https:"));
+function out(obj) { process.stdout.write(JSON.stringify(obj) + "\n"); }
+const targets = await fetch(new URL("/json/list", cdpBase)).then((res) => { if (!res.ok) throw new Error(`cdp target list ${res.status}`); return res.json(); });
+const pageTarget = targets.find((item) => item.type === "page" && item.id) ?? targets.find((item) => item.id);
+if (!pageTarget?.id) throw new Error("no page target available");
+const __ver = await fetch(new URL("/json/version", cdpBase)).then((res) => res.json());
+let __sessionId = null;
+const wsTarget = new URL(__ver.webSocketDebuggerUrl);
+wsTarget.protocol = cdpUrl.startsWith("wss:") ? "wss:" : "ws:";
+wsTarget.hostname = cdpBase.hostname;
+wsTarget.port = cdpBase.port;
+const socket = new WebSocket(wsTarget);
+await new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error("cdp websocket open timeout")), 8000);
+  socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+  socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("cdp websocket error")); }, { once: true });
+});
+let nextId = 1;
+const pending = new Map();
+let lastMeta = {};
+let loadedFlag = false;
+socket.addEventListener("message", (event) => {
+  let message;
+  try { message = JSON.parse(event.data); } catch { return; }
+  if (message.id && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); return; }
+  if (message.method === "Page.loadEventFired") loadedFlag = true;
+  if (message.method === "Page.screencastFrame") {
+    const params = message.params || {};
+    const md = params.metadata || {};
+    out({ t: "frame", data: params.data || "", metadata: { url: lastMeta.url, title: lastMeta.title, width: md.deviceWidth || lastMeta.width, height: md.deviceHeight || lastMeta.height } });
+    if (params.sessionId !== undefined) { try { socket.send(JSON.stringify({ id: nextId++, sessionId: __sessionId, method: "Page.screencastFrameAck", params: { sessionId: params.sessionId } })); } catch {} }
+  }
+});
+async function send(method, params = {}) {
+  if (!__sessionId && method !== "Target.attachToTarget") {
+    const __a = await send("Target.attachToTarget", { targetId: pageTarget.id, flatten: true });
+    __sessionId = __a.sessionId;
+    if (!__sessionId) throw new Error("flat attach returned no sessionId");
+  }
+  const id = nextId++;
+  const __msg = { id, method, params };
+  if (__sessionId) __msg.sessionId = __sessionId;
+  socket.send(JSON.stringify(__msg));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`${method} timeout`)); }, 12000);
+    pending.set(id, (message) => { clearTimeout(timer); if (message.error) reject(new Error(message.error.message || method)); else resolve(message.result || {}); });
+  });
+}
+async function refreshMeta() {
+  try { const m = await send("Runtime.evaluate", { expression: "({ url: location.href, title: document.title, width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) })", returnByValue: true }); if (m.result && m.result.value) lastMeta = m.result.value; } catch {}
+}
+async function waitForLoad(ms) {
+  loadedFlag = false;
+  const started = Date.now();
+  await new Promise((resolve) => { const tick = () => (loadedFlag || Date.now() - started > ms) ? resolve() : setTimeout(tick, 150); tick(); });
+}
+const WF_LIB = `
+window.__wfClassify=function(el){try{
+  var tag=(el.tagName||'').toLowerCase();
+  var type=((el.getAttribute&&el.getAttribute('type'))||'').toLowerCase();
+  var txt=((el.innerText||el.value||(el.getAttribute&&el.getAttribute('aria-label'))||(el.getAttribute&&el.getAttribute('title'))||'')+'').trim().slice(0,160).toLowerCase();
+  var meta=((((el.getAttribute&&el.getAttribute('name'))||'')+' '+(el.id||'')+' '+((el.getAttribute&&el.getAttribute('autocomplete'))||'')+' '+((el.getAttribute&&el.getAttribute('placeholder'))||''))).toLowerCase();
+  if(tag==='input'&&type==='password')return{allow:false,reason:'password_field'};
+  if(/pass|pwd|user.?name|user.?id|ssn|social.?security|\\botp\\b|2fa|mfa|verification|security.?code|card.?number|\\bcvv\\b|\\bcvc\\b|account.?number|routing/.test(meta))return{allow:false,reason:'sensitive_field'};
+  if(tag==='input'&&['text','email','tel','number','search','date','password'].indexOf(type)>=0)return{allow:false,reason:'free_text_input_human_only'};
+  if(tag==='textarea')return{allow:false,reason:'free_text_input_human_only'};
+  var deny=/(sign\\s?in|log\\s?in|log\\s?out|sign\\s?out|\\bsubmit\\b|\\bpay\\b|payment|checkout|place\\s?order|transfer|withdraw|\\bcancel\\b|\\bdelete\\b|\\bremove\\b|\\bupdate\\b|\\bsave\\b|\\bsend\\b|file\\s?(a\\s?)?(claim|appeal|grievance)|enroll|unenroll|change\\s?pcp|authorize|\\bconfirm\\b|\\bagree\\b|\\baccept\\b|deactivate|close\\s?account|\\breset\\b|\\bbuy\\b|add\\s?to\\s?cart)/;
+  if(deny.test(txt))return{allow:false,reason:'write_or_submit_label'};
+  if(tag==='button'&&type==='submit')return{allow:false,reason:'submit_button'};
+  if(tag==='input'&&['submit','image'].indexOf(type)>=0)return{allow:false,reason:'submit_input'};
+  var form=el.closest&&el.closest('form');
+  if(form){var hasPwd=!!form.querySelector('input[type=password]');var f=((((form.getAttribute&&form.getAttribute('action'))||'')+' '+(form.id||'')+' '+((form.getAttribute&&form.getAttribute('name'))||''))).toLowerCase();
+    if((hasPwd||/login|sign-?in|auth|payment|\\bpay\\b|checkout|card/.test(f))&&(type==='submit'||tag==='button'))return{allow:false,reason:'auth_or_payment_form_control'};}
+  if(tag==='a'){try{var u=new URL(el.href,location.href);if(u.host&&u.host!==location.host&&!/(^|\\.)aetna\\.com$/.test(u.host))return{allow:false,reason:'offsite_link'};}catch(e){}}
+  return{allow:true,reason:null};
+}catch(e){return{allow:false,reason:'classify_error'};}};
+window.__wfEnum=function(){var sel='a[href],button,[role=button],[role=tab],[role=menuitem],[aria-expanded],summary,select,[role=link],.pagination a,.pagination button';
+  var nodes=Array.prototype.slice.call(document.querySelectorAll(sel)).filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(el).visibility!=='hidden';});
+  nodes.forEach(function(el,i){el.setAttribute('data-wf-ref',String(i));});return nodes;};
+window.__wfExtract=function(){var nodes=window.__wfEnum();
+  var controls=nodes.map(function(el,i){var c=window.__wfClassify(el);var label=((el.innerText||el.value||(el.getAttribute&&el.getAttribute('aria-label'))||'')+'').replace(/\\s+/g,' ').trim().slice(0,80);
+    var kind=(el.tagName||'').toLowerCase()==='select'?'filter':((el.getAttribute&&el.getAttribute('role'))==='tab'?'tab':((el.getAttribute&&el.getAttribute('aria-expanded'))!=null?'expander':'control'));
+    return{ref:i,tag:(el.tagName||'').toLowerCase(),kind:kind,label:label,allow:c.allow,denyReason:c.reason};});
+  var headings=Array.prototype.slice.call(document.querySelectorAll('h1,h2,h3,[role=heading]')).slice(0,40).map(function(h){return (h.innerText||'').replace(/\\s+/g,' ').trim().slice(0,120);}).filter(Boolean);
+  var tables=Array.prototype.slice.call(document.querySelectorAll('table')).slice(0,12).map(function(t){
+    var headers=Array.prototype.slice.call(t.querySelectorAll('thead th, tr:first-child th')).map(function(th){return (th.innerText||'').replace(/\\s+/g,' ').trim().slice(0,60);});
+    var rows=Array.prototype.slice.call(t.querySelectorAll('tbody tr')).slice(0,40).map(function(tr){return Array.prototype.slice.call(tr.querySelectorAll('td,th')).map(function(td){return (td.innerText||'').replace(/\\s+/g,' ').trim().slice(0,90);});});
+    return{headers:headers,rows:rows};}).filter(function(t){return t.rows.length;});
+  var kv=[];Array.prototype.slice.call(document.querySelectorAll('dl')).slice(0,20).forEach(function(dl){var dts=dl.querySelectorAll('dt'),dds=dl.querySelectorAll('dd');for(var i=0;i<Math.min(dts.length,dds.length);i++){kv.push({label:(dts[i].innerText||'').replace(/\\s+/g,' ').trim().slice(0,80),value:(dds[i].innerText||'').replace(/\\s+/g,' ').trim().slice(0,140)});}});
+  return{url:location.href,title:document.title,headings:headings,tables:tables,keyValues:kv.slice(0,60),text:(document.body?document.body.innerText:'').slice(0,40000),controls:controls};};
+window.__wfInteract=function(ref,value){var el=document.querySelector('[data-wf-ref="'+ref+'"]');if(!el){window.__wfEnum();el=document.querySelector('[data-wf-ref="'+ref+'"]');}if(!el)return{acted:false,denied:'ref_not_found'};
+  var c=window.__wfClassify(el);if(!c.allow)return{acted:false,denied:c.reason,label:((el.innerText||'')+'').replace(/\\s+/g,' ').trim().slice(0,80)};
+  try{if((el.tagName||'').toLowerCase()==='select'&&value!=null){el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return{acted:true,action:'set_filter',label:(el.name||el.id||'select'),value:value};}
+    el.scrollIntoView({block:'center'});el.click();return{acted:true,action:'click',label:((el.innerText||(el.getAttribute&&el.getAttribute('aria-label'))||'')+'').replace(/\\s+/g,' ').trim().slice(0,80)};}catch(e){return{acted:false,denied:'click_error'};}};
+`;
+async function runOp(operation, payload) {
+  payload = payload || {};
+  if (operation === "capture") {
+    const screenshot = await send("Page.captureScreenshot", { format: "jpeg", quality: Number(payload.quality || 62), fromSurface: true });
+    const meta = await send("Runtime.evaluate", { expression: "({ url: location.href, title: document.title, width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) })", returnByValue: true });
+    return { mime: "image/jpeg", data: screenshot.data || "", metadata: meta.result?.value || {} };
+  } else if (operation === "navigate") {
+    const url = new URL(String(payload.url || payload.navigateUrl || ""));
+    if (!["http:", "https:"].includes(url.protocol)) throw new Error("unsupported navigation protocol");
+    await send("Page.navigate", { url: url.href });
+    await waitForLoad(10000);
+    await refreshMeta();
+    return { navigated: true, currentUrl: lastMeta.url || null, currentTitle: lastMeta.title || null };
+  } else if (operation === "observe") {
+    if (payload.navigateUrl) { await send("Page.navigate", { url: String(payload.navigateUrl) }); await waitForLoad(9000); }
+    const observed = await send("Runtime.evaluate", { expression: `(() => {
+        const links = Array.from(document.querySelectorAll("a[href]")).slice(0, 120).map((link) => ({ text: (link.innerText || link.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().slice(0, 160), href: link.href }));
+        return { url: location.href, title: document.title, text: (document.body?.innerText || "").slice(0, 60000), links };
+      })()`, returnByValue: true });
+    return { observation: observed.result?.value || {} };
+  } else if (operation === "input") {
+    const input = payload.input || {};
+    const viewport = await send("Runtime.evaluate", { expression: "({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) })", returnByValue: true });
+    const size = viewport.result?.value || { width: 1280, height: 720 };
+    if (input.kind === "mouse") {
+      const x = Math.max(0, Math.min(1, Number(input.x || 0))) * Number(size.width || 1280);
+      const y = Math.max(0, Math.min(1, Number(input.y || 0))) * Number(size.height || 720);
+      await send("Input.dispatchMouseEvent", { type: input.type || "mousePressed", x, y, button: input.button || "left", clickCount: Number(input.clickCount || 1) });
+    } else if (input.kind === "wheel") {
+      const x = Math.max(0, Math.min(1, Number(input.x || 0))) * Number(size.width || 1280);
+      const y = Math.max(0, Math.min(1, Number(input.y || 0))) * Number(size.height || 720);
+      await send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: Number(input.deltaX || 0), deltaY: Number(input.deltaY || 0), button: "none" });
+    } else if (input.kind === "text") {
+      await send("Input.insertText", { text: String(input.text || "") });
+    } else if (input.kind === "key") {
+      await send("Input.dispatchKeyEvent", { type: input.type || "keyDown", key: input.key || "Enter", code: input.code || input.key || "Enter", windowsVirtualKeyCode: Number(input.keyCode || 13), nativeVirtualKeyCode: Number(input.keyCode || 13) });
+    } else if (input.kind === "navigate") {
+      const url = new URL(String(input.url || ""));
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error("unsupported navigation protocol");
+      await send("Page.navigate", { url: url.href });
+      await waitForLoad(9000);
+    }
+    return { inputAccepted: true };
+  } else if (operation === "extract" || operation === "interact") {
+    await send("Runtime.evaluate", { expression: WF_LIB });
+    if (operation === "extract") {
+      const r = await send("Runtime.evaluate", { expression: "window.__wfExtract()", returnByValue: true });
+      return { extract: r.result?.value || {} };
+    } else {
+      const r = await send("Runtime.evaluate", { expression: "window.__wfInteract(" + JSON.stringify(Number(payload.ref)) + "," + JSON.stringify(payload.value ?? null) + ")", returnByValue: true });
+      const res = r.result?.value || {};
+      if (res.acted) { await new Promise((rr) => setTimeout(rr, Number(payload.settleMs || 1200))); const after = await send("Runtime.evaluate", { expression: "window.__wfExtract()", returnByValue: true }); res.extract = after.result?.value || {}; }
+      return { interaction: res };
+    }
+  }
+  throw new Error(`unsupported operation ${operation}`);
+}
+// Bring the page up + start the single screencast.
+await send("Page.enable");
+await send("Runtime.enable");
+await send("Page.bringToFront");
+await refreshMeta();
+const metaTimer = setInterval(refreshMeta, 1000);
+await send("Page.startScreencast", { format: "jpeg", quality: Number(quality || 55), maxWidth: 1600, maxHeight: 1000, everyNthFrame: Math.max(1, Number(everyNth || 1)) });
+out({ t: "ready" });
+// stdin request loop: one JSON object per line -> dispatch over the SAME flat session.
+let __buf = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  __buf += chunk;
+  let idx;
+  while ((idx = __buf.indexOf("\n")) >= 0) {
+    const line = __buf.slice(0, idx); __buf = __buf.slice(idx + 1);
+    if (!line.trim()) continue;
+    let req; try { req = JSON.parse(line); } catch { continue; }
+    runOp(req.operation, req.payload || {}).then(
+      (result) => out({ t: "response", rid: req.rid, ok: true, result }),
+      (err) => out({ t: "response", rid: req.rid, ok: false, error: String((err && err.message) || err) })
+    );
+  }
+});
+process.on("SIGTERM", () => { try { clearInterval(metaTimer); socket.close(); } catch {} process.exit(0); });
+await new Promise(() => {});
+"""
+
+
+class SteelUnifiedBridge:
+    """One persistent node CDP subprocess per browser session. Holds a single flat
+    session; fans screencast frames out to stream subscribers; serializes operation
+    requests (input/navigate/observe/extract/interact/capture) over the same session."""
+
+    def __init__(self, cdp_url: str, quality: str, every_nth: str) -> None:
+        self.cdp_url = cdp_url
+        self.quality = quality
+        self.every_nth = every_nth
+        self.process: "asyncio.subprocess.Process | None" = None
+        self._frame_subs: "set[asyncio.Queue]" = set()
+        self._pending: "dict[int, asyncio.Future]" = {}
+        self._rid = 0
+        self._stdin_lock = asyncio.Lock()
+        self._start_lock = asyncio.Lock()
+        self._reader_task: "asyncio.Task | None" = None
+        self._ready = False
+
+    def alive(self) -> bool:
+        return bool(self.process is not None and self.process.returncode is None)
+
+    async def start(self) -> None:
+        async with self._start_lock:
+            if self.alive():
+                return
+            self.process = await asyncio.create_subprocess_exec(
+                "node", "--input-type=module", "-e", STEEL_UNIFIED_BRIDGE_SCRIPT,
+                self.cdp_url, str(self.quality), str(self.every_nth),
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                limit=16 * 1024 * 1024,
+            )
+            self._ready = False
+            self._reader_task = asyncio.create_task(self._read_stdout())
+            # Wait briefly for the {"t":"ready"} marker (screencast started + flat attached).
+            for _ in range(60):
+                if self._ready or not self.alive():
+                    break
+                await asyncio.sleep(0.1)
+            if not self.alive():
+                err = b""
+                try:
+                    err = await asyncio.wait_for(self.process.stderr.read(), timeout=1) if self.process else b""
+                except Exception:
+                    err = b""
+                raise BrowserSandboxError(f"Steel unified CDP bridge failed to start: {_node_error_detail(err, b'')}")
+
+    async def _read_stdout(self) -> None:
+        proc = self.process
+        if proc is None or proc.stdout is None:
+            return
+        try:
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                try:
+                    msg = json.loads(line)
+                except Exception:
+                    continue
+                t = msg.get("t")
+                if t == "frame":
+                    for q in list(self._frame_subs):
+                        try:
+                            q.put_nowait(msg)
+                        except asyncio.QueueFull:
+                            try:
+                                q.get_nowait()
+                                q.put_nowait(msg)
+                            except Exception:
+                                pass
+                elif t == "response":
+                    fut = self._pending.pop(msg.get("rid"), None)
+                    if fut is not None and not fut.done():
+                        fut.set_result(msg)
+                elif t == "ready":
+                    self._ready = True
+        except Exception:
+            pass
+        finally:
+            # Fail any in-flight requests so callers don't hang.
+            for fut in list(self._pending.values()):
+                if not fut.done():
+                    fut.set_exception(BrowserSandboxError("Steel unified CDP bridge closed"))
+            self._pending.clear()
+
+    async def request(self, operation: str, payload: "dict[str, Any] | None" = None, timeout: float = 20.0) -> "dict[str, Any]":
+        await self.start()
+        self._rid += 1
+        rid = self._rid
+        fut: "asyncio.Future" = asyncio.get_event_loop().create_future()
+        self._pending[rid] = fut
+        line = json.dumps({"rid": rid, "operation": operation, "payload": payload or {}}, separators=(",", ":")) + "\n"
+        async with self._stdin_lock:
+            if self.process is None or self.process.stdin is None:
+                raise BrowserSandboxError("Steel unified CDP bridge has no stdin")
+            self.process.stdin.write(line.encode("utf-8"))
+            await self.process.stdin.drain()
+        try:
+            msg = await asyncio.wait_for(fut, timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            self._pending.pop(rid, None)
+            raise BrowserSandboxError(f"Steel self-host CDP {operation} timed out") from exc
+        if not msg.get("ok"):
+            raise BrowserSandboxError(f"Steel self-host CDP {operation} failed: {msg.get('error', 'unknown error')}")
+        return msg.get("result") or {}
+
+    async def frames(self) -> AsyncIterator["dict[str, Any]"]:
+        await self.start()
+        q: "asyncio.Queue" = asyncio.Queue(maxsize=4)
+        self._frame_subs.add(q)
+        try:
+            while self.alive():
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=20)
+                except asyncio.TimeoutError:
+                    if not self.alive():
+                        break
+                    continue
+                yield msg
+        finally:
+            self._frame_subs.discard(q)
+
+    async def stop(self) -> None:
+        proc = self.process
+        if proc is not None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=3)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        if self._reader_task is not None:
+            self._reader_task.cancel()
+
+
+# Registry of live bridges keyed by browser_session_id (survives across /stream,
+# /input, /takeover, observe calls; one Steel page client total).
+_UNIFIED_BRIDGES: "dict[str, SteelUnifiedBridge]" = {}
+
+
+async def get_unified_bridge(browser_session_id: str) -> SteelUnifiedBridge:
+    cdp_url = os.environ.get("WEFELLA_BROWSER_SANDBOX_CDP_URL")
+    if not cdp_url:
+        raise BrowserSandboxError("Steel self-host CDP tunnel URL is not configured.")
+    bridge = _UNIFIED_BRIDGES.get(browser_session_id)
+    if bridge is None or not bridge.alive():
+        # This Steel self-host has a single page client slot, so only one bridge may hold it.
+        # Stop any other live bridges before starting this one (avoids the competing-session hang).
+        for other_id, other in list(_UNIFIED_BRIDGES.items()):
+            if other_id != browser_session_id and other.alive():
+                try:
+                    await other.stop()
+                except Exception:
+                    pass
+                _UNIFIED_BRIDGES.pop(other_id, None)
+        bridge = SteelUnifiedBridge(
+            cdp_url,
+            os.environ.get("WEFELLA_BROWSER_SANDBOX_SCREENCAST_QUALITY", "55"),
+            os.environ.get("WEFELLA_BROWSER_SANDBOX_SCREENCAST_EVERY_NTH_FRAME", "1"),
+        )
+        _UNIFIED_BRIDGES[browser_session_id] = bridge
+        await bridge.start()
+    return bridge
+
+
+async def stop_unified_bridge(browser_session_id: str) -> None:
+    bridge = _UNIFIED_BRIDGES.pop(browser_session_id, None)
+    if bridge is not None:
+        await bridge.stop()
+
+
 class BrowserSandboxProvider:
     provider_key = "abstract"
 
@@ -971,15 +1336,19 @@ await new Promise(() => {});
             limit=16 * 1024 * 1024
         )
 
-    async def _relay_steel_self_host_input(self, input_payload: dict[str, Any]) -> dict[str, Any]:
-        return await self._steel_cdp_bridge(operation="input", payload={"input": input_payload or {}})
+    async def _relay_steel_self_host_input(self, *, browser_session_id: str, input_payload: dict[str, Any]) -> dict[str, Any]:
+        bridge = await get_unified_bridge(browser_session_id)
+        result = await bridge.request("input", {"input": input_payload or {}}, timeout=15)
+        return {"ok": True, **result}
 
-    async def _extract_steel_self_host(self) -> dict[str, Any]:
-        result = await self._steel_cdp_bridge(operation="extract")
+    async def _extract_steel_self_host(self, *, browser_session_id: str) -> dict[str, Any]:
+        bridge = await get_unified_bridge(browser_session_id)
+        result = await bridge.request("extract", {}, timeout=20)
         return result.get("extract") or {}
 
-    async def _interact_steel_self_host(self, *, ref: int, value: Any = None, settle_ms: int = 1200) -> dict[str, Any]:
-        result = await self._steel_cdp_bridge(operation="interact", payload={"ref": int(ref), "value": value, "settleMs": int(settle_ms)})
+    async def _interact_steel_self_host(self, *, browser_session_id: str, ref: int, value: Any = None, settle_ms: int = 1200) -> dict[str, Any]:
+        bridge = await get_unified_bridge(browser_session_id)
+        result = await bridge.request("interact", {"ref": int(ref), "value": value, "settleMs": int(settle_ms)}, timeout=20)
         return result.get("interaction") or {}
 
     async def explore_portal_read_only(self, *, browser_session: dict[str, Any], max_steps: int = 8, user_message: str | None = None) -> dict[str, Any]:
@@ -988,6 +1357,7 @@ await new Promise(() => {});
         credentials/2FA/captcha entry, submits, and writes are hard-denied (never actioned)."""
         if browser_session.get("provider_strategy") != "steel-self-host":
             raise BrowserSandboxError("Portal exploration is implemented for steel-self-host sessions only.")
+        browser_session_id = browser_session.get("browser_session_id")
         safety = {
             "readOnly": True,
             "agentCredentialEntryAllowed": False,
@@ -995,7 +1365,7 @@ await new Promise(() => {});
             "writeActionsAllowed": False,
             "offsiteFailClosed": True,
         }
-        first = await self._extract_steel_self_host()
+        first = await self._extract_steel_self_host(browser_session_id=browser_session_id)
         if _portal_login_required(first.get("url"), first.get("title"), first.get("text")):
             return {
                 "ok": False,
@@ -1048,7 +1418,7 @@ await new Promise(() => {});
             visited.add((target.get("kind"), target.get("label")))
             steps += 1
             try:
-                inter = await self._interact_steel_self_host(ref=target.get("ref"))
+                inter = await self._interact_steel_self_host(browser_session_id=browser_session_id, ref=target.get("ref"))
             except BrowserSandboxError as exc:
                 actions.append({"label": target.get("label"), "kind": target.get("kind"), "acted": False, "error": str(exc)[:160]})
                 continue
@@ -1077,15 +1447,18 @@ await new Promise(() => {});
             "safety": safety,
         }
 
-    async def _observe_steel_self_host_page(self, *, navigate_url: str | None = None) -> dict[str, Any]:
+    async def _observe_steel_self_host_page(self, *, browser_session_id: str, navigate_url: str | None = None) -> dict[str, Any]:
         if navigate_url and not self._is_allowed_steel_target_url(navigate_url):
             raise BrowserSandboxError("Steel self-host read-only observation blocked an offsite or unsafe claims navigation target.")
-        return await self._steel_cdp_bridge(operation="observe", payload={"navigateUrl": navigate_url} if navigate_url else {})
+        bridge = await get_unified_bridge(browser_session_id)
+        result = await bridge.request("observe", {"navigateUrl": navigate_url} if navigate_url else {}, timeout=20)
+        return {"ok": True, **result}
 
     async def observe_claims_read_only(self, *, browser_session: dict[str, Any], user_message: str | None = None) -> dict[str, Any]:
         if browser_session.get("provider_strategy") != "steel-self-host":
             raise BrowserSandboxError("Remote read-only claims observation is currently implemented for steel-self-host browser sessions only.")
-        first = await self._observe_steel_self_host_page()
+        browser_session_id = browser_session.get("browser_session_id")
+        first = await self._observe_steel_self_host_page(browser_session_id=browser_session_id)
         observation = first.get("observation") or {}
         current_url = str(observation.get("url") or "")
         title = str(observation.get("title") or "")
@@ -1140,7 +1513,7 @@ await new Promise(() => {});
             for link in links:
                 selected_url = _safe_claims_link(link.get("href"), link.get("text"), current_url=current_url)
                 if selected_url:
-                    navigated = await self._observe_steel_self_host_page(navigate_url=selected_url)
+                    navigated = await self._observe_steel_self_host_page(browser_session_id=browser_session_id, navigate_url=selected_url)
                     observed = navigated.get("observation") or {}
                     current_url = str(observed.get("url") or selected_url)
                     title = str(observed.get("title") or "")
@@ -1230,11 +1603,18 @@ await new Promise(() => {});
         payload = result["payload"]
         provider_session_ref = str(payload.get("id") or payload.get("sessionId") or payload.get("session", {}).get("id") or provider_session_id)
         session_viewer_url = self._steel_viewer_url(provider_session_ref, payload)
+        # Start the SINGLE persistent CDP bridge for this session and navigate through it, so
+        # navigate + screencast + input/observe all share one flat session (no competing clients).
+        browser_session_id = f"hosted_browser_{uuid4()}"
         navigation = None
         if target_url:
-            navigation = await self._navigate_steel_self_host_session(target_url=target_url)
+            try:
+                bridge = await get_unified_bridge(browser_session_id)
+                navigation = await bridge.request("navigate", {"url": target_url}, timeout=20)
+            except Exception:
+                navigation = None
         return {
-            "browser_session_id": f"hosted_browser_{uuid4()}",
+            "browser_session_id": browser_session_id,
             "contract_version": HOSTED_PROVIDER_ADAPTER_CONTRACT_VERSION,
             "provider": self.provider_key,
             "adapter_mode": "hosted_provider",
@@ -1608,7 +1988,7 @@ await new Promise(() => {});
         if browser_session.get("provider_strategy") == "steel-self-host":
             if not grant_token.startswith("hosted_provider_grant_"):
                 raise BrowserSandboxError("Steel self-host browser input requires a valid human takeover grant token.")
-            relay = await self._relay_steel_self_host_input(input_payload)
+            relay = await self._relay_steel_self_host_input(browser_session_id=browser_session.get("browser_session_id"), input_payload=input_payload)
             return {
                 "ok": relay.get("ok") is True,
                 "status": "interactive_takeover_input_relayed",
@@ -2675,65 +3055,50 @@ async def hosted_browser_sandbox_provider_stream(browser_session: dict[str, Any]
     if browser_session.get("provider_strategy") == "steel-self-host":
         # Preferred path: persistent CDP screencast (10-30 fps). Falls back to the legacy
         # one-screenshot-per-second loop below if the screencast bridge can't start.
-        screencast_proc = None
+        bridge = None
         if os.environ.get("WEFELLA_BROWSER_SANDBOX_SCREENCAST_DISABLED") != "1":
             try:
-                screencast_proc = await provider._start_steel_self_host_screencast()
+                bridge = await get_unified_bridge(browser_session.get("browser_session_id"))
             except Exception:
-                screencast_proc = None
-        if screencast_proc is not None:
+                bridge = None
+        if bridge is not None:
+            # Subscribe to the SINGLE persistent bridge's frame stream. The bridge is NOT
+            # torn down when this stream ends (keep the logged-in session alive after the
+            # viewer is hidden); only this subscriber unsubscribes.
             loop = asyncio.get_event_loop()
             start = loop.time()
             max_seconds = max(5, min(900, int(os.environ.get("WEFELLA_BROWSER_SANDBOX_SCREENCAST_MAX_SECONDS", "240"))))
             frame_count = 0
-            try:
-                while loop.time() - start < max_seconds:
-                    try:
-                        line = await asyncio.wait_for(screencast_proc.stdout.readline(), timeout=15)
-                    except asyncio.TimeoutError:
-                        break
-                    if not line:
-                        break
-                    try:
-                        frame = json.loads(line)
-                    except Exception:
-                        continue
-                    metadata = frame.get("metadata") if isinstance(frame.get("metadata"), dict) else {}
-                    safe_payload = {
-                        "eventType": "hosted.sandbox.steel_cdp_screencast_frame",
-                        "browserSessionId": browser_session.get("browser_session_id"),
-                        "sessionId": browser_session.get("session_id"),
-                        "provider": "hosted_remote",
-                        "adapterMode": "hosted_provider",
-                        "providerStrategy": "steel-self-host",
-                        "providerLiveConnected": True,
-                        "mime": "image/jpeg",
-                        "data": frame.get("data", ""),
-                        "metadata": {
-                            "title": metadata.get("title"),
-                            "urlHost": _safe_host(metadata.get("url")),
-                            "width": metadata.get("width"),
-                            "height": metadata.get("height"),
-                            "capturedAt": now_iso()
-                        },
-                        "safety": {
-                            "rawFrameReturnedToAuthorizedUser": True,
-                            "rawFrameRecorded": False,
-                            "rawOcrTextReturned": False,
-                            "externalWriteActionsWithoutApproval": False
-                        }
+            async for frame in bridge.frames():
+                if loop.time() - start >= max_seconds:
+                    break
+                metadata = frame.get("metadata") if isinstance(frame.get("metadata"), dict) else {}
+                safe_payload = {
+                    "eventType": "hosted.sandbox.steel_cdp_screencast_frame",
+                    "browserSessionId": browser_session.get("browser_session_id"),
+                    "sessionId": browser_session.get("session_id"),
+                    "provider": "hosted_remote",
+                    "adapterMode": "hosted_provider",
+                    "providerStrategy": "steel-self-host",
+                    "providerLiveConnected": True,
+                    "mime": "image/jpeg",
+                    "data": frame.get("data", ""),
+                    "metadata": {
+                        "title": metadata.get("title"),
+                        "urlHost": _safe_host(metadata.get("url")),
+                        "width": metadata.get("width"),
+                        "height": metadata.get("height"),
+                        "capturedAt": now_iso()
+                    },
+                    "safety": {
+                        "rawFrameReturnedToAuthorizedUser": True,
+                        "rawFrameRecorded": False,
+                        "rawOcrTextReturned": False,
+                        "externalWriteActionsWithoutApproval": False
                     }
-                    yield f"event: hosted.sandbox.frame\ndata: {json.dumps(safe_payload, separators=(',', ':'))}\n\n"
-                    frame_count += 1
-            finally:
-                try:
-                    screencast_proc.terminate()
-                    await asyncio.wait_for(screencast_proc.wait(), timeout=3)
-                except Exception:
-                    try:
-                        screencast_proc.kill()
-                    except Exception:
-                        pass
+                }
+                yield f"event: hosted.sandbox.frame\ndata: {json.dumps(safe_payload, separators=(',', ':'))}\n\n"
+                frame_count += 1
             yield "event: hosted.sandbox.frame_stream_complete\ndata: " + json.dumps({
                 "eventType": "hosted.sandbox.frame_stream_complete",
                 "browserSessionId": browser_session.get("browser_session_id"),
