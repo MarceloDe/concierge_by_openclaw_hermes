@@ -197,7 +197,9 @@ socket.addEventListener("message", (event) => {
   let message;
   try { message = JSON.parse(event.data); } catch { return; }
   if (message.id && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); return; }
-  if (message.method === "Page.loadEventFired") loadedFlag = true;
+  if (message.method === "Page.loadEventFired") { loadedFlag = true; restartScreencast(); }
+  if (message.method === "Page.frameNavigated" && message.params && message.params.frame && !message.params.frame.parentId) restartScreencast();
+  if (message.method === "Runtime.executionContextsCleared") restartScreencast();
   if (message.method === "Page.screencastFrame") {
     const params = message.params || {};
     const md = params.metadata || {};
@@ -222,6 +224,20 @@ async function send(method, params = {}) {
 }
 async function refreshMeta() {
   try { const m = await send("Runtime.evaluate", { expression: "({ url: location.href, title: document.title, width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) })", returnByValue: true }); if (m.result && m.result.value) lastMeta = m.result.value; } catch {}
+}
+let __restartPending = false;
+async function restartScreencast() {
+  // After a (post-login) navigation Chrome stops emitting screencast frames for the new
+  // renderer -> the viewer goes white. Re-arm the screencast (and refresh size) on each
+  // main-frame navigation so the live view follows the user into the authenticated pages.
+  if (__restartPending) return;
+  __restartPending = true;
+  try {
+    await new Promise((r) => setTimeout(r, 400));
+    await refreshMeta();
+    await send("Page.bringToFront");
+    await send("Page.startScreencast", { format: "jpeg", quality: Number(quality || 55), maxWidth: 1600, maxHeight: 1000, everyNthFrame: Math.max(1, Number(everyNth || 1)) });
+  } catch {} finally { __restartPending = false; }
 }
 async function waitForLoad(ms) {
   loadedFlag = false;
@@ -289,8 +305,9 @@ async function runOp(operation, payload) {
     return { observation: observed.result?.value || {} };
   } else if (operation === "input") {
     const input = payload.input || {};
-    const viewport = await send("Runtime.evaluate", { expression: "({ width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) })", returnByValue: true });
-    const size = viewport.result?.value || { width: 1280, height: 720 };
+    // Use the cached page size (refreshMeta updates it ~1s) instead of a Runtime.evaluate per
+    // input — a fresh eval can hang on heavy authenticated pages and was failing input dispatch.
+    const size = { width: Number(lastMeta.width || 1280), height: Number(lastMeta.height || 720) };
     if (input.kind === "mouse") {
       const x = Math.max(0, Math.min(1, Number(input.x || 0))) * Number(size.width || 1280);
       const y = Math.max(0, Math.min(1, Number(input.y || 0))) * Number(size.height || 720);
@@ -1587,6 +1604,16 @@ await new Promise(() => {});
         health = await _api(path="v1/health", method="GET")
         if health["status_code"] >= 400 or health["payload"].get("status") != "ok":
             raise BrowserSandboxError("Steel self-host browser sandbox health check failed.")
+        # This Steel self-host allows one live session at a time. Release any existing live
+        # session before creating a new one so reconnect (after a refresh/restart) never hits
+        # the 1-session cap. (Durable per-user reuse is the persistence follow-up.)
+        try:
+            listed = await _api(path="v1/sessions", method="GET")
+            for sess in (listed.get("payload") or {}).get("sessions", []) or []:
+                if sess.get("status") == "live" and sess.get("id"):
+                    await _api(path=f"v1/sessions/{sess['id']}/release", method="POST")
+        except Exception:
+            pass
         result = await _api(
             path="v1/sessions",
             body={
