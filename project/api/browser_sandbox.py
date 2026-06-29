@@ -515,10 +515,11 @@ const targets = await fetch(listUrl).then((res) => {
   if (!res.ok) throw new Error(`cdp target list ${res.status}`);
   return res.json();
 });
-const target = targets.find((item) => item.type === "page" && item.webSocketDebuggerUrl)
-  ?? targets.find((item) => item.webSocketDebuggerUrl);
-if (!target?.webSocketDebuggerUrl) throw new Error("no page target with websocket debugger URL");
-const wsTarget = new URL(target.webSocketDebuggerUrl);
+const pageTarget = targets.find((item) => item.type === "page" && item.id) ?? targets.find((item) => item.id);
+if (!pageTarget?.id) throw new Error("no page target available");
+const __ver = await fetch(new URL("/json/version", cdpBase)).then((res) => res.json());
+let __sessionId = null;
+const wsTarget = new URL(__ver.webSocketDebuggerUrl);
 wsTarget.protocol = cdpUrl.startsWith("wss:") ? "wss:" : "ws:";
 wsTarget.hostname = cdpBase.hostname;
 wsTarget.port = cdpBase.port;
@@ -539,9 +540,16 @@ socket.addEventListener("message", (event) => {
     pending.delete(payload.id);
   }
 });
-function send(method, params = {}) {
+async function send(method, params = {}) {
+  if (!__sessionId && method !== "Target.attachToTarget") {
+    const __a = await send("Target.attachToTarget", { targetId: pageTarget.id, flatten: true });
+    __sessionId = __a.sessionId;
+    if (!__sessionId) throw new Error("flat attach returned no sessionId");
+  }
   const id = nextId++;
-  socket.send(JSON.stringify({ id, method, params }));
+  const __msg = { id, method, params };
+  if (__sessionId) __msg.sessionId = __sessionId;
+  socket.send(JSON.stringify(__msg));
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
@@ -608,10 +616,11 @@ const targets = await fetch(listUrl).then((res) => {
   if (!res.ok) throw new Error(`cdp target list ${res.status}`);
   return res.json();
 });
-const target = targets.find((item) => item.type === "page" && item.webSocketDebuggerUrl)
-  ?? targets.find((item) => item.webSocketDebuggerUrl);
-if (!target?.webSocketDebuggerUrl) throw new Error("no page target with websocket debugger URL");
-const wsTarget = new URL(target.webSocketDebuggerUrl);
+const pageTarget = targets.find((item) => item.type === "page" && item.id) ?? targets.find((item) => item.id);
+if (!pageTarget?.id) throw new Error("no page target available");
+const __ver = await fetch(new URL("/json/version", cdpBase)).then((res) => res.json());
+let __sessionId = null;
+const wsTarget = new URL(__ver.webSocketDebuggerUrl);
 wsTarget.protocol = cdpUrl.startsWith("wss:") ? "wss:" : "ws:";
 wsTarget.hostname = cdpBase.hostname;
 wsTarget.port = cdpBase.port;
@@ -630,9 +639,16 @@ socket.addEventListener("message", (event) => {
     pending.delete(message.id);
   }
 });
-function send(method, params = {}) {
+async function send(method, params = {}) {
+  if (!__sessionId && method !== "Target.attachToTarget") {
+    const __a = await send("Target.attachToTarget", { targetId: pageTarget.id, flatten: true });
+    __sessionId = __a.sessionId;
+    if (!__sessionId) throw new Error("flat attach returned no sessionId");
+  }
   const id = nextId++;
-  socket.send(JSON.stringify({ id, method, params }));
+  const __msg = { id, method, params };
+  if (__sessionId) __msg.sessionId = __sessionId;
+  socket.send(JSON.stringify(__msg));
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
@@ -863,10 +879,11 @@ const targets = await fetch(new URL("/json/list", cdpBase)).then((res) => {
   if (!res.ok) throw new Error(`cdp target list ${res.status}`);
   return res.json();
 });
-const target = targets.find((item) => item.type === "page" && item.webSocketDebuggerUrl)
-  ?? targets.find((item) => item.webSocketDebuggerUrl);
-if (!target?.webSocketDebuggerUrl) throw new Error("no page target with websocket debugger URL");
-const wsTarget = new URL(target.webSocketDebuggerUrl);
+const pageTarget = targets.find((item) => item.type === "page" && item.id) ?? targets.find((item) => item.id);
+if (!pageTarget?.id) throw new Error("no page target available");
+const __ver = await fetch(new URL("/json/version", cdpBase)).then((res) => res.json());
+let __sessionId = null;
+const wsTarget = new URL(__ver.webSocketDebuggerUrl);
 wsTarget.protocol = cdpUrl.startsWith("wss:") ? "wss:" : "ws:";
 wsTarget.hostname = cdpBase.hostname;
 wsTarget.port = cdpBase.port;
@@ -900,13 +917,20 @@ socket.addEventListener("message", (event) => {
       }
     }) + "\n");
     if (params.sessionId !== undefined) {
-      try { socket.send(JSON.stringify({ id: nextId++, method: "Page.screencastFrameAck", params: { sessionId: params.sessionId } })); } catch {}
+      try { socket.send(JSON.stringify({ id: nextId++, sessionId: __sessionId, method: "Page.screencastFrameAck", params: { sessionId: params.sessionId } })); } catch {}
     }
   }
 });
-function send(method, params = {}) {
+async function send(method, params = {}) {
+  if (!__sessionId && method !== "Target.attachToTarget") {
+    const __a = await send("Target.attachToTarget", { targetId: pageTarget.id, flatten: true });
+    __sessionId = __a.sessionId;
+    if (!__sessionId) throw new Error("flat attach returned no sessionId");
+  }
   const id = nextId++;
-  socket.send(JSON.stringify({ id, method, params }));
+  const __msg = { id, method, params };
+  if (__sessionId) __msg.sessionId = __sessionId;
+  socket.send(JSON.stringify(__msg));
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`${method} timeout`)); }, 10000);
     pending.set(id, (message) => {
