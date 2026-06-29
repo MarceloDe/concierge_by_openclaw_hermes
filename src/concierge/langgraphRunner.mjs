@@ -10,7 +10,7 @@ import {
 import { consumeReadOnlyObservationApproval } from "./approvalResume.mjs";
 import { persistClaimedChromeSnapshot, runPortalExtraction } from "./browserAutomation.mjs";
 import { classifyIntent } from "./classifier.mjs";
-import { createId, nowIso } from "./database.mjs";
+import { createId, nowIso, insertConversationMessage } from "./database.mjs";
 import {
   READ_ONLY_DOCUMENT_ALLOWED_ACTION,
   READ_ONLY_DOCUMENT_APPROVAL_SCOPE,
@@ -31,7 +31,7 @@ import {
 import { persistPortalPageScan } from "./portalScan.mjs";
 import { buildRuntimeCompatibilityBundle, toOpenClawChannelEnvelope } from "./runtimeAdapters.mjs";
 import { checkpointSession, getManagedSessionState } from "./sessionManager.mjs";
-import { runLedgerMode, writeShadowCheckpointLedger } from "./checkpointRunLedger.mjs";
+import { runLedgerMode, processRuntimeEnabled, writeShadowCheckpointLedger } from "./checkpointRunLedger.mjs";
 import { composeProcessOfferResponse } from "./plannerResponseComposer.mjs";
 import {
   buildRuntimeContextManifest,
@@ -170,7 +170,12 @@ const BrainstyState = Annotation.Root({
   memory_type: field(null),
   workflow_outcome: field(null),
   safety: mergeObjectField({}),
-  proof: appendArrayField()
+  proof: appendArrayField(),
+  // Canonical conversation channel (concat reducer). Carried across turns by the checkpointer
+  // per thread_id. MUST be omitted from initialState/Command.update (appendArrayField resets on
+  // []), so prior turns are preserved. Appended: user turn in inputPolicyNode, assistant turn
+  // via graph.updateState after the run. Authoritative durable record stays in conversation_messages.
+  messages: appendArrayField()
 });
 
 function appendProof(state, step, details = {}) {
@@ -650,7 +655,30 @@ async function publishGraphRuntimeEvent(store, state, { eventType, payload, sess
 async function inputPolicyNode(state) {
   const policyResult = evaluateInputPolicy(state.user_input);
   const intent = classifyIntent(state.user_input, policyResult);
+  // Append the current user turn to the canonical messages channel. Cold start (fresh process,
+  // empty/lost checkpoint): rehydrate prior turns from the authoritative DB in order, dropping
+  // the just-inserted current user row. Warm path: channel already holds history -> seed empty.
+  const priorInChannel = Array.isArray(state.messages) ? state.messages : [];
+  let seed = [];
+  if (priorInChannel.length === 0) {
+    const store = activeStores.get(state.session_id);
+    if (store) {
+      try {
+        const rows = await store.all(
+          "SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY sequence_number ASC;",
+          [state.session_id]
+        );
+        seed = rows.map((r) => ({ role: r.role, content: String(r.content ?? "") }));
+        const last = seed[seed.length - 1];
+        if (last && last.role === "user" && last.content === String(state.user_input ?? "")) seed.pop();
+      } catch {
+        seed = [];
+      }
+    }
+  }
+  const currentUserTurn = { role: "user", content: String(state.user_input ?? ""), at: nowIso() };
   return {
+    messages: [...seed, currentUserTurn],
     policy_result: policyResult,
     intent,
     safety: {
@@ -1016,26 +1044,17 @@ async function llmOrchestrationDecisionNode(state) {
   } catch {
     offerableProcesses = [];
   }
-  // Recent conversation turns so the planner does NOT re-offer / re-ask, and can ADVANCE
-  // when the user accepts a prior offer. Excludes the current user message (just persisted).
-  let conversationHistory = [];
-  try {
-    const rows = await store.all(
-      "SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 8;",
-      [state.session_id]
-    );
-    conversationHistory = rows
-      .reverse()
-      .map((r) => ({ role: r.role, content: String(r.content ?? "").slice(0, 500) }));
-    // drop the trailing current-turn user message (already in userInput)
-    const last = conversationHistory[conversationHistory.length - 1];
-    if (last && last.role === "user" && last.content === String(state.user_input ?? "").slice(0, 500)) {
-      conversationHistory.pop();
-    }
-    conversationHistory = conversationHistory.slice(-6);
-  } catch {
-    conversationHistory = [];
+  // Recent conversation turns so the planner does NOT re-offer / re-ask, and can ADVANCE when the
+  // user accepts a prior offer. Read from the canonical messages channel (populated by
+  // inputPolicyNode, carried across turns by the checkpointer) — not a DB re-read. The current
+  // user turn (appended in inputPolicyNode) is dropped here since it is already in user_input.
+  let conversationHistory = (Array.isArray(state.messages) ? state.messages : [])
+    .map((m) => ({ role: m.role, content: String(m.content ?? "").slice(0, 500) }));
+  const lastTurn = conversationHistory[conversationHistory.length - 1];
+  if (lastTurn && lastTurn.role === "user" && lastTurn.content === String(state.user_input ?? "").slice(0, 500)) {
+    conversationHistory.pop();
   }
+  conversationHistory = conversationHistory.slice(-6);
   const plannerState = dbCatalogPortfolio
     ? { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
     : { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory };
@@ -3581,13 +3600,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
   const graphTraceId = session.langgraph_thread_id ?? createId("lgtrace");
   const persistConversation = rawMessage.persistConversation !== false;
   if (persistConversation && userInput) {
-    await store.insert("conversation_messages", {
-      id: createId("msg"),
-      session_id: session.id,
-      role: "user",
-      content: userInput,
-      created_at: nowIso()
-    });
+    await insertConversationMessage(store, { sessionId: session.id, role: "user", content: userInput });
   }
   const context = await buildContextPacket(store, {
     user,
@@ -3843,8 +3856,10 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       checkpointResumePlan
     }
   });
-  // Step 7: write-only shadow checkpoint ledger (gated; never affects control flow).
-  if (runLedgerMode() === "shadow") {
+  // Checkpoint run ledger: default-ON (process-driven; binds the workflow's process + writes real
+  // per-step rows). Honors BRAINSTY_PROCESS_RUNTIME=off kill-switch and the legacy shadow mode.
+  // Write-only here (never affects this turn's control flow); always wrapped so it cannot break it.
+  if (processRuntimeEnabled() || runLedgerMode() === "shadow") {
     try {
       await writeShadowCheckpointLedger(store, {
         user,
@@ -3854,7 +3869,7 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
         sessionCheckpointId: checkpointResult.checkpointId
       });
     } catch {
-      /* shadow ledger is write-only and must never break the orchestration */
+      /* checkpoint ledger is write-only and must never break the orchestration */
     }
   }
   const refreshedManagedSession = await getManagedSessionState(store, session.id);
@@ -3889,13 +3904,20 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     achievedCheckpointCount: runtimeContextManifest.achievedCheckpoints.length
   });
   if (persistConversation && state.final_response) {
-    await store.insert("conversation_messages", {
-      id: createId("msg"),
-      session_id: session.id,
-      role: "assistant",
-      content: state.final_response,
-      created_at: nowIso()
-    });
+    await insertConversationMessage(store, { sessionId: session.id, role: "assistant", content: state.final_response });
+    // Append the assistant turn to the canonical LangGraph messages channel so the next turn's
+    // planner sees it from state (not a DB re-read). Single robust append site; concat reducer.
+    // SKIP when the run paused at a native approval interrupt: updateState would write a new
+    // checkpoint on top of the pending interrupt and clear it (breaking resume).
+    const pausedAtInterrupt = state.approval_interrupt?.status === "interrupted"
+      || state.workflow_outcome === "approval_pending_interrupt";
+    if (!pausedAtInterrupt) {
+      try {
+        await graph.updateState(config, { messages: [{ role: "assistant", content: String(state.final_response), at: nowIso() }] });
+      } catch (channelError) {
+        audit(store, session.id, "messages_channel_append_failed", { graphTraceId, error: String(channelError?.message ?? channelError) });
+      }
+    }
     await audit(store, session.id, "response_composed", {
       runtime: "langgraph",
       graphTraceId,

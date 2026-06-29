@@ -84,7 +84,7 @@ async function loadOwnedSession(store, { sessionId, userId }) {
 export async function getSessionContinuity(store, { sessionId, userId }) {
   const { session, user } = await loadOwnedSession(store, { sessionId, userId });
   const [messages, managedState, feedbackRows, handoffRows] = await Promise.all([
-    store.list("conversation_messages", { session_id: session.id }),
+    store.all("SELECT * FROM conversation_messages WHERE session_id = ? ORDER BY sequence_number ASC;", [session.id]),
     store.findOne("session_state", { session_id: session.id }),
     store.list("feedback_items", { session_id: session.id }),
     store.list("human_handoff_items", { session_id: session.id })

@@ -1432,5 +1432,46 @@ export const COLUMN_MIGRATIONS = [
     ["process_id", "ALTER TABLE workflow_runs ADD COLUMN process_id TEXT;"],
     ["resume_count", "ALTER TABLE workflow_runs ADD COLUMN resume_count INTEGER NOT NULL DEFAULT 0;"],
     ["last_checkpoint_boundary", "ALTER TABLE workflow_runs ADD COLUMN last_checkpoint_boundary TEXT;"]
+  ]],
+  ["conversation_messages", [
+    // Monotonic per-session ordinal so the conversation timeline is stable (created_at is a
+    // millisecond ISO string and collides under rapid turns). Legacy rows backfilled in migrate().
+    ["sequence_number", "ALTER TABLE conversation_messages ADD COLUMN sequence_number INTEGER NOT NULL DEFAULT 0;"]
+  ]],
+  ["processes", [
+    // Logical binding workflow -> process (no FK; selectProcessForWorkflow joins on it).
+    ["workflow_key", "ALTER TABLE processes ADD COLUMN workflow_key TEXT;"]
   ]]
 ];
+
+// Index migrations applied AFTER the column loop + backfill (migrateColumns is column-name
+// keyed, so indexes cannot live in COLUMN_MIGRATIONS). Idempotent (IF NOT EXISTS).
+export const INDEX_MIGRATIONS = [
+  ["idx_conversation_messages_session_seq",
+    "CREATE INDEX IF NOT EXISTS idx_conversation_messages_session_seq ON conversation_messages (session_id, sequence_number);"],
+  ["idx_processes_workflow_key",
+    "CREATE INDEX IF NOT EXISTS idx_processes_workflow_key ON processes (workflow_key);"]
+];
+
+// SQL to backfill conversation_messages.sequence_number for legacy rows (run once per engine).
+// SQLite (correlated count) and Postgres (window function) variants.
+export const CONVERSATION_SEQUENCE_BACKFILL_KEY = "backfill:conversation_messages.sequence_number";
+export const CONVERSATION_SEQUENCE_BACKFILL_SQLITE = `
+  UPDATE conversation_messages
+  SET sequence_number = (
+    SELECT COUNT(*) FROM conversation_messages c2
+    WHERE c2.session_id = conversation_messages.session_id
+      AND (c2.created_at < conversation_messages.created_at
+           OR (c2.created_at = conversation_messages.created_at AND c2.id <= conversation_messages.id))
+  )
+  WHERE sequence_number = 0;
+`;
+export const CONVERSATION_SEQUENCE_BACKFILL_POSTGRES = `
+  UPDATE conversation_messages cm
+  SET sequence_number = sub.rn
+  FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at, id) AS rn
+    FROM conversation_messages
+  ) sub
+  WHERE cm.id = sub.id AND cm.sequence_number = 0;
+`;

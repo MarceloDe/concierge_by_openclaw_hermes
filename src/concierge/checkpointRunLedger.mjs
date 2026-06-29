@@ -18,6 +18,28 @@ export function runLedgerMode(env = process.env) {
   return String(env.BRAINSTY_RUN_LEDGER ?? "off").toLowerCase(); // off | shadow | authoritative
 }
 
+// Process-driven runtime is default-ON; BRAINSTY_PROCESS_RUNTIME=off is the emergency kill-switch
+// (falls back to the legacy fixed-boundary ledger/resume, never a gate).
+export function processRuntimeEnabled(env = process.env) {
+  return String(env.BRAINSTY_PROCESS_RUNTIME ?? "on").toLowerCase() !== "off";
+}
+
+// Resolve the process bound to a routed workflow: explicit workflow_key match wins, then the
+// process:<workflow> convention, else null (legacy fixed-boundary behavior). Active+production only.
+export async function selectProcessForWorkflow(store, workflowKey) {
+  if (!workflowKey || !processRuntimeEnabled()) return null;
+  let proc = await store.findOne("processes", { workflow_key: workflowKey, status: "active", lifecycle_state: "production" });
+  if (!proc) proc = await store.findOne("processes", { process_key: `process:${workflowKey}`, status: "active", lifecycle_state: "production" });
+  return proc ?? null;
+}
+
+async function processStepsFor(store, processId) {
+  return store.all(
+    "SELECT id, step_order, step_key, checkpoint_boundary, capability_id, requires_idempotency_key, on_failure_policy FROM process_steps WHERE process_id = ? ORDER BY step_order;",
+    [processId]
+  );
+}
+
 export function reachedBoundaries(state = {}) {
   const reached = [];
   if (state.policy_result) reached.push("after_policy_gate");
@@ -43,6 +65,12 @@ async function upsertById(store, table, id, row) {
 // by the caller; wrapped by the caller so it can never break the orchestration.
 export async function writeShadowCheckpointLedger(store, { user, session, state, graphTraceId, sessionCheckpointId = null }) {
   const runId = `wfrun:${graphTraceId}`;
+  // Bind the process for the routed workflow (default-on). When bound, the ledger is driven by the
+  // process's real ordered steps (real process_id + pstep:* ids); otherwise the legacy fixed
+  // boundaries with synthetic step ids (back-compat for workflows without an authored process).
+  const proc = await selectProcessForWorkflow(store, state.workflow);
+  const steps = proc ? await processStepsFor(store, proc.id) : [];
+
   await upsertById(store, "workflow_runs", runId, {
     user_id: user?.id ?? state.user_id,
     session_id: session?.id ?? state.session_id ?? null,
@@ -51,31 +79,31 @@ export async function writeShadowCheckpointLedger(store, { user, session, state,
     status: "started",
     route_reason: state.route_reason ?? "shadow_ledger",
     started_at: nowIso(),
-    process_id: null,
+    process_id: proc?.id ?? null,
     last_checkpoint_boundary: null
   });
 
   const reached = reachedBoundaries(state);
-  let order = 0;
-  for (const boundary of RUN_LEDGER_BOUNDARIES) {
-    if (!reached.includes(boundary)) {
-      order += 1;
-      continue;
-    }
-    await upsertById(store, "workflow_checkpoint_runs", `ckpt:${graphTraceId}:${boundary}`, {
+  // Ledger rows: one per real process step when bound, else one per fixed boundary.
+  const ledgerRows = proc
+    ? steps.map((s) => ({ boundary: s.checkpoint_boundary, order: s.step_order, processStepId: s.id }))
+    : RUN_LEDGER_BOUNDARIES.map((b, i) => ({ boundary: b, order: i, processStepId: `step:adhoc:${b}` }));
+
+  for (const row of ledgerRows) {
+    const done = reached.includes(row.boundary);
+    await upsertById(store, "workflow_checkpoint_runs", `ckpt:${graphTraceId}:${row.boundary}`, {
       workflow_run_id: runId,
-      process_id: null,
-      process_step_id: `step:adhoc:${boundary}`,
-      checkpoint_boundary: boundary,
-      step_order: order,
-      status: "completed",
-      effect_stage: "after_effect",
+      process_id: proc?.id ?? null,
+      process_step_id: row.processStepId,
+      checkpoint_boundary: row.boundary,
+      step_order: row.order,
+      status: done ? "completed" : "pending",
+      effect_stage: done ? "after_effect" : "before_effect",
       session_checkpoint_id: sessionCheckpointId
     });
-    order += 1;
   }
   await store.update("workflow_runs", { last_checkpoint_boundary: reached.at(-1) ?? null, updated_at: nowIso() }, { id: runId });
-  return { mode: "shadow", runId, boundaries: reached };
+  return { mode: "shadow", runId, processId: proc?.id ?? null, processBound: Boolean(proc), boundaries: reached };
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +126,23 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
   if (!run) return { ok: false, reason: "run_not_found" };
   await store.update("workflow_runs", { status: "resuming", updated_at: nowIso() }, { id: runId });
 
+  // Derive the ordered plan from the BOUND process (real steps + idempotency + failure policy);
+  // fall back to the fixed boundaries for legacy runs with no process_id.
+  let plan; // [{ boundary, processStepId, requiresIdem, onFailure }]
+  if (run.process_id && processRuntimeEnabled()) {
+    const steps = await processStepsFor(store, run.process_id);
+    plan = steps.map((s) => ({
+      boundary: s.checkpoint_boundary,
+      processStepId: s.id,
+      requiresIdem: Number(s.requires_idempotency_key) === 1,
+      onFailure: s.on_failure_policy ?? "resume"
+    }));
+  }
+  if (!plan || plan.length === 0) {
+    plan = RUN_LEDGER_BOUNDARIES.map((b) => ({ boundary: b, processStepId: `step:adhoc:${b}`, requiresIdem: b === "before_worker", onFailure: "resume" }));
+  }
+  const order = plan.map((p) => p.boundary);
+
   const rows = await store.all(
     "SELECT * FROM workflow_checkpoint_runs WHERE workflow_run_id = ? ORDER BY step_order;",
     [runId]
@@ -116,28 +161,43 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
     }
   }
 
-  // Resume target R = first boundary not done.
-  const resumeTarget = RUN_LEDGER_BOUNDARIES.find((b) => !isDone(b)) ?? null;
+  // Resume target R = first planned step not done.
+  const resumeTarget = order.find((b) => !isDone(b)) ?? null;
   if (!resumeTarget) {
     await store.update("workflow_runs", { status: "completed", updated_at: nowIso() }, { id: runId });
-    return { ok: true, resumeTarget: null, skipped: [...RUN_LEDGER_BOUNDARIES], toReplay: [], rePlanned, invalidCaps, alreadyComplete: true };
+    return { ok: true, resumeTarget: null, skipped: [...order], toReplay: [], rePlanned, invalidCaps, alreadyComplete: true };
   }
-  const startIdx = RUN_LEDGER_BOUNDARIES.indexOf(resumeTarget);
-  const skipped = RUN_LEDGER_BOUNDARIES.slice(0, startIdx).filter(isDone);
-  const toReplay = RUN_LEDGER_BOUNDARIES.slice(startIdx);
+  const startIdx = order.indexOf(resumeTarget);
+  const skipped = order.slice(0, startIdx).filter(isDone);
+  const toReplay = plan.slice(startIdx);
 
-  // Replay downstream only. before_worker re-dispatch is idempotent (no duplicate effect).
+  // Replay downstream only. Idempotent steps re-dispatch via dispatchOnce (no duplicate effect);
+  // on_failure_policy 'abort' fails the run loudly, 'resume' leaves it resumable.
   let dispatch = null;
-  for (const boundary of toReplay) {
-    if (boundary === "before_worker" && dispatchFn) {
-      const existing = byBoundary.get("before_worker");
-      dispatch = await dispatchOnce(
-        store,
-        { workflowRunId: runId, idempotencyKey: existing?.idempotency_key ?? `resume:${runId}:before_worker`, sessionCheckpointId: existing?.session_checkpoint_id ?? null },
-        dispatchFn
-      );
+  for (const step of toReplay) {
+    if (step.requiresIdem && dispatchFn) {
+      const existing = byBoundary.get(step.boundary);
+      try {
+        dispatch = await dispatchOnce(
+          store,
+          {
+            workflowRunId: runId,
+            idempotencyKey: existing?.idempotency_key ?? `resume:${runId}:${step.boundary}`,
+            sessionCheckpointId: existing?.session_checkpoint_id ?? null,
+            processId: run.process_id ?? null,
+            processStepId: step.processStepId
+          },
+          dispatchFn
+        );
+      } catch (err) {
+        if (step.onFailure === "abort") {
+          await store.update("workflow_runs", { status: "failed", last_checkpoint_boundary: step.boundary, updated_at: nowIso() }, { id: runId });
+          return { ok: false, reason: "step_failed_abort", failedBoundary: step.boundary, error: String(err?.message ?? err), rePlanned, invalidCaps };
+        }
+        return { ok: false, reason: "step_failed_resumable", resumeTarget: step.boundary, error: String(err?.message ?? err), rePlanned, invalidCaps };
+      }
     } else {
-      const row = byBoundary.get(boundary);
+      const row = byBoundary.get(step.boundary);
       if (row) {
         await store.update("workflow_checkpoint_runs", { status: "completed", effect_stage: "after_effect", updated_at: nowIso() }, { id: row.id });
       }
@@ -145,8 +205,8 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
   }
   await store.update(
     "workflow_runs",
-    { status: "completed", resume_count: (run.resume_count ?? 0) + 1, last_checkpoint_boundary: "after_response", updated_at: nowIso() },
+    { status: "completed", resume_count: (run.resume_count ?? 0) + 1, last_checkpoint_boundary: order.at(-1), updated_at: nowIso() },
     { id: runId }
   );
-  return { ok: true, resumeTarget, skipped, toReplay, rePlanned, invalidCaps, dispatch };
+  return { ok: true, resumeTarget, skipped, toReplay: toReplay.map((s) => s.boundary), rePlanned, invalidCaps, dispatch };
 }

@@ -26,7 +26,7 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
   let conversationHistory = state.conversation_history ?? [];
   if (!conversationHistory.length) {
     try {
-      const rows = await store.all("SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 8;", [sessionId]);
+      const rows = await store.all("SELECT role, content FROM conversation_messages WHERE session_id = ? ORDER BY sequence_number DESC LIMIT 8;", [sessionId]);
       conversationHistory = rows.reverse().map((r) => ({ role: r.role, content: String(r.content ?? "").slice(0, 400) }));
       const last = conversationHistory[conversationHistory.length - 1];
       if (last && last.role === "user" && last.content === String(state.user_input ?? "").slice(0, 400)) conversationHistory.pop();

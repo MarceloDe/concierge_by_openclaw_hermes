@@ -312,7 +312,7 @@ export async function retainMemoryFromSession(store, { user, session, reason = "
       `SELECT id, content, created_at
        FROM conversation_messages
        WHERE session_id = ? AND role = 'user'
-       ORDER BY created_at DESC
+       ORDER BY sequence_number DESC
        LIMIT 1;`,
       [session.id]
     )

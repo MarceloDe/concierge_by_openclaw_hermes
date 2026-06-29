@@ -23,10 +23,13 @@ function idempotencyLockKey(idempotencyKey) {
 
 // Run dispatchFn at most once per idempotencyKey. Returns {dispatched, duplicatePrevented,
 // resultPointer, traceEvent}. effect_stage distinguishes retry-safe from compensation.
-export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessionCheckpointId = null }, dispatchFn) {
+export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessionCheckpointId = null, processId = null, processStepId = null }, dispatchFn) {
   const cache = createRuntimeContextCache();
   const lockKey = idempotencyLockKey(idempotencyKey);
   const lockRowId = `dispatch:${idempotencyKey}`;
+  // The lock row's process_step_id must stay DISTINCT from the ledger step row's real pstep:* id
+  // (UNIQUE(workflow_run_id, process_step_id)); encode the real step for traceability via a prefix.
+  const lockProcessStepId = `step:dispatch:${processStepId ?? idempotencyKey}`;
 
   // Authoritative check (Postgres) — independent of Redis.
   const existing = await store.findOne("workflow_checkpoint_runs", { idempotency_key: idempotencyKey });
@@ -42,8 +45,8 @@ export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessi
     await store.insert("workflow_checkpoint_runs", {
       id: lockRowId,
       workflow_run_id: workflowRunId,
-      process_id: null,
-      process_step_id: `step:dispatch:${idempotencyKey}`,
+      process_id: processId,
+      process_step_id: lockProcessStepId,
       checkpoint_boundary: "before_worker",
       step_order: 0,
       status: "in_progress",

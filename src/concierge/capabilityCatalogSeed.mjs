@@ -12,6 +12,34 @@ const VALID_NODES = new Set(BRAINSTY_GRAPH_NODE_NAMES);
 // allowed-workflows. See docs/CAPABILITY_PORTFOLIO_SCHEMA_PROPOSAL.md section 6.
 const meta = (when, why, best, score) => ({ when_to_use: when, why_use: why, best_used_for: best, planner_score: score });
 
+// Reusable process spines (all node names are in BRAINSTY_GRAPH_NODE_NAMES; validated at seed time).
+// Spine A = portal/observe (user login takeover -> idempotent read-only worker dispatch -> cited evidence).
+// Spine B = research/parse (no login; gather published/uploaded evidence -> cited answer).
+// Spine C = approval (short native HITL pause).
+const SPINE_A_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "approval_pause", "case_state_shadow", "compose_response"];
+const SPINE_B_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "case_state_shadow", "compose_response"];
+const SPINE_C_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "approval_pause", "compose_response"];
+// Founder edits these step lists after the first sketch. One step per checkpoint boundary in v1.
+const spineASteps = (observeCapKey, observeTitle) => [
+  { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+  { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+  { step_key: "observe", checkpoint_boundary: "before_worker", title: observeTitle, capability_key: observeCapKey, requires_idempotency_key: 1 },
+  { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Capture cited evidence", capability_key: "tool:payer_portal_reader", expected_source_pointer: 1 },
+  { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
+];
+const spineBSteps = (gatherCapKey, gatherTitle) => [
+  { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+  { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+  { step_key: "gather", checkpoint_boundary: "after_evidence", title: gatherTitle, capability_key: gatherCapKey, expected_source_pointer: 1 },
+  { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
+];
+const spineCSteps = () => [
+  { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+  { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+  { step_key: "approval", checkpoint_boundary: "before_worker", title: "Pause for human approval", capability_key: "graph_path:approval_interrupt_resume", on_failure_policy: "resume" },
+  { step_key: "respond", checkpoint_boundary: "after_response", title: "Confirm and respond" }
+];
+
 export const CAPABILITY_CATALOG = Object.freeze({
   capabilities: [
     // workflows (FK workflow_key)
@@ -37,26 +65,134 @@ export const CAPABILITY_CATALOG = Object.freeze({
     { capability_key: "graph_path:approval_interrupt_resume", kind: "graph_path", graph_subpath: ["observe_evidence", "approval_pause", "observe_evidence"], short_description: "Native HITL approval pause before worker/write.", ...meta("read-only worker execution needs explicit human approval", "native LangGraph interrupt + resume on approval token", "human-in-the-loop approval", 10) },
     { capability_key: "graph_path:evidence_to_sourced_answer", kind: "graph_path", graph_subpath: ["observe_evidence", "case_state_shadow", "compose_response"], short_description: "Cited answer once trusted source pointers exist.", ...meta("trusted source pointers exist and can be cited", "evidence -> case shadow -> cited compose", "sourced answer composition", 10) }
   ],
+  // 8 canonical processes — one per allowed workflow. Spine A (portal/observe), B (research/parse),
+  // C (approval). Each binds via workflow_key so the router selects it (selectProcessForWorkflow).
   processes: [
     {
       process_key: "process:portal_readonly_lookup",
-      title: "Read-only insurer portal lookup",
+      workflow_key: "eligibility_benefits_navigation",
+      title: "Read-only insurer portal lookup (eligibility & benefits)",
       journey_stage: "coverage_understanding",
       offerable: 1,
       display_order: 1,
       short_description: "You log in yourself; I read and cite what's on screen.",
-      ...meta("a payer-portal data request when a portal account exists but no fresh evidence is cached", "the default spine to obtain plan-specific data without the agent ever entering credentials", "plan-specific lookups requiring portal login", 26),
+      ...meta("a payer-portal data request when a portal account exists but no fresh evidence is cached", "the default spine to obtain plan-specific data without the agent ever entering credentials", "coverage / deductible / OOP / copay requiring portal login", 26),
       required_user_inputs: [{ key: "which_payer_portal", label: "Which insurance portal", why: "to open the right site", sensitive: false }],
       approval_scope: "read_only_observation",
       worker_skill_capability_key: "skill:insurance_portal_browser",
-      graph_subpath: ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "approval_pause", "case_state_shadow", "compose_response"],
+      graph_subpath: SPINE_A_GRAPH,
       steps: [
         { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
         { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
         { step_key: "observe", checkpoint_boundary: "before_worker", title: "Read-only observe (after your login)", capability_key: "skill:insurance_portal_browser", requires_idempotency_key: 1 },
-        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Capture cited evidence", expected_source_pointer: 1 },
-        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer" }
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Capture cited evidence", capability_key: "tool:payer_portal_reader", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
       ]
+    },
+    {
+      process_key: "process:claim_status_lookup",
+      workflow_key: "claim_status_navigation",
+      title: "Claim status / EOB / why-was-I-billed lookup",
+      journey_stage: "service_use_claim",
+      offerable: 1,
+      display_order: 2,
+      short_description: "Log in; I read your claim/EOB and explain what you owe and why.",
+      ...meta("user asks claim status, EOB, patient responsibility, or why they were billed", "reads the claim/EOB from the portal and traces deductible/coinsurance/copay", "claim status and patient-responsibility explanation", 26),
+      required_user_inputs: [{ key: "which_payer_portal", label: "Which insurance portal", why: "to open the right site", sensitive: false }, { key: "claim_or_date", label: "Claim id or date of service", why: "to locate the claim", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_portal_browser",
+      graph_subpath: SPINE_A_GRAPH,
+      steps: spineASteps("skill:insurance_portal_browser", "Read-only claim/EOB observe (after your login)")
+    },
+    {
+      process_key: "process:pharmacy_formulary_lookup",
+      workflow_key: "pharmacy_formulary",
+      title: "Pharmacy / formulary coverage lookup",
+      journey_stage: "pharmacy_benefit_scrutiny",
+      offerable: 1,
+      display_order: 3,
+      short_description: "Log in; I read your drug's tier, coverage, PA/step-therapy and cost.",
+      ...meta("user asks if a drug is covered, its tier, step therapy, quantity limits or cost", "reads the plan formulary / pharmacy benefit from the portal and cites it", "medication coverage and cost-share", 26),
+      required_user_inputs: [{ key: "which_payer_portal", label: "Which insurance portal", why: "to open the right site", sensitive: false }, { key: "drug_name", label: "Medication name and strength", why: "to look up the formulary entry", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_portal_browser",
+      graph_subpath: SPINE_A_GRAPH,
+      steps: spineASteps("skill:insurance_portal_browser", "Read-only formulary observe (after your login)")
+    },
+    {
+      process_key: "process:prior_auth_lookup",
+      workflow_key: "prior_authorization_navigation",
+      title: "Prior authorization requirement / status lookup",
+      journey_stage: "service_authorization",
+      offerable: 1,
+      display_order: 4,
+      short_description: "Log in; I read whether a service needs prior auth and its status (never submits).",
+      ...meta("user asks whether a service/drug needs prior auth, its status, or required documentation", "reads the PA policy/status from the portal and cites it; never submits a request", "prior authorization requirement and status", 24),
+      required_user_inputs: [{ key: "which_payer_portal", label: "Which insurance portal", why: "to open the right site", sensitive: false }, { key: "service_or_code", label: "Service, procedure code, or drug", why: "to look up the PA rule", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_portal_browser",
+      graph_subpath: SPINE_A_GRAPH,
+      steps: spineASteps("skill:insurance_portal_browser", "Read-only prior-auth observe (after your login)")
+    },
+    {
+      process_key: "process:portal_extraction",
+      workflow_key: "payer_portal_read_only_extraction",
+      title: "Read-only payer portal extraction",
+      journey_stage: "evidence_capture",
+      offerable: 1,
+      display_order: 5,
+      short_description: "Log in; I extract and cite the structured facts visible on your portal.",
+      ...meta("specific plan data is only available behind portal login and must be captured as cited evidence", "drives read-only structured extraction after user takeover login", "authenticated portal evidence capture", 24),
+      required_user_inputs: [{ key: "which_payer_portal", label: "Which insurance portal", why: "to open the right site", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_portal_browser",
+      graph_subpath: SPINE_A_GRAPH,
+      steps: spineASteps("skill:insurance_portal_browser", "Read-only structured extraction (after your login)")
+    },
+    {
+      process_key: "process:denial_appeal_support",
+      workflow_key: "denial_appeal_preparation",
+      title: "Denial appeal support (draft only)",
+      journey_stage: "denial_resolution",
+      offerable: 1,
+      display_order: 6,
+      short_description: "I explain the denial grounds and assemble appeal support — I never send anything.",
+      ...meta("a claim/PA was denied and the user wants to understand grounds and assemble an appeal", "researches policy/criteria and assembles a cited appeal support packet; draft only, never sends", "denial appeal preparation", 22),
+      required_user_inputs: [{ key: "denial_reason", label: "Denial reason / letter", why: "to map the grounds to plan rules", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_knowledge_research",
+      graph_subpath: SPINE_B_GRAPH,
+      steps: spineBSteps("skill:insurance_knowledge_research", "Research denial grounds + appeal criteria")
+    },
+    {
+      process_key: "process:document_review",
+      workflow_key: "document_or_trace_review",
+      title: "Document / trace review",
+      journey_stage: "evidence_review",
+      offerable: 1,
+      display_order: 7,
+      short_description: "Upload an EOB/SBC/denial; I extract the key fields with citations.",
+      ...meta("user uploads a document (EOB/SBC/denial/bill) to interpret; no login needed", "parses the uploaded artifact into cited structured fields", "uploaded document interpretation", 22),
+      required_user_inputs: [{ key: "uploaded_document", label: "The document to review", why: "to extract its fields", sensitive: false }],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: "skill:insurance_knowledge_research",
+      graph_subpath: SPINE_B_GRAPH,
+      steps: spineBSteps("tool:document_trace_parser", "Parse uploaded document to cited fields")
+    },
+    {
+      process_key: "process:human_approval",
+      workflow_key: "human_approval_escalation",
+      title: "Human approval escalation",
+      journey_stage: "approval_gate",
+      offerable: 0,
+      display_order: 8,
+      short_description: "Pause for your explicit approval before any gated step.",
+      ...meta("a high-risk or approval-gated step needs explicit human approval before proceeding", "native HITL pause that waits for an approval token", "human-in-the-loop approval gate", 18),
+      required_user_inputs: [],
+      approval_scope: "read_only_observation",
+      worker_skill_capability_key: null,
+      graph_subpath: SPINE_C_GRAPH,
+      steps: spineCSteps()
     }
   ]
 });
@@ -130,7 +266,8 @@ export async function seedCapabilityCatalog(store, { nowIso, createId, catalog =
       required_user_inputs_json: JSON.stringify(proc.required_user_inputs ?? []),
       approval_scope: proc.approval_scope ?? "read_only_observation",
       worker_skill_capability_id: proc.worker_skill_capability_key ? capIdByKey[proc.worker_skill_capability_key] ?? null : null,
-      graph_subpath_json: proc.graph_subpath ? JSON.stringify(proc.graph_subpath) : null
+      graph_subpath_json: proc.graph_subpath ? JSON.stringify(proc.graph_subpath) : null,
+      workflow_key: proc.workflow_key ?? null
     }, nowIso, createId);
     let order = 0;
     for (const step of proc.steps ?? []) {
@@ -143,7 +280,8 @@ export async function seedCapabilityCatalog(store, { nowIso, createId, catalog =
         checkpoint_boundary: step.checkpoint_boundary,
         capability_id: step.capability_key ? capIdByKey[step.capability_key] ?? null : null,
         expected_source_pointer: step.expected_source_pointer ?? 0,
-        requires_idempotency_key: step.requires_idempotency_key ?? 0
+        requires_idempotency_key: step.requires_idempotency_key ?? 0,
+        on_failure_policy: step.on_failure_policy ?? "resume"
       }, nowIso, createId);
     }
   }

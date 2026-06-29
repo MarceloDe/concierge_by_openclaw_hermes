@@ -1,7 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { COLUMN_MIGRATIONS, SCHEMA_SQL, TABLES } from "./schema.mjs";
+import {
+  COLUMN_MIGRATIONS, INDEX_MIGRATIONS, SCHEMA_SQL, TABLES,
+  CONVERSATION_SEQUENCE_BACKFILL_KEY, CONVERSATION_SEQUENCE_BACKFILL_SQLITE
+} from "./schema.mjs";
 import { seedRuntimeRegistries } from "./workflowArchitecture.mjs";
 
 export const DEFAULT_DB_PATH = resolve("data/brainstyworkers.sqlite");
@@ -111,6 +114,20 @@ export class SqliteStore {
     // Single source of truth: apply incremental ADD COLUMN migrations (schema.mjs).
     for (const [table, migrations] of COLUMN_MIGRATIONS) {
       await this.migrateColumns(table, migrations);
+    }
+    // Backfill legacy conversation ordinals BEFORE creating the ordering index (so any future
+    // unique constraint would not trip on the DEFAULT 0 rows). Idempotent: only touches seq=0.
+    const seqDone = await this.get(
+      "SELECT 1 AS x FROM schema_migrations WHERE migration_key = ? LIMIT 1;",
+      [CONVERSATION_SEQUENCE_BACKFILL_KEY]
+    );
+    if (!seqDone) {
+      await this.exec(CONVERSATION_SEQUENCE_BACKFILL_SQLITE);
+      await this.recordMigration(CONVERSATION_SEQUENCE_BACKFILL_KEY, { engine: "sqlite" });
+    }
+    // Index migrations (after columns + backfill; column-name-keyed migrateColumns cannot host them).
+    for (const [, sql] of INDEX_MIGRATIONS) {
+      await this.exec(sql);
     }
     await this.exec(`
       CREATE TABLE IF NOT EXISTS human_handoff_items (
@@ -528,4 +545,28 @@ export class SqliteStore {
       throw error;
     }
   }
+}
+
+// Authoritative, ordered conversation insert. Computes the next per-session ordinal inside a
+// transaction (SQLite BEGIN IMMEDIATE serializes writers; Postgres uses a dedicated client) so
+// the timeline is monotonic even under rapid turns. Works for both stores (transaction(callback)
+// passes a store-like object exposing get/insert). Returns the inserted row.
+export async function insertConversationMessage(store, { sessionId, role, content }) {
+  return store.transaction(async (tx) => {
+    const row = await tx.get(
+      "SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next FROM conversation_messages WHERE session_id = ?;",
+      [sessionId]
+    );
+    const seq = Number(row?.next ?? 1);
+    const values = {
+      id: createId("msg"),
+      session_id: sessionId,
+      role,
+      content,
+      created_at: nowIso(),
+      sequence_number: seq
+    };
+    await tx.insert("conversation_messages", values);
+    return values;
+  });
 }

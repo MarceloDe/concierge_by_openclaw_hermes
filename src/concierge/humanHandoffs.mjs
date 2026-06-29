@@ -65,7 +65,7 @@ export async function createHumanHandoffItem(
   if (!user?.id || !session?.id) throw new Error("A user and session are required to create a human handoff.");
 
   const latestMessage = await store.get(
-    "SELECT id, content FROM conversation_messages WHERE session_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1;",
+    "SELECT id, content FROM conversation_messages WHERE session_id = ? AND role = 'user' ORDER BY sequence_number DESC LIMIT 1;",
     [session.id]
   );
   const category = policyResult.urgentEscalation?.category ?? "urgent_emergency";

@@ -51,16 +51,29 @@ test("Step 7: shadow ledger records exactly the 5 boundaries with a session chec
   }
 });
 
-test("Step 7: ledger is gated — OFF by default writes nothing", async () => {
-  const prev = process.env.BRAINSTY_RUN_LEDGER;
+test("Step 7: ledger is default-ON; BRAINSTY_PROCESS_RUNTIME=off disables it", async () => {
+  const prevLedger = process.env.BRAINSTY_RUN_LEDGER;
+  const prevProc = process.env.BRAINSTY_PROCESS_RUNTIME;
   delete process.env.BRAINSTY_RUN_LEDGER;
   try {
-    const store = await freshStore();
-    const { user, session } = await enrollDefaultMember(store);
-    const result = await runLangGraphOrchestration(store, { user, session, channel: session.channel, userInput: "check my benefits", rawMessage: replayRaw });
-    const rows = await store.all("SELECT id FROM workflow_checkpoint_runs WHERE workflow_run_id = ?;", [`wfrun:${result.state.graph_trace_id}`]);
-    assert.equal(rows.length, 0, "ledger off => no rows");
+    // Default (no envs): the process-driven ledger writes per-step rows.
+    delete process.env.BRAINSTY_PROCESS_RUNTIME;
+    const store1 = await freshStore();
+    const m1 = await enrollDefaultMember(store1);
+    const r1 = await runLangGraphOrchestration(store1, { user: m1.user, session: m1.session, channel: m1.session.channel, userInput: "check my benefits", rawMessage: replayRaw });
+    const rows1 = await store1.all("SELECT id FROM workflow_checkpoint_runs WHERE workflow_run_id = ?;", [`wfrun:${r1.state.graph_trace_id}`]);
+    assert.ok(rows1.length > 0, "default-on => ledger rows written");
+
+    // Kill-switch OFF: writes nothing.
+    process.env.BRAINSTY_PROCESS_RUNTIME = "off";
+    const store2 = await freshStore();
+    const m2 = await enrollDefaultMember(store2);
+    const r2 = await runLangGraphOrchestration(store2, { user: m2.user, session: m2.session, channel: m2.session.channel, userInput: "check my benefits", rawMessage: replayRaw });
+    const rows2 = await store2.all("SELECT id FROM workflow_checkpoint_runs WHERE workflow_run_id = ?;", [`wfrun:${r2.state.graph_trace_id}`]);
+    assert.equal(rows2.length, 0, "kill-switch off => no rows");
   } finally {
-    if (prev !== undefined) process.env.BRAINSTY_RUN_LEDGER = prev;
+    if (prevLedger !== undefined) process.env.BRAINSTY_RUN_LEDGER = prevLedger;
+    if (prevProc === undefined) delete process.env.BRAINSTY_PROCESS_RUNTIME;
+    else process.env.BRAINSTY_PROCESS_RUNTIME = prevProc;
   }
 });

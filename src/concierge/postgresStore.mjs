@@ -1,5 +1,8 @@
 import pg from "pg";
-import { COLUMN_MIGRATIONS, SCHEMA_SQL, TABLES } from "./schema.mjs";
+import {
+  COLUMN_MIGRATIONS, INDEX_MIGRATIONS, SCHEMA_SQL, TABLES,
+  CONVERSATION_SEQUENCE_BACKFILL_KEY, CONVERSATION_SEQUENCE_BACKFILL_POSTGRES
+} from "./schema.mjs";
 import { seedRuntimeRegistries } from "./workflowArchitecture.mjs";
 import { assertSafeSqlIdentifier, assertSafeTableName, createId, nowIso } from "./database.mjs";
 
@@ -158,6 +161,18 @@ export class PostgresStore {
     // never alters an existing table). Single source: schema COLUMN_MIGRATIONS.
     for (const [table, migrations] of COLUMN_MIGRATIONS) {
       await this.migrateColumns(table, migrations);
+    }
+    // Backfill legacy conversation ordinals before the ordering index. Idempotent (seq=0 only).
+    const seqDone = await this.get(
+      "SELECT 1 AS x FROM schema_migrations WHERE migration_key = ? LIMIT 1;",
+      [CONVERSATION_SEQUENCE_BACKFILL_KEY]
+    );
+    if (!seqDone) {
+      await this.query(CONVERSATION_SEQUENCE_BACKFILL_POSTGRES);
+      await this.recordMigration(CONVERSATION_SEQUENCE_BACKFILL_KEY, { engine: "postgres" });
+    }
+    for (const [, sql] of INDEX_MIGRATIONS) {
+      await this.query(sql);
     }
     if (seed) await seedRuntimeRegistries(this, { nowIso, createId });
     return this;

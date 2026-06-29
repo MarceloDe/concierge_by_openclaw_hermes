@@ -31,9 +31,17 @@ test("Step 2: seed inserts the catalog (FKs resolve to existing registry rows)",
   assert.ok(keys.has("skill:insurance_portal_browser"));
   assert.ok(keys.has("workflow:eligibility_benefits_navigation"));
 
-  const steps = await store.all("SELECT step_key, checkpoint_boundary FROM process_steps ORDER BY step_order;");
+  // Scope to the portal process (the canonical Spine A); 8 processes are now seeded.
+  const steps = await store.all(
+    "SELECT step_key, checkpoint_boundary FROM process_steps WHERE process_id = ? ORDER BY step_order;",
+    ["proc:process:portal_readonly_lookup"]
+  );
   const boundaries = steps.map((s) => s.checkpoint_boundary);
   assert.deepEqual(boundaries, ["after_policy_gate", "after_planner", "before_worker", "after_evidence", "after_response"], "spine checkpoint boundaries seeded in order");
+  // Every process is bound to a workflow_key (router selection surface).
+  const procs = await store.all("SELECT process_key, workflow_key FROM processes;");
+  assert.equal(procs.length, 8, "8 canonical processes seeded");
+  assert.ok(procs.every((p) => p.workflow_key), "every process bound to a workflow_key");
 });
 
 test("Step 2: seed is idempotent (runs twice, no duplicates)", async () => {
