@@ -221,6 +221,10 @@ export function buildLlmOrchestrationDecisionPayload(state) {
       workerMayContactPayer: false
     },
     expectedJsonShape: {
+      extractedDemand: "one sentence: what the user is actually asking for, in your words",
+      targetOutcome: "the concrete final information or action the user wants (e.g. 'current out-of-pocket balance')",
+      informationNeeds: ["specific data required to fulfill the demand, e.g. payer, member_id, claim_id, drug_name"],
+      collectedUserData: "object of data the user has ALREADY provided across the conversation, e.g. { payer: 'Aetna', requested_data: 'out_of_pocket' } (empty object if none)",
       workflow: "one of the allowed workflow keys",
       intent: "short snake_case intent",
       confidence: "number from 0 to 1",
@@ -263,6 +267,7 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "If source pointers are absent, say what evidence is missing.",
         "Reason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).",
         "A member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence; they require authenticated portal evidence. For ANY such current-balance/amount question, set canAnswerNow=false and responseStrategy='offer_process_and_ask' (offer the portal-lookup process) EVEN IF research or policy evidence is present. Research/policy evidence supports only general coverage explanations, never a live balance.",
+        "DEMAND EXTRACTION (do this first): set extractedDemand (what the user wants, in one sentence), targetOutcome (the concrete final info/action), and informationNeeds (the specific data required to fulfill it). Build collectedUserData from conversationHistory + the current message — every datum the user has ALREADY provided (payer, member_id, claim_id, drug, the data they want). informationNeeds MINUS what's in collectedUserData = what you still need (drives clarificationNeeded + missingPlanDetails). Never list a need the user already satisfied.",
         "If you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'.",
         "Use conversationHistory (recent prior turns). NEVER re-ask for information the user already gave (payer name, the data they want) and NEVER repeat an offer you already made. If you ALREADY offered the portal-lookup process in a prior turn AND the user's latest message accepts/confirms/proceeds (e.g. 'ready', 'yes', 'ok', 'let's go', names the payer, names the data), DO NOT re-explain the offer — keep responseStrategy='offer_process_and_ask' with the offeredProcessIds set, set clarificationNeeded=false, and set userFacingNextQuestion to a SINGLE short instruction to use the live portal action (the UI shows a 'Connect portal (live)' button).",
         "BREVITY: keep userFacingNextQuestion and rationale short and direct — at most one or two short sentences. No preamble, no repeating caveats already stated earlier in the conversation."
@@ -292,6 +297,10 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
       workflow: options.fallbackWorkflow ?? null,
       confidence: 0,
       intent: null,
+      extractedDemand: "",
+      targetOutcome: "",
+      informationNeeds: [],
+      collectedUserData: {},
       rationale: error.message,
       requiredEvidence: [],
       missingEvidence: [],
@@ -336,6 +345,14 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
   const responseStrategy = allowedStrategies.includes(responseStrategyRaw) ? responseStrategyRaw : (responseStrategyRaw ? compact(responseStrategyRaw, 1000) : null);
   if (clarificationNeeded && !userFacingNextQuestion) warnings.push("clarification_needed_without_question");
   if (["offer_process_and_ask", "honest_capability_decline"].includes(responseStrategy) && offeredProcessIds.length === 0) warnings.push("capability_question_without_offer");
+  // Demand extraction (Lever 1): first-class so it is measurable + traceable.
+  const extractedDemand = parsed.extractedDemand ? compact(parsed.extractedDemand, 500) : "";
+  const targetOutcome = parsed.targetOutcome ? compact(parsed.targetOutcome, 300) : "";
+  const informationNeeds = asArray(parsed.informationNeeds);
+  const collectedUserData = parsed.collectedUserData && typeof parsed.collectedUserData === "object" && !Array.isArray(parsed.collectedUserData)
+    ? parsed.collectedUserData
+    : {};
+  if (!extractedDemand) warnings.push("demand_not_extracted");
 
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
@@ -347,6 +364,10 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     workflow: issues.length ? options.fallbackWorkflow ?? null : workflow,
     confidence,
     intent: parsed.intent ? String(parsed.intent) : null,
+    extractedDemand,
+    targetOutcome,
+    informationNeeds,
+    collectedUserData,
     rationale: compact(parsed.rationale, 800),
     requiredEvidence: asArray(parsed.requiredEvidence),
     missingEvidence: asArray(parsed.missingEvidence),

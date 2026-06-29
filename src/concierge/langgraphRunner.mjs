@@ -1028,9 +1028,36 @@ async function llmOrchestrationDecisionNode(state) {
     const { loadSessionPortfolio } = await import("./capabilityCatalog.mjs");
     const portfolio = await loadSessionPortfolio(store, { sessionId: state.session_id });
     const table = portfolio.manifest?.promptTable ?? [];
-    offerableProcesses = table
-      .filter((row) => row.kind === "process")
-      .map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope }));
+    const processRows = table.filter((row) => row.kind === "process");
+    // Lever 2: surface each process's ORDERED STEPS (boundary + the tool/skill bound to it) so the
+    // planner reasons about feasibility ("can these steps reach the user's target?"). Tool/skill
+    // selection is authored into process_steps (deterministic), not LLM-guessed. Batched (1 query).
+    let stepsByProc = {};
+    try {
+      const procDbIds = processRows.map((p) => `proc:${p.portfolioId}`);
+      if (procDbIds.length) {
+        const placeholders = procDbIds.map(() => "?").join(", ");
+        const stepRows = await store.all(
+          `SELECT ps.process_id, ps.step_order, ps.step_key, ps.checkpoint_boundary, c.capability_key
+           FROM process_steps ps LEFT JOIN capabilities c ON c.id = ps.capability_id
+           WHERE ps.process_id IN (${placeholders}) ORDER BY ps.process_id, ps.step_order;`,
+          procDbIds
+        );
+        for (const r of stepRows) {
+          (stepsByProc[r.process_id] ??= []).push({ boundary: r.checkpoint_boundary, capability: r.capability_key || null });
+        }
+      }
+    } catch {
+      stepsByProc = {};
+    }
+    offerableProcesses = processRows.map((p) => ({
+      id: p.portfolioId,
+      title: p.title,
+      whenToUse: p.whenToUse,
+      target: p.whyUse || p.bestUsedFor || p.title,
+      approvalScope: p.approvalScope,
+      steps: stepsByProc[`proc:${p.portfolioId}`] ?? []
+    }));
     if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0" && table.length > 0) {
       dbCatalogPortfolio = {
         cacheBackend: portfolio.backend,
