@@ -5,6 +5,7 @@ import {
   streamFrames,
   relayInput,
   observeClaimsReadOnly,
+  resizeBrowserViewport,
   FACADE_BASE_URL,
   type SessionState,
   type BrowserSession,
@@ -58,10 +59,39 @@ export function LiveView({
   const [fps, setFps] = useState(0);
   const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const rippleId = useRef(0);
+  const [expanded, setExpanded] = useState(false);
+  const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSentSize = useRef<string>("");
   useEffect(() => {
     const t = setInterval(() => { setFps(frameCountRef.current); frameCountRef.current = 0; }, 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Keep the REMOTE viewport matched to the visible viewer: observe the stage's pixel size and
+  // (debounced) tell the facade to re-layout the remote Chrome to those dimensions, so the
+  // page never renders cramped/letterboxed. Re-fires on window resize and expand/collapse.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+    const push = () => {
+      const bs = bsRef.current;
+      if (!bs?.browserSessionId) return;
+      const rect = stage.getBoundingClientRect();
+      const w = Math.round(rect.width);
+      const h = Math.round(rect.height);
+      if (w < 50 || h < 50) return;
+      const key = `${w}x${h}`;
+      if (key === lastSentSize.current) return;
+      lastSentSize.current = key;
+      void resizeBrowserViewport(session, bs.browserSessionId, w, h, Math.max(1, Math.min(2, Math.round(window.devicePixelRatio || 1))));
+    };
+    const ro = new ResizeObserver(() => {
+      if (resizeTimer.current) clearTimeout(resizeTimer.current);
+      resizeTimer.current = setTimeout(push, 350);
+    });
+    ro.observe(stage);
+    return () => { ro.disconnect(); if (resizeTimer.current) clearTimeout(resizeTimer.current); };
+  }, [session]);
 
   const focusStage = () => {
     try { stageRef.current?.focus({ preventScroll: true }); } catch { stageRef.current?.focus(); }
@@ -315,12 +345,13 @@ export function LiveView({
 
   return (
     <div className="sheet-backdrop" role="dialog" aria-modal="true">
-      <div className="sheet">
+      <div className={"sheet" + (expanded ? " expanded" : "")}>
         <div className="sheet-bar">
           <span className="t">Aetna · live worker browser</span>
           {(phase === "ready" || controlling) && fps > 0 && <span className="fps">{fps} fps</span>}
           {phase === "ready" && <span className="badge read">Read-only</span>}
           {controlling && <span className="badge control">You are in control</span>}
+          <button className="x" onClick={() => setExpanded((v) => !v)} aria-label={expanded ? "Shrink" : "Expand"} title={expanded ? "Shrink" : "Expand"}>{expanded ? "⤢" : "⛶"}</button>
           <button className="x" onClick={onClose} aria-label="Close"><Close /></button>
         </div>
 

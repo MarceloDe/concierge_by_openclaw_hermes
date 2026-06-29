@@ -20,7 +20,8 @@ from .browser_sandbox import (
     get_browser_sandbox_provider,
     hosted_browser_sandbox_harness_stream,
     hosted_browser_sandbox_provider_stream,
-    steel_session_is_live
+    steel_session_is_live,
+    get_unified_bridge
 )
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
 from .local_env import load_local_env_if_enabled
@@ -572,6 +573,25 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
             grant_token=request.grant_token,
             input_payload=request.input
         )
+
+    @app.post("/api/v1/browser/sessions/{browser_session_id}/resize")
+    async def v1_browser_resize(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(default_factory=dict), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
+        await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_resize")
+        browser_session = browser_session_for_user(app, browser_session_id, principal)
+        if browser_session.get("provider_strategy") != "steel-self-host":
+            return {"version": VERSION, "browser_session_id": browser_session_id, "resized": False, "reason": "unsupported_provider"}
+        try:
+            bridge = await get_unified_bridge(browser_session_id)
+            result = await bridge.request("resize", {
+                "width": body.get("width") or body.get("w"),
+                "height": body.get("height") or body.get("h"),
+                "deviceScaleFactor": body.get("deviceScaleFactor") or body.get("dpr") or 1
+            }, timeout=15)
+        except BrowserSandboxError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        browser_session["current_viewport"] = {"width": result.get("width"), "height": result.get("height")}
+        _persist_browser_sessions(app)
+        return {"version": VERSION, "browser_session_id": browser_session_id, **result}
 
     @app.post("/api/v1/browser/sessions/{browser_session_id}/takeover")
     async def v1_browser_takeover(browser_session_id: str, request_context: Request, request: V1BrowserTakeoverRequest, principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:

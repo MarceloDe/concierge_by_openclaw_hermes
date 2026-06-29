@@ -210,6 +210,27 @@ export async function createBrowserSession(session: SessionState, targetUrl: str
   };
 }
 
+/** Resize the remote Chrome viewport to match the visible viewer (re-layout + re-arm screencast). */
+export async function resizeBrowserViewport(
+  session: SessionState,
+  browserSessionId: string,
+  width: number,
+  height: number,
+  deviceScaleFactor = 1
+): Promise<void> {
+  if (!session.facadeToken || !browserSessionId) return;
+  try {
+    await postJson(
+      `${FACADE_BASE}/api/v1/browser/sessions/${browserSessionId}/resize`,
+      { width: Math.round(width), height: Math.round(height), deviceScaleFactor },
+      { authorization: `Bearer ${session.facadeToken}` },
+      15000
+    );
+  } catch {
+    /* best-effort; the viewer still renders at the prior size */
+  }
+}
+
 export type TakeoverMode = "request" | "grant" | "end";
 
 export async function takeover(

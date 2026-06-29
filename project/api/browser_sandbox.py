@@ -235,6 +235,7 @@ async function restartScreencast() {
   try {
     await new Promise((r) => setTimeout(r, 400));
     await refreshMeta();
+    try { await send("Page.stopScreencast"); } catch {}
     await send("Page.bringToFront");
     await send("Page.startScreencast", { format: "jpeg", quality: Number(quality || 55), maxWidth: 1600, maxHeight: 1000, everyNthFrame: Math.max(1, Number(everyNth || 1)) });
   } catch {} finally { __restartPending = false; }
@@ -327,6 +328,17 @@ async function runOp(operation, payload) {
       await waitForLoad(9000);
     }
     return { inputAccepted: true };
+  } else if (operation === "resize") {
+    const w = Math.max(320, Math.min(2400, Math.round(Number(payload.width || 1280))));
+    const h = Math.max(240, Math.min(1600, Math.round(Number(payload.height || 720))));
+    const dsf = Math.max(1, Math.min(2, Number(payload.deviceScaleFactor || 1)));
+    // IMPORTANT: on this Steel Chrome both Emulation.setDeviceMetricsOverride AND re-calling
+    // Page.startScreencast permanently stop frame delivery. So resize does NOT touch the live
+    // screencast. The remote page is already laid out at the create-time viewport (the userapp
+    // sends the window size at session create), and the viewer's expand toggle scales the frame
+    // (object-fit) for a larger, legible view. This keeps the stream uninterrupted.
+    await refreshMeta();
+    return { resized: true, width: w, height: h, applied: "clientside_viewer_scale" };
   } else if (operation === "extract" || operation === "interact") {
     await send("Runtime.evaluate", { expression: WF_LIB });
     if (operation === "extract") {
