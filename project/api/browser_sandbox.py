@@ -143,6 +143,24 @@ class BrowserSandboxError(RuntimeError):
     pass
 
 
+def _node_error_detail(stderr: bytes | None, stdout: bytes | None) -> str:
+    """Extract the meaningful error line from a crashed node subprocess.
+
+    Node prints "Node.js vX.Y.Z" as the LAST line after an uncaught exception, so taking
+    splitlines()[-1] masked the real error (e.g. it reported "Node.js v24.15.0" instead of
+    "Error: Page.enable timeout"). Prefer the actual Error/timeout/failed line.
+    """
+    text = (stderr or stdout or b"").decode("utf-8", errors="replace")
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("Node.js v")]
+    if not lines:
+        return "unknown error"
+    for ln in reversed(lines):
+        low = ln.lower()
+        if ln.startswith("Error:") or "timeout" in low or "failed" in low:
+            return ln
+    return lines[-1]
+
+
 class BrowserSandboxProvider:
     provider_key = "abstract"
 
@@ -570,8 +588,7 @@ console.log(JSON.stringify({
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
         if process.returncode != 0:
-            detail = (stderr or stdout).decode("utf-8", errors="replace").strip().splitlines()[-1:]
-            raise BrowserSandboxError(f"Steel self-host CDP navigation failed: {detail[0] if detail else 'unknown error'}")
+            raise BrowserSandboxError(f"Steel self-host CDP navigation failed: {_node_error_detail(stderr, stdout)}")
         try:
             payload = json.loads(stdout.decode("utf-8"))
         except Exception as exc:
@@ -820,8 +837,7 @@ window.__wfInteract=function(ref,value){var el=document.querySelector('[data-wf-
         )
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=18)
         if process.returncode != 0:
-            detail = (stderr or stdout).decode("utf-8", errors="replace").strip().splitlines()[-1:]
-            raise BrowserSandboxError(f"Steel self-host CDP {operation} failed: {detail[0] if detail else 'unknown error'}")
+            raise BrowserSandboxError(f"Steel self-host CDP {operation} failed: {_node_error_detail(stderr, stdout)}")
         try:
             parsed = json.loads(stdout.decode("utf-8"))
         except Exception as exc:

@@ -65,7 +65,15 @@ def allowed_origins() -> list[str]:
     raw = os.getenv("WEFELLA_ALLOWED_ORIGINS")
     if raw is None and auth_mode() in PROVIDER_AUTH_MODES:
         return []
-    raw = raw or "http://localhost:3000,http://127.0.0.1:4173,http://127.0.0.1:4174,http://127.0.0.1:4226,http://127.0.0.1:8000"
+    # Include both localhost and 127.0.0.1 for the dev ports — a browser served on one origin
+    # is blocked by CORS if only the other is allowlisted (the userapp token mint failed this way).
+    raw = raw or (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "http://localhost:4174,http://127.0.0.1:4174,"
+        "http://localhost:4226,http://127.0.0.1:4226,"
+        "http://localhost:8000,http://127.0.0.1:8000"
+    )
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
