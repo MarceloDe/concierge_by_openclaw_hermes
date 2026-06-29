@@ -111,6 +111,59 @@ export function summarizeNodeOutput(output = {}) {
   };
 }
 
+// Full-state trace toggle: ON by default in dev (so every node shows its complete hydrated
+// context), OFF in production unless forced. Mirrors traceFullPromptsEnabled in modelTierPolicy.
+export function fullStateTraceEnabled(env = process.env) {
+  const flag = String(env.BRAINSTY_TRACE_FULL_PROMPTS ?? "");
+  if (flag === "1") return true;
+  if (flag === "0") return false;
+  const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").toLowerCase();
+  return !["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
+}
+
+// The complete orchestration state a node received: every context-injection channel + every
+// decision/evidence field, so Langfuse shows the full state evolution turn-by-turn, node-by-node
+// (the basis for finding latency + quality levers). redact_payload masks PHI downstream.
+export function fullOrchestrationStateSnapshot(state = {}) {
+  const ctx = state.context_packet || {};
+  const trim = (arr, n = 12) => (Array.isArray(arr) ? arr.slice(0, n) : arr);
+  return {
+    user_input: state.user_input,
+    intent: state.intent,
+    messages: trim((state.messages || []).map((m) => ({ role: m?.role, content: m?.content })), 20),
+    conversation_history: trim(state.conversation_history, 12),
+    policy_result: state.policy_result,
+    structured_intent: state.structured_intent,
+    llm_orchestration_decision: state.llm_orchestration_decision,
+    workflow: state.workflow,
+    workflow_route: state.workflow_route,
+    route_reason: state.route_reason,
+    offerable_processes: trim(state.offerable_processes, 12),
+    hydrated_capabilities: state.hydrated_capabilities,
+    capability_offer: state.capability_offer,
+    checkpoint_resume_plan: state.checkpoint_resume_plan,
+    context_packet: {
+      runtimeContext: ctx.runtimeContext,
+      capabilityPortfolio: ctx.capabilityPortfolio
+        ? { ...ctx.capabilityPortfolio, promptTable: trim(ctx.capabilityPortfolio.promptTable, 20) }
+        : null,
+      llmOutputIndex: ctx.llmOutputIndex,
+      runtimeVectorIndex: ctx.runtimeVectorIndex,
+      workflowArchitecture: ctx.workflowArchitecture
+        ? { routeCandidates: trim(ctx.workflowArchitecture.routeCandidates, 10), readiness: trim(ctx.workflowArchitecture.readiness, 10) }
+        : null,
+      memorySkillTree: ctx.memorySkillTree
+    },
+    product_memory_recall: state.product_memory_recall,
+    dynamic_skill_context: state.dynamic_skill_context,
+    evidence_observation: state.evidence_observation,
+    source_pointers: trim(state.source_pointers, 12),
+    answer_claims: trim(state.answer_claims, 12),
+    final_response: state.final_response,
+    workflow_outcome: state.workflow_outcome
+  };
+}
+
 export function observedLangGraphNode(nodeName, checkpointKind, fn, metadataBuilder = null) {
   return async function observedNode(state) {
     const metadata = {
@@ -125,18 +178,25 @@ export function observedLangGraphNode(nodeName, checkpointKind, fn, metadataBuil
       openclaw_enabled: Boolean(state.openclaw_envelope || state.raw_message?.useOfficialOpenClawWorker)
     };
     const extra = metadataBuilder ? metadataBuilder(state) : {};
-    return withCheckpoint(
-      nodeName,
-      {
-        kind: checkpointKind,
-        metadata: { ...metadata, ...extra },
-        input: {
+    // Full-state mode (dev default-on): capture the COMPLETE hydrated orchestration state the node
+    // received, so every node span in Langfuse shows the full context + decisions (find perf/quality
+    // levers). Production stays lean with the lightweight summary.
+    const fullState = fullStateTraceEnabled();
+    const spanInput = fullState
+      ? { full_state: fullOrchestrationStateSnapshot(state) }
+      : {
           workflow: state.workflow,
           routeReason: state.route_reason,
           sourcePointerCount: state.source_pointers?.length ?? 0,
           hasApprovalToken: Boolean(state.raw_message?.approvalToken),
           hasWorkerContinuation: Boolean(state.raw_message?.workerContinuationId)
-        }
+        };
+    return withCheckpoint(
+      nodeName,
+      {
+        kind: checkpointKind,
+        metadata: { ...metadata, ...extra, full_state_trace: fullState },
+        input: spanInput
       },
       async () => fn(state)
     );
