@@ -365,7 +365,12 @@ process.stdin.on("data", (chunk) => {
     );
   }
 });
-process.on("SIGTERM", () => { try { clearInterval(metaTimer); socket.close(); } catch {} process.exit(0); });
+function __shutdown() { try { clearInterval(metaTimer); socket.close(); } catch {} process.exit(0); }
+process.on("SIGTERM", __shutdown);
+// When the parent facade dies its stdin pipe closes -> exit so we never orphan a bridge that
+// keeps holding the single Steel page session (which would wedge the next facade's bridge).
+process.stdin.on("end", __shutdown);
+process.stdin.on("close", __shutdown);
 await new Promise(() => {});
 """
 
