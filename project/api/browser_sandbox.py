@@ -548,6 +548,24 @@ async def stop_unified_bridge(browser_session_id: str) -> None:
         await bridge.stop()
 
 
+async def steel_session_is_live(provider_session_ref: str | None) -> bool:
+    """Is a previously-created Steel session still live on the host? Used to reattach a
+    persisted browser session (keep the user's login) across a facade restart/reconnect
+    instead of creating a fresh (logged-out) session."""
+    api_url = os.environ.get("WEFELLA_BROWSER_SANDBOX_STEEL_API_URL")
+    if not api_url or not provider_session_ref:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(f"{api_url.rstrip('/')}/v1/sessions")
+            for sess in (res.json() or {}).get("sessions", []) or []:
+                if sess.get("id") == provider_session_ref and sess.get("status") == "live":
+                    return True
+    except Exception:
+        return False
+    return False
+
+
 class BrowserSandboxProvider:
     provider_key = "abstract"
 

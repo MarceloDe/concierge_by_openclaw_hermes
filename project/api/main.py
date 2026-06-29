@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 from typing import Any
@@ -18,7 +19,8 @@ from .browser_sandbox import (
     describe_browser_sandbox_provider_contract,
     get_browser_sandbox_provider,
     hosted_browser_sandbox_harness_stream,
-    hosted_browser_sandbox_provider_stream
+    hosted_browser_sandbox_provider_stream,
+    steel_session_is_live
 )
 from .hardening import RateLimitExceeded, RateLimiter, source_grounding_config, summarize_source_grounding
 from .local_env import load_local_env_if_enabled
@@ -213,6 +215,26 @@ def write_claims_observe_proof_artifact(
     }
 
 
+def _browser_sessions_path() -> str:
+    return os.getenv("WEFELLA_BROWSER_SESSIONS_PATH") or str(Path(tempfile.gettempdir()) / "wefella_browser_sessions.json")
+
+
+def _persist_browser_sessions(app: FastAPI) -> None:
+    try:
+        Path(_browser_sessions_path()).write_text(json.dumps(app.state.browser_sessions))
+    except Exception:
+        pass
+
+
+def _restore_browser_sessions(app: FastAPI) -> None:
+    try:
+        data = json.loads(Path(_browser_sessions_path()).read_text())
+        if isinstance(data, dict):
+            app.state.browser_sessions = data
+    except Exception:
+        pass
+
+
 def create_app(*, inline_tasks: bool = False) -> FastAPI:
     app = FastAPI(title="Wefella Concierge API", version=VERSION)
     origins = allowed_origins()
@@ -228,6 +250,10 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     app.state.rate_limiter = RateLimiter()
     app.state.upload_store = UploadStore()
     app.state.browser_sessions = {}
+    # Persistence: the in-memory browser_sessions are durably mirrored to a file so a facade
+    # restart/crash does not lose the user's live (logged-in) remote session. The Steel session
+    # itself survives server-side; on reconnect we reattach to it (reuse) instead of re-logging in.
+    _restore_browser_sessions(app)
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -453,6 +479,30 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     @app.post("/api/v1/browser/sessions", response_model=V1BrowserSessionResponse)
     async def v1_create_browser_session(request_context: Request, request: V1BrowserSessionRequest, principal: UserPrincipal = Depends(require_user)) -> V1BrowserSessionResponse:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser")
+        # Reattach/reuse: if this user already has a live remote session (Steel session still
+        # alive on the host), reuse it so a reconnect/refresh/restart keeps the existing login
+        # instead of creating a fresh logged-out session. Newest first.
+        for _bsid, _sess in sorted(app.state.browser_sessions.items(), key=lambda kv: kv[1].get("created_at") or "", reverse=True):
+            if (_sess.get("user_id") == principal.user_id and _sess.get("provider") == "hosted_remote"
+                    and _sess.get("provider_strategy") == "steel-self-host"
+                    and await steel_session_is_live(_sess.get("provider_session_ref"))):
+                _sess["reattached"] = True
+                _persist_browser_sessions(app)
+                return V1BrowserSessionResponse(
+                    version=VERSION,
+                    browser_session_id=_sess["browser_session_id"],
+                    provider=_sess["provider"],
+                    session_id=_sess.get("session_id"),
+                    user_id=_sess["user_id"],
+                    stream_url=f"/api/v1/browser/sessions/{_sess['browser_session_id']}/stream",
+                    takeover_state=_sess.get("takeover_state", "not_requested"),
+                    current_url=_sess.get("current_url"),
+                    current_title=_sess.get("current_title"),
+                    readiness={**(_sess.get("readiness") or {}), "reattached": True, "nextAction": "reattached_existing_live_session"},
+                    ocr_caption=_sess.get("ocr_caption") or {},
+                    screencast=_sess.get("screencast") or {},
+                    navigation=_sess.get("navigation") or {}
+                )
         try:
             provider = get_browser_sandbox_provider(request.provider)
             session = await provider.create_session(
@@ -465,6 +515,7 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         except BrowserSandboxError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         app.state.browser_sessions[session["browser_session_id"]] = session
+        _persist_browser_sessions(app)
         return V1BrowserSessionResponse(
             version=VERSION,
             browser_session_id=session["browser_session_id"],
@@ -527,22 +578,32 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_takeover")
         browser_session = browser_session_for_user(app, browser_session_id, principal)
         provider = get_browser_sandbox_provider(browser_session["provider"])
+        # Explicit takeover state machine + agent pause: while the user is in control the worker
+        # must not observe/scrape (it resumes read-only only after control is returned).
         if request.mode == "request":
             result = await provider.request_takeover(node_client=app.state.node_client, browser_session=browser_session, reason=request.reason)
+            browser_session["takeover_state"] = "takeover_requested"
         elif request.mode == "grant":
             if not request.takeover_id:
                 raise HTTPException(status_code=400, detail="takeover_id is required for grant mode.")
             result = await provider.grant_takeover(node_client=app.state.node_client, browser_session=browser_session, takeover_id=request.takeover_id, approved_by=request.approved_by)
+            browser_session["takeover_state"] = "user_in_control"
+            browser_session["user_in_control"] = True  # agent paused
         else:
             if not request.takeover_id:
                 raise HTTPException(status_code=400, detail="takeover_id is required for end mode.")
             result = await provider.end_takeover(node_client=app.state.node_client, browser_session=browser_session, takeover_id=request.takeover_id)
-        return {"version": VERSION, "browser_session_id": browser_session_id, **result}
+            browser_session["takeover_state"] = "agent_read_only_observation"
+            browser_session["user_in_control"] = False  # agent resumes read-only
+        _persist_browser_sessions(app)
+        return {"version": VERSION, "browser_session_id": browser_session_id, "takeover_state": browser_session["takeover_state"], **result}
 
     @app.post("/api/v1/browser/sessions/{browser_session_id}/openclaw/claims-observe")
     async def v1_browser_openclaw_claims_observe(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(default_factory=dict), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_claims_observe")
         browser_session = browser_session_for_user(app, browser_session_id, principal)
+        if browser_session.get("user_in_control"):
+            raise HTTPException(status_code=409, detail="Worker observation is paused while you are in control of the browser. Return control to resume read-only observation.")
         provider = get_browser_sandbox_provider(browser_session["provider"])
         observe = getattr(provider, "observe_claims_read_only", None)
         if not callable(observe):
@@ -588,6 +649,8 @@ def create_app(*, inline_tasks: bool = False) -> FastAPI:
     async def v1_browser_openclaw_explore(browser_session_id: str, request_context: Request, body: dict[str, Any] = Body(default_factory=dict), principal: UserPrincipal = Depends(require_user)) -> dict[str, Any]:
         await enforce_rate_limit(app, request_context, principal=principal, scope="v1_browser_openclaw_explore")
         browser_session = browser_session_for_user(app, browser_session_id, principal)
+        if browser_session.get("user_in_control"):
+            raise HTTPException(status_code=409, detail="Worker exploration is paused while you are in control of the browser. Return control to resume read-only observation.")
         provider = get_browser_sandbox_provider(browser_session["provider"])
         explore = getattr(provider, "explore_portal_read_only", None)
         if not callable(explore):
