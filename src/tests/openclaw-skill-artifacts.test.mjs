@@ -17,7 +17,7 @@ test("insurance portal browser OpenClaw skill artifact is present and gated", as
   assert.deepEqual(artifact.manifest.required_companion_skills, ["browser-automation", "ocr-local"]);
   assert.equal(artifact.manifest.browser_control_policy.required_skill, "browser-automation");
   assert.equal(artifact.manifest.visual_evidence_policy.ocr_engine, "ocr-local");
-  assert.ok(artifact.manifest.allowed_tools.includes("portal_search"));
+  assert.ok(artifact.manifest.allowed_tools.includes("openclaw_portal_discovery"));
   assert.ok(artifact.manifest.allowed_tools.includes("read_only_document_download"));
   assert.ok(artifact.manifest.allowed_tools.includes("pdf_extraction_analysis"));
   assert.equal(artifact.manifest.adaptive_worker_policy.worker_may_decompose_assigned_task, true);

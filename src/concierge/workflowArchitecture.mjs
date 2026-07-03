@@ -26,7 +26,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Review medication coverage, formulary tier, pharmacy benefit requirements, copay/coinsurance signals, and source pointers from plan documents or the authenticated payer portal.",
     required_user_fields: ["user.id", "user.email", "portal_account"],
     required_data_pointers: ["eligibility_snapshots", "portal_accounts"],
-    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory", "web_search_authoritative_sources"],
+    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory", "public_web_search"],
     memory_scopes: ["session", "episodic", "semantic", "long_term"]
   },
   {
@@ -46,7 +46,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Assemble denial facts, policy references, evidence checklist, and approval-gated appeal draft support.",
     required_user_fields: ["user.id", "user.email", "portal_account"],
     required_data_pointers: ["claim_items", "eligibility_snapshots"],
-    required_tools: ["aetna_cpb_lookup", "cms_mcd_lookup", "cms_icd10_lookup", "web_search_authoritative_sources"],
+    required_tools: ["aetna_cpb_lookup", "cms_mcd_lookup", "cms_icd10_lookup", "public_web_search"],
     memory_scopes: ["episodic", "long_term", "reflection"]
   },
   {
@@ -89,6 +89,8 @@ const TOOL_REGISTRY = [
     risk_level: "high",
     integration_status: "adapter_contract_ready",
     approval_required: "per_browser_action_scope",
+    executor_key: "read_only_browser",
+    write_capable: 0,
     config: { boundary: "user_authenticated_chrome", noCredentialEntry: true }
   },
   // Three-layer pivot Phase 85 tools (plan §7 canonical keys) — real backing modules
@@ -100,6 +102,8 @@ const TOOL_REGISTRY = [
     risk_level: "low",
     integration_status: "enabled",
     approval_required: "none",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { owner: "src/concierge/mrfPricing.mjs", consentColumn: "mrf_pricing_lookup_approved", dataLayer: "layer_1_public" }
   },
   {
@@ -109,6 +113,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "enabled",
     approval_required: "none",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { owner: "src/concierge/planIdentity.mjs", plannerVisibleColumns: ["plan_name_masked", "plan_type"], dataLayer: "layer_2_member_authorized_api" }
   },
   {
@@ -118,6 +124,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "enabled",
     approval_required: "read_only_observation",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { owner: "src/concierge/credentialVault.mjs", consentColumn: "session_reuse_approved", dataLayer: "layer_3_portal_control" }
   },
   {
@@ -127,6 +135,8 @@ const TOOL_REGISTRY = [
     risk_level: "high",
     integration_status: "enabled_local_when_chrome_debugger_running",
     approval_required: "user_opens_and_authenticates_browser",
+    executor_key: "read_only_browser",
+    write_capable: 0,
     config: { fallbackRank: 1 }
   },
   {
@@ -136,6 +146,8 @@ const TOOL_REGISTRY = [
     risk_level: "high",
     integration_status: "fallback_planned",
     approval_required: "user_installs_and_keeps_session_open",
+    executor_key: "read_only_browser",
+    write_capable: 0,
     config: { fallbackRank: 2 }
   },
   {
@@ -145,6 +157,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "fallback_planned",
     approval_required: "user_approves_tool_connection",
+    executor_key: "read_only_browser",
+    write_capable: 0,
     config: { fallbackRank: 3 }
   },
   {
@@ -154,6 +168,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "enabled_local",
     approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
     config: { storesSourcePointers: true }
   },
   {
@@ -163,6 +179,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "enabled_local",
     approval_required: "local_phi_storage_approval",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { storesPhi: true, timestampType: "iso_8601_utc_text" }
   },
   {
@@ -172,6 +190,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "deferred_until_runtime_approval",
     approval_required: "memory_retention_policy_and_api_setup",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { operations: ["recall", "retain", "reflect"] }
   },
   {
@@ -181,6 +201,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "registry_ready_manual_or_web",
     approval_required: "cite_source_and_no_medical_advice",
+    executor_key: "trusted_research",
+    write_capable: 0,
     config: { sourceKey: "aetna_clinical_policy_bulletins" }
   },
   {
@@ -190,6 +212,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "registry_ready_manual_or_web",
     approval_required: "cite_source_and_no_coding_advice_as_medical_advice",
+    executor_key: "configured_api",
+    write_capable: 0,
     config: { sourceKey: "cms_icd10_files" }
   },
   {
@@ -199,15 +223,21 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "registry_ready_manual_or_web",
     approval_required: "cite_source_and_plan_specific_verification",
+    executor_key: "configured_api",
+    write_capable: 0,
     config: { sourceKey: "cms_medicare_coverage_database" }
   },
+  // Phase 87 (§7): public_web_search REPLACES the old authoritative-web-search key —
+  // the draft name is canonical, the old key + capability row are DELETED (no alias).
   {
-    tool_key: "web_search_authoritative_sources",
+    tool_key: "public_web_search",
     tool_type: "research",
-    title: "Authoritative web source retrieval",
+    title: "Public authoritative web source retrieval",
     risk_level: "medium",
     integration_status: "available_through_codex_when_requested",
     approval_required: "source_citation_required",
+    executor_key: "trusted_research",
+    write_capable: 0,
     config: { allowedDomainsFirst: ["cms.gov", "aetna.com", "healthcare.gov", "ama-assn.org"] }
   },
   {
@@ -217,6 +247,8 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "enabled_local",
     approval_required: "artifact_storage_approval",
+    executor_key: "local_followup_planner",
+    write_capable: 0,
     config: { storesArtifacts: true }
   },
   {
@@ -226,6 +258,8 @@ const TOOL_REGISTRY = [
     risk_level: "high",
     integration_status: "deferred_until_user_setup",
     approval_required: "user_installs_and_approves_email_scope",
+    executor_key: "configured_api",
+    write_capable: 0,
     config: { externalData: true }
   },
   {
@@ -235,6 +269,8 @@ const TOOL_REGISTRY = [
     risk_level: "high",
     integration_status: "deferred_until_user_setup",
     approval_required: "explicit_send_approval",
+    executor_key: "configured_api",
+    write_capable: 1,
     config: { externalMessaging: true }
   },
   {
@@ -244,7 +280,220 @@ const TOOL_REGISTRY = [
     risk_level: "medium",
     integration_status: "deferred_until_api_setup",
     approval_required: "gateway_credentials_and_spend_policy",
+    executor_key: "configured_api",
+    write_capable: 0,
     config: { modelRouting: true }
+  },
+  // ------------------------------------------------------------------
+  // Phase 87 (§7 mapping table). Promotions of REAL pipeline steps to first-class
+  // tool_registry rows (the observation pipeline in openclawOfficialRuntime.mjs
+  // already executes them), the renamed public scraper, the document-download
+  // executor's tool, and the RAG/user-doc retrieval tool.
+  {
+    tool_key: "openclaw_browser_screenshot",
+    tool_type: "openclaw_skill",
+    title: "OpenClaw per-page browser screenshot",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
+    config: { pipelineStep: "cdp_screenshot", evidenceClass: "portal_observation" }
+  },
+  {
+    tool_key: "openclaw_visual_ocr",
+    tool_type: "openclaw_skill",
+    title: "OpenClaw local OCR over captured screenshots",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
+    config: { pipelineStep: "local_ocr", localOnly: true }
+  },
+  {
+    tool_key: "openclaw_same_site_read_only_navigation",
+    tool_type: "openclaw_skill",
+    title: "OpenClaw same-site read-only navigation",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
+    config: { owner: "buildOfficialOpenClawReadOnlyNavigationPlan", sameSiteOnly: true }
+  },
+  {
+    tool_key: "openclaw_portal_discovery",
+    tool_type: "openclaw_skill",
+    title: "OpenClaw portal search and document discovery (download-free)",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
+    config: { owner: "buildOfficialOpenClawDiscoveryReport", downloadAttempted: false }
+  },
+  {
+    tool_key: "public_web_scraper_openclaw",
+    tool_type: "openclaw_skill",
+    title: "OpenClaw public web scraper (unauthenticated pages)",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "read_only_scope_approval",
+    executor_key: "read_only_browser",
+    write_capable: 0,
+    config: { renamesSkillJsonTool: "website_scraper", evidenceClass: "unauthenticated_public" }
+  },
+  {
+    tool_key: "openclaw_document_downloader",
+    tool_type: "openclaw_skill",
+    title: "Scope-bound document download + PDF analysis (consumed-gate only)",
+    risk_level: "high",
+    integration_status: "enabled_local",
+    approval_required: "read_only_document_approval_gate_consumed_token",
+    executor_key: "document_download",
+    write_capable: 0,
+    config: { gate: "READ_ONLY_DOCUMENT_APPROVAL_GATE", singleCandidateUrl: true, singleUse: true }
+  },
+  {
+    tool_key: "employer_benefits_doc_rag",
+    tool_type: "knowledge_source",
+    title: "Employer benefits document retrieval (user-doc chunks, local consent)",
+    risk_level: "medium",
+    integration_status: "enabled_local",
+    approval_required: "local_phi_storage_approval",
+    executor_key: "trusted_research",
+    write_capable: 0,
+    config: { owner: "src/concierge/knowledge/publicRagRetrieval.mjs", corpusClass: "user_document" }
+  },
+  // Phase 89/90/91/92 CONNECTOR rows — Capability Registry presence only (§7.0):
+  // deferred integration_status (backingEnabled-refused), never enabled-looking,
+  // runtime_selectable stays fail-closed on the capability row until each phase's
+  // real proof lands. No fake enabled integrations (founder decision).
+  {
+    tool_key: "provider_directory_public_api",
+    tool_type: "configured_api",
+    title: "Plan-Net public provider directory API",
+    risk_level: "low",
+    integration_status: "deferred_until_phase_connector_landed",
+    approval_required: "none",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { connector: "src/concierge/connectors/planNetDirectory.mjs", phase: "phase_89", dataLayer: "layer_1_public" }
+  },
+  {
+    tool_key: "prior_auth_requirements_api",
+    tool_type: "knowledge_source",
+    title: "Prior-authorization requirement lookup (PA-policy corpus, later CMS API)",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_connector_landed",
+    approval_required: "cite_source_and_plan_specific_verification",
+    executor_key: "trusted_research",
+    write_capable: 0,
+    config: { corpus: "pa_policy_corpus", phase: "phase_89", dataLayer: "layer_1_public" }
+  },
+  {
+    tool_key: "payer_fhir_patient_access_api",
+    tool_type: "configured_api",
+    title: "Payer FHIR Patient Access API (coverage / EOB / accumulators)",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_sandbox_proof",
+    approval_required: "member_oauth_consent",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { connector: "src/concierge/connectors/aetnaPatientAccess.mjs", phase: "phase_90_sandbox_phase_91_production", querySurfaces: ["coverage_api", "accumulator_api", "claims_eob_api"], dataLayer: "layer_2_member_authorized_api" }
+  },
+  {
+    tool_key: "eligibility_benefits_api",
+    tool_type: "configured_api",
+    title: "Eligibility 270/271 API (clearinghouse rail)",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_mock_sandbox",
+    approval_required: "member_oauth_consent",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { connector: "src/concierge/connectors/eligibility270.mjs", phase: "phase_90_contract_ready_phase_91_production", dataLayer: "layer_2_member_authorized_api" }
+  },
+  {
+    tool_key: "pbm_formulary_api",
+    tool_type: "configured_api",
+    title: "PDex formulary / PBM API",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_sandbox_proof",
+    approval_required: "member_oauth_consent",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { connector: "src/concierge/connectors/pdexFormulary.mjs", phase: "phase_90_sandbox_phase_91_production", dataLayer: "layer_2_member_authorized_api" }
+  },
+  {
+    tool_key: "prior_auth_status_api",
+    tool_type: "configured_api",
+    title: "Prior-authorization status API (Patient Access expansion)",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_sandbox_proof",
+    approval_required: "member_oauth_consent",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { rides: "payer_fhir_patient_access_api", phase: "phase_90", dataLayer: "layer_2_member_authorized_api" }
+  },
+  {
+    tool_key: "consent_token_vault",
+    tool_type: "configured_api",
+    title: "API-rail OAuth grant vault (connector_oauth_grants)",
+    risk_level: "medium",
+    integration_status: "deferred_until_phase_oauth_rail",
+    approval_required: "member_oauth_consent",
+    executor_key: "configured_api",
+    write_capable: 0,
+    config: { connector: "src/concierge/connectors/tokenVault.mjs", phase: "phase_90", distinctFrom: "consent_session_vault" }
+  },
+  // SIGNATURE-GATED write/submission rows (Phase 92 ONLY, §7.0 / founder #11):
+  // present in the Capability Registry, NEVER in the Executable Tool Catalog before
+  // every Phase 92 gate clears. executor_key is NULL — any dispatch attempt fails
+  // LOUD executor_missing; write_capable declared for the §8 write gates.
+  {
+    tool_key: "prior_auth_submission_pas_api",
+    tool_type: "configured_api",
+    title: "Da Vinci PAS prior-auth submission (signature-gated write track)",
+    risk_level: "high",
+    integration_status: "deferred_until_phase_signature_write_track",
+    approval_required: "provider_delegation_verified_plus_consumed_write_token",
+    executor_key: null,
+    write_capable: 1,
+    config: { connector: "src/concierge/connectors/pasPacket.mjs", phase: "phase_92_signature_gated", hardGate: "pas_submission_without_provider_delegation" }
+  },
+  {
+    tool_key: "openclaw_claim_submission_worker",
+    tool_type: "openclaw_skill",
+    title: "Claim submission worker (approved-write pathway; signature-gated)",
+    risk_level: "high",
+    integration_status: "deferred_until_phase_signature_write_track",
+    approval_required: "per_action_bound_single_use_write_token",
+    executor_key: null,
+    write_capable: 1,
+    config: { pathway: "runOfficialOpenClawApprovedWriteAction", phase: "phase_92_signature_gated" }
+  },
+  {
+    tool_key: "openclaw_form_filler",
+    tool_type: "openclaw_skill",
+    title: "Portal form filler (approved-write pathway; signature-gated)",
+    risk_level: "high",
+    integration_status: "deferred_until_phase_signature_write_track",
+    approval_required: "per_action_bound_single_use_write_token",
+    executor_key: null,
+    write_capable: 1,
+    config: { pathway: "runOfficialOpenClawApprovedWriteAction", phase: "phase_92_signature_gated" }
+  },
+  {
+    tool_key: "openclaw_provider_scheduler",
+    tool_type: "openclaw_skill",
+    title: "Provider scheduling worker (approved-write pathway; signature-gated)",
+    risk_level: "high",
+    integration_status: "deferred_until_phase_signature_write_track",
+    approval_required: "per_action_bound_single_use_write_token",
+    executor_key: null,
+    write_capable: 1,
+    config: { pathway: "runOfficialOpenClawApprovedWriteAction", phase: "phase_92_signature_gated" }
   }
 ];
 
@@ -313,19 +562,25 @@ const OPENCLAW_SKILLS = [
     description: "Navigate the user-authenticated payer portal, observe visible state, extract facts with source pointers, and stop before any irreversible action.",
     status: "repo_artifact_ready_adapter_execution_gated",
     risk_level: "high",
+    // Phase 87 (§7): SET-EQUAL with skill.json allowed_tools (one commit, one test) —
+    // website_scraper renamed public_web_scraper_openclaw; the dead OS-automation tool removed.
     allowed_tools: [
       "openclaw_authenticated_browser",
       "openclaw_browser_screenshot",
       "openclaw_visual_ocr",
+      "openclaw_same_site_read_only_navigation",
+      "openclaw_portal_discovery",
       "browser_remote_debugger",
       "chrome_extension_bridge",
       "mcp_browser_adapter",
       "payer_portal_reader",
       "public_web_search",
-      "website_scraper",
+      "public_web_scraper_openclaw",
       "configured_read_only_api_client",
-      "task_scoped_helper_skill",
-      "local_os_automation"
+      "openclaw_document_downloader",
+      "read_only_document_download",
+      "pdf_extraction_analysis",
+      "task_scoped_helper_skill"
     ],
     fallback_strategy: {
       order: ["browser_remote_debugger", "chrome_extension_bridge", "mcp_browser_adapter", "manual_user_export"],
@@ -354,7 +609,7 @@ const OPENCLAW_SKILLS = [
     description: "Retrieve payer, CMS, code-set, and authoritative web sources for workflow-specific questions with citation and freshness checks.",
     status: "design_ready",
     risk_level: "medium",
-    allowed_tools: ["aetna_cpb_lookup", "cms_icd10_lookup", "cms_mcd_lookup", "web_search_authoritative_sources"],
+    allowed_tools: ["aetna_cpb_lookup", "cms_icd10_lookup", "cms_mcd_lookup", "public_web_search"],
     fallback_strategy: {
       order: ["payer_policy_source", "cms_source", "healthcare.gov_or_state_source", "ask_user_for_document"],
       stopCondition: "source_not_current_or_not_applicable_to_plan"
@@ -414,6 +669,14 @@ async function upsert(store, table, keyColumn, row, time, createId) {
 }
 
 export async function seedRuntimeRegistries(store, { nowIso, createId }) {
+  // Phase 87 (§7): public_web_search replaced the old authoritative-web-search key —
+  // the stale row and its requirement rows are DELETED (no alias, no dual key).
+  try {
+    await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'web_search_authoritative_sources';");
+    await store.all("DELETE FROM tool_registry WHERE tool_key = 'web_search_authoritative_sources';");
+  } catch {
+    /* fresh store: nothing to retire */
+  }
   const time = nowIso();
   for (const workflow of WORKFLOW_DEFINITIONS) {
     await upsert(
@@ -447,6 +710,11 @@ export async function seedRuntimeRegistries(store, { nowIso, createId }) {
         risk_level: tool.risk_level,
         integration_status: tool.integration_status,
         approval_required: tool.approval_required,
+        // Phase 87 (§7): the explicit executor map + write gate are DATA on the row —
+        // executorRegistry materializes tool_key -> executor_key from here; a NULL
+        // executor_key means any dispatch attempt fails loud executor_missing.
+        executor_key: tool.executor_key ?? null,
+        write_capable: tool.write_capable ?? 0,
         config_json: json(tool.config)
       },
       time,
@@ -519,11 +787,25 @@ export async function seedRuntimeRegistries(store, { nowIso, createId }) {
   }
 }
 
+// Phase 87 (§7): the explicit tool_key -> executor mapping, materialized from the SAME
+// rows that seed tool_registry (one source of truth; the DB rows are the runtime
+// authority — buildToolExecutorMap in executorRegistry.mjs consumes either).
+export function toolExecutorAssignments() {
+  const map = {};
+  for (const tool of TOOL_REGISTRY) {
+    map[tool.tool_key] = {
+      executorKey: tool.executor_key ?? null,
+      writeCapable: Number(tool.write_capable ?? 0) === 1 ? 1 : 0
+    };
+  }
+  return map;
+}
+
 function fallbacksForTool(toolKey) {
   if (toolKey === "openclaw_authenticated_browser") return ["browser_remote_debugger", "chrome_extension_bridge", "mcp_browser_adapter"];
-  if (toolKey === "aetna_cpb_lookup") return ["web_search_authoritative_sources", "ask_user_for_plan_document"];
-  if (toolKey === "cms_icd10_lookup") return ["web_search_authoritative_sources"];
-  if (toolKey === "cms_mcd_lookup") return ["web_search_authoritative_sources"];
+  if (toolKey === "aetna_cpb_lookup") return ["public_web_search", "ask_user_for_plan_document"];
+  if (toolKey === "cms_icd10_lookup") return ["public_web_search"];
+  if (toolKey === "cms_mcd_lookup") return ["public_web_search"];
   if (toolKey === "gmail_inbox_reader") return ["manual_user_forwarded_email"];
   return [];
 }

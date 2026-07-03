@@ -66,6 +66,7 @@ import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
 import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
 import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
+import { toolExecutorAssignments } from "./workflowArchitecture.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
 import {
   consumeWorkerContinuationForApprovedDispatch,
@@ -539,18 +540,39 @@ function structuredPriorAuthorizationRowsFromEligibility(eligibility) {
   }));
 }
 
+// Phase 87 (§7): the planner-selected OpenClaw capability — a RESOLVED hydrated entry
+// whose backing maps to the read-only browser (or document-download) executor. This is
+// what makes dispatch decision-first: the client cannot veto or force it with a flag.
+function plannerSelectedOpenclawCapability(state) {
+  const resolved = state.hydrated_capabilities?.resolved ?? [];
+  const map = toolExecutorAssignments();
+  return (
+    resolved.find((entry) => {
+      const key = String(entry?.portfolioId ?? "");
+      if (key === "skill:insurance_portal_browser") return true;
+      const toolKey = entry?.hydrate?.toolKey ?? entry?.hydrate?.tool_key ?? (key.startsWith("tool:") ? key.slice(5) : null);
+      const executorKey = toolKey ? map[toolKey]?.executorKey ?? null : null;
+      return executorKey === "read_only_browser" || executorKey === "document_download";
+    }) ?? null
+  );
+}
+
+// Phase 87 (§7 node-entry gate rewrite): keyed on the PLANNER's resolved openclaw
+// selection plus genuine resume/evidence artifacts. The deleted client-side
+// legacy worker flag can no longer veto or force dispatch;
+// executeEvidenceObservation stays as a NON-AUTHORITATIVE entry hint only.
 function shouldObserveEvidence(state) {
   const raw = state.raw_message ?? {};
   return Boolean(
-      raw.executeEvidenceObservation === true ||
-      raw.useOfficialOpenClawWorker === true ||
+      plannerSelectedOpenclawCapability(state) ||
       raw.workerContinuationId ||
       raw.documentCandidateId ||
       raw.approvedDocumentCandidateId ||
       raw.browserSnapshot ||
       raw.remoteDebuggerUrl ||
-      raw.portalPageSnapshots?.length
-      || raw.uploadedDocuments?.length
+      raw.portalPageSnapshots?.length ||
+      raw.uploadedDocuments?.length ||
+      raw.executeEvidenceObservation === true
   );
 }
 
@@ -591,6 +613,37 @@ async function retrieveTrustedResearchEvidence(store, state, { session, user }) 
     }
   } catch {
     /* MRF evidence is additive; research evidence flow continues */
+  }
+  // Phase 87 (§7): public-corpus RAG chunks join the trusted-evidence pool as CITED
+  // pointers (rag_chunks#id + the backing extraction_artifacts anchor). Public data
+  // classes only; a missing artifact anchor fails LOUD inside queryRagEvidence
+  // (rag_chunk_artifact_missing) and is surfaced, never swallowed into an uncited answer.
+  try {
+    const { queryRagEvidence } = await import("./knowledge/publicRagRetrieval.mjs");
+    for (const dataClass of ["official_payer_public", "cms_public", "official_employer_public"]) {
+      const rag = await queryRagEvidence(store, {
+        query: state.user_input,
+        dataClass,
+        limit: 3,
+        sessionId: state.session_id
+      });
+      for (const row of rag.evidence) {
+        if (row.score >= 0.25) {
+          sourcePointers.push({
+            table: "rag_chunks",
+            id: row.chunkId,
+            summary: row.chunkText.slice(0, 240),
+            sourcePointer: row.source_pointer,
+            artifactPointer: row.artifact_pointer,
+            evidenceClass: row.sourceEvidenceClass,
+            score: row.score
+          });
+        }
+      }
+    }
+  } catch (error) {
+    if (error?.failureClass === "rag_chunk_artifact_missing") throw error; // loud, classified
+    /* provider-unavailable and empty-corpus states are additive skips; research flow continues */
   }
   const status = sourcePointers.length
     ? "captured_trusted_research_evidence"
@@ -1610,10 +1663,9 @@ async function workflowExecutorNode(state) {
   const validation = validateOpenClawEnvelopeAgainstSkill(envelope, skillArtifact, {
     workflowKey: state.workflow
   });
-  const workerPlan = buildLangGraphOpenClawWorkerPlan(envelope, validation);
   // Read-back changes behavior: the capabilities the planner selected (hydrated
-  // from Redis) are surfaced into the dispatch so the worker job carries the
-  // planner's chosen skills/tools/workflows, not just the deterministic defaults.
+  // from the authoritative catalog) are surfaced into the dispatch so the worker job
+  // carries the planner's chosen skills/tools/workflows, not deterministic defaults.
   const plannerHydratedCapabilities = (state.hydrated_capabilities?.resolved ?? []).map((entry) => ({
     portfolioId: entry.portfolioId,
     kind: entry.kind,
@@ -1622,6 +1674,11 @@ async function workflowExecutorNode(state) {
     toolKey: entry.hydrate?.key ?? entry.hydrate?.toolKey ?? null,
     workflowKey: entry.hydrate?.workflowKey ?? null
   }));
+  // Contract v4 (Phase 87 §7): the plan is BUILT FROM the hydrated pointers; every
+  // tool key is asserted registered in the executor map (unregistered -> blocked).
+  const workerPlan = buildLangGraphOpenClawWorkerPlan(envelope, validation, {
+    hydratedCapabilities: plannerHydratedCapabilities
+  });
   const plannerSelectedSkillKeys = plannerHydratedCapabilities
     .filter((entry) => entry.kind === "skill" && entry.skillKey)
     .map((entry) => entry.skillKey);
@@ -1923,71 +1980,15 @@ async function evidenceObservationNode(state) {
       })
     };
   }
-  if (documentObservationRequested && state.raw_message?.useOfficialOpenClawWorker !== true) {
-    const reason = "Approved document candidate observation requires the dedicated official OpenClaw worker.";
-    await audit(store, session.id, "document_candidate_observation_blocked", {
-      status: "document_candidate_requires_official_openclaw",
-      reason,
-      taskId: approvalTaskId,
-      requestedDocumentCandidateId,
-      actionsTaken: []
-    });
-    return {
-      evidence_observation: {
-        status: "document_candidate_requires_official_openclaw",
-        reason,
-        actionsTaken: [],
-        sourcePointers: []
-      },
-      source_pointers: [],
-      proof: appendProof(state, "evidence_observation", {
-        status: "document_candidate_requires_official_openclaw",
-        actionsTaken: []
-      })
-    };
-  }
+  // Phase 87 (§7): a consumed document approval gate is SUFFICIENT on its own — the
+  // deleted client flag can no longer strand an approved document observation.
 
   let workerContinuationValidation = null;
   if (state.raw_message?.workerContinuationId) {
     const taskId = approvalTaskId;
-    if (state.raw_message?.useOfficialOpenClawWorker !== true) {
-      const reason = "Worker continuation dispatch requires the dedicated official OpenClaw read-only worker.";
-      await publishGraphRuntimeEvent(store, state, {
-        eventType: "worker.status.updated",
-        session,
-        user,
-        payload: {
-          status: "blocked_worker_continuation_requires_official_openclaw",
-          terminalOutcome: "not_possible_policy_or_approval_block",
-          reason,
-          workflow: state.workflow,
-          taskId,
-          continuationId: state.raw_message.workerContinuationId,
-          actionsTaken: []
-        }
-      });
-      await audit(store, session.id, "worker_continuation_dispatch_blocked", {
-        status: "blocked_worker_continuation_requires_official_openclaw",
-        reason,
-        taskId,
-        continuationId: state.raw_message.workerContinuationId,
-        workflow: state.workflow,
-        actionsTaken: []
-      });
-      return {
-        evidence_observation: {
-          status: "blocked_worker_continuation_requires_official_openclaw",
-          reason,
-          actionsTaken: [],
-          sourcePointers: []
-        },
-        source_pointers: [],
-        proof: appendProof(state, "evidence_observation", {
-          status: "blocked_worker_continuation_requires_official_openclaw",
-          actionsTaken: []
-        })
-      };
-    }
+    // Phase 87 (§7): a bound ACTIVE worker continuation is SUFFICIENT on its own — a
+    // "continue" turn or approval token must never be silently stranded by the
+    // deleted client flag. Validation below is the real gate.
     workerContinuationValidation = await validateWorkerContinuationForDispatch(store, {
       continuationId: state.raw_message.workerContinuationId,
       sessionId: state.session_id,
@@ -2163,7 +2164,16 @@ async function evidenceObservationNode(state) {
     }
   }
 
-  if (state.raw_message?.useOfficialOpenClawWorker === true) {
+  // Phase 87 (§7 dispatch trigger replacement — complete): dispatch fires when ANY of
+  // (1) the PLANNER selected a resolved openclaw capability (decision-first path),
+  // (2) a bound ACTIVE worker continuation validated above (resume path), or
+  // (3) a consumed read-only/document approval gate authorizes the observation.
+  // The client flag is DELETED; same node, same state keys, same idempotency.
+  const openclawDispatchTrigger =
+    plannerSelectedOpenclawCapability(state) ||
+    (state.raw_message?.workerContinuationId && workerContinuationValidation?.ok) ||
+    documentObservationRequested;
+  if (openclawDispatchTrigger) {
     await publishGraphRuntimeEvent(store, state, {
       eventType: "worker.status.updated",
       session,
@@ -3760,7 +3770,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       user_hash: user.id,
       workflow: rawMessage.workflow ?? null,
       langchain_runtime: "@langchain/langgraph",
-      openclaw_enabled: Boolean(rawMessage.useOfficialOpenClawWorker || rawMessage.workerContinuationId),
+      // Phase 87 (§7): seeded from GENUINE resume artifacts only; the planner-driven
+      // trigger is re-derived post-decision (plannerSelectedOpenclawCapability).
+      openclaw_enabled: Boolean(rawMessage.workerContinuationId),
       safety_mode: "deterministic_rails_llm_planner",
       phi_redaction_enabled: true
     }
@@ -3784,7 +3796,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       router_version: "llm_primary_no_silent_fallback",
       profile_name: "brainstyworkers",
       langchain_runtime: "@langchain/langgraph",
-      openclaw_enabled: Boolean(rawMessage.useOfficialOpenClawWorker || rawMessage.workerContinuationId),
+      // Phase 87 (§7): seeded from GENUINE resume artifacts only; the planner-driven
+      // trigger is re-derived post-decision (plannerSelectedOpenclawCapability).
+      openclaw_enabled: Boolean(rawMessage.workerContinuationId),
       safety_mode: "deterministic_rails_llm_planner",
       phi_redaction_enabled: true
     },

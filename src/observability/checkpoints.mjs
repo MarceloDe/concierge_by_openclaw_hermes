@@ -188,7 +188,8 @@ export function observedLangGraphNode(nodeName, checkpointKind, fn, metadataBuil
       checkpoint_name: nodeName,
       checkpoint_kind: checkpointKind,
       safety_mode: "deterministic_rails_llm_planner",
-      openclaw_enabled: Boolean(state.openclaw_envelope || state.raw_message?.useOfficialOpenClawWorker)
+      // Phase 87 (§7): re-derived from REAL dispatch state, never the deleted client flag.
+      openclaw_enabled: Boolean(state.openclaw_envelope || state.openclaw_worker_plan || state.worker_runtime_state)
     };
     const extra = metadataBuilder ? metadataBuilder(state) : {};
     // Full-state mode (dev default-on): capture the COMPLETE hydrated orchestration state the node

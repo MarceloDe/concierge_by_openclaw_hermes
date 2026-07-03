@@ -22,14 +22,30 @@ export function catalogPortfolioKey(sessionId) {
 export async function buildSessionPortfolioFromPostgres(store, sessionId) {
   const cacheKey = catalogPortfolioKey(sessionId);
   const caps = await store.all(
-    "SELECT capability_key, kind, short_description, when_to_use, why_use, best_used_for, planner_score FROM capabilities WHERE status='active' AND lifecycle_state='production' ORDER BY planner_score DESC, capability_key ASC;"
+    "SELECT capability_key, kind, short_description, when_to_use, why_use, best_used_for, planner_score, registry_status, runtime_selectable, planner_exposure_json FROM capabilities WHERE status='active' AND lifecycle_state='production' ORDER BY planner_score DESC, capability_key ASC;"
   );
   const procs = await store.all(
     "SELECT process_key, title, short_description, when_to_use, why_use, best_used_for, planner_score, approval_scope FROM processes WHERE status='active' AND lifecycle_state='production' AND offerable=1 ORDER BY display_order ASC, planner_score DESC;"
   );
   const promptTable = [
     ...procs.map((p) => ({ portfolioId: p.process_key, kind: "process", title: p.title, whenToUse: p.when_to_use, whyUse: p.why_use, shortDescription: p.short_description, approvalScope: p.approval_scope, pointer: `${cacheKey}#${p.process_key}`, score: p.planner_score })),
-    ...caps.map((c) => ({ portfolioId: c.capability_key, kind: c.kind, title: c.short_description || c.capability_key, whenToUse: c.when_to_use, whyUse: c.why_use, shortDescription: c.short_description, pointer: `${cacheKey}#${c.capability_key}`, score: c.planner_score }))
+    ...caps.map((c) => {
+      const row = { portfolioId: c.capability_key, kind: c.kind, title: c.short_description || c.capability_key, whenToUse: c.when_to_use, whyUse: c.why_use, shortDescription: c.short_description, pointer: `${cacheKey}#${c.capability_key}`, score: c.planner_score };
+      // §7.0 Planner Exposure Contract: registry rows that exist conceptually but are
+      // NOT runtime-selectable surface HONESTLY — first-class data, never an
+      // enabled-looking lie. The hydrator + normalizer refuse selection regardless.
+      if (Number(c.runtime_selectable) !== 1) {
+        row.runtimeSelectable = 0;
+        row.registryStatus = c.registry_status ?? "planned";
+        row.notYetExecutable = true;
+        try {
+          row.plannerExposure = JSON.parse(c.planner_exposure_json || "{}");
+        } catch {
+          row.plannerExposure = {};
+        }
+      }
+      return row;
+    })
   ];
   const entries = Object.fromEntries(promptTable.map((row) => [row.portfolioId, { portfolioId: row.portfolioId, kind: row.kind, pointer: row.pointer }]));
   // Prompt layer 2 (plan §3.1/§3.3): the ONLY workflow keys the planner may select —

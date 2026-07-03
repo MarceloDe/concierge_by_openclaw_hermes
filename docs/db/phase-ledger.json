@@ -49,7 +49,7 @@
     {
       "phase": 86,
       "title": "Redis runtime deltas + legacy portfolio removal",
-      "status": "in_progress",
+      "status": "landed",
       "dependencies": [
         85
       ],
@@ -65,7 +65,7 @@
     {
       "phase": 87,
       "title": "Tool/executor registry + dispatch trigger + RAG/public-data substrate",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         86
       ],
@@ -73,7 +73,7 @@
         "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#7"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-87",
-      "owner": null,
+      "owner": "claude-code",
       "blockers": [
         "write workers stay Capability-Registry rows with runtime_selectable=0 (founder #11)",
         "PHI-class embeddings blocked until BAA/Bedrock-KMS profile (founder #16)"

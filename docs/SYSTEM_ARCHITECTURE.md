@@ -309,7 +309,7 @@ agent id, LLM credential present).
 | `BRAINSTY_OPENAI_BASE_URL` | OpenAI / LLM | Override OpenAI base URL for tiered chat models. | ✔ |
 | `BRAINSTY_<TIER>_MODEL` / `BRAINSTY_REASONER_MODEL` | Model tier policy | Per-tier model override (classifier/reasoner/planner) via `modelTierPolicy.mjs`. | |
 | `BRAINSTY_ORCHESTRATOR_LLM_ALWAYS` | Orchestrator | LLM-primary routing; `!= "0"` → LLM is planner authority (skips redundant live intent call; fail-loud on unavailable planner). | ✔ |
-| `BRAINSTY_PLANNER_DB_CATALOG` | Planner | `!= "0"` → DB catalog is the planner surface + hydration source. | |
+| ~~`BRAINSTY_PLANNER_DB_CATALOG`~~ | Planner | DELETED (Phase 86, plan §6.3): the DB catalog is unconditionally the planner surface and the ONLY hydration source — no switch remains. | |
 | `BRAINSTY_TYPE_II_COMPOSER` | Composer | `!= "0"` → Type-II process-offer composer active in `compose_response`. | |
 | `BRAINSTY_RUN_LEDGER` | Run ledger | `off` (default) / `shadow` / `authoritative` checkpoint-run ledger mode. | |
 | `BRAINSTY_PORTAL_LIVE` | Evidence/portal | `=1` requires live portal proof for observation. | |
@@ -371,7 +371,7 @@ writes off unless `WEFELLA_EXECUTION_WRITE_ENABLED=1`, with a `BRAINSTY_EXECUTIO
 | Flag | Default | Off/default behavior | On behavior |
 |---|---|---|---|
 | `BRAINSTY_TYPE_II_COMPOSER` | on unless `=0` (`langgraphRunner.mjs` ~L3025) | `=0` disables the Type-II process-offer composer in `compose_response`. | Composes capability/process offers in the final response. |
-| `BRAINSTY_PLANNER_DB_CATALOG` | on unless `=0` (`langgraphRunner.mjs` ~L863, ~L1006) | `=0` falls back to the legacy per-turn portfolio as the planner surface and pointer hydrator. | DB catalog replaces legacy portfolio as planner surface; pointers hydrated via authoritative catalog. |
+| ~~`BRAINSTY_PLANNER_DB_CATALOG`~~ | DELETED in Phase 86 (plan §6.3) | The legacy per-turn portfolio and its fallback are removed; `hydrateCapabilityPointer` (authoritative catalog, §7.0 gates) is the only hydration surface. | DB catalog IS the planner surface — no dual pathway. |
 | `BRAINSTY_RUN_LEDGER` | `off` (`checkpointRunLedger.mjs` L18) | No run-ledger writes. | `shadow` writes a shadow ledger; `authoritative` makes it the run-of-record. |
 | `BRAINSTY_REQUIRE_REDIS` | unset (`runtimeContextCache.mjs` L267-269) | Redis optional; missing Redis → process-local memory cache (warned, not fatal). When unset, production profile may still require it `(verify)`. | `=1` Redis required → boot fails loud if not live; `=0` forces optional. |
 | `BRAINSTY_REQUIRE_OPENCLAW` | `0` (`server.mjs` L218, `openclawRuntime.mjs` L67) | Gateway unreachable returns a degraded readiness object; boot continues. | `=1` boot throws if the gateway is not reachable. |

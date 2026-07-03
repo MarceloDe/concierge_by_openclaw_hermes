@@ -18,7 +18,7 @@ import { runLangGraphOrchestration } from "../src/concierge/langgraphRunner.mjs"
 const CASES = [
   { q: "why was my last claim denied and what do I still owe?", expectWorkflow: "claim_status_navigation", expectProcess: "process:claim_status_lookup", demandIncludes: "deni", expectTaskClass: ["claims_support", "member_specific_read"], expectTier: ["medium", "high"] },
   { q: "is Ozempic covered by my plan and how much will it cost?", expectWorkflow: "pharmacy_formulary", expectProcess: "process:pharmacy_formulary_lookup", demandIncludes: "ozempic", expectTaskClass: ["medication_support", "cost_estimation"], expectTier: ["low", "medium"] },
-  { q: "do I need approval before my knee replacement surgery?", expectWorkflow: "prior_authorization_navigation", expectProcess: "process:prior_auth_lookup", demandIncludes: "approval", expectTaskClass: ["prior_auth_support"], expectTier: ["low", "medium"] },
+  { q: "do I need approval before my knee replacement surgery?", expectWorkflow: "prior_authorization_navigation", expectProcess: "process:prior_auth_lookup", demandIncludes: ["approval", "prior auth"], expectTaskClass: ["prior_auth_support"], expectTier: ["low", "medium"] },
   { q: "what's my deductible and out-of-pocket so far this year?", expectWorkflow: "eligibility_benefits_navigation", expectProcess: "process:portal_readonly_lookup", demandIncludes: "deductible", expectTaskClass: ["member_specific_read", "cost_estimation"], expectTier: ["medium"] },
   { q: "help me appeal a denial my insurer sent me", expectWorkflow: "denial_appeal_preparation", expectProcess: "process:denial_appeal_support", demandIncludes: "appeal", expectTaskClass: ["appeal_or_denial_support"], expectTier: ["medium", "high"] },
   { q: "can you read this EOB document I have and explain it?", expectWorkflow: "document_or_trace_review", expectProcess: "process:document_review", demandIncludes: "eob", expectTaskClass: ["claims_support", "member_specific_read", "generic_public"], expectTier: ["low", "medium"] }
@@ -48,7 +48,9 @@ async function main() {
     const workflowOk = d.classification?.workflow === c.expectWorkflow;
     const processOk = c.expectProcess ? offered.includes(c.expectProcess) : true;
     const extractedDemand = d.classification?.extractedDemand ?? "";
-    const demandOk = Boolean(extractedDemand) && extractedDemand.toLowerCase().includes(c.demandIncludes);
+    // demandIncludes accepts synonyms (e.g. "prior auth" IS the approval requirement).
+    const demandKeys = Array.isArray(c.demandIncludes) ? c.demandIncludes : [c.demandIncludes];
+    const demandOk = Boolean(extractedDemand) && demandKeys.some((key) => extractedDemand.toLowerCase().includes(key));
     const needsOk = Array.isArray(d.demand_and_evidence?.informationNeeds) && d.demand_and_evidence.informationNeeds.length > 0;
     // DECISION_CONTRACT_V2 scoring (plan §11 Phase 83): draft-adopted enums.
     const floor = String(d.riskTierFloor ?? "low");
@@ -61,7 +63,7 @@ async function main() {
     const workflowGraphOk = !recommendedProcessId || d.workflow_graph?.processId === recommendedProcessId;
     // Phase 86 acceptance (§11): every turn's planner capability surface is the DB catalog.
     const capabilitySourceOk = capabilitySource === "db_catalog";
-    rows.push({ q: c.q, workflow: d.classification?.workflow, workflowOk, offered: offered.join(","), processOk, demand: extractedDemand, demandOk, needsOk, conf: d.classification?.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk, capabilitySource, capabilitySourceOk });
+    rows.push({ q: c.q, mode: d.mode ?? null, workflow: d.classification?.workflow, workflowOk, offered: offered.join(","), processOk, demand: extractedDemand, demandOk, needsOk, conf: d.classification?.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk, capabilitySource, capabilitySourceOk });
     await new Promise((s) => setTimeout(s, 800)); // gentle pacing for rate limits
   }
 

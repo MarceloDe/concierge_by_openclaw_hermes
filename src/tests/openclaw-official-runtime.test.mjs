@@ -161,7 +161,6 @@ test("official OpenClaw readiness and read-only dispatch fail closed on public p
     rawMessage: {
       source: "official_openclaw_test",
       executeEvidenceObservation: true,
-      useOfficialOpenClawWorker: true,
       requireLivePortalProof: true,
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
@@ -254,7 +253,6 @@ test("official OpenClaw authenticated current-tab continuation creates source po
     rawMessage: {
       source: "official_openclaw_authenticated_current_tab_test",
       executeEvidenceObservation: true,
-      useOfficialOpenClawWorker: true,
       officialOpenClawUseCurrentTab: true,
       officialOpenClawMultiPage: process.env.BRAINSTY_OPENCLAW_MULTI_PAGE === "1",
       requireLivePortalProof: true,
