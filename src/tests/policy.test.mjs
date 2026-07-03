@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateInputPolicy, evaluatePortalAction, classifyUntrustedTextRisk } from "../concierge/policy.mjs";
+import { evaluateInputPolicy, mcpPolicyGuard, classifyUntrustedTextRisk } from "../concierge/policy.mjs";
 
 test("policy blocks credential-entry requests", () => {
   const result = evaluateInputPolicy("Please type my password and 2FA code into Aetna");
@@ -23,9 +23,10 @@ test("policy routes urgent emergency prompts to safe escalation instead of norma
   assert.equal(result.checks.find((check) => check.name === "medical_advice_boundary").passed, true);
 });
 
-test("portal action policy allows read-only navigation and gates irreversible actions", () => {
-  assert.equal(evaluatePortalAction("navigate to benefits page").allowed, true);
-  const submit = evaluatePortalAction("submit prior authorization");
+test("portal action policy allows read-only navigation and gates irreversible actions", async () => {
+  // Phase 88 (§8.2): the guard is the ONLY entry point (storeless call = pure verdict).
+  assert.equal((await mcpPolicyGuard(null, { action: "navigate to benefits page" })).allowed, true);
+  const submit = await mcpPolicyGuard(null, { action: "submit prior authorization" });
   assert.equal(submit.allowed, false);
   assert.equal(submit.approvalRequired, true);
 });

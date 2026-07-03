@@ -2,6 +2,7 @@ import { nowIso, createId } from "./database.mjs";
 import { redact_text, stableHash } from "../observability/redaction.mjs";
 import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
 import { audit } from "./audit.mjs";
+import { RISK_TIERS, capabilityRowTier } from "./policy.mjs";
 
 export const CATALOG_PORTFOLIO_MIRROR_VERSION = "2026-07-02.catalog-portfolio-mirror.v2";
 
@@ -190,7 +191,7 @@ function refusal(capabilityKey, reason, extra = {}) {
   return { resolved: false, capabilityKey, reason, traceEvent: "verify_fail", ...extra };
 }
 
-export async function hydrateCapabilityPointer(store, { pointer, requestRoute = null, expectedHowConfigHash = null } = {}) {
+export async function hydrateCapabilityPointer(store, { pointer, requestRoute = null, expectedHowConfigHash = null, authorizedTier = "medium" } = {}) {
   const capabilityKey = parseCapabilityPointer(pointer);
   if (!capabilityKey) return refusal(null, "pointer_empty");
 
@@ -224,6 +225,20 @@ export async function hydrateCapabilityPointer(store, { pointer, requestRoute = 
     backing = await store.findOne("tool_registry", { tool_key: cap.tool_key });
     const b = backingEnabled("tool", backing);
     if (!b.enabled) return refusal(capabilityKey, b.reason);
+  }
+
+  // 2b. Phase 88 (§8.1) tier CEILING: a capability whose derived tier maps ABOVE what
+  // this turn's satisfied interrupts authorize refuses hydration with a named reason.
+  // The tier signal is the BACKING row's approval_required/risk_level (the same inputs
+  // capabilityRowTier projects for the risk floor); the tier->scope map derives from
+  // the three gate constants via riskTierAuthorizedByGates: consumed write token ->
+  // high; read-only/document gate -> medium (the baseline — read-only capabilities
+  // bind their gate at dispatch, downstream). Never free strings.
+  if (backing) {
+    const rowTier = capabilityRowTier({ approvalScope: backing.approval_required ?? null, riskLevel: backing.risk_level ?? null });
+    if (RISK_TIERS.indexOf(rowTier) > RISK_TIERS.indexOf(String(authorizedTier))) {
+      return refusal(capabilityKey, "capability_tier_above_authorized_scope", { rowTier, authorizedTier });
+    }
   }
 
   // 3. Freshness: if a config hash is tracked and an expected hash is supplied, they must match.

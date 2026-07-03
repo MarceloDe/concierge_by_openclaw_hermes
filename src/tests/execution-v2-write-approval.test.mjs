@@ -10,7 +10,7 @@ import {
   createWriteActionApproval,
   WRITE_ACTION_EXECUTION_MODE
 } from "../concierge/approvalResume.mjs";
-import { evaluatePortalAction } from "../concierge/policy.mjs";
+import { mcpPolicyGuard } from "../concierge/policy.mjs";
 import { runOfficialOpenClawApprovedWriteAction } from "../concierge/openclawOfficialRuntime.mjs";
 import { runLlmManagerWorkerProposal } from "../concierge/llmManagerWorker.mjs";
 import {
@@ -139,7 +139,7 @@ test("Execution V2 write approval is exact-url, exact-action, expiring, and sing
 });
 
 test("portal action policy fails closed unless consumed write approval matches exact action", async () => {
-  assert.equal(evaluatePortalAction("submit prior authorization").allowed, false);
+  assert.equal((await mcpPolicyGuard(null, { action: "submit prior authorization" })).allowed, false);
   const store = await createStore();
   const { user, session } = await enrollDefaultMember(store);
   const workflow = "prior_authorization";
@@ -159,11 +159,11 @@ test("portal action policy fails closed unless consumed write approval matches e
     workflow,
     actionSchema: submitAction()
   });
-  const policy = evaluatePortalAction({
+  const policy = await mcpPolicyGuard(null, {
     action: "submit prior authorization",
     targetUrl: submitAction().targetUrl,
     actionSchema: submitAction(),
-    approvalToken: consumed
+    approval: consumed
   });
   assert.equal(policy.allowed, true);
   assert.equal(policy.executionMode, WRITE_ACTION_EXECUTION_MODE);

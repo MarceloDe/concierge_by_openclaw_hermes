@@ -1,6 +1,6 @@
 import { audit } from "./audit.mjs";
 import { WRITE_ACTION_EXECUTION_MODE } from "./approvalResume.mjs";
-import { evaluatePortalAction } from "./policy.mjs";
+import { mcpPolicyGuard } from "./policy.mjs";
 
 export const LLM_MANAGER_WORKER_VERSION = "2026-06-21.execution-v2-llm-manager-worker.v1";
 
@@ -34,11 +34,18 @@ export async function runLlmManagerWorkerProposal({
 }) {
   const runtime = getBrainstyWorkerRuntime(env);
   const actionText = proposedActionText(proposedAction);
-  const policy = evaluatePortalAction({
+  // Phase 88 (§8.2): the guard is the single pre-tool-call chokepoint (consumption
+  // before verdict happens inside; here the approval is passed through as received).
+  const policy = await mcpPolicyGuard(store, {
+    tool: "llm_manager_worker",
     action: actionText,
     targetUrl: proposedAction.targetUrl ?? proposedAction.actionSchema?.targetUrl,
     actionSchema: proposedAction.actionSchema,
-    approvalToken: approval
+    approval,
+    taskId,
+    sessionId,
+    userId,
+    workflow
   });
   await audit(store, sessionId, "llm_manager_worker_action_proposed", {
     version: LLM_MANAGER_WORKER_VERSION,

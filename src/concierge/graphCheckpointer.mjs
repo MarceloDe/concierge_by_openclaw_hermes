@@ -190,8 +190,27 @@ export class FileBackedMemorySaver extends MemorySaver {
   }
 }
 
+// Phase 88 (§4.3 interrupt durability — fail-loud, NO new env flag): a pending
+// interrupt in MemorySaver does not survive a restart, so a production/staging
+// profile that resolves to memory mode is a BOOT ERROR. The gate derives purely from
+// the runtime profile (same profile ladder redisRequired uses); dev default stays
+// memory. File mode (AES-256-GCM) is acceptable for dev/local/closed-pilot ONLY; the
+// Postgres LangGraph checkpointer is the DECLARED PRODUCTION TARGET (founder #4 —
+// named late work item in the Phase 91/92 window).
+export function durableInterruptsRequired(env = process.env) {
+  const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").toLowerCase();
+  return ["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
+}
+
 export function createGraphCheckpointer(env = process.env) {
   const mode = String(env.BRAINSTY_GRAPH_CHECKPOINTER ?? "memory").trim().toLowerCase();
+  if (durableInterruptsRequired(env) && !["file", "local_file", "durable_file"].includes(mode)) {
+    const error = new Error(
+      "[graph-checkpointer] production/staging profile requires a DURABLE checkpointer — a pending interrupt in MemorySaver does not survive restart. Set BRAINSTY_GRAPH_CHECKPOINTER=file (dev/closed-pilot) — the Postgres checkpointer is the declared production target (plan §4.3, founder #4)."
+    );
+    error.failureClass = "non_durable_interrupts_in_production_profile";
+    throw error;
+  }
   if (["file", "local_file", "durable_file"].includes(mode)) {
     const path = defaultCheckpointPath(env);
     const encryption = encryptionConfigFromEnv(env);

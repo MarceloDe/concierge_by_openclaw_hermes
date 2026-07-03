@@ -1,7 +1,19 @@
 import { createHash } from "node:crypto";
 import { audit } from "./audit.mjs";
 
-export const OUTBOUND_PAYLOAD_OBSERVABILITY_VERSION = "2026-06-22.outbound-payload-observability.enforced-default.v2";
+export const OUTBOUND_PAYLOAD_OBSERVABILITY_VERSION = "2026-07-03.outbound-payload-observability.phase88.v3";
+
+// Phase 88 (§8.3): the registered connector payload types — every §9 connector's
+// outbound request observes through this module under one of these types (the same
+// enforced classification path model payloads use). Registration precedes the
+// connectors themselves (Phases 89-90) so the observability rail is never optional.
+export const CONNECTOR_PAYLOAD_TYPES = Object.freeze([
+  "aetna_patient_access_fhir_request",
+  "stedi_eligibility_270",
+  "plan_net_directory_query",
+  "cms_public_data_request",
+  "pdex_formulary_request"
+]);
 export const OUTBOUND_PAYLOAD_POLICY_VERSION = "2026-06-22.outbound-payload-policy.enforced-default.v2";
 
 function safeStringify(value) {

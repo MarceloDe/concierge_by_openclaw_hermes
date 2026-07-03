@@ -1,4 +1,6 @@
-export const MODEL_PAYLOAD_POLICY_VERSION = "2026-05-18.model-payload-policy.v2";
+// v3 (Phase 88, plan §8.3): ALL outbound connector/tool arguments pass masking before
+// egress (maskOutboundToolArgs below) — the mcp_phi_redactor IS this existing layer.
+export const MODEL_PAYLOAD_POLICY_VERSION = "2026-07-03.model-payload-policy.phase88.v3";
 
 function pickRoute(route) {
   if (!route) return null;
@@ -174,4 +176,21 @@ export function selectModelPayload(state, { payloadMode = "phi_allowed_identifie
     payload: buildPhiAllowedReasoningPayload(state),
     warning: "Payload may include insurance, portal, and clinical PHI context, with direct patient identifiers masked as database pointers."
   };
+}
+
+
+// Phase 88 (§8.3): the outbound tool-argument masking gate. Every connector/tool
+// argument object passes here before egress — direct identifiers are replaced with
+// DB-pointer tokens via the SAME maskDirectIdentifiers primitive the model payloads
+// use (one masking layer, no local variants). Deep-walks plain data; never mutates.
+export function maskOutboundToolArgs(args, state = {}) {
+  const walk = (value) => {
+    if (typeof value === "string") return maskDirectIdentifiers(value, state);
+    if (Array.isArray(value)) return value.map(walk);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, walk(entry)]));
+    }
+    return value;
+  };
+  return walk(args);
 }
