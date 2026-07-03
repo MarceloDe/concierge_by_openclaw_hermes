@@ -5,8 +5,26 @@
 Before any implementation, every agent (Codex, Claude Code, OpenClaw, Hermes, Cursor, Perplexity Computer) MUST first:
 
 1. Pull the latest `cortex/main`.
-2. Read `semantic/projects/workerprototype-openclaw-late-implementation-architecture.md` — the **authoritative product source** for the current phase.
+2. Read `semantic/projects/workerprototype-openclaw-three-layer-planner-pivot.md` — the **authoritative product source** for the current phase (supersedes `workerprototype-openclaw-late-implementation-architecture.md`).
 3. Read the most recent `episodic/<YYYY>/<MM>/*--codex--workerprototype-openclaw--late-implementation-alignment-consolidation.md` — supersedes any earlier architecture note on conflict.
+
+## CURRENT BIG IMPLEMENTATION CHANGE — Three-Layer Planner Pivot (2026-07-02)
+
+The planner moves from the restricted-context MVP to a three-data-layer decision architecture
+(`layer_1_public` | `layer_2_member_authorized_api` | `layer_3_portal_control`). Before writing ANY code for it, read, in this order:
+
+1. `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md` — the BINDING implementation spec (Phases 83–92, decision contract v2, legacy removal list §10, proof cycle §12). Every file:line anchor in it is verified.
+2. `docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml` — the founder's permanent spine config (Capability Registry vs Executable Tool Catalog vs Planner Exposure Contract, evidence classes, embedding/vault/interrupt/reauth policies). Where plan and YAML conflict, the YAML wins.
+3. `docs/THREE_LAYER_PLANNER_PROMPT_DRAFT.md` + `docs/THREE_LAYER_PIVOT_RATIONALE_AETNA_UM.md` — source documents (vocabulary authority + Aetna/UM case and founder constraints).
+4. `docs/THREE_LAYER_FOUNDER_DECISION_SHEET.md` — all 17 founder decisions, RESOLVED 2026-07-02.
+
+Hard rules for this change (non-negotiable):
+
+- NO dual pathways, toggles, or switch functions between old and new decision logic — legacy items are DELETED per plan §10 (26 items), never flagged off.
+- Every new/adapted function is accepted ONLY with real-runtime proof per plan §12 and `docs/NON_MOCKED_PROOF_RULES.md` — no mock connections, no scaffold modules/DBs; pointers proven by deferred pointers + real queries; negative arms mandatory.
+- LangGraph dispatches ONLY Executable Tool Catalog entries (`runtime_selectable=1` + existing backing gates); planned capabilities are registry-visible but never dispatchable (normalizer hard issue `tool_not_runtime_selectable`).
+- Signature-gated connectors (Aetna production FHIR, Stedi BAA, Optum/Availity, Da Vinci PAS delegation) land ONLY in Phases 91–92.
+- Phase order comes from `docs/db/phase-ledger.json` (Phase 83 work item) reconciled against the Cortex ledger — never inferred from prose.
 
 The Cortex semantic note is the single source of truth for the next implementation phase. `brainstyworkers_ai_concierge_prompt.md` is historical context only. Any conflict between this repo's docs and Cortex is resolved in favor of Cortex.
 

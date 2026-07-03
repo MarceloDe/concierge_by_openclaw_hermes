@@ -1,0 +1,819 @@
+# docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml
+# Purpose:
+# Permanent spine configuration for the health insurance concierge planner.
+# This file separates planned capability visibility from runtime executability.
+# Coding agents, planner docs, evals, and roadmap automation may see planned capabilities.
+# LangGraph runtime may dispatch only executable tools.
+
+spine_version: "three_layer_planner_spine_v1"
+created: "2026-07-02"
+owner: "Founder"
+system_name: "Wefella / Brainstyworkers Health Insurance Concierge"
+
+architectural_principle:
+  statement: >
+    The system distinguishes future capability visibility from runtime executability.
+    Planned capabilities must be visible to coding agents, documentation, evals,
+    roadmap tools, and planner policy, but only executable tools with real backing
+    implementations, credentials/enrollment, tests, audit coverage, policy gates,
+    and safety gates may enter the runtime tool catalog.
+  registries:
+    capability_registry:
+      purpose: "Durable roadmap, docs, planner policy, coding-agent work surface."
+      may_include_unimplemented_capabilities: true
+      runtime_dispatch_authority: false
+    executable_tool_catalog:
+      purpose: "Runtime dispatch truth used by LangGraph."
+      may_include_unimplemented_capabilities: false
+      runtime_dispatch_authority: true
+    planner_exposure_contract:
+      purpose: "Defines what planner may prepare/say when capability exists but cannot execute."
+      runtime_dispatch_authority: false
+
+phase_ledger_policy:
+  source_of_truth: "Cortex ledger"
+  provisional_phase_range: "83-92"
+  if_no_cortex_conflict: "keep_83_92"
+  requirements:
+    - "Create or update machine-readable phase ledger."
+    - "Do not infer phase order from prose docs."
+    - "Each phase must list dependencies, blockers, docs, acceptance criteria, implementation owner, and status."
+  redis_port_policy:
+    source_of_truth: "actual runtime config"
+    docs_must_not_guess: true
+    required_repo_check:
+      - "search_for_6379"
+      - "search_for_6381"
+      - "inspect_env_files"
+      - "inspect_docker_compose"
+      - "inspect_deployment_config"
+      - "inspect_redis_client_initialization"
+    if_both_ports_exist:
+      distinguish:
+        - "container_internal_port"
+        - "host_mapped_port"
+        - "test_port_if_separate"
+    acceptance_criteria_rule: "Reference canonical config variable, not duplicated prose."
+
+data_layers:
+  layer_1_public:
+    description: "Public / non-authenticated insurance, employer, payer, CMS, MRF, policy, and provider data."
+    allowed_data_classes:
+      - "official_payer_public"
+      - "official_employer_public"
+      - "cms_public"
+      - "mrf_public"
+      - "unauthenticated_public"
+      - "social_confusion_signal"
+    default_tools:
+      - "public_insurance_rag"
+      - "employer_benefits_doc_rag"
+      - "medical_policy_rag"
+      - "public_web_search"
+      - "public_web_scraper_openclaw"
+      - "cms_public_data_api"
+      - "pricing_mrf_query_db"
+      - "provider_directory_public_api"
+
+  layer_2_member_authorized_api:
+    description: "Member-authorized payer/PBM/FHIR/API reads after consent."
+    auth_model:
+      - "payer_oauth_smart_fhir"
+      - "oidc"
+      - "consent_token_vault"
+    raw_password_storage_allowed: false
+    allowed_data_classes:
+      - "member_authorized_api"
+      - "member_phi"
+    default_tools:
+      - "payer_fhir_patient_access_api"
+      - "eligibility_benefits_api"
+      - "coverage_api"
+      - "accumulator_api"
+      - "claims_eob_api"
+      - "pbm_formulary_api"
+      - "prior_auth_status_api"
+      - "prior_auth_requirements_api"
+
+  layer_3_portal_control:
+    description: "Authenticated portal control and transactional automation by OpenClaw workers."
+    use_only_when:
+      - "no_suitable_api_exists"
+      - "real_time_portal_data_required"
+      - "user_requested_transaction"
+      - "document_only_available_in_portal"
+    raw_password_storage_allowed: false
+    requires_human_auth_interrupt: true
+    requires_human_approval_before_write: true
+    default_workers:
+      - "openclaw_logged_portal_control"
+      - "openclaw_public_web_scraper"
+      - "openclaw_form_filler"
+      - "openclaw_document_downloader"
+      - "openclaw_provider_scheduler"
+      - "openclaw_claim_submission_worker"
+
+evidence_classes:
+  authenticated_portal:
+    trust_rank: 1
+    can_support_member_specific_truth: true
+    notes: "Portal-derived truth from allowlisted authenticated payer/employer/provider/PBM host."
+  member_authorized_api:
+    trust_rank: 1
+    can_support_member_specific_truth: true
+    notes: "FHIR/API data accessed after user OAuth/consent."
+  official_payer_public:
+    trust_rank: 2
+    can_support_member_specific_truth: false
+    notes: "Official payer public documents, policies, directories."
+  official_employer_public:
+    trust_rank: 2
+    can_support_member_specific_truth: false
+    notes: "Official employer benefits documents, SPDs, SBCs, guides."
+  cms_public:
+    trust_rank: 2
+    can_support_member_specific_truth: false
+    notes: "CMS public datasets, rules, public-use files."
+  mrf_public:
+    trust_rank: 2
+    can_support_member_specific_truth: false
+    notes: "Transparency in Coverage machine-readable files."
+  user_uploaded:
+    trust_rank: 2
+    can_support_member_specific_truth: true
+    notes: "User uploaded EOB, ID card, letter, claim, plan document; requires classification."
+  user_reported:
+    trust_rank: 4
+    can_support_member_specific_truth: false
+    notes: "User-provided plain statement; useful but needs verification for decisions."
+  unauthenticated_public:
+    trust_rank: 5
+    can_support_member_specific_truth: false
+    notes: "Public web facts not from official payer/employer/CMS source."
+  social_confusion_signal:
+    trust_rank: 6
+    can_support_member_specific_truth: false
+    notes: "Forums/social only for confusion-pattern discovery, never coverage truth."
+
+capability_status_values:
+  planned:
+    runtime_selectable: false
+    meaning: "Known future capability; visible to coding agents and docs."
+  contract_ready:
+    runtime_selectable: false
+    meaning: "Schema/API contract/workflow designed, but not executable in production."
+  blocked_external_enrollment:
+    runtime_selectable: false
+    meaning: "Implementation depends on payer/provider/clearinghouse/legal enrollment."
+  implemented_dev:
+    runtime_selectable: false
+    meaning: "Implementation exists but not production-cleared."
+  implemented_runtime:
+    runtime_selectable: true
+    meaning: "Implemented, tested, credentialed, policy-cleared, and dispatchable."
+  disabled_policy:
+    runtime_selectable: false
+    meaning: "Capability exists but policy disallows runtime execution."
+  retired:
+    runtime_selectable: false
+    meaning: "No longer supported."
+
+capability_registry:
+  - capability_id: "public_plan_explanation"
+    domain: "insurance.public_rag"
+    status: "implemented_runtime"
+    runtime_selectable: true
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "answer_with_public_evidence"
+    data_layer: ["layer_1_public"]
+    tools:
+      - "public_insurance_rag"
+      - "employer_benefits_doc_rag"
+      - "medical_policy_rag"
+      - "public_web_search"
+    safety:
+      requires_member_auth: false
+      requires_human_approval_before_write: false
+      phi_allowed: false
+    acceptance_criteria:
+      - "answers cite source pointers"
+      - "does not claim member-specific coverage without member data"
+      - "uses lower confidence for unauthenticated_public evidence"
+
+  - capability_id: "provider_search_public"
+    domain: "insurance.provider_search"
+    status: "implemented_runtime"
+    runtime_selectable: true
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "search_provider_directory_and_explain_verification_limits"
+    data_layer: ["layer_1_public"]
+    tools:
+      - "provider_directory_public_api"
+      - "public_insurance_rag"
+      - "public_web_scraper_openclaw"
+    safety:
+      requires_member_auth: false
+      requires_human_approval_before_write: false
+      phi_allowed: false
+    acceptance_criteria:
+      - "requires plan/network identifier when available"
+      - "does not guarantee in-network status without plan-specific verification"
+      - "records source directory and timestamp"
+
+  - capability_id: "pricing_mrf_estimation"
+    domain: "insurance.cost_estimation"
+    status: "contract_ready"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "estimate_if_data_available_else_prepare_data_gap_response"
+    data_layer: ["layer_1_public"]
+    tools:
+      - "pricing_mrf_query_db"
+      - "public_insurance_rag"
+      - "employer_benefits_doc_rag"
+    first_slice:
+      payer_scope: "generic_payer_source_first_slice"
+      geography_scope: "first_metro"
+      code_scope:
+        - "CMS_shoppable_services_baseline"
+        - "imaging"
+        - "labs"
+        - "common_outpatient"
+    generic_keys:
+      - "payer_id"
+      - "employer_id"
+      - "plan_id"
+      - "network_id"
+      - "geography"
+      - "npi"
+      - "tin"
+      - "cpt_hcpcs"
+      - "place_of_service"
+      - "billing_class"
+      - "negotiated_rate"
+      - "allowed_amount"
+      - "source_file_url"
+      - "source_file_month"
+      - "ingestion_run_id"
+    vendor_threshold:
+      re_evaluate_buy_when:
+        - "more_than_one_payer"
+        - "more_than_one_metro"
+        - "maintenance_exceeds_one_engineer_week_per_month"
+        - "legal_requires_vendor_normalized_terms"
+    legal_review_required_for:
+      - "consumer_facing_display"
+      - "redistribution"
+      - "caching"
+      - "vendor_terms"
+    acceptance_criteria:
+      - "pipeline is not hardwired to one payer"
+      - "rate display includes caveats"
+      - "source file and ingestion date preserved"
+
+  - capability_id: "member_coverage_read"
+    domain: "insurance.member_api"
+    status: "contract_ready"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "request_consent_then_read_coverage_if_connector_available"
+    data_layer: ["layer_2_member_authorized_api"]
+    tools:
+      - "payer_fhir_patient_access_api"
+      - "coverage_api"
+      - "accumulator_api"
+      - "claims_eob_api"
+    auth:
+      requires_member_auth: true
+      auth_type: "payer_oauth_smart_fhir"
+      requires_user_consent: true
+      raw_password_storage_allowed: false
+      token_storage: "vault_interface_required"
+    blocked_by:
+      - "payer_app_registration"
+      - "connector_credentials"
+      - "token_vault_profile"
+      - "consent_flow"
+    acceptance_criteria:
+      - "user authenticates at payer, not in app"
+      - "tokens stored only through vault interface"
+      - "PHI redacted from traces/logs"
+      - "audit every member API call"
+
+  - capability_id: "eligibility_x12_270_271"
+    domain: "insurance.eligibility"
+    status: "blocked_external_enrollment"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "do_not_send_production_270_271; use alternate data sources"
+    data_layer: ["layer_2_member_authorized_api"]
+    tools:
+      - "eligibility_benefits_api"
+    external_dependency:
+      vendor: "Stedi_or_equivalent"
+      required_standing:
+        - "information_receiver_standing"
+        - "provider_partner_or_atypical_receiver_confirmation"
+        - "BAA_before_production_key"
+    production_transactions_allowed: false
+    fallback_sources:
+      - "FHIR Coverage"
+      - "Patient Access API"
+      - "accumulator API"
+      - "plan documents"
+      - "portal fallback with user auth"
+      - "user uploaded documents"
+    acceptance_criteria:
+      - "no production 270/271 without verified standing"
+      - "capability remains visible to coding agents"
+      - "planner explains alternate path"
+
+  - capability_id: "prior_auth_requirements_check"
+    domain: "insurance.prior_authorization"
+    status: "contract_ready"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "check_requirements_if_public_or_member_api_available_else_prepare_questions"
+    data_layer:
+      - "layer_1_public"
+      - "layer_2_member_authorized_api"
+    tools:
+      - "prior_auth_requirements_api"
+      - "medical_policy_rag"
+      - "public_insurance_rag"
+      - "payer_fhir_patient_access_api"
+    safety:
+      requires_member_auth: "conditional"
+      requires_human_approval_before_write: false
+    acceptance_criteria:
+      - "requires CPT/HCPCS/drug, diagnosis if needed, setting, provider/facility, plan context"
+      - "distinguishes generic policy from member-specific requirement"
+      - "does not submit prior auth"
+
+  - capability_id: "prior_auth_status_read"
+    domain: "insurance.prior_authorization"
+    status: "contract_ready"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "request_consent_then_read_status_if_connector_available"
+    data_layer:
+      - "layer_2_member_authorized_api"
+      - "layer_3_portal_control"
+    tools:
+      - "prior_auth_status_api"
+      - "payer_fhir_patient_access_api"
+      - "openclaw_logged_portal_control"
+    safety:
+      requires_member_auth: true
+      requires_user_consent: true
+      requires_human_auth_interrupt_for_portal: true
+      requires_human_approval_before_write: false
+    acceptance_criteria:
+      - "API before portal"
+      - "portal control only when API unavailable"
+      - "audit status source and timestamp"
+
+  - capability_id: "prior_auth_submission"
+    domain: "insurance.prior_authorization.write"
+    status: "blocked_external_enrollment"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "prepare_packet_only_unless_provider_delegation_verified"
+    data_layer:
+      - "layer_2_member_authorized_api"
+      - "layer_3_portal_control"
+    tools:
+      - "prior_auth_submission_pas_api"
+      - "openclaw_form_filler"
+      - "openclaw_logged_portal_control"
+    authorization_basis_required:
+      - "verified_provider_delegation"
+      - "clearinghouse_or_EHR_authority"
+      - "legal_compliance_signoff"
+      - "human_approval_interrupt"
+    provider_delegation_status: "required_unverified"
+    runtime_rules:
+      - "do_not_submit_without_verified_provider_delegation"
+      - "may_generate_prior_auth_packet"
+      - "may_route_to_provider"
+      - "may_prepare_forms"
+      - "must_require_human_approval_before_any_write"
+    acceptance_criteria:
+      - "no PAS submission as pure patient-side app"
+      - "provider delegation stored and audited"
+      - "packet generation works before submission rail is live"
+
+  - capability_id: "claim_packet_generation"
+    domain: "insurance.claims.prepare"
+    status: "contract_ready"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "generate_claim_packet_for_review"
+    data_layer:
+      - "layer_1_public"
+      - "layer_2_member_authorized_api"
+      - "layer_3_portal_control"
+    tools:
+      - "mcp_document_generation"
+      - "mcp_document_store"
+      - "claims_eob_api"
+      - "openclaw_document_downloader"
+    safety:
+      requires_member_auth: "conditional"
+      requires_human_review_interrupt: true
+      requires_human_approval_before_write: false
+    acceptance_criteria:
+      - "packet saved to document store"
+      - "user reviews before use"
+      - "no claim submitted by this capability"
+
+  - capability_id: "claim_submission"
+    domain: "insurance.claims.write"
+    status: "planned"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "prepare_only_until_phase_92_executor"
+    data_layer:
+      - "layer_3_portal_control"
+    tools:
+      - "openclaw_claim_submission_worker"
+      - "openclaw_form_filler"
+      - "openclaw_logged_portal_control"
+    blocked_by:
+      - "phase_92_executor"
+      - "payer_portal_allowlist"
+      - "human_approval_gate"
+      - "audit_confirmation_capture"
+      - "legal_review"
+    runtime_rules:
+      - "not_in_executable_catalog_until_implemented"
+      - "must_not_claim_submission_performed"
+      - "must_require_human_approval_before_write"
+      - "must_capture_confirmation_artifact"
+    acceptance_criteria:
+      - "real executor exists"
+      - "integration tests pass against sandbox/mock portal"
+      - "approval interrupt works"
+      - "audit log records action"
+      - "confirmation artifact stored"
+
+  - capability_id: "provider_scheduling"
+    domain: "healthcare.scheduling.write"
+    status: "planned"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "prepare_options_only_until_scheduler_worker_ready"
+    data_layer:
+      - "layer_3_portal_control"
+    tools:
+      - "openclaw_provider_scheduler"
+      - "openclaw_logged_portal_control"
+    blocked_by:
+      - "scheduler_worker_executor"
+      - "provider_portal_allowlist"
+      - "human_approval_gate"
+      - "captcha_2fa_user_participation_policy"
+      - "confirmation_capture"
+    runtime_rules:
+      - "do_not_book_cancel_or_reschedule_without_human_approval"
+      - "user_handles_captcha_and_2fa"
+      - "capture_confirmation"
+    acceptance_criteria:
+      - "scheduler worker tested"
+      - "approval interrupt implemented"
+      - "provider portal allowlist configured"
+      - "confirmation artifact saved"
+
+  - capability_id: "document_download"
+    domain: "insurance.portal.read"
+    status: "planned"
+    runtime_selectable: false
+    visible_to_coding_agents: true
+    visible_to_planner: true
+    planner_behavior: "download_if_worker_enabled_else_request_upload_or_prepare_instructions"
+    data_layer:
+      - "layer_3_portal_control"
+    tools:
+      - "openclaw_document_downloader"
+      - "openclaw_logged_portal_control"
+    safety:
+      requires_human_auth_interrupt: true
+      requires_human_approval_before_write: false
+      raw_password_storage_allowed: false
+    acceptance_criteria:
+      - "document hash stored"
+      - "source portal and timestamp recorded"
+      - "PHI redacted from logs"
+
+executable_tool_catalog_policy:
+  required_for_runtime_selectable_true:
+    - "real_backing_implementation_exists"
+    - "integration_status_is_implemented_runtime"
+    - "required_credentials_or_enrollment_present"
+    - "policy_guard_allows"
+    - "acceptance_tests_pass"
+    - "audit_events_implemented"
+    - "PHI_redaction_implemented"
+    - "human_approval_gate_implemented_if_write"
+    - "confirmation_capture_implemented_if_transaction"
+  prohibited:
+    - "fake_enabled_tools"
+    - "visible_but_refusing_tool_rows_that_pass_backing_gate_dishonestly"
+    - "planner_dispatch_to_planned_capability"
+    - "write_actions_without_human_approval"
+    - "raw_password_storage"
+
+planner_exposure_contracts:
+  submit_claim_when_not_executable:
+    if_user_requests:
+      - "submit claim"
+      - "file reimbursement"
+      - "upload claim"
+    planner_may:
+      - "classify as claims_support or transactional_action"
+      - "collect required documents"
+      - "generate claim packet"
+      - "explain manual submission steps"
+      - "create follow-up task"
+      - "say claim submission worker is not enabled yet"
+    planner_must_not:
+      - "select openclaw_claim_submission_worker as executable"
+      - "claim submission occurred"
+      - "ask for raw password"
+      - "bypass human approval"
+
+  schedule_visit_when_not_executable:
+    if_user_requests:
+      - "schedule appointment"
+      - "reschedule appointment"
+      - "cancel appointment"
+    planner_may:
+      - "find providers"
+      - "prepare scheduling options"
+      - "collect preferences"
+      - "prepare portal work order"
+    planner_must_not:
+      - "book appointment"
+      - "cancel appointment"
+      - "send portal message"
+      - "select scheduler worker as executable before enabled"
+
+  prior_auth_submit_without_delegation:
+    if_user_requests:
+      - "submit prior authorization"
+      - "get pre auth"
+      - "send prior auth to insurance"
+    planner_may:
+      - "check requirements"
+      - "draft packet"
+      - "prepare provider-facing request"
+      - "track status if user has member access"
+    planner_must_not:
+      - "submit PAS transaction"
+      - "claim provider authority"
+      - "use prior_auth_submission_pas_api without verified delegation"
+
+embedding_policy:
+  abstraction_required: true
+  default_public_provider:
+    provider: "openai"
+    model: "text-embedding-3-small"
+    allowed_data_classes:
+      - "official_payer_public"
+      - "official_employer_public"
+      - "cms_public"
+      - "mrf_public"
+      - "unauthenticated_public"
+    phi_allowed: false
+    baa_required: false
+  phi_provider_policy:
+    allowed_only_if:
+      - "BAA signed for provider"
+      - "policy profile marks provider PHI-enabled"
+      - "KMS/Vault profile active where required"
+    preferred_targets:
+      - "aws_bedrock_embeddings_with_kms"
+      - "openai_with_BAA_if_approved"
+      - "local_model_if_ops_ready"
+    blocked_data_classes_until_policy_enabled:
+      - "member_phi"
+      - "claims_eob"
+      - "portal_screenshot"
+      - "uploaded_eob"
+      - "id_card"
+      - "prior_auth_letter"
+      - "clinical_note"
+  required_chunk_metadata:
+    - "embedding_provider"
+    - "embedding_model"
+    - "embedding_dimension"
+    - "data_class"
+    - "embedding_policy_version"
+    - "created_at"
+    - "source_document_id"
+    - "source_evidence_class"
+    - "phi_allowed"
+    - "baa_required"
+    - "baa_status"
+    - "kms_profile"
+    - "chunk_hash"
+
+secret_vault_policy:
+  abstraction_required: true
+  raw_password_storage_allowed: false
+  dev_closed_pilot_backend:
+    backend: "local_secret_file"
+    allowed_profiles:
+      - "dev"
+      - "closed_pilot"
+    notes: "Allowed only for local/dev/closed pilot. Not broad production."
+  production_target:
+    backend: "managed_kms_or_vault"
+    required_before:
+      - "broad_external_users"
+      - "long_lived_layer_2_tokens"
+      - "production_phi_token_storage"
+  token_storage_rules:
+    - "encrypt OAuth access tokens"
+    - "encrypt refresh tokens"
+    - "store token metadata separately from token secret"
+    - "audit every token access"
+    - "scope token use by user, payer, capability, consent, expiry, and data class"
+
+interrupt_policy:
+  local_dev_checkpointer: "file_backed_saver_allowed"
+  production_target_checkpointer: "postgres"
+  schema_versioning_required_now: true
+  required_interrupt_fields:
+    - "interrupt_id"
+    - "interrupt_schema_version"
+    - "workflow_schema_version"
+    - "planner_schema_version"
+    - "workflow_id"
+    - "user_id"
+    - "action_type"
+    - "risk_tier_derived"
+    - "target_site_or_api"
+    - "data_to_be_submitted_summary"
+    - "user_visible_review_text"
+    - "approval_status"
+    - "created_at"
+    - "expires_at"
+    - "replay_safety_metadata"
+  deployment_policy:
+    early_phase: "operational_drain_allowed"
+    long_term: "cross_version_resume_or_safe_reissue_required"
+    rules:
+      - "do not deploy with pending write approvals in early phase"
+      - "before production, compatible interrupts may resume"
+      - "incompatible interrupts must expire or be reissued with user notice"
+      - "never auto-execute ambiguous post-deploy write action"
+
+reauth_and_sync_policy:
+  supported_modes:
+    - "on_demand_fetch"
+    - "background_sync_with_refresh_token"
+    - "reconnect_prompt_if_refresh_absent"
+  default_runtime_mode: "on_demand_fetch"
+  background_sync_allowed_only_if:
+    - "refresh_token_available"
+    - "user_consented_to_background_sync"
+    - "token_policy_allows"
+    - "connector_stable"
+  reconnect_prompt_policy:
+    prompt_when:
+      - "user asks for member-specific data and token expired"
+      - "scheduled task has clear user value and consent exists"
+      - "connector status is reauth_required"
+    do_not_prompt_when:
+      - "no immediate user value"
+      - "recent prompt already shown"
+      - "user disabled background sync"
+  connector_status_values:
+    - "connected"
+    - "expired"
+    - "reauth_required"
+    - "revoked"
+    - "unsupported"
+    - "error"
+
+risk_tier_policy:
+  persisted_as_column: false
+  derived_only: true
+  authorities:
+    - "planner_decision_record"
+    - "policy_evaluation_record"
+    - "audit_event_risk_tier_assigned"
+  audit_event_required_fields:
+    - "workflow_id"
+    - "capability_id"
+    - "risk_tier"
+    - "reason_code"
+    - "policy_version"
+    - "timestamp"
+  reporting:
+    may_materialize_cache: true
+    cache_is_source_of_truth: false
+    materialized_view_must_include:
+      - "source_event_ids"
+      - "policy_version"
+      - "recomputed_at"
+
+langfuse_policy:
+  old_span_to_remove: "router.intent_classified"
+  new_spans:
+    - "planner.input"
+    - "planner.output"
+    - "planner.capability_decision"
+    - "planner.tool_selection"
+    - "planner.policy_decision"
+    - "planner.interrupt_required"
+    - "worker.dispatch"
+    - "openclaw.worker_selected"
+    - "openclaw.worker_blocked"
+    - "final.answer_contract"
+  required_before_removal:
+    - "grep/export check dashboards and saved queries"
+    - "re-key any dependency in same phase"
+  phi_safe_redaction_required: true
+
+eval_policy:
+  planner_corpus:
+    action: "re_record_post_phase_85"
+    old_corpus_status: "archive_only"
+    active_eval_must_cover:
+      - "new planner schema"
+      - "capability registry"
+      - "executable tool catalog"
+      - "planner exposure contract"
+      - "three data layers"
+      - "OpenClaw write-worker non-executability before Phase 92"
+      - "consent interrupts"
+      - "auth interrupts"
+      - "human approval interrupts"
+      - "prior auth provider delegation block"
+      - "eligibility rail blocked_external_enrollment"
+
+mrf_policy:
+  first_slice:
+    code_basis: "CMS_shoppable_services_baseline"
+    filters:
+      - "imaging"
+      - "labs"
+      - "common_outpatient"
+    geography: "first_metro"
+    payer_scope: "first_payer_source"
+  generic_from_day_one: true
+  required_keys:
+    - "payer_id"
+    - "employer_id"
+    - "plan_id"
+    - "network_id"
+    - "geography"
+    - "npi"
+    - "tin"
+    - "cpt_hcpcs"
+    - "place_of_service"
+    - "billing_class"
+    - "negotiated_rate"
+    - "allowed_amount"
+    - "source_file_url"
+    - "source_file_month"
+    - "ingestion_run_id"
+  buy_vs_build_threshold:
+    self_build_until_any:
+      - "more_than_one_payer"
+      - "more_than_one_metro"
+      - "maintenance_exceeds_one_engineer_week_per_month"
+      - "legal_requires_vendor_terms"
+      - "consumer_display_warranty_needed"
+  legal_owner_review_required_for:
+    - "display"
+    - "redistribution"
+    - "caching"
+    - "attribution"
+    - "vendor_contract"
+
+coding_agent_instructions:
+  - "Read Capability Registry before adding tools."
+  - "Do not add runtime-selectable tools unless executable catalog requirements are met."
+  - "Do not invent fake integrations to satisfy planner prompts."
+  - "If capability is planned, add docs, blockers, acceptance criteria, and planner exposure behavior."
+  - "If capability is executable, add tests, policy guard, audit events, redaction, and Langfuse spans."
+  - "OpenClaw workers are official worker-management layer, but LangGraph remains healthcare orchestration authority."
+  - "Any write action requires human approval interrupt before execution."
+  - "Any PHI path requires redaction and audit."
+  - "Any portal path must avoid raw password storage."
+  - "Any prior auth submission requires verified provider delegation or equivalent authority."
+  - "Any eligibility 270/271 production rail requires verified receiver/provider standing."
