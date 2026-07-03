@@ -64,7 +64,6 @@ import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
-import { hydrateCapabilityPointers } from "./capabilityPortfolio.mjs";
 import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
 import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
 import { classifyFailureClass, FAILURE_CLASSES } from "../observability/failures.mjs";
@@ -834,23 +833,21 @@ async function hydrateDecisionCapabilities(state, decision) {
       input: { requestedPointerCount: selectedPointers.length }
     },
     async () => {
-      // go-live 3/3: when the DB catalog is the planner surface, resolve selected
-      // pointers via the authoritative catalog hydrator (by key, backing-precedence).
-      if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0") {
-        const store = activeStores.get(state.session_id);
-        const { hydrateCapabilityPointer } = await import("./capabilityCatalog.mjs");
-        const resolved = [];
-        const missing = [];
-        for (const pointer of selectedPointers) {
-          const r = await hydrateCapabilityPointer(store, { pointer });
-          if (r.resolved) resolved.push({ portfolioId: r.capabilityKey, kind: r.kind, title: r.hydrate?.title ?? r.capabilityKey, pointer, hydrate: r.hydrate });
-          else missing.push(pointer);
-        }
-        if (resolved.length || missing.length) {
-          return { cacheBackend: "db_catalog", requested: selectedPointers.length, resolvedCount: resolved.length, cacheHit: resolved.length > 0, missing, resolved };
-        }
+      // Phase 86 (§6.3): the DB catalog is the ONLY hydration surface — selected
+      // pointers resolve via the authoritative catalog hydrator (by key,
+      // backing-precedence, §7.0 runtime_selectable gate). The legacy Redis-trusting
+      // portfolio deref (hydrateCapabilityPointers) and its BRAINSTY_PLANNER_DB_CATALOG
+      // switch are DELETED — a pointer the catalog cannot resolve reports missing, loud.
+      const store = activeStores.get(state.session_id);
+      const { hydrateCapabilityPointer } = await import("./capabilityCatalog.mjs");
+      const resolved = [];
+      const missing = [];
+      for (const pointer of selectedPointers) {
+        const r = await hydrateCapabilityPointer(store, { pointer });
+        if (r.resolved) resolved.push({ portfolioId: r.capabilityKey, kind: r.kind, title: r.hydrate?.title ?? r.capabilityKey, pointer, hydrate: r.hydrate });
+        else missing.push(pointer);
       }
-      return hydrateCapabilityPointers(state.session_id, selectedPointers);
+      return { cacheBackend: "db_catalog", requested: selectedPointers.length, resolvedCount: resolved.length, cacheHit: resolved.length > 0, missing, resolved };
     }
   );
 }
@@ -907,7 +904,7 @@ async function loadPlannerCatalogSurface(state) {
       approvalScope: p.approvalScope,
       steps: stepsByProc[`proc:${p.portfolioId}`] ?? []
     }));
-    if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0" && table.length > 0) {
+    if (table.length > 0) {
       surface.dbCatalogPortfolio = {
         cacheBackend: portfolio.backend,
         cacheKey: portfolio.cacheKey,
@@ -1697,6 +1694,11 @@ async function workflowExecutorNode(state) {
       plannerSelectedSkillKeys,
       hydratedCapabilityCount: plannerHydratedCapabilities.length,
       workerPlanId: workerPlan.planId,
+      // Phase 86 (§6.2): decision layer fields + the oauth-session handle POINTER
+      // (never the raw credential — pointer/hash discipline of the oauth mirror).
+      dataLayer: state.llm_orchestration_decision?.data_layer?.length ? state.llm_orchestration_decision.data_layer : null,
+      riskTier: state.llm_orchestration_decision?.risk_tier ?? null,
+      oauthHandlePointer: state.context_packet?.runtimeContext?.layerRouting?.oauthHandles?.[0]?.vaultPointer ?? null,
       // Stateful worker carries the (honestly-classified) remote browser tier + the
       // reusable session endpoint so later dispatches can reuse the live session.
       browserReadinessTier: browserReadiness.tier,
@@ -3876,6 +3878,11 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
         graphTraceId,
         workflow: state.workflow,
         routeReason: state.route_reason,
+        // Phase 86 (§6.2): decision layer fields flow into the checkpoint statePatch so
+        // compactManagedCheckpoints/priorDecisionPointers hydrate them next turn
+        // (empty data_layer normalizes to null — an empty array is not a routed layer).
+        dataLayer: state.llm_orchestration_decision?.data_layer?.length ? state.llm_orchestration_decision.data_layer : null,
+        riskTier: state.llm_orchestration_decision?.risk_tier ?? null,
         contextPacketId: context.row.id,
         evidenceObservationStatus: state.evidence_observation?.status ?? null,
         sourcePointers: state.source_pointers ?? [],

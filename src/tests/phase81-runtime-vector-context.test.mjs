@@ -3,15 +3,24 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { buildLlmOrchestrationDecisionMessages } from "../concierge/llmOrchestrationDecision.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { loadRuntimeVectorIndex, runtimeVectorIndexKey } from "../concierge/runtimeVectorIndex.mjs";
 
+// Hermetic: pin the in-memory cache backend regardless of ambient .env.local (which
+// is lazily loaded mid-run and would otherwise flip the backend between write and read).
+process.env.BRAINSTY_REDIS_URL = "";
+process.env.REDIS_URL = "";
+
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-phase81-vector-context-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Phase 86 (§6.3): the vector index's capability documents come from the DB catalog.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 test("Phase 81 vector context retrieves pharmacy capability pointers for medication copay questions", async () => {

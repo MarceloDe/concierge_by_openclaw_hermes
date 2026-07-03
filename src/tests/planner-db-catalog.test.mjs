@@ -19,9 +19,9 @@ async function seededStore() {
 }
 
 test("go-live 3/3: replay decision with a DB-catalog pointer hydrates via the catalog (backing-precedence)", async () => {
-  const prev = process.env.BRAINSTY_PLANNER_DB_CATALOG;
-  delete process.env.BRAINSTY_PLANNER_DB_CATALOG; // default on
-  try {
+  // Phase 86 (§6.3): the DB catalog is the ONLY hydration surface — the
+  // BRAINSTY_PLANNER_DB_CATALOG switch and the legacy fallback are deleted.
+  {
     const store = await seededStore();
     const { user, session } = await enrollDefaultMember(store);
     const pointer = `${catalogPortfolioKey(session.id)}#skill:insurance_portal_browser`;
@@ -40,7 +40,5 @@ test("go-live 3/3: replay decision with a DB-catalog pointer hydrates via the ca
     assert.equal(h.cacheBackend, "db_catalog", "hydration resolved via the DB catalog, not legacy");
     assert.equal(h.resolvedCount, 1, "DB-catalog pointer resolved");
     assert.equal(h.resolved[0].portfolioId, "skill:insurance_portal_browser");
-  } finally {
-    if (prev !== undefined) process.env.BRAINSTY_PLANNER_DB_CATALOG = prev;
   }
 });

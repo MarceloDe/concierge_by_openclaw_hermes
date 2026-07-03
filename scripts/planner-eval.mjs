@@ -36,9 +36,11 @@ async function main() {
   for (const c of CASES) {
     const { user, session } = await enrollDefaultMember(store); // fresh session per case (no bleed)
     let d = {};
+    let capabilitySource = null;
     try {
       const r = await runLangGraphOrchestration(store, { user, session, channel: session.channel, userInput: c.q, rawMessage: { source: "planner-eval", useLiveModel: true } });
       d = r.state.llm_orchestration_decision || {};
+      capabilitySource = r.state.context_packet?.capabilityPortfolio?.source ?? null;
     } catch (err) {
       d = { error: String(err?.message ?? err) };
     }
@@ -57,7 +59,9 @@ async function main() {
     const taskClassOk = Boolean(taskClass) && (!c.expectTaskClass || c.expectTaskClass.includes(taskClass) || taskClass === "mixed");
     const recommendedProcessId = d.selected_tools?.recommendedProcessId ?? null;
     const workflowGraphOk = !recommendedProcessId || d.workflow_graph?.processId === recommendedProcessId;
-    rows.push({ q: c.q, workflow: d.classification?.workflow, workflowOk, offered: offered.join(","), processOk, demand: extractedDemand, demandOk, needsOk, conf: d.classification?.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk });
+    // Phase 86 acceptance (§11): every turn's planner capability surface is the DB catalog.
+    const capabilitySourceOk = capabilitySource === "db_catalog";
+    rows.push({ q: c.q, workflow: d.classification?.workflow, workflowOk, offered: offered.join(","), processOk, demand: extractedDemand, demandOk, needsOk, conf: d.classification?.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk, capabilitySource, capabilitySourceOk });
     await new Promise((s) => setTimeout(s, 800)); // gentle pacing for rate limits
   }
 
@@ -70,6 +74,7 @@ async function main() {
     console.log(`  offered:  ${r.offered || "(none)"} ${r.processOk ? "✓" : "✗"}`);
     console.log(`  demand:   "${r.demand}" ${r.demandOk ? "✓" : "✗"} | informationNeeds ${r.needsOk ? "✓" : "✗"}`);
     console.log(`  v2:       taskClass=${r.taskClass ?? "(none)"} ${r.taskClassOk ? "✓" : "✗"} | data_layer=[${r.dataLayer}] ${r.dataLayerOk ? "✓" : "✗"} | risk_tier=${r.riskTier ?? "(none)"} ${r.riskTierOk ? "✓" : "✗"} | graph ${r.workflowGraphOk ? "✓" : "✗"}`);
+    console.log(`  source:   plannerCapabilitySource=${r.capabilitySource ?? "(none)"} ${r.capabilitySourceOk ? "✓" : "✗"}`);
   }
   console.log("\n---------------- SCORE ----------------");
   console.log(`  workflow selection : ${pct("workflowOk")}`);
@@ -80,6 +85,7 @@ async function main() {
   console.log(`  data layer (v2)    : ${pct("dataLayerOk")}`);
   console.log(`  risk tier (v2)     : ${pct("riskTierOk")}`);
   console.log(`  workflow graph (v2): ${pct("workflowGraphOk")}`);
+  console.log(`  capability source  : ${pct("capabilitySourceOk")} (db_catalog required — Phase 86)`);
   console.log("\n(Inspect the full per-node hydration of any case in Langfuse: planner.start -> Input.full_prompt.)");
   await store.close?.();
 }

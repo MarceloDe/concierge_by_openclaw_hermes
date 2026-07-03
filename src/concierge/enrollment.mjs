@@ -1,4 +1,5 @@
 import { audit, approvalGate } from "./audit.mjs";
+import { evictConsentState } from "./consentStateRuntime.mjs";
 import { createId, nowIso } from "./database.mjs";
 import { resolveManagedSession } from "./sessionManager.mjs";
 import { CHANNELS, DEFAULT_APPROVALS, DEFAULT_MEMBER } from "./types.mjs";
@@ -28,6 +29,14 @@ export async function enrollDefaultMember(store, overrides = {}, sessionOptions 
     created_at: nowIso()
   };
   await store.insert("user_consents", consent);
+  // Phase 86 (§6.1): every user_consents write evicts the Redis consent-state mirror
+  // synchronously — the mirror can never outlive a consent flip.
+  try {
+    const sessionRows = await store.all("SELECT id FROM sessions WHERE user_id = ?;", [user.id]);
+    await evictConsentState(sessionRows.map((row) => row.id));
+  } catch {
+    /* eviction is best-effort on the mirror; DB re-checks are the safety net */
+  }
 
   const portal = {
     id: createId("portal"),

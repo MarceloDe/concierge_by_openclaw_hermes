@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import net from "node:net";
 import tls from "node:tls";
 
-export const RUNTIME_CONTEXT_CACHE_VERSION = "2026-06-26.phase77-runtime-context-cache.v1";
+// v2 (Phase 86, plan §6.2): compacted checkpoints + prior decision pointers carry
+// dataLayer/riskTier from the checkpoint state.langgraph patch. Reads stay tolerant of
+// pre-pivot manifests (null-guarded merge — old checkpoints hydrate with null layers).
+export const RUNTIME_CONTEXT_CACHE_VERSION = "2026-07-03.phase86-runtime-context-cache.v2";
 
 const memoryStore = new Map();
 
@@ -22,11 +25,18 @@ function encodeRespCommand(args) {
   }).join("")}`;
 }
 
+// RESP parsing operates on the RAW Buffer with BYTE offsets — bulk-string `$<len>`
+// counts BYTES, so decoding first and slicing a JS string by that count desyncs the
+// parser on any multi-byte UTF-8 payload (e.g. "§"/"—" in catalog metadata) and the
+// command hangs to timeout. Fixed in Phase 86 (the bug surfaced when seed v3 metadata
+// introduced non-ASCII characters); values decode to utf8 only at the boundaries.
+const RESP_CRLF = Buffer.from("\r\n");
+
 function parseRespAt(buffer, offset = 0) {
-  const type = buffer[offset];
-  const lineEnd = buffer.indexOf("\r\n", offset);
+  const type = String.fromCharCode(buffer[offset]);
+  const lineEnd = buffer.indexOf(RESP_CRLF, offset);
   if (lineEnd < 0) return null;
-  const header = buffer.slice(offset + 1, lineEnd);
+  const header = buffer.slice(offset + 1, lineEnd).toString("utf8");
   if (type === "+" || type === ":") return { value: type === ":" ? Number(header) : header, offset: lineEnd + 2 };
   if (type === "-") {
     const error = new Error(header);
@@ -34,12 +44,12 @@ function parseRespAt(buffer, offset = 0) {
     throw error;
   }
   if (type === "$") {
-    const len = Number(header);
+    const len = Number(header); // BYTE length per RESP
     if (len < 0) return { value: null, offset: lineEnd + 2 };
     const start = lineEnd + 2;
     const end = start + len;
     if (buffer.length < end + 2) return null;
-    return { value: buffer.slice(start, end), offset: end + 2 };
+    return { value: buffer.slice(start, end).toString("utf8"), offset: end + 2 };
   }
   if (type === "*") {
     const count = Number(header);
@@ -94,7 +104,7 @@ class MinimalRedisClient {
       socket.on("data", (chunk) => {
         chunks.push(chunk);
         try {
-          const values = parseRespAll(Buffer.concat(chunks).toString("utf8"));
+          const values = parseRespAll(Buffer.concat(chunks));
           if (values.length >= commands.length) {
             clearTimeout(timer);
             socket.end();
@@ -132,6 +142,23 @@ class MinimalRedisClient {
   async del(key) {
     const result = await this.command(["DEL", key]);
     return Number(result) || 0;
+  }
+
+  // Cursor-iterated SCAN (never KEYS — non-blocking). Used by the Phase 86 live
+  // namespace gate (§6.3): the observed brainsty:* prefix set must equal the
+  // documented namespace set. Each cursor step is its own short-lived command.
+  async scanKeys(pattern, { limit = 2000 } = {}) {
+    const keys = [];
+    let cursor = "0";
+    do {
+      const reply = await this.command(["SCAN", cursor, "MATCH", pattern, "COUNT", "500"]);
+      cursor = String(reply[0]);
+      for (const key of reply[1] ?? []) {
+        keys.push(String(key));
+        if (keys.length >= limit) return keys;
+      }
+    } while (cursor !== "0");
+    return keys;
   }
 
   async ping() {
@@ -180,6 +207,11 @@ class MemoryRuntimeCache {
     return memoryStore.delete(key) ? 1 : 0;
   }
 
+  async scanKeys(pattern, { limit = 2000 } = {}) {
+    const re = new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`);
+    return [...memoryStore.keys()].filter((key) => re.test(key)).slice(0, limit);
+  }
+
   async ping() {
     // Development-only backend; report unhealthy-for-production so readiness never
     // scores a process-local Map as Redis-backed.
@@ -207,6 +239,10 @@ class RedisRuntimeCache {
 
   del(key) {
     return this.client.del(key);
+  }
+
+  scanKeys(pattern, options) {
+    return this.client.scanKeys(pattern, options);
   }
 
   ping() {
@@ -241,6 +277,7 @@ function instrument(adapter, backend) {
     async set(key, value, options) { runtimeCacheMetrics.sets += 1; return adapter.set(key, value, options); },
     async setNX(key, value, options) { return adapter.setNX(key, value, options); },
     async del(key) { runtimeCacheMetrics.deletes += 1; return adapter.del(key); },
+    scanKeys(pattern, options) { return adapter.scanKeys(pattern, options); },
     ping() { return adapter.ping(); }
   };
 }
@@ -335,7 +372,11 @@ export function compactManagedCheckpoints(managedSession, { limit = 6 } = {}) {
         routeReason: langgraph.routeReason ?? null,
         contextPacketId: langgraph.contextPacketId ?? null,
         sourcePointerCount: Array.isArray(langgraph.sourcePointers) ? langgraph.sourcePointers.length : 0,
-        evidenceObservationStatus: langgraph.evidenceObservationStatus ?? null
+        evidenceObservationStatus: langgraph.evidenceObservationStatus ?? null,
+        // Phase 86 (§6.2): decision layer fields from the checkpoint statePatch;
+        // pre-pivot checkpoints hydrate null (tolerant read, never a throw).
+        dataLayer: langgraph.dataLayer ?? null,
+        riskTier: langgraph.riskTier ?? null
       };
     });
 }
@@ -369,7 +410,9 @@ export function buildRuntimeContextManifest({ session, contextPacket, managedSes
       workflow: checkpoint.workflow,
       routeReason: checkpoint.routeReason,
       sourcePointerCount: checkpoint.sourcePointerCount,
-      contextPacketId: checkpoint.contextPacketId
+      contextPacketId: checkpoint.contextPacketId,
+      dataLayer: checkpoint.dataLayer ?? null,
+      riskTier: checkpoint.riskTier ?? null
     }));
   const capabilitySummary = (contextPacket.workflowArchitecture?.routeCandidates ?? []).slice(0, 5).map((candidate) => ({
     workflowKey: candidate.workflowKey,

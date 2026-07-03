@@ -174,3 +174,26 @@ test("the contract object renders once and carries the draft-adopted vocabularie
   assert.deepEqual(DECISION_CONTRACT_V2.riskTiers, ["low", "medium", "high", "critical"]);
   assert.equal(DECISION_CONTRACT_V2.executionPolicyInvariants.storeRawCredentials, false);
 });
+
+test("v2 normalizer canonicalizes the unambiguous workflow: prefix; unknown workflows still fail loud", () => {
+  const options = { allowedWorkflows: ["document_or_trace_review"], offerableProcessIds: [], knownCapabilityKeys: [] };
+  // Prefixed form of an ALLOWED workflow → canonicalized (deterministic alias, not a fallback).
+  const canonical = normalizeLlmOrchestrationDecision({
+    classification: { workflow: "workflow:document_or_trace_review", taskClass: "claims_support", intent: "eob_review", confidence: 0.97, rationale: "prefixed form" },
+    data_layer: ["layer_1_public"],
+    risk_tier: "medium",
+    response: { responseStrategy: "answer", workerGoal: "read-only" }
+  }, options);
+  assert.equal(canonical.valid, true);
+  assert.equal(canonical.classification.workflow, "document_or_trace_review");
+  assert.ok(canonical.warnings.includes("workflow_prefix_canonicalized"));
+  // Prefixed form of a NOT-allowed workflow → still a loud hard issue.
+  const invalid = normalizeLlmOrchestrationDecision({
+    classification: { workflow: "workflow:invented_workflow", taskClass: "claims_support", intent: "x", confidence: 0.9, rationale: "invented" },
+    data_layer: ["layer_1_public"],
+    risk_tier: "low",
+    response: { responseStrategy: "answer", workerGoal: "read-only" }
+  }, options);
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.issues.some((issue) => issue.startsWith("workflow_not_allowed:")));
+});

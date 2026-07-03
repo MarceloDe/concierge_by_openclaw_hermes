@@ -25,15 +25,17 @@ function runNode(scriptRelPath, args = []) {
 test("Phase 5: Redis runtime context survives a process restart (turn 1 writes, fresh process reads back)", () => {
   assert.ok(process.env.BRAINSTY_REDIS_URL, "BRAINSTY_REDIS_URL must be configured for the cross-process proof");
 
-  // Turn 1 — writer process writes the portfolio to Redis.
+  // Turn 1 — writer process mirrors the DB catalog to Redis (Phase 86: the packet's
+  // capability surface IS the DB-catalog manifest; brainsty:capability-portfolio is retired).
   const writer = runNode("scripts/redis-xprocess-writer.mjs");
   assert.equal(writer.backend, "redis", "writer must use the redis backend");
-  assert.equal(writer.stored, true, "writer must store the portfolio");
+  assert.equal(writer.source, "db_catalog", "packet capability surface must be the DB catalog");
+  assert.ok(writer.entryCount > 0, "writer must mirror a non-empty catalog manifest");
   assert.ok(writer.pointer, "writer must produce a real pointer");
 
-  // Turn 2 — a brand new process (no shared memory) reads it back.
+  // Turn 2 — a brand new process (no shared memory) reads the mirror back.
   const reader = runNode("scripts/redis-xprocess-reader.mjs", [writer.sessionId, writer.pointer]);
   assert.equal(reader.backend, "redis", "reader must use the redis backend");
-  assert.equal(reader.cacheHit, true, "fresh process must read the portfolio back from redis (proves cross-process persistence)");
-  assert.equal(reader.resolvedCount, 1, "pointer must hydrate to a full payload in the fresh process");
+  assert.equal(reader.cacheHit, true, "fresh process must read the catalog mirror back from redis (proves cross-process persistence)");
+  assert.equal(reader.resolvedCount, 1, "pointer's entry must be present in the mirrored manifest in the fresh process");
 });

@@ -2,7 +2,10 @@
   "$schema": "internal://brainsty/redis-keys.v1",
   "description": "Machine-readable map of the Redis runtime-mirror namespaces for the healthcare AI concierge. Redis is the fast runtime mirror; Postgres/SQLite is authoritative. jsonShape values are the REAL top-level value shapes captured from the live Redis (127.0.0.1:6381); 'object'/'array[n] of {...}' annotations are summaries of nested structure, not invented fields.",
   "backendSelection": {
-    "redisUrlEnv": ["BRAINSTY_REDIS_URL", "REDIS_URL"],
+    "redisUrlEnv": [
+      "BRAINSTY_REDIS_URL",
+      "REDIS_URL"
+    ],
     "fallback": "in-process Map (backend=\"memory\", productionReady=false)",
     "requireRedisEnv": "BRAINSTY_REQUIRE_REDIS=1 (or runtime env production/prod/staging/production-candidate) makes Redis mandatory; initializeRuntimeCache fails loud otherwise",
     "factory": "createRuntimeContextCache (src/concierge/runtimeContextCache.mjs)",
@@ -26,20 +29,39 @@
         "processCount": "number"
       }
     },
-    "brainsty:capability-portfolio": {
-      "keyPattern": "brainsty:capability-portfolio:<sessionId>",
+    "brainsty:consent-state": {
+      "keyPattern": "brainsty:consent-state:<sessionId>",
       "valueType": "JSON object (string-encoded)",
       "ttlSeconds": 1800,
-      "writer": "attachCapabilityPortfolio — src/concierge/capabilityPortfolio.mjs",
-      "reader": "loadCapabilityPortfolio / hydrateCapabilityPointers — src/concierge/capabilityPortfolio.mjs",
-      "purpose": "Per-turn capability portfolio fullPayload built from the context packet's workflowArchitecture (workflows, skills, tools, graph paths). Read back to dereference LLM-planner-selected pointers into full hydrated entries.",
+      "writer": "loadConsentState (on miss, rebuild-on-miss) / buildConsentStateFromDb — src/concierge/consentStateRuntime.mjs",
+      "reader": "loadConsentState — src/concierge/consentStateRuntime.mjs",
+      "purpose": "Mirror of the AUTHORITATIVE user_consents row + derived per-data-layer executability (Phase 86, plan §6.1). Evicted synchronously inside every user_consents write and by the resumeRun consent-revocation re-plan; NEVER the consent authority — revocation safety is guaranteed by DB-side re-checks.",
       "jsonShape": {
         "version": "string",
-        "cacheKey": "string",
-        "generatedAt": "string",
+        "userId": "string",
+        "missing": "boolean",
+        "consentRowId": "string",
+        "credentialBoundary": "string",
+        "sessionReuseApproved": "boolean",
+        "mrfPricingLookupApproved": "boolean",
+        "readOnlyExtractionApproved": "boolean",
+        "websiteActionsApproved": "boolean",
+        "layers": "object {layer_1_public:{allowed}, layer_2_member_authorized_api:{allowed,reason}, layer_3_portal_control:{allowed,writeActions}}",
+        "mirroredAt": "string"
+      }
+    },
+    "brainsty:oauth-session": {
+      "keyPattern": "brainsty:oauth-session:<sessionId>",
+      "valueType": "JSON object (string-encoded)",
+      "ttlSeconds": "min(1800, seconds-to-token-expiry)",
+      "writer": "recordOauthSessionHandle — src/concierge/oauthSessionRuntime.mjs (called from credentialVault.cacheSessionArtifact after the authoritative credential_session_vault row exists)",
+      "reader": "readOauthSessionRuntime — src/concierge/oauthSessionRuntime.mjs (memoryHarness layerRouting.oauthHandles)",
+      "purpose": "Per-session OAuth/portal session HANDLES (Phase 86, plan §6.1). HARD INVARIANT: no raw token/cookie/secret/Authorization value ever enters this key — handles carry vault POINTERS (credential_session_vault#<rowId>) and sha256-prefix-24 hashes only. Evicted on vault revoke.",
+      "jsonShape": {
+        "version": "string",
         "sessionId": "string",
-        "entryCount": "number",
-        "entries": "object map of portfolioId -> entry object (workflow:*, skill:*, tool:*, graph:* keys; each entry carries kind/title/pointer/score and a nested hydrate payload)"
+        "handles": "array of {portalAccountId, vaultPointer, tokenHash, scope, dataLayer, riskTier, status, expiresAt, recordedAt}",
+        "updatedAt": "string"
       }
     },
     "brainsty:llm-output-index": {
@@ -82,10 +104,12 @@
           "routeReason": "string",
           "contextPacketId": "string",
           "sourcePointerCount": "number",
-          "evidenceObservationStatus": "string"
+          "evidenceObservationStatus": "string",
+          "dataLayer": "string|null",
+          "riskTier": "string|null"
         },
-        "achievedCheckpoints": "array[1] of {checkpointId, stepName, createdAt, stateVersion, workflow, routeReason, contextPacketId, sourcePointerCount, evidenceObservationStatus}",
-        "priorDecisionPointers": "array[1] of {checkpointId, stepName, workflow, routeReason, sourcePointerCount, contextPacketId}",
+        "achievedCheckpoints": "array of {checkpointId, stepName, createdAt, stateVersion, workflow, routeReason, contextPacketId, sourcePointerCount, evidenceObservationStatus, dataLayer, riskTier}",
+        "priorDecisionPointers": "array of {checkpointId, stepName, workflow, routeReason, sourcePointerCount, contextPacketId, dataLayer, riskTier}",
         "promptCompaction": {
           "strategy": "string",
           "checkpointLimit": "number",
@@ -138,9 +162,12 @@
           "workerPlanId": "string",
           "browserReadinessTier": "string",
           "browserProductionReady": "boolean",
-          "browserCdpUrl": "string"
+          "browserCdpUrl": "string",
+          "dataLayer": "string|null",
+          "riskTier": "string|null",
+          "oauthHandlePointer": "string|null"
         },
-        "dispatchHistory": "array[1] of {dispatchedAt, workflow, skillKey, executionMode, plannerSelectedSkillKeys, hydratedCapabilityCount, workerPlanId, browserReadinessTier, browserProductionReady, browserCdpUrl}",
+        "dispatchHistory": "array of {dispatchedAt, workflow, skillKey, executionMode, plannerSelectedSkillKeys, hydratedCapabilityCount, workerPlanId, dataLayer, riskTier, oauthHandlePointer, browserReadinessTier, browserProductionReady, browserCdpUrl}",
         "updatedAt": "string"
       }
     },
@@ -153,7 +180,9 @@
       "purpose": "Losable fast-path SETNX lock for exactly-once worker dispatch. NOT load-bearing: the Redis lock is best-effort; correctness is enforced by the Postgres UNIQUE constraint. NOTE: this namespace may not be present in a live dump because the lock is short-lived (600s) and only exists during an in-flight dispatch; documented from dispatchIdempotency.mjs source.",
       "jsonShape": {
         "status": "string (e.g. \"in_progress\")",
-        "runId": "string (workflowRunId)"
+        "runId": "string (workflowRunId)",
+        "dataLayer": "string|null (informational — never part of the idempotency key)",
+        "riskTier": "string|null (informational — never part of the idempotency key)"
       }
     }
   }

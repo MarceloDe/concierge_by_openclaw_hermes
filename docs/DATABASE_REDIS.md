@@ -39,7 +39,8 @@
 | Key pattern | Value type | TTL (s) | Writer fn (file) | Reader fn (file) | Purpose |
 |---|---|---|---|---|---|
 | `brainsty:capability-catalog:<sessionId>` | JSON object | 1800 | `mirrorCapabilityPortfolioToRedis` / `loadSessionPortfolio` on miss (`capabilityCatalog.mjs`) | `loadSessionPortfolio` (`capabilityCatalog.mjs`) | Postgres-sourced planner-facing capability/process catalog mirror (metadata-only prompt table + pointers; HOW hydrated separately). |
-| `brainsty:capability-portfolio:<sessionId>` | JSON object | 1800 | `attachCapabilityPortfolio` (`capabilityPortfolio.mjs`) | `loadCapabilityPortfolio` / `hydrateCapabilityPointers` (`capabilityPortfolio.mjs`) | Per-turn portfolio fullPayload (workflows/skills/tools/graph paths) for dereferencing planner-selected pointers. |
+| `brainsty:consent-state:<sessionId>` | JSON object | 1800 | `loadConsentState` on miss / `buildConsentStateFromDb` (`consentStateRuntime.mjs`) | `loadConsentState` (`consentStateRuntime.mjs`) | Mirror of the authoritative `user_consents` row + derived per-data-layer executability. Evicted synchronously inside every `user_consents` write; NEVER the consent authority (DB re-checks guard revocation). |
+| `brainsty:oauth-session:<sessionId>` | JSON object | min(1800, token expiry) | `recordOauthSessionHandle` (`oauthSessionRuntime.mjs`) | `readOauthSessionRuntime` (`oauthSessionRuntime.mjs`) | Per-session OAuth/portal session HANDLES: vault pointers (`credential_session_vault#<rowId>`) + sha256-prefix hashes only — no raw token/cookie/secret ever enters this key. |
 | `brainsty:llm-output-index:<sessionId>` | JSON object | 1800 | `indexLlmOutput` (`llmOutputIndex.mjs`) | `loadLlmOutputIndex` (`llmOutputIndex.mjs`) | Bounded index (≤20) of LLM outputs: hash + pointer + parsed summary per step. Raw output never stored. |
 | `brainsty:runtime-context:<sessionId>` | JSON object | 1800 | `storeRuntimeContextManifest` (`runtimeContextCache.mjs`) | `loadRuntimeContextForSession` (`runtimeContextCache.mjs`) | Cross-turn runtime context manifest: merged checkpoints, prior decision pointers, capability summary. |
 | `brainsty:runtime-vector-index:<sessionId>` | JSON object | 1800 | `attachRuntimeVectorIndex` (`runtimeVectorIndex.mjs`) | `loadRuntimeVectorIndex` (`runtimeVectorIndex.mjs`) | Deterministic local lexical term-vector index over portfolio/checkpoint/llm-output docs scored vs. user input. |
@@ -61,15 +62,16 @@ flowchart TD
     subgraph ContextBuild["Context build (per turn)"]
         CB[buildContextPacket]
         RC[storeRuntimeContextManifest<br/>runtimeContextCache.mjs]
-        CP[attachCapabilityPortfolio<br/>capabilityPortfolio.mjs]
+        CS[loadConsentState mirror<br/>consentStateRuntime.mjs]
+        OA[recordOauthSessionHandle<br/>oauthSessionRuntime.mjs]
         CAT[mirrorCapabilityPortfolioToRedis<br/>capabilityCatalog.mjs]
         VEC[attachRuntimeVectorIndex<br/>runtimeVectorIndex.mjs]
     end
 
     subgraph Planner["LLM planner + routing"]
-        LOAD[loadRuntimeContextForSession<br/>loadCapabilityPortfolio<br/>loadSessionPortfolio<br/>loadRuntimeVectorIndex]
+        LOAD[loadRuntimeContextForSession<br/>loadSessionPortfolio<br/>loadConsentState<br/>loadRuntimeVectorIndex]
         IDX[indexLlmOutput<br/>llmOutputIndex.mjs]
-        HYD[hydrateCapabilityPointers]
+        HYD[hydrateCapabilityPointer<br/>capabilityCatalog.mjs — DB-authoritative]
     end
 
     subgraph Worker["Worker dispatch"]
@@ -80,7 +82,7 @@ flowchart TD
 
     subgraph Redis["Redis runtime mirror (TTL 1800s; lock 600s)"]
         K1[[brainsty:runtime-context:&lt;id&gt;]]
-        K2[[brainsty:capability-portfolio:&lt;id&gt;]]
+        K2[[brainsty:consent-state:&lt;id&gt;<br/>brainsty:oauth-session:&lt;id&gt;]]
         K3[[brainsty:capability-catalog:&lt;id&gt;]]
         K4[[brainsty:runtime-vector-index:&lt;id&gt;]]
         K5[[brainsty:llm-output-index:&lt;id&gt;]]
@@ -90,7 +92,8 @@ flowchart TD
 
     PG --> CB
     CB --> RC --> K1
-    CB --> CP --> K2
+    PG --> CS --> K2
+    PG --> OA --> K2
     PG --> CAT --> K3
     CB --> VEC --> K4
 
@@ -101,7 +104,7 @@ flowchart TD
     K4 --> LOAD
     LOAD --> Planner
     Planner --> IDX --> K5
-    K2 --> HYD
+    PG --> HYD
 
     WSR --> K6
     Worker --> DISP --> K7
@@ -159,57 +162,51 @@ quarantine / demote / lifecycle-sync (`evictSessions`).
 - `promptTable` — the prompt-injected planner table; `pointer` is `"<cacheKey>#<portfolioId>"`.
 - `entries` — map of `portfolioId` → `{ portfolioId, kind, pointer }` for hydration lookups.
 
-### `brainsty:capability-portfolio:<sessionId>`
+### `brainsty:consent-state:<sessionId>`
 
-Per-turn portfolio `fullPayload` built from the context packet's
-`workflowArchitecture`. This is the read-back half of the pointer architecture: the
-LLM planner selects pointers, then `hydrateCapabilityPointers` resolves only the
-selected entries from `entries`.
+Mirror of the AUTHORITATIVE `user_consents` row + derived per-data-layer
+executability (Phase 86, plan §6.1). Evicted synchronously inside every
+`user_consents` write and by the `resumeRun` consent-revocation re-plan; the mirror
+is NEVER the consent authority — revocation safety is guaranteed by DB-side
+re-checks.
 
 ```json
 {
   "version": "string",
-  "cacheKey": "string",
-  "generatedAt": "string",
-  "sessionId": "string",
-  "entryCount": "number",
-  "entries": {
-    "workflow:claim_status_navigation": "object (carries kind/title/pointer/score + nested hydrate payload)",
-    "workflow:denial_appeal_preparation": "object",
-    "workflow:document_or_trace_review": "object",
-    "workflow:eligibility_benefits_navigation": "object",
-    "workflow:human_approval_escalation": "object",
-    "workflow:payer_portal_read_only_extraction": "object",
-    "workflow:pharmacy_formulary": "object",
-    "workflow:prior_authorization_navigation": "object",
-    "skill:heartbeat_followup_planner": "object",
-    "skill:insurance_knowledge_research": "object",
-    "skill:insurance_portal_browser": "object",
-    "tool:aetna_cpb_lookup": "object",
-    "tool:browser_remote_debugger": "object",
-    "tool:chrome_extension_bridge": "object",
-    "tool:cms_icd10_lookup": "object",
-    "tool:cms_mcd_lookup": "object",
-    "tool:document_trace_parser": "object",
-    "tool:gmail_inbox_reader": "object",
-    "tool:hindsight_memory_adapter": "object",
-    "tool:local_sqlite_memory": "object",
-    "tool:mcp_browser_adapter": "object",
-    "tool:openclaw_authenticated_browser": "object",
-    "tool:payer_portal_reader": "object",
-    "tool:vercel_ai_gateway": "object",
-    "tool:web_search_authoritative_sources": "object",
-    "tool:whatsapp_sender": "object",
-    "graph:input_policy_to_llm_planner": "object",
-    "graph:approval_interrupt_resume": "object",
-    "graph:evidence_to_sourced_answer": "object"
-  }
+  "userId": "string",
+  "missing": "boolean",
+  "consentRowId": "string",
+  "credentialBoundary": "string",
+  "sessionReuseApproved": "boolean",
+  "mrfPricingLookupApproved": "boolean",
+  "readOnlyExtractionApproved": "boolean",
+  "websiteActionsApproved": "boolean",
+  "layers": {
+    "layer_1_public": { "allowed": true },
+    "layer_2_member_authorized_api": { "allowed": "boolean", "reason": "string" },
+    "layer_3_portal_control": { "allowed": "boolean", "writeActions": false }
+  },
+  "mirroredAt": "string"
 }
 ```
 
-> Distinct from `capability-catalog`: the catalog is DB-sourced and metadata-only;
-> the portfolio is per-turn context-packet-sourced and carries the nested `hydrate`
-> payloads. The two keys coexist by design during the transition.
+### `brainsty:oauth-session:<sessionId>`
+
+Per-session OAuth/portal session HANDLES (Phase 86, plan §6.1). TTL is
+`min(1800, seconds-to-token-expiry)`. **Hard invariant:** no raw
+token/cookie/secret/Authorization value ever enters this key — handles carry vault
+POINTERS (`credential_session_vault#<rowId>`) and sha256-prefix-24 hashes only (the
+same discipline as `llm-output-index` `rawOutputStored:false`). Written from the real
+vault write path (`credentialVault.cacheSessionArtifact`); evicted on vault revoke.
+
+```json
+{
+  "version": "string",
+  "sessionId": "string",
+  "handles": "array of {portalAccountId, vaultPointer, tokenHash, scope, dataLayer, riskTier, status, expiresAt, recordedAt}",
+  "updatedAt": "string"
+}
+```
 
 ### `brainsty:llm-output-index:<sessionId>`
 

@@ -9,7 +9,8 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { buildContextPacket } from "../concierge/memoryHarness.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
@@ -42,9 +43,10 @@ test("Phase 4: hydrated capabilities change the dispatch and named spans fire (r
   try {
     const dir = await mkdtemp(join(tmpdir(), "brainsty-p4-behavior-"));
     const store = await new SqliteStore(join(dir, "p4b.sqlite")).initialize();
+    await seedCapabilityCatalog(store, { nowIso, createId });
     const { user, session } = await enrollDefaultMember(store);
 
-    // Real context build stores the portfolio to Redis; pick real pointers.
+    // Real context build mirrors the DB catalog to Redis; pick real pointers.
     const context = await buildContextPacket(store, { user, session, channel: session.channel, userInput: "can you check my eligibility and benefits?" });
     const table = context.packet.capabilityPortfolio.promptTable;
     const skillRow = table.find((row) => row.kind === "skill") ?? table[0];
@@ -70,17 +72,18 @@ test("Phase 4: hydrated capabilities change the dispatch and named spans fire (r
       }
     });
 
-    // Read-back proven: hydration resolved the selected pointers from Redis.
+    // Read-back proven: hydration resolved the selected pointers via the AUTHORITATIVE
+    // catalog (Phase 86 §6.3: the DB catalog is the only hydration surface).
     const hydration = result.state.hydrated_capabilities;
     assert.ok(hydration, "hydrated_capabilities must be present");
-    assert.equal(hydration.cacheBackend, "redis", "hydration must read from redis");
+    assert.equal(hydration.cacheBackend, "db_catalog", "hydration must resolve via the DB catalog");
     assert.ok(hydration.resolvedCount >= 1, "at least one selected pointer must hydrate");
 
     // Behavior change proven: the dispatch toolCall carries the planner-hydrated capabilities.
     const dispatchCall = (result.state.tool_calls ?? []).find((call) => Array.isArray(call.plannerHydratedCapabilities));
     assert.ok(dispatchCall, "a dispatch tool call must exist");
     assert.ok(dispatchCall.plannerHydratedCapabilities.length >= 1, "dispatch must include planner-hydrated capabilities (read-back changed behavior)");
-    assert.equal(dispatchCall.plannerCapabilitySource.cacheBackend, "redis");
+    assert.equal(dispatchCall.plannerCapabilitySource.cacheBackend, "db_catalog");
 
     // Named spans fired.
     for (const name of ["memory.read", "capability.hydrate", "source_pointer.validation"]) {
