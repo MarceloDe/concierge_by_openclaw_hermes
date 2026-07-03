@@ -97,7 +97,7 @@
     {
       "phase": 89,
       "title": "Early no-signature connectors (Plan-Net directory, MRF pipeline, CMS PDP PUFs, PA-policy corpus)",
-      "status": "in_progress",
+      "status": "landed",
       "dependencies": [
         88
       ],
@@ -113,7 +113,7 @@
     {
       "phase": 90,
       "title": "Mid connectors (Aetna sandbox Patient Access, PDex formulary, Stedi mock contract_ready)",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         89
       ],
@@ -121,7 +121,7 @@
         "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-90",
-      "owner": null,
+      "owner": "claude-code",
       "blockers": [
         "founder action S1: Aetna developer-portal sandbox registration (click-through, no signature)"
       ]
