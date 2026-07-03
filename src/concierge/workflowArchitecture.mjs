@@ -1,4 +1,27 @@
 const WORKFLOW_DEFINITIONS = [
+  // Phase 89 (plan §9/§11): the two connector-backed navigation workflows — provider
+  // network search over the Plan-Net directory mirror, and cost estimation over the
+  // Transparency-in-Coverage MRF evidence tables. Public data (layer_1), no login.
+  {
+    workflow_key: "provider_network_navigation",
+    title: "In-network provider search",
+    journey_stage: "care_access_navigation",
+    description: "Find in-network providers by specialty and location from the payer's Plan-Net provider directory, with cited directory source URLs.",
+    required_user_fields: ["user.id"],
+    required_data_pointers: ["provider_directory_entries"],
+    required_tools: ["provider_directory_public_api", "local_sqlite_memory"],
+    memory_scopes: ["session", "episodic"]
+  },
+  {
+    workflow_key: "cost_estimate_navigation",
+    title: "Procedure cost estimation",
+    journey_stage: "cost_estimation",
+    description: "Estimate negotiated in-network prices for a shoppable procedure code from Transparency-in-Coverage MRF observations, always cited and always with the non-guarantee disclaimer.",
+    required_user_fields: ["user.id"],
+    required_data_pointers: ["mrf_price_observations"],
+    required_tools: ["pricing_mrf_query_db", "local_sqlite_memory"],
+    memory_scopes: ["session", "episodic"]
+  },
   {
     workflow_key: "eligibility_benefits_navigation",
     title: "Eligibility and benefits navigation",
@@ -375,7 +398,8 @@ const TOOL_REGISTRY = [
     tool_type: "configured_api",
     title: "Plan-Net public provider directory API",
     risk_level: "low",
-    integration_status: "deferred_until_phase_connector_landed",
+    // Phase 89: the connector LANDED (planNetDirectory.mjs + live pagination proof).
+    integration_status: "enabled_local",
     approval_required: "none",
     executor_key: "configured_api",
     write_capable: 0,
@@ -386,7 +410,8 @@ const TOOL_REGISTRY = [
     tool_type: "knowledge_source",
     title: "Prior-authorization requirement lookup (PA-policy corpus, later CMS API)",
     risk_level: "medium",
-    integration_status: "deferred_until_phase_connector_landed",
+    // Phase 89: the PA-policy corpus crawler LANDED (real crawled policy artifacts).
+    integration_status: "enabled_local",
     approval_required: "cite_source_and_plan_specific_verification",
     executor_key: "trusted_research",
     write_capable: 0,

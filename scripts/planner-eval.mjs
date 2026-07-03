@@ -21,7 +21,10 @@ const CASES = [
   { q: "do I need approval before my knee replacement surgery?", expectWorkflow: "prior_authorization_navigation", expectProcess: "process:prior_auth_lookup", demandIncludes: ["approval", "prior auth"], expectTaskClass: ["prior_auth_support"], expectTier: ["low", "medium"] },
   { q: "what's my deductible and out-of-pocket so far this year?", expectWorkflow: "eligibility_benefits_navigation", expectProcess: "process:portal_readonly_lookup", demandIncludes: "deductible", expectTaskClass: ["member_specific_read", "cost_estimation"], expectTier: ["medium"] },
   { q: "help me appeal a denial my insurer sent me", expectWorkflow: "denial_appeal_preparation", expectProcess: "process:denial_appeal_support", demandIncludes: "appeal", expectTaskClass: ["appeal_or_denial_support"], expectTier: ["medium", "high"] },
-  { q: "can you read this EOB document I have and explain it?", expectWorkflow: "document_or_trace_review", expectProcess: "process:document_review", demandIncludes: "eob", expectTaskClass: ["claims_support", "member_specific_read", "generic_public"], expectTier: ["low", "medium"] }
+  { q: "can you read this EOB document I have and explain it?", expectWorkflow: "document_or_trace_review", expectProcess: "process:document_review", demandIncludes: "eob", expectTaskClass: ["claims_support", "member_specific_read", "generic_public"], expectTier: ["low", "medium"] },
+  // Phase 89: the connector-backed navigation cases (directory + MRF cost evidence).
+  { q: "find an in-network cardiologist near 33143", expectWorkflow: "provider_network_navigation", expectProcess: "process:provider_network_search", demandIncludes: ["cardiolog"], expectTaskClass: ["provider_search"], expectTier: ["low", "medium"] },
+  { q: "how much does a knee replacement (CPT 27447) cost in network?", expectWorkflow: "cost_estimate_navigation", expectProcess: "process:cost_estimate_lookup", demandIncludes: ["knee", "27447", "cost"], expectTaskClass: ["cost_estimation"], expectTier: ["low", "medium"] }
 ];
 
 const DATA_LAYERS = ["layer_1_public", "layer_2_member_authorized_api", "layer_3_portal_control"];

@@ -618,6 +618,23 @@ async function retrieveTrustedResearchEvidence(store, state, { session, user }) 
   } catch {
     /* MRF evidence is additive; research evidence flow continues */
   }
+  // Phase 89 (§9): provider-directory evidence joins the pool as CITED rows when the
+  // decision routed to the provider-network journey (deterministic specialty/zip
+  // extraction — never LLM-guessed). Rows carry the REAL directory source_url.
+  try {
+    if (state.workflow === "provider_network_navigation") {
+      const { extractDirectoryQuery, queryProviderDirectoryEvidence } = await import("./connectors/planNetDirectory.mjs");
+      const { specialty, zip, nuccCode } = extractDirectoryQuery(state.user_input);
+      if (specialty || zip) {
+        const rows = await queryProviderDirectoryEvidence(store, { specialty, nuccCode, zip, limit: 5 });
+        for (const row of rows) {
+          sourcePointers.push({ table: row.table, id: row.id, summary: row.summary, sourceUrl: row.sourceUrl, sourcePointer: row.sourcePointer });
+        }
+      }
+    }
+  } catch {
+    /* directory evidence is additive; research flow continues */
+  }
   // Phase 87 (§7): public-corpus RAG chunks join the trusted-evidence pool as CITED
   // pointers (rag_chunks#id + the backing extraction_artifacts anchor). Public data
   // classes only; a missing artifact anchor fails LOUD inside queryRagEvidence
@@ -3271,13 +3288,23 @@ function composeTrustedResearchEvidenceResponse(state, routeSummary) {
   const pointerLine = sourcePointers.length
     ? `Source pointers: ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`
     : "Source pointers: none.";
+  // Phase 89 (§9 MRF row): cited negotiated-rate evidence carries the MANDATORY
+  // non-guarantee disclaimer; directory evidence names its directory-source citation.
+  const hasMrfEvidence = sourcePointers.some((pointer) => pointer.table === "mrf_price_observations");
+  const hasDirectoryEvidence = sourcePointers.some((pointer) => pointer.table === "provider_directory_entries");
   return [
     `LangGraph routed this request to ${state.workflow} and answered from operator-reviewed research evidence.`,
     `Routing evidence: ${routeSummary}`,
     resultLines.length ? `Reviewed evidence used:\n${resultLines.join("\n")}` : "Reviewed evidence used: none.",
     pointerLine,
+    hasMrfEvidence
+      ? "Price disclaimer: these are published Transparency-in-Coverage negotiated rates for the cited source file and month — an ESTIMATE for comparison, not a guarantee of your final cost; your plan's deductible, coinsurance, and accumulators determine what you actually owe."
+      : null,
+    hasDirectoryEvidence
+      ? "Directory note: results come from the payer's published provider directory (source URL cited per row, synced within the CMS freshness window); confirm network status with the office before booking."
+      : null,
     "This answer is limited to reviewed, citation-approved research artifacts. It does not use pending review artifacts, MockWorker output, raw document dumps, payer contact, form submission, credential entry, medical advice, or account changes."
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function composeMissingTrustedResearchEvidenceResponse(state, routeSummary) {
