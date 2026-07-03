@@ -1,0 +1,61 @@
+
+> brainstyworkers-ai-concierge@0.1.0 eval:planner
+> node scripts/planner-eval.mjs
+
+
+================ PLANNER EVAL (real gpt-4.1) ================
+
+Q: why was my last claim denied and what do I still owe?
+  workflow: claim_status_navigation ✓ | conf 0.96
+  offered:  process:claim_status_lookup ✓
+  demand:   "The user wants to know why their most recent claim was denied and what amount, if any, is still owed." ✓ | informationNeeds ✓
+  v2:       taskClass=claims_support ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+Q: is Ozempic covered by my plan and how much will it cost?
+  workflow: pharmacy_formulary ✓ | conf 0.98
+  offered:  process:pharmacy_formulary_lookup ✓
+  demand:   "The user wants to know if Ozempic is covered by their Aetna plan and how much it will cost." ✓ | informationNeeds ✓
+  v2:       taskClass=medication_support ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+Q: do I need approval before my knee replacement surgery?
+  workflow: prior_authorization_navigation ✓ | conf 0.98
+  offered:  process:prior_auth_lookup ✓
+  demand:   "The user wants to know if prior approval is needed for their knee replacement surgery." ✓ | informationNeeds ✓
+  v2:       taskClass=prior_auth_support ✓ | data_layer=[layer_1_public,layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+Q: what's my deductible and out-of-pocket so far this year?
+  workflow: eligibility_benefits_navigation ✓ | conf 0.97
+  offered:  process:portal_readonly_lookup ✓
+  demand:   "The user wants to know their deductible and out-of-pocket spending so far this year." ✓ | informationNeeds ✓
+  v2:       taskClass=member_specific_read ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+Q: help me appeal a denial my insurer sent me
+  workflow: denial_appeal_preparation ✓ | conf 0.98
+  offered:  process:denial_appeal_support,process:document_review ✓
+  demand:   "The user wants help appealing a claim or service denial from their insurer." ✓ | informationNeeds ✓
+  v2:       taskClass=appeal_or_denial_support ✓ | data_layer=[layer_1_public] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+Q: can you read this EOB document I have and explain it?
+  workflow: document_or_trace_review ✓ | conf 0.98
+  offered:  process:document_review ✓
+  demand:   "The user wants me to read and explain an EOB document they have." ✓ | informationNeeds ✓
+  v2:       taskClass=member_specific_read ✓ | data_layer=[layer_1_public] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓
+
+---------------- SCORE ----------------
+  workflow selection : 6/6 (100%)
+  process selection  : 6/6 (100%)
+  demand extraction  : 6/6 (100%)
+  information needs   : 6/6 (100%)
+  task class (v2)    : 6/6 (100%)
+  data layer (v2)    : 6/6 (100%)
+  risk tier (v2)     : 6/6 (100%)
+  workflow graph (v2): 6/6 (100%)
+  capability source  : 6/6 (100%) (db_catalog required — Phase 86)
+
+(Inspect the full per-node hydration of any case in Langfuse: planner.start -> Input.full_prompt.)

@@ -34,7 +34,7 @@
     {
       "phase": 85,
       "title": "Postgres schema deltas + owner modules + audit v2 + v1-alias removal",
-      "status": "in_progress",
+      "status": "landed",
       "dependencies": [
         84
       ],
@@ -49,7 +49,7 @@
     {
       "phase": 86,
       "title": "Redis runtime deltas + legacy portfolio removal",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         85
       ],
@@ -59,10 +59,8 @@
         "docs/db/redis-keys.json"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-86",
-      "owner": null,
-      "blockers": [
-        "boot-seed fail-loud precondition landed in Phase 84 (plan \u00a710.26)"
-      ]
+      "owner": "claude-code",
+      "blockers": []
     },
     {
       "phase": 87,

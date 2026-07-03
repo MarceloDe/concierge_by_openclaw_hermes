@@ -1,5 +1,6 @@
 import { createId, nowIso } from "./database.mjs";
 import { audit } from "./audit.mjs";
+import { evictOauthSessionRuntime, recordOauthSessionHandle } from "./oauthSessionRuntime.mjs";
 import { dereferenceSecret, destroySecret, putSecret, sha256Hex } from "./secretBackend.mjs";
 
 // credential_session_vault owner (three-layer pivot, plan §5.1) — SOLE writer and
@@ -109,7 +110,29 @@ export async function cacheSessionArtifact(store, {
     vaultId: row.id, userId, portalAccountId, artifactKind,
     secretHashPrefix: secret.secretHash.slice(0, 12), consentId: consent.id
   }, { layer: "layer_3_portal_control" });
-  return { cached: true, vaultId: row.id, maskedPreview: row.masked_preview, secretHash: secret.secretHash };
+  // Phase 86 (§6.1): mirror a pointer+hash HANDLE to the oauth-session runtime key —
+  // Postgres row first (authoritative), Redis handle second. Never the plaintext.
+  let oauthHandleMirror = null;
+  if (sessionId) {
+    try {
+      oauthHandleMirror = await recordOauthSessionHandle({
+        sessionId,
+        handle: {
+          portalAccountId,
+          vaultPointer: `credential_session_vault#${row.id}`,
+          tokenHash: secret.secretHash.slice(0, 24),
+          scope,
+          dataLayer: "layer_3_portal_control",
+          riskTier: "medium",
+          status: "active",
+          expiresAt
+        }
+      });
+    } catch (error) {
+      oauthHandleMirror = { stored: false, storeError: error.message };
+    }
+  }
+  return { cached: true, vaultId: row.id, maskedPreview: row.masked_preview, secretHash: secret.secretHash, oauthHandleMirror };
 }
 
 // READ path (metadata only — no plaintext): the newest active, unexpired artifact.
@@ -174,5 +197,9 @@ export async function revokeSessionArtifact(store, { vaultId, reason = "revoked"
     { id: vaultId }
   );
   await audit(store, sessionId, "vault.session_revoked", { vaultId, reason }, { layer: "layer_3_portal_control" });
+  // Phase 86 (§6.1): a revoked artifact's mirrored handle must not survive — targeted eviction.
+  if (sessionId) {
+    try { await evictOauthSessionRuntime(sessionId); } catch { /* mirror eviction best-effort; DB is authority */ }
+  }
   return { revoked: true, vaultId };
 }

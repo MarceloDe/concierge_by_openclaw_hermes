@@ -1,6 +1,9 @@
 import { audit } from "./audit.mjs";
-import { attachCapabilityPortfolio } from "./capabilityPortfolio.mjs";
+import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
+import { loadSessionPortfolio } from "./capabilityCatalog.mjs";
+import { buildConsentStateFromDb, loadConsentState } from "./consentStateRuntime.mjs";
 import { createId, nowIso } from "./database.mjs";
+import { readOauthSessionRuntime } from "./oauthSessionRuntime.mjs";
 import { loadLlmOutputIndex } from "./llmOutputIndex.mjs";
 import { attachRuntimeVectorIndex } from "./runtimeVectorIndex.mjs";
 import { classifyUntrustedTextRisk } from "./policy.mjs";
@@ -484,6 +487,13 @@ export async function buildContextPacket(store, { user, session = null, channel 
   });
   const generatedAt = nowIso();
 
+  // Phase 86 (§6.2): the packet's consent view is the Redis consent-state MIRROR
+  // (rebuild-on-miss from the authoritative user_consents row). Session-less callers
+  // build straight from the DB — the mirror key is per-session.
+  const consentLoad = session
+    ? await loadConsentState(store, { sessionId: session.id, userId: user.id })
+    : { backend: "none", cacheKey: null, cacheHit: false, consentState: await buildConsentStateFromDb(store, { userId: user.id }) };
+
   const packet = {
     schemaVersion: 2,
     generatedAt,
@@ -562,11 +572,17 @@ export async function buildContextPacket(store, { user, session = null, channel 
       heartbeatIntervalMinutes: openclaw.heartbeat_interval_minutes,
       heartbeatState: openclaw.heartbeatState
     },
+    // Phase 86 (§6.2): consent flags come from the user_consents mirror; the four hard
+    // boundaries below are NON-OVERRIDABLE floors merged in code OVER the consent flags —
+    // no consent value can relax them. A missing consent row denies all portal layers
+    // (fail-closed inside buildConsentStateFromDb).
     safety: {
       externalMessaging: "requires_explicit_approval_gate",
       payerCommunication: "requires_explicit_approval_gate",
       credentialEntry: "user_only",
-      medicalAdvice: "not_allowed"
+      medicalAdvice: "not_allowed",
+      consentState: consentLoad.consentState,
+      consentSource: consentLoad.cacheHit ? "consent_state_mirror" : "user_consents_db"
     }
   };
   if (session) {
@@ -583,6 +599,11 @@ export async function buildContextPacket(store, { user, session = null, channel 
       key: runtimeContextLoad.key,
       manifest: runtimeManifest
     });
+    // Phase 86 (§6.2): layerRouting is the SINGLE hydration point for per-turn layer
+    // routing — the consent-state mirror, oauth-session HANDLES (pointer + hash only;
+    // raw cdpUrl/token values never enter the mirror by shape), and the honestly
+    // classified remote-browser readiness tier.
+    const oauthRuntime = await readOauthSessionRuntime(session.id);
     packet.runtimeContext = {
       version: runtimeManifest.version,
       cacheBackend: runtimeContextLoad.cache.backend,
@@ -596,9 +617,41 @@ export async function buildContextPacket(store, { user, session = null, channel 
       achievedCheckpoints: runtimeManifest.achievedCheckpoints,
       priorDecisionPointers: runtimeManifest.priorDecisionPointers,
       promptCompaction: runtimeManifest.promptCompaction,
-      capabilitySummary: runtimeManifest.capabilitySummary
+      capabilitySummary: runtimeManifest.capabilitySummary,
+      layerRouting: {
+        consentState: consentLoad.consentState,
+        consentCacheBackend: consentLoad.backend,
+        consentCacheKey: consentLoad.cacheKey,
+        consentCacheHit: consentLoad.cacheHit,
+        oauthHandles: (oauthRuntime.handles ?? []).map((handle) => ({
+          portalAccountId: handle.portalAccountId,
+          vaultPointer: handle.vaultPointer,
+          tokenHash: handle.tokenHash,
+          scope: handle.scope,
+          dataLayer: handle.dataLayer,
+          riskTier: handle.riskTier,
+          status: handle.status,
+          expiresAt: handle.expiresAt
+        })),
+        browserReadinessTier: classifyBrowserRemoteReadiness().tier
+      }
     };
-    packet.capabilityPortfolio = await attachCapabilityPortfolio(packet);
+    // Phase 86 (§6.3): the legacy per-turn portfolio writer (attachCapabilityPortfolio /
+    // brainsty:capability-portfolio:*) is RETIRED. The packet's capability surface is the
+    // DB-sourced catalog manifest (loadSessionPortfolio — Postgres-authoritative,
+    // rebuild-on-empty per §10.26), the same surface the planner consumes.
+    const catalogPortfolio = await loadSessionPortfolio(store, { sessionId: session.id });
+    packet.capabilityPortfolio = {
+      version: catalogPortfolio.manifest?.version ?? null,
+      cacheBackend: catalogPortfolio.backend,
+      cacheKey: catalogPortfolio.cacheKey,
+      cacheHit: catalogPortfolio.cacheHit,
+      source: "db_catalog",
+      portfolioHash: catalogPortfolio.manifest?.version ?? "db_catalog",
+      entryCount: catalogPortfolio.manifest?.promptTable?.length ?? 0,
+      promptTable: catalogPortfolio.manifest?.promptTable ?? [],
+      allowedWorkflows: catalogPortfolio.manifest?.allowedWorkflows ?? []
+    };
     packet.runtimeVectorIndex = await attachRuntimeVectorIndex(packet);
   }
   // Three-layer pivot (plan §4.1/§5.1): plan_context is a PROJECTION of the context

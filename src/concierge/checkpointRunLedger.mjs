@@ -1,3 +1,4 @@
+import { buildConsentStateFromDb, consentAllowsDataLayer, evictConsentState } from "./consentStateRuntime.mjs";
 import { nowIso } from "./database.mjs";
 import { dispatchOnce } from "./dispatchIdempotency.mjs";
 
@@ -5,7 +6,10 @@ import { dispatchOnce } from "./dispatchIdempotency.mjs";
 // boundaries a run reached) and never affects control flow; AUTHORITATIVE mode (Step 9)
 // will drive resume. Boundaries follow the paper: after_policy_gate / after_planner /
 // before_worker / after_evidence / after_response.
-export const RUN_LEDGER_VERSION = "2026-06-27.checkpoint-run-ledger.v1";
+// v2 (Phase 86, plan §6.2): the shadow run row records the decision's dataLayer/riskTier
+// (readiness_json.decisionLayer) and resumeRun gains a consent-revocation re-plan trigger
+// alongside the existing quarantine re-plan. RUN_LEDGER_BOUNDARIES stays frozen.
+export const RUN_LEDGER_VERSION = "2026-07-03.checkpoint-run-ledger.v2";
 export const RUN_LEDGER_BOUNDARIES = Object.freeze([
   "after_policy_gate",
   "after_planner",
@@ -78,6 +82,14 @@ export async function writeShadowCheckpointLedger(store, { user, session, state,
     journey_stage: state.workflow_route?.journeyStage ?? state.journey_plan?.journey ?? "unknown",
     status: "started",
     route_reason: state.route_reason ?? "shadow_ledger",
+    // Phase 86 (§6.2): record the decision layer so a later resume can re-check the
+    // AUTHORITATIVE consent row against what this run was planned to touch.
+    readiness_json: JSON.stringify({
+      decisionLayer: {
+        dataLayer: state.llm_orchestration_decision?.data_layer ?? null,
+        riskTier: state.llm_orchestration_decision?.risk_tier ?? null
+      }
+    }),
     started_at: nowIso(),
     process_id: proc?.id ?? null,
     last_checkpoint_boundary: null
@@ -150,9 +162,33 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
   const byBoundary = new Map(rows.map((r) => [r.checkpoint_boundary, r]));
   const isDone = (b) => ["completed", "skipped"].includes(byBoundary.get(b)?.status);
 
-  // Re-plan trigger: a previously-selected capability is now quarantined/non-production.
+  // Re-plan trigger 1: a previously-selected capability is now quarantined/non-production.
   const invalidCaps = await selectedCapabilitiesInvalid(store, selectedCapabilityKeys);
-  const rePlanned = invalidCaps.length > 0;
+
+  // Re-plan trigger 2 (Phase 86, §6.2): consent revocation. Re-read the AUTHORITATIVE
+  // user_consents row (NEVER the Redis mirror); if the run's recorded dataLayer requires
+  // a now-revoked flag, the plan is stale — re-plan and evict the mirror so the next
+  // turn rebuilds from the revoked state.
+  let consentRevoked = false;
+  let recordedDataLayer = null;
+  try {
+    recordedDataLayer = JSON.parse(run.readiness_json || "{}")?.decisionLayer?.dataLayer ?? null;
+  } catch {
+    recordedDataLayer = null;
+  }
+  if (recordedDataLayer && recordedDataLayer !== "layer_1_public" && run.user_id) {
+    const authoritativeConsent = await buildConsentStateFromDb(store, { userId: run.user_id });
+    if (!consentAllowsDataLayer(authoritativeConsent, recordedDataLayer)) {
+      consentRevoked = true;
+      await evictConsentState([run.session_id]);
+    }
+  }
+
+  const rePlanReasons = [
+    ...(invalidCaps.length > 0 ? ["capability_quarantined_replan"] : []),
+    ...(consentRevoked ? ["consent_revoked_replan"] : [])
+  ];
+  const rePlanned = rePlanReasons.length > 0;
   if (rePlanned) {
     const planner = byBoundary.get("after_planner");
     if (planner) {
@@ -165,7 +201,7 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
   const resumeTarget = order.find((b) => !isDone(b)) ?? null;
   if (!resumeTarget) {
     await store.update("workflow_runs", { status: "completed", updated_at: nowIso() }, { id: runId });
-    return { ok: true, resumeTarget: null, skipped: [...order], toReplay: [], rePlanned, invalidCaps, alreadyComplete: true };
+    return { ok: true, resumeTarget: null, skipped: [...order], toReplay: [], rePlanned, rePlanReasons, invalidCaps, alreadyComplete: true };
   }
   const startIdx = order.indexOf(resumeTarget);
   const skipped = order.slice(0, startIdx).filter(isDone);
@@ -192,9 +228,9 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
       } catch (err) {
         if (step.onFailure === "abort") {
           await store.update("workflow_runs", { status: "failed", last_checkpoint_boundary: step.boundary, updated_at: nowIso() }, { id: runId });
-          return { ok: false, reason: "step_failed_abort", failedBoundary: step.boundary, error: String(err?.message ?? err), rePlanned, invalidCaps };
+          return { ok: false, reason: "step_failed_abort", failedBoundary: step.boundary, error: String(err?.message ?? err), rePlanned, rePlanReasons, invalidCaps };
         }
-        return { ok: false, reason: "step_failed_resumable", resumeTarget: step.boundary, error: String(err?.message ?? err), rePlanned, invalidCaps };
+        return { ok: false, reason: "step_failed_resumable", resumeTarget: step.boundary, error: String(err?.message ?? err), rePlanned, rePlanReasons, invalidCaps };
       }
     } else {
       const row = byBoundary.get(step.boundary);
@@ -208,5 +244,5 @@ export async function resumeRun(store, runId, { selectedCapabilityKeys = [], dis
     { status: "completed", resume_count: (run.resume_count ?? 0) + 1, last_checkpoint_boundary: order.at(-1), updated_at: nowIso() },
     { id: runId }
   );
-  return { ok: true, resumeTarget, skipped, toReplay: toReplay.map((s) => s.boundary), rePlanned, invalidCaps, dispatch };
+  return { ok: true, resumeTarget, skipped, toReplay: toReplay.map((s) => s.boundary), rePlanned, rePlanReasons, invalidCaps, dispatch };
 }

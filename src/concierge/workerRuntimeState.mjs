@@ -6,7 +6,9 @@ import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
 // pointer layer: the worker resumes with prior observations instead of restarting
 // context-blind. The authoritative record remains the DB (worker_continuations,
 // source pointers, audit); Redis is the fast resumable runtime layer.
-export const WORKER_RUNTIME_STATE_VERSION = "2026-06-27.worker-runtime-state.v1";
+// v2 (Phase 86, plan §6.2): dispatch entries carry dataLayer/riskTier/oauthHandlePointer
+// (pointer only — never a raw credential). Key, TTL, and historyLimit are unchanged.
+export const WORKER_RUNTIME_STATE_VERSION = "2026-07-03.worker-runtime-state.v2";
 
 export function workerRuntimeStateKey(sessionId) {
   return `brainsty:worker-state:${sessionId}`;

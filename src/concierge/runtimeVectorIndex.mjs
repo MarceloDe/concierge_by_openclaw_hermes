@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
 
-export const RUNTIME_VECTOR_INDEX_VERSION = "2026-06-26.phase81-runtime-vector-index.v1";
+// v2 (Phase 86, plan §6.3): the capability document source is the DB-catalog promptTable
+// (packet.capabilityPortfolio now carries the loadSessionPortfolio manifest — the legacy
+// per-turn portfolio is retired). Key name, TTL, scoring method, topMatches≤10 unchanged.
+export const RUNTIME_VECTOR_INDEX_VERSION = "2026-07-03.phase86-runtime-vector-index.v2";
 
 function sha(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
@@ -50,10 +53,11 @@ function entryText(entry) {
     entry.kind,
     entry.title,
     entry.shortDescription,
-    entry.workflowKey,
-    entry.skillKey,
-    entry.toolKey,
-    entry.graphPathId
+    // DB-catalog planner metadata columns (Phase 86 retarget) — already PHI-masked
+    // upstream by maskPlannerMetadata before they reach the catalog.
+    entry.whenToUse,
+    entry.whyUse,
+    entry.approvalScope
   ]
     .filter(Boolean)
     .join(" ");

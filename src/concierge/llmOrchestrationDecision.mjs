@@ -761,7 +761,16 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
 
   // --- allowed workflows (DB-derived; fail loud, never permissive) ---
   const allowedWorkflows = asArray(options.allowedWorkflows);
-  const workflow = String(g.workflow ?? "").trim();
+  let workflow = String(g.workflow ?? "").trim();
+  // Deterministic canonicalization (NOT a fallback): the prompt shows workflows in two
+  // representations — bare keys in payload.allowedWorkflows and "workflow:<key>"
+  // portfolioIds in the promptTable — and the model occasionally returns the prefixed
+  // form. Strip the unambiguous prefix ONLY when the remainder is in the allowlist;
+  // anything else still fails loud with workflow_not_allowed.
+  if (workflow.startsWith("workflow:") && allowedWorkflows.includes(workflow.slice("workflow:".length))) {
+    workflow = workflow.slice("workflow:".length);
+    warnings.push("workflow_prefix_canonicalized");
+  }
   if (!allowedWorkflows.length) {
     issues.push("allowed_workflows_unavailable");
   } else if (!allowedWorkflows.includes(workflow)) {

@@ -6,7 +6,11 @@ import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
 // UNIQUE(idempotency_key) on workflow_checkpoint_runs; the Redis SETNX lock is a
 // losable fast-path only. The key derives from the PERSISTED selected capability
 // pointers (not a per-turn-rebuilt portfolio) so reruns produce the same key.
-export const DISPATCH_IDEMPOTENCY_VERSION = "2026-06-27.dispatch-idempotency.v1";
+// Phase 86 (§6.2): the losable SETNX lock JSON gains INFORMATIONAL dataLayer/riskTier.
+// HARD INVARIANT: workerPlanSignature and computeDispatchIdempotencyKey stay
+// byte-identical (golden-value test: dispatch-idempotency-golden) — resume of pre-pivot
+// runs must produce identical keys.
+export const DISPATCH_IDEMPOTENCY_VERSION = "2026-07-03.dispatch-idempotency.v2";
 
 export function workerPlanSignature(selectedCapabilityPointers = []) {
   const sorted = [...(selectedCapabilityPointers ?? [])].map(String).sort();
@@ -23,7 +27,7 @@ function idempotencyLockKey(idempotencyKey) {
 
 // Run dispatchFn at most once per idempotencyKey. Returns {dispatched, duplicatePrevented,
 // resultPointer, traceEvent}. effect_stage distinguishes retry-safe from compensation.
-export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessionCheckpointId = null, processId = null, processStepId = null }, dispatchFn) {
+export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessionCheckpointId = null, processId = null, processStepId = null, dataLayer = null, riskTier = null }, dispatchFn) {
   const cache = createRuntimeContextCache();
   const lockKey = idempotencyLockKey(idempotencyKey);
   const lockRowId = `dispatch:${idempotencyKey}`;
@@ -67,7 +71,7 @@ export async function dispatchOnce(store, { workflowRunId, idempotencyKey, sessi
 
   // Redis fast-path lock (losable; not load-bearing).
   try {
-    await cache.adapter.setNX(lockKey, { status: "in_progress", runId: workflowRunId }, { ttlSeconds: 600 });
+    await cache.adapter.setNX(lockKey, { status: "in_progress", runId: workflowRunId, dataLayer, riskTier }, { ttlSeconds: 600 });
   } catch {
     /* fast-path only */
   }

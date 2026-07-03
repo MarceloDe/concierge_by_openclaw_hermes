@@ -10,7 +10,9 @@ import {
   normalizeLlmOrchestrationDecision
 } from "../concierge/llmOrchestrationDecision.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
-import { capabilityPortfolioKey, loadCapabilityPortfolio } from "../concierge/capabilityPortfolio.mjs";
+import { catalogPortfolioKey, loadSessionPortfolio } from "../concierge/capabilityCatalog.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
+import { createId, nowIso } from "../concierge/database.mjs";
 
 // Hermetic precondition: verifies the no-Redis in-memory fallback path, pinned
 // independent of ambient .env.local (which now configures BRAINSTY_REDIS_URL).
@@ -19,7 +21,9 @@ process.env.REDIS_URL = "";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-phase78-capability-portfolio-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 test("Phase 78 writes a hydratable capability portfolio and injects its short table", async () => {
@@ -33,23 +37,25 @@ test("Phase 78 writes a hydratable capability portfolio and injects its short ta
     rawMessage: { source: "phase78_portfolio_test", useLiveModel: false, executeEvidenceObservation: false }
   });
 
+  // Phase 86 (§6.3): the packet's capability surface is the DB-catalog manifest —
+  // the legacy per-turn portfolio (brainsty:capability-portfolio) is retired.
   const summary = result.state.context_packet.capabilityPortfolio;
   assert.equal(summary.cacheBackend, "memory");
-  assert.equal(summary.cacheKey, capabilityPortfolioKey(session.id));
-  assert.equal(summary.stored, true);
+  assert.equal(summary.cacheKey, catalogPortfolioKey(session.id));
+  assert.equal(summary.source, "db_catalog");
   assert.ok(summary.entryCount >= 10);
   assert.ok(summary.promptTable.some((entry) => entry.portfolioId === "workflow:pharmacy_formulary"));
   assert.ok(summary.promptTable.some((entry) => entry.portfolioId === "workflow:claim_status_navigation"));
   assert.ok(summary.promptTable.some((entry) => entry.portfolioId === "skill:insurance_portal_browser"));
   assert.ok(summary.promptTable.some((entry) => entry.portfolioId === "tool:openclaw_authenticated_browser"));
   assert.ok(summary.promptTable.some((entry) => entry.kind === "graph_path"));
+  assert.ok(summary.allowedWorkflows.length > 0, "manifest must carry the DB-derived allowedWorkflows");
 
-  const hydrated = await loadCapabilityPortfolio(session.id);
-  assert.equal(hydrated.status, "ok");
-  assert.equal(hydrated.portfolio.cacheKey, summary.cacheKey);
-  assert.ok(hydrated.portfolio.entries["workflow:pharmacy_formulary"]);
-  assert.ok(hydrated.portfolio.entries["skill:insurance_portal_browser"]);
-  assert.ok(hydrated.portfolio.entries["graph:input_policy_to_llm_planner"]);
+  const hydrated = await loadSessionPortfolio(store, { sessionId: session.id });
+  assert.equal(hydrated.cacheKey, summary.cacheKey);
+  assert.ok(hydrated.manifest.entries["workflow:pharmacy_formulary"]);
+  assert.ok(hydrated.manifest.entries["skill:insurance_portal_browser"]);
+  assert.ok(hydrated.manifest.entries["graph_path:input_policy_to_llm_planner"]);
 });
 
 test("Phase 78 planner payload exposes portfolio IDs and pointers instead of full hydrated entries", async () => {
@@ -65,7 +71,7 @@ test("Phase 78 planner payload exposes portfolio IDs and pointers instead of ful
   const messages = buildLlmOrchestrationDecisionMessages(result.state);
   const payload = JSON.parse(messages.find((message) => message.role === "user").content);
 
-  assert.equal(payload.capabilityPortfolio.cacheKey, capabilityPortfolioKey(session.id));
+  assert.equal(payload.capabilityPortfolio.cacheKey, catalogPortfolioKey(session.id));
   assert.ok(payload.capabilityPortfolio.promptTable.length > 0);
   assert.ok(payload.capabilityPortfolio.promptTable.every((entry) => entry.portfolioId && entry.pointer));
   assert.equal(JSON.stringify(payload.capabilityPortfolio).includes('"hydrate"'), false);
@@ -86,15 +92,20 @@ test("Phase 78 decision parser preserves selected capability portfolio IDs and c
     userFacingNextQuestion: "Which medication should I check?",
     selectedCapabilityPortfolioIds: ["workflow:pharmacy_formulary", "skill:insurance_portal_browser"],
     selectedCapabilityPointers: [
-      "brainsty:capability-portfolio:session_1#workflow:pharmacy_formulary",
-      "brainsty:capability-portfolio:session_1#skill:insurance_portal_browser"
+      "brainsty:capability-catalog:session_1#workflow:pharmacy_formulary",
+      "brainsty:capability-catalog:session_1#skill:insurance_portal_browser"
     ]
+  }, {
+    // v2 normalizer contract (plan §3.3): the DB-derived allowlists are REQUIRED options.
+    allowedWorkflows: ["pharmacy_formulary"],
+    offerableProcessIds: [],
+    knownCapabilityKeys: ["workflow:pharmacy_formulary", "skill:insurance_portal_browser"]
   });
 
   assert.equal(decision.valid, true);
   assert.deepEqual(decision.selected_tools.selectedCapabilityPortfolioIds, ["workflow:pharmacy_formulary", "skill:insurance_portal_browser"]);
   assert.deepEqual(decision.selected_tools.capabilityPointers, [
-    "brainsty:capability-portfolio:session_1#workflow:pharmacy_formulary",
-    "brainsty:capability-portfolio:session_1#skill:insurance_portal_browser"
+    "brainsty:capability-catalog:session_1#workflow:pharmacy_formulary",
+    "brainsty:capability-catalog:session_1#skill:insurance_portal_browser"
   ]);
 });
