@@ -1,6 +1,6 @@
 import { BRAINSTY_GRAPH_NODE_NAMES } from "./langgraphRunner.mjs";
 
-export const CAPABILITY_CATALOG_VERSION = "2026-07-03.capability-catalog-seed.v4";
+export const CAPABILITY_CATALOG_VERSION = "2026-07-03.capability-catalog-seed.v5";
 
 const VALID_NODES = new Set(BRAINSTY_GRAPH_NODE_NAMES);
 
@@ -53,6 +53,9 @@ export const CAPABILITY_CATALOG = Object.freeze({
     // Terminal escalation workflow: the planner may legitimately select it (ambiguous
     // high-stakes / explicit approval / human handoff), so it must appear in the
     // DB-derived allowedWorkflows manifest (plan §3.3 — replaces the frozen enum's 8th key).
+    // Phase 89 connector-backed navigation workflows (real Plan-Net mirror + MRF tables).
+    { capability_key: "workflow:provider_network_navigation", kind: "workflow", workflow_key: "provider_network_navigation", short_description: "In-network provider search from the payer directory.", ...meta("user asks to find an in-network doctor/specialist near a location", "routes provider-search questions to the directory-backed journey", "in-network provider discovery", 24) },
+    { capability_key: "workflow:cost_estimate_navigation", kind: "workflow", workflow_key: "cost_estimate_navigation", short_description: "Cited negotiated-price estimation for a shoppable procedure.", ...meta("user asks what a procedure costs / price comparison for a billing code", "routes cost questions to the MRF-evidence journey; never a guarantee", "procedure cost estimation", 24) },
     { capability_key: "workflow:human_approval_escalation", kind: "workflow", workflow_key: "human_approval_escalation", short_description: "Human approval escalation and safe handoff.", ...meta("the request is high-stakes/ambiguous, needs explicit human approval, or asks for a human", "terminal safe handoff; never executes tools", "human escalation and approval gates", 18) },
     // skills (FK skill_key)
     { capability_key: "skill:insurance_portal_browser", kind: "skill", skill_key: "insurance_portal_browser", short_description: "Execution arm: OBSERVE a user-authenticated portal (read-only).", ...meta("portal evidence is needed after the user logs in", "the OpenClaw read-only browser skill; never enters credentials", "read-only portal observation", 22) },
@@ -77,8 +80,8 @@ export const CAPABILITY_CATALOG = Object.freeze({
     // Phase 89/90 CONNECTOR registry rows (§7.0 Capability Registry ONLY — honest
     // non-executability as DATA; the Executable Tool Catalog excludes them until each
     // phase's real proof lands; hydrator + normalizer both refuse selection):
-    { capability_key: "tool:provider_directory_public_api", kind: "tool", tool_key: "provider_directory_public_api", registry_status: "planned", runtime_selectable: 0, blocked_by: ["phase_89_connector"], planner_exposure: { planner_may: ["explain that provider directory lookup is planned", "offer the portal route instead"], planner_must_not: ["select as an executable tool", "claim a directory lookup was performed"] }, short_description: "Planned: public provider directory (in-network search) connector.", ...meta("a provider network question once the public directory connector lands", "planned connector; not yet executable by the system", "planned provider directory lookup", 10) },
-    { capability_key: "tool:prior_auth_requirements_api", kind: "tool", tool_key: "prior_auth_requirements_api", registry_status: "planned", runtime_selectable: 0, blocked_by: ["phase_89_pa_policy_corpus"], planner_exposure: { planner_may: ["explain that PA requirement lookup is planned", "use payer policy research instead"], planner_must_not: ["select as an executable tool"] }, short_description: "Planned: prior-auth requirement lookup over the PA-policy corpus.", ...meta("a PA requirement question once the policy corpus lands", "planned corpus retrieval; not yet executable by the system", "planned PA requirement lookup", 10) },
+    { capability_key: "tool:provider_directory_public_api", kind: "tool", tool_key: "provider_directory_public_api", short_description: "In-network provider lookup from the Plan-Net directory mirror (cited).", ...meta("an in-network provider question by specialty and location", "returns CITED directory rows (source URL per row) from the nightly-synced mirror with live fallback", "in-network provider lookup", 13) },
+    { capability_key: "tool:prior_auth_requirements_api", kind: "tool", tool_key: "prior_auth_requirements_api", short_description: "Prior-auth requirement lookup over the crawled payer-policy corpus (cited).", ...meta("does this procedure need prior authorization under this payer's policy", "answers from stored policy artifacts with source pointers", "PA requirement lookup", 12) },
     { capability_key: "tool:payer_fhir_patient_access_api", kind: "tool", tool_key: "payer_fhir_patient_access_api", registry_status: "contract_ready", runtime_selectable: 0, blocked_by: ["phase_90_sandbox_proof", "phase_91_production_vetting_signature"], planner_exposure: { planner_may: ["explain that member API access is planned", "offer the portal route or user upload instead"], planner_must_not: ["select as an executable tool", "claim member data was fetched via API"] }, short_description: "Planned: member-authorized payer FHIR reads (coverage, claims, accumulators).", ...meta("member-authorized API data once the sandbox and production rails land", "planned member API rail; not yet executable by the system", "planned member API reads", 10) },
     { capability_key: "tool:eligibility_benefits_api", kind: "tool", tool_key: "eligibility_benefits_api", registry_status: "blocked_external_enrollment", runtime_selectable: 0, blocked_by: ["phase_90_mock_sandbox", "external_enrollment_information_receiver_standing"], planner_exposure: { planner_may: ["explain that the eligibility rail is pending enrollment"], planner_must_not: ["select as an executable tool", "claim an eligibility transaction ran"] }, short_description: "Planned: eligibility transaction rail (blocked on external enrollment).", ...meta("real-time eligibility once clearinghouse standing is confirmed", "enrollment-blocked rail; not yet executable by the system", "planned eligibility transactions", 10) },
     { capability_key: "tool:pbm_formulary_api", kind: "tool", tool_key: "pbm_formulary_api", registry_status: "contract_ready", runtime_selectable: 0, blocked_by: ["phase_90_sandbox_proof"], planner_exposure: { planner_may: ["explain that the formulary API is planned", "offer the portal formulary route instead"], planner_must_not: ["select as an executable tool"] }, short_description: "Planned: PDex formulary API rail.", ...meta("formulary API data once the sandbox proof lands", "planned formulary rail; portal route remains available", "planned formulary API", 10) },
@@ -96,9 +99,48 @@ export const CAPABILITY_CATALOG = Object.freeze({
     { capability_key: "graph_path:approval_interrupt_resume", kind: "graph_path", graph_subpath: ["observe_evidence", "approval_pause", "observe_evidence"], short_description: "Native HITL approval pause before worker/write.", ...meta("read-only worker execution needs explicit human approval", "native LangGraph interrupt + resume on approval token", "human-in-the-loop approval", 10) },
     { capability_key: "graph_path:evidence_to_sourced_answer", kind: "graph_path", graph_subpath: ["observe_evidence", "case_state_shadow", "compose_response"], short_description: "Cited answer once trusted source pointers exist.", ...meta("trusted source pointers exist and can be cited", "evidence -> case shadow -> cited compose", "sourced answer composition", 10) }
   ],
-  // 8 canonical processes — one per allowed workflow. Spine A (portal/observe), B (research/parse),
+  // 8 canonical processes + the Phase 89 connector-backed pair — one per allowed workflow. Spine A (portal/observe), B (research/parse),
   // C (approval). Each binds via workflow_key so the router selects it (selectProcessForWorkflow).
   processes: [
+    // Phase 89 (plan §9/§11): connector-backed public-data processes (layer_1 — no login).
+    {
+      process_key: "process:provider_network_search",
+      workflow_key: "provider_network_navigation",
+      title: "Find an in-network provider (payer directory)",
+      journey_stage: "care_access_navigation",
+      offerable: 1,
+      display_order: 9,
+      short_description: "I search the payer's provider directory and cite each result's directory source.",
+      ...meta("the user wants an in-network doctor or specialist near a location", "the public Plan-Net directory mirror answers without any login", "in-network provider search by specialty and area", 24),
+      required_user_inputs: [{ key: "specialty_and_area", label: "Specialty and ZIP or city", why: "to search the right slice of the directory", sensitive: false }],
+      approval_scope: "none",
+      graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"],
+      steps: [
+        { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+        { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Directory lookup (cited rows)", capability_key: "tool:provider_directory_public_api", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
+      ]
+    },
+    {
+      process_key: "process:cost_estimate_lookup",
+      workflow_key: "cost_estimate_navigation",
+      title: "Estimate a procedure's negotiated price (MRF evidence)",
+      journey_stage: "cost_estimation",
+      offerable: 1,
+      display_order: 10,
+      short_description: "I look up published negotiated rates and cite the exact source file — an estimate, never a guarantee.",
+      ...meta("the user asks what a procedure or billing code costs in network", "Transparency-in-Coverage observations answer with citations and the mandatory disclaimer", "negotiated price estimation for shoppable codes", 24),
+      required_user_inputs: [{ key: "procedure_or_code", label: "Procedure or billing code", why: "to find matching negotiated rates", sensitive: false }],
+      approval_scope: "none",
+      graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"],
+      steps: [
+        { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+        { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "MRF price evidence (cited rows)", capability_key: "tool:pricing_mrf_query_db", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited estimate + disclaimer", capability_key: "graph_path:evidence_to_sourced_answer" }
+      ]
+    },
     {
       process_key: "process:portal_readonly_lookup",
       workflow_key: "eligibility_benefits_navigation",

@@ -1,8 +1,8 @@
 {
   "generatedFrom": "live Postgres 16 information_schema (real query)",
   "engine": "postgres (SCHEMA_SQL applied via PostgresStore.initialize)",
-  "generatedAt": "2026-07-03T15:03:50.971Z",
-  "tableCount": 79,
+  "generatedAt": "2026-07-03T21:35:26.600Z",
+  "tableCount": 85,
   "tables": {
     "agent_outbox": {
       "columns": [
@@ -1128,6 +1128,98 @@
         {
           "name": "claim_items_pkey",
           "def": "CREATE UNIQUE INDEX claim_items_pkey ON public.claim_items USING btree (id)"
+        }
+      ]
+    },
+    "connector_endpoints": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "payer_key",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "connector_kind",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "base_url",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "auth_mode",
+          "type": "text",
+          "nullable": false,
+          "default": "'none'::text",
+          "position": 5
+        },
+        {
+          "name": "quirks_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 6
+        },
+        {
+          "name": "readiness_label",
+          "type": "text",
+          "nullable": false,
+          "default": "'unprobed'::text",
+          "position": 7
+        },
+        {
+          "name": "last_probe_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "last_probe_status",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 11
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [],
+      "indexes": [
+        {
+          "name": "connector_endpoints_pkey",
+          "def": "CREATE UNIQUE INDEX connector_endpoints_pkey ON public.connector_endpoints USING btree (id)"
         }
       ]
     },
@@ -3790,6 +3882,501 @@
         }
       ]
     },
+    "pdp_formulary": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "formulary_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "contract_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "plan_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "rxcui",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "ndc",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "drug_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "tier",
+          "type": "integer",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "prior_authorization",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 9
+        },
+        {
+          "name": "step_therapy",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 10
+        },
+        {
+          "name": "quantity_limit",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 11
+        },
+        {
+          "name": "release_cycle",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "dataset_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 14
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 15
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "pdp_formulary_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "pdp_formulary_pkey",
+          "def": "CREATE UNIQUE INDEX pdp_formulary_pkey ON public.pdp_formulary USING btree (id)"
+        },
+        {
+          "name": "pdp_formulary_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX pdp_formulary_row_content_hash_key ON public.pdp_formulary USING btree (row_content_hash)"
+        }
+      ]
+    },
+    "pdp_pharmacy_network": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "contract_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "plan_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "segment_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "pharmacy_npi",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "pharmacy_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "pharmacy_zip",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "preferred_status",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "pharmacy_retail",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 9
+        },
+        {
+          "name": "pharmacy_mail",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 10
+        },
+        {
+          "name": "release_cycle",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "dataset_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 14
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "pdp_pharmacy_network_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "pdp_pharmacy_network_pkey",
+          "def": "CREATE UNIQUE INDEX pdp_pharmacy_network_pkey ON public.pdp_pharmacy_network USING btree (id)"
+        },
+        {
+          "name": "pdp_pharmacy_network_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX pdp_pharmacy_network_row_content_hash_key ON public.pdp_pharmacy_network USING btree (row_content_hash)"
+        }
+      ]
+    },
+    "pdp_plans": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "contract_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "plan_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "segment_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "plan_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "organization_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "plan_type",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "region_code",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "county_code",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "state",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "premium",
+          "type": "real",
+          "nullable": true,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "deductible",
+          "type": "real",
+          "nullable": true,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "release_cycle",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "dataset_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 14
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 15
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 16
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "pdp_plans_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "pdp_plans_pkey",
+          "def": "CREATE UNIQUE INDEX pdp_plans_pkey ON public.pdp_plans USING btree (id)"
+        },
+        {
+          "name": "pdp_plans_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX pdp_plans_row_content_hash_key ON public.pdp_plans USING btree (row_content_hash)"
+        }
+      ]
+    },
+    "pdp_pricing": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "contract_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "plan_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "segment_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "ndc",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "days_supply",
+          "type": "integer",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "unit_cost",
+          "type": "real",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "pharmacy_type",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "release_cycle",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "dataset_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 12
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "pdp_pricing_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "pdp_pricing_pkey",
+          "def": "CREATE UNIQUE INDEX pdp_pricing_pkey ON public.pdp_pricing USING btree (id)"
+        },
+        {
+          "name": "pdp_pricing_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX pdp_pricing_row_content_hash_key ON public.pdp_pricing USING btree (row_content_hash)"
+        }
+      ]
+    },
     "pems_candidate_claim_revisions": {
       "columns": [
         {
@@ -5455,6 +6042,170 @@
         {
           "name": "product_memory_replay_queue_pkey",
           "def": "CREATE UNIQUE INDEX product_memory_replay_queue_pkey ON public.product_memory_replay_queue USING btree (id)"
+        }
+      ]
+    },
+    "provider_directory_entries": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "payer_key",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "npi",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "practitioner_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "specialty",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "specialty_code",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "network_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "organization_name",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "address_line",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "city",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "state",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "postal_code",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "fhir_resource_type",
+          "type": "text",
+          "nullable": false,
+          "default": "'PractitionerRole'::text",
+          "position": 14
+        },
+        {
+          "name": "fhir_resource_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 15
+        },
+        {
+          "name": "source_url",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 16
+        },
+        {
+          "name": "source_last_updated_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 17
+        },
+        {
+          "name": "synced_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 18
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 19
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 20
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "provider_directory_entries_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "provider_directory_entries_pkey",
+          "def": "CREATE UNIQUE INDEX provider_directory_entries_pkey ON public.provider_directory_entries USING btree (id)"
+        },
+        {
+          "name": "provider_directory_entries_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX provider_directory_entries_row_content_hash_key ON public.provider_directory_entries USING btree (row_content_hash)"
         }
       ]
     },

@@ -40,7 +40,7 @@ test("Step 2: seed inserts the catalog (FKs resolve to existing registry rows)",
   assert.deepEqual(boundaries, ["after_policy_gate", "after_planner", "before_worker", "after_evidence", "after_response"], "spine checkpoint boundaries seeded in order");
   // Every process is bound to a workflow_key (router selection surface).
   const procs = await store.all("SELECT process_key, workflow_key FROM processes;");
-  assert.equal(procs.length, 8, "8 canonical processes seeded");
+  assert.equal(procs.length, 10, "10 processes seeded (8 canonical + the Phase 89 connector-backed pair)");
   assert.ok(procs.every((p) => p.workflow_key), "every process bound to a workflow_key");
 });
 

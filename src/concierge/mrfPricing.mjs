@@ -136,7 +136,9 @@ export async function queryMrfPriceEvidence(store, {
   if (!billingCode) return [];
   const clauses = ["o.billing_code = ?"];
   const params = [String(billingCode)];
-  if (payer) { clauses.push("o.payer = ?"); params.push(String(payer)); }
+  // Payer PREFIX family match (Phase 89): the auth-state payer is the brand ("Aetna");
+  // MRF reporting entities carry the legal name ("Aetna Life Insurance Company").
+  if (payer) { clauses.push("o.payer LIKE ?"); params.push(`${String(payer)}%`); }
   if (planExternalId) { clauses.push("o.plan_external_id = ?"); params.push(String(planExternalId)); }
   if (geography) { clauses.push("o.geography = ?"); params.push(String(geography)); }
   const bounded = Math.max(1, Math.min(20, Number(limit) || 5));

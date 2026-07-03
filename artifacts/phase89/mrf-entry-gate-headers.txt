@@ -1,0 +1,38 @@
+HTTP/2 200 
+date: Fri, 03 Jul 2026 21:10:21 GMT
+content-type: text/plain
+content-length: 7068263
+vary: Accept-Encoding
+server: BunnyCDN-IL1-1348
+cdn-pullzone: 726872
+cdn-requestcountrycode: US
+vary: Accept-Encoding
+access-control-allow-origin: *
+access-control-allow-headers: Server, x-goog-meta-frames, Content-Length, Content-Type, Range, X-Requested-With, If-Modified-Since, If-None-Match
+access-control-expose-headers: Server, x-goog-meta-frames, Content-Length, Content-Type, Range, X-Requested-With, If-Modified-Since, If-None-Match
+accept-ranges: bytes
+cache-control: public, max-age=0
+etag: "fc16c336baf043d80df93901fc682ae7"
+last-modified: Fri, 03 Jul 2026 17:08:06 GMT
+x-guploader-uploadid: AJ5rDhFpkBFHcKkmU4f-D2drBQUEdZeSvP-kJmRRjbJMyJnr28LWJDjzjBNH5WWh6BFIFtpb71LvWi4
+x-goog-generation: 1783098486567936
+x-goog-metageneration: 1
+x-goog-stored-content-encoding: identity
+x-goog-stored-content-length: 7068263
+x-amz-meta-x-goog-reserved-source-generation: 1782568156173001
+x-goog-hash: crc32c=USXBLQ==
+x-goog-hash: md5=/BbDNrrwQ9gN+TkB/Ggq5w==
+x-amz-checksum-crc32c: USXBLQ==
+x-goog-expiration: Sat, 03 Jul 2027 17:08:06 GMT
+x-goog-storage-class: STANDARD
+cdn-proxyver: 1.58
+cdn-requestpullsuccess: True
+cdn-requestpullcode: 200
+cdn-cachedat: 07/03/2026 21:10:21
+cdn-edgestorageid: 1235
+content-disposition: attachment
+cdn-requestid: 68635126eb2f88798f1c5718decd9ef1
+cdn-cache: BYPASS
+cdn-status: 200
+cdn-requesttime: 0
+

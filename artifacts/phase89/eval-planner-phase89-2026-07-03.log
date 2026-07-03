@@ -1,0 +1,75 @@
+
+> brainstyworkers-ai-concierge@0.1.0 eval:planner
+> node scripts/planner-eval.mjs
+
+
+================ PLANNER EVAL (real gpt-4.1) ================
+
+Q: why was my last claim denied and what do I still owe?
+  workflow: claim_status_navigation ✓ | conf 0.99
+  offered:  process:claim_status_lookup ✓
+  demand:   "The user wants to know why their last claim was denied and what amount they still owe." ✓ | informationNeeds ✓
+  v2:       taskClass=claims_support ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: is Ozempic covered by my plan and how much will it cost?
+  workflow: pharmacy_formulary ✓ | conf 0.99
+  offered:  process:pharmacy_formulary_lookup ✓
+  demand:   "The user wants to know whether Ozempic is covered by their Aetna plan and how much it will cost." ✓ | informationNeeds ✓
+  v2:       taskClass=medication_support ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: do I need approval before my knee replacement surgery?
+  workflow: prior_authorization_navigation ✓ | conf 0.97
+  offered:  process:prior_auth_lookup ✓
+  demand:   "The user wants to know if prior approval is needed for a knee replacement surgery." ✓ | informationNeeds ✓
+  v2:       taskClass=prior_auth_support ✓ | data_layer=[layer_1_public,layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: what's my deductible and out-of-pocket so far this year?
+  workflow: eligibility_benefits_navigation ✓ | conf 1
+  offered:  process:portal_readonly_lookup ✓
+  demand:   "The user wants to know their current deductible and out-of-pocket maximum status for this year." ✓ | informationNeeds ✓
+  v2:       taskClass=member_specific_read ✓ | data_layer=[layer_3_portal_control] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: help me appeal a denial my insurer sent me
+  workflow: denial_appeal_preparation ✓ | conf 0.98
+  offered:  process:denial_appeal_support ✓
+  demand:   "The user wants help appealing a denial they received from their insurer." ✓ | informationNeeds ✓
+  v2:       taskClass=appeal_or_denial_support ✓ | data_layer=[layer_1_public] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: can you read this EOB document I have and explain it?
+  workflow: document_or_trace_review ✓ | conf 1
+  offered:  process:document_review ✓
+  demand:   "The user wants to upload an EOB document and have it explained." ✓ | informationNeeds ✓
+  v2:       taskClass=claims_support ✓ | data_layer=[layer_1_public] ✓ | risk_tier=medium ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: find an in-network cardiologist near 33143
+  workflow: provider_network_navigation ✓ | conf 1
+  offered:  process:provider_network_search ✓
+  demand:   "The user wants to find an in-network cardiologist near ZIP code 33143." ✓ | informationNeeds ✓
+  v2:       taskClass=provider_search ✓ | data_layer=[layer_1_public] ✓ | risk_tier=low ✓ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_invoked
+
+Q: how much does a knee replacement (CPT 27447) cost in network?
+  workflow: null ✗ (expected mismatch) | conf 0
+  offered:  (none) ✗
+  demand:   "" ✗ | informationNeeds ✗
+  v2:       taskClass=(none) ✗ | data_layer=[] ✗ | risk_tier=(none) ✗ | graph ✓
+  source:   plannerCapabilitySource=db_catalog ✓ | mode=openai_chatopenai_failed
+
+---------------- SCORE ----------------
+  workflow selection : 7/8 (88%)
+  process selection  : 7/8 (88%)
+  demand extraction  : 7/8 (88%)
+  information needs   : 7/8 (88%)
+  task class (v2)    : 7/8 (88%)
+  data layer (v2)    : 7/8 (88%)
+  risk tier (v2)     : 7/8 (88%)
+  workflow graph (v2): 8/8 (100%)
+  capability source  : 8/8 (100%) (db_catalog required — Phase 86)
+
+(Inspect the full per-node hydration of any case in Langfuse: planner.start -> Input.full_prompt.)

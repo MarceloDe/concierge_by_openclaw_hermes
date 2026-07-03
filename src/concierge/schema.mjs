@@ -77,7 +77,13 @@ export const TABLES = [
   "member_plan_identities",
   "mrf_pricing_sources",
   "mrf_price_observations",
-  "rag_chunks"
+  "rag_chunks",
+  "connector_endpoints",
+  "provider_directory_entries",
+  "pdp_plans",
+  "pdp_formulary",
+  "pdp_pharmacy_network",
+  "pdp_pricing"
 ];
 
 export const SCHEMA_SQL = `
@@ -1503,6 +1509,121 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
   chunk_hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL,
   FOREIGN KEY (artifact_id) REFERENCES extraction_artifacts(id)
+);
+
+-- Phase 89 (plan §5.2/§9): per-payer connector endpoint registry. Readiness is a
+-- PROBED STORED FACT (last_probe_status on the connector_status_values enum),
+-- never an env switch. Owner: src/concierge/connectors/endpointRegistry.mjs.
+CREATE TABLE IF NOT EXISTS connector_endpoints (
+  id TEXT PRIMARY KEY,
+  payer_key TEXT NOT NULL,
+  connector_kind TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  auth_mode TEXT NOT NULL DEFAULT 'none',
+  quirks_json TEXT NOT NULL DEFAULT '{}',
+  readiness_label TEXT NOT NULL DEFAULT 'unprobed',
+  last_probe_at TEXT,
+  last_probe_status TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Phase 89 (plan §9): Plan-Net provider directory mirror (nightly delta sync; 24h
+-- cache under the CMS-9115-F 30-day freshness ceiling). Every row carries its source
+-- URL + sync provenance so composed answers cite REAL dereferenceable pointers.
+CREATE TABLE IF NOT EXISTS provider_directory_entries (
+  id TEXT PRIMARY KEY,
+  payer_key TEXT NOT NULL,
+  npi TEXT,
+  practitioner_name TEXT,
+  specialty TEXT,
+  specialty_code TEXT,
+  network_id TEXT,
+  organization_name TEXT,
+  address_line TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  phone TEXT,
+  fhir_resource_type TEXT NOT NULL DEFAULT 'PractitionerRole',
+  fhir_resource_id TEXT,
+  source_url TEXT NOT NULL,
+  source_last_updated_at TEXT,
+  synced_at TEXT NOT NULL,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+-- Phase 89 (plan §9): CMS Prescription Drug Plan PUF tables. Batch-ingested per
+-- release cycle (idempotent on release + row hash); every row carries the dataset
+-- release pointer. Owner: scripts/ingest-cms-pdp-puf.mjs.
+CREATE TABLE IF NOT EXISTS pdp_plans (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL,
+  plan_id TEXT NOT NULL,
+  segment_id TEXT,
+  plan_name TEXT,
+  organization_name TEXT,
+  plan_type TEXT,
+  region_code TEXT,
+  county_code TEXT,
+  state TEXT,
+  premium REAL,
+  deductible REAL,
+  release_cycle TEXT NOT NULL,
+  dataset_pointer TEXT NOT NULL,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pdp_formulary (
+  id TEXT PRIMARY KEY,
+  formulary_id TEXT NOT NULL,
+  contract_id TEXT,
+  plan_id TEXT,
+  rxcui TEXT NOT NULL,
+  ndc TEXT,
+  drug_name TEXT,
+  tier INTEGER,
+  prior_authorization INTEGER NOT NULL DEFAULT 0,
+  step_therapy INTEGER NOT NULL DEFAULT 0,
+  quantity_limit INTEGER NOT NULL DEFAULT 0,
+  release_cycle TEXT NOT NULL,
+  dataset_pointer TEXT NOT NULL,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pdp_pharmacy_network (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL,
+  plan_id TEXT,
+  segment_id TEXT,
+  pharmacy_npi TEXT NOT NULL,
+  pharmacy_name TEXT,
+  pharmacy_zip TEXT,
+  preferred_status TEXT,
+  pharmacy_retail INTEGER NOT NULL DEFAULT 0,
+  pharmacy_mail INTEGER NOT NULL DEFAULT 0,
+  release_cycle TEXT NOT NULL,
+  dataset_pointer TEXT NOT NULL,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pdp_pricing (
+  id TEXT PRIMARY KEY,
+  contract_id TEXT NOT NULL,
+  plan_id TEXT,
+  segment_id TEXT,
+  ndc TEXT NOT NULL,
+  days_supply INTEGER,
+  unit_cost REAL,
+  pharmacy_type TEXT,
+  release_cycle TEXT NOT NULL,
+  dataset_pointer TEXT NOT NULL,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
 );
 `;
 
