@@ -34,7 +34,7 @@
     {
       "phase": 85,
       "title": "Postgres schema deltas + owner modules + audit v2 + v1-alias removal",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         84
       ],
@@ -43,7 +43,7 @@
         "docs/db/postgres-schema.json"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-85",
-      "owner": null,
+      "owner": "claude-code",
       "blockers": []
     },
     {

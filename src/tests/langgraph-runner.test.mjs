@@ -493,7 +493,7 @@ test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", a
       }
     });
 
-    assert.equal(result.state.llm_orchestration_decision.intent, "pharmacy_formulary_question");
+    assert.equal(result.state.llm_orchestration_decision.classification.intent, "pharmacy_formulary_question");
     assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "pharmacy_formulary");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
@@ -561,7 +561,7 @@ test("LangGraph answers procedure prep questions with sourced AI2UI checklist ro
       }
     });
 
-    assert.equal(result.state.llm_orchestration_decision.intent, "procedure_admin_checklist");
+    assert.equal(result.state.llm_orchestration_decision.classification.intent, "procedure_admin_checklist");
     assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "eligibility_benefits_navigation");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
@@ -630,7 +630,7 @@ test("LangGraph answers provider network questions with sourced AI2UI provider r
       }
     });
 
-    assert.equal(result.state.llm_orchestration_decision.intent, "provider_network");
+    assert.equal(result.state.llm_orchestration_decision.classification.intent, "provider_network");
     assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "eligibility_benefits_navigation");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
@@ -955,8 +955,8 @@ test("LangGraph runner routes from the validated LLM orchestration decision, not
       }
     });
 
-    assert.equal(result.state.llm_orchestration_decision.workflow, workflow, message);
-    assert.equal(result.state.llm_orchestration_decision.intent, intent, message);
+    assert.equal(result.state.llm_orchestration_decision.classification.workflow, workflow, message);
+    assert.equal(result.state.llm_orchestration_decision.classification.intent, intent, message);
     assert.equal(result.state.llm_orchestration_decision.usedByRouter, true, message);
     assert.equal(result.state.workflow, workflow, message);
     assert.equal(result.state.route_reason, "llm_orchestration_decision");

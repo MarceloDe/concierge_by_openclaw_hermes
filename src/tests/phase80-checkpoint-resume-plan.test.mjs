@@ -127,7 +127,7 @@ test("Phase 80 exposes checkpoint resume plan and prior LLM pointers to the plan
     // One LLM step (the planner) is indexed per turn since the legacy classifier
     // step was deleted, so the prior turn contributes one pointer.
     assert.ok(payload.checkpointResumePlan.priorLlmOutputPointers.length >= 1);
-    assert.ok(resumed.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 1);
+    assert.ok(resumed.state.llm_orchestration_decision.demand_and_evidence.priorLlmOutputPointersUsed.length >= 1);
   } finally {
     resetTieredChatModelFactoryForTests();
     if (priorKey) process.env.OPENAI_API_KEY = priorKey;

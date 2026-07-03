@@ -107,7 +107,7 @@ test("Phase 76 routes a general medication copay question through the top-tier L
   assert.equal(result.state.workflow, "pharmacy_formulary");
   assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
-  assert.match(result.state.llm_orchestration_decision.workerGoal, /formulary tier/i);
+  assert.match(result.state.llm_orchestration_decision.selected_tools.workerGoal, /formulary tier/i);
 });
 
 test("Phase 76 routes a general claim question through the top-tier LLM planner", async () => {
@@ -120,7 +120,7 @@ test("Phase 76 routes a general claim question through the top-tier LLM planner"
   assert.equal(result.state.workflow, "claim_status_navigation");
   assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
-  assert.match(result.state.llm_orchestration_decision.workerGoal, /claim status/i);
+  assert.match(result.state.llm_orchestration_decision.selected_tools.workerGoal, /claim status/i);
 });
 
 test("Phase 76 keeps free-text chat routing out of brittle frontend phrase shortcuts", async () => {

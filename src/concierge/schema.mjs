@@ -72,7 +72,11 @@ export const TABLES = [
   "processes",
   "process_steps",
   "workflow_checkpoint_runs",
-  "capability_provenance"
+  "capability_provenance",
+  "credential_session_vault",
+  "member_plan_identities",
+  "mrf_pricing_sources",
+  "mrf_price_observations"
 ];
 
 export const SCHEMA_SQL = `
@@ -100,6 +104,10 @@ CREATE TABLE IF NOT EXISTS user_consents (
   read_only_extraction_approved INTEGER NOT NULL,
   website_actions_approved INTEGER NOT NULL,
   credential_boundary TEXT NOT NULL,
+  session_reuse_approved INTEGER NOT NULL DEFAULT 0,
+  mrf_pricing_lookup_approved INTEGER NOT NULL DEFAULT 0,
+  consent_document_hash TEXT,
+  updated_at TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -1210,6 +1218,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
   previous_event_hash TEXT,
   event_hash TEXT,
   chain_version TEXT,
+  layer TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
@@ -1248,6 +1257,10 @@ CREATE TABLE IF NOT EXISTS capabilities (
   config_version INTEGER NOT NULL DEFAULT 1,
   last_hydrated_at TEXT,
   hydrate_count INTEGER NOT NULL DEFAULT 0,
+  registry_status TEXT,
+  runtime_selectable INTEGER NOT NULL DEFAULT 0,
+  blocked_by_json TEXT NOT NULL DEFAULT '[]',
+  planner_exposure_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (workflow_key) REFERENCES workflow_definitions(workflow_key),
@@ -1366,6 +1379,100 @@ CREATE TABLE IF NOT EXISTS capability_provenance (
   FOREIGN KEY (capability_id) REFERENCES capabilities(id),
   FOREIGN KEY (process_id) REFERENCES processes(id)
 );
+
+CREATE TABLE IF NOT EXISTS credential_session_vault (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  portal_account_id TEXT,
+  consent_id TEXT NOT NULL,
+  artifact_kind TEXT NOT NULL,
+  secret_pointer TEXT NOT NULL,
+  envelope_json TEXT NOT NULL DEFAULT '{}',
+  secret_hash TEXT NOT NULL,
+  masked_preview TEXT NOT NULL DEFAULT '',
+  scope_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'active',
+  issued_at TEXT NOT NULL,
+  expires_at TEXT,
+  last_used_at TEXT,
+  revoked_at TEXT,
+  revocation_reason TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (portal_account_id) REFERENCES portal_accounts(id),
+  FOREIGN KEY (consent_id) REFERENCES user_consents(id)
+);
+
+CREATE TABLE IF NOT EXISTS member_plan_identities (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  portal_account_id TEXT,
+  payer TEXT NOT NULL,
+  member_id_hash TEXT NOT NULL,
+  plan_external_id TEXT,
+  plan_name_masked TEXT NOT NULL DEFAULT '',
+  plan_type TEXT,
+  group_number_hash TEXT,
+  coverage_start_at TEXT,
+  coverage_end_at TEXT,
+  source_kind TEXT NOT NULL,
+  source_pointer_id TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  graphiti_entity_ref TEXT,
+  metadata_phi_cleared INTEGER NOT NULL DEFAULT 0,
+  details_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_id, payer, member_id_hash),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (portal_account_id) REFERENCES portal_accounts(id)
+);
+
+CREATE TABLE IF NOT EXISTS mrf_pricing_sources (
+  id TEXT PRIMARY KEY,
+  payer TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  file_kind TEXT NOT NULL,
+  file_month TEXT,
+  content_hash TEXT,
+  effective_at TEXT,
+  retrieved_at TEXT,
+  ingestion_run_id TEXT,
+  status TEXT NOT NULL DEFAULT 'fetched',
+  ingest_stats_json TEXT NOT NULL DEFAULT '{}',
+  failure_class TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (source_url, content_hash)
+);
+
+CREATE TABLE IF NOT EXISTS mrf_price_observations (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  payer TEXT NOT NULL,
+  employer_id TEXT,
+  plan_external_id TEXT,
+  network_id TEXT,
+  geography TEXT,
+  billing_code TEXT NOT NULL,
+  billing_code_type TEXT NOT NULL,
+  billing_class TEXT,
+  place_of_service TEXT,
+  provider_npi TEXT,
+  provider_tin_hash TEXT,
+  negotiated_type TEXT,
+  negotiated_rate REAL,
+  allowed_amount REAL,
+  service_codes_json TEXT NOT NULL DEFAULT '[]',
+  effective_from_at TEXT,
+  effective_to_at TEXT,
+  ingestion_run_id TEXT,
+  row_content_hash TEXT NOT NULL UNIQUE,
+  source_pointer TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (source_id) REFERENCES mrf_pricing_sources(id)
+);
 `;
 
 // Single source of truth for incremental ADD COLUMN migrations applied to BOTH engines
@@ -1426,7 +1533,11 @@ export const COLUMN_MIGRATIONS = [
   ["audit_events", [
     ["previous_event_hash", "ALTER TABLE audit_events ADD COLUMN previous_event_hash TEXT;"],
     ["event_hash", "ALTER TABLE audit_events ADD COLUMN event_hash TEXT;"],
-    ["chain_version", "ALTER TABLE audit_events ADD COLUMN chain_version TEXT;"]
+    ["chain_version", "ALTER TABLE audit_events ADD COLUMN chain_version TEXT;"],
+    // Three-layer pivot (plan §5.3): the DATA layer touched, canonical enum
+    // layer_1_public|layer_2_member_authorized_api|layer_3_portal_control; nullable for
+    // legacy rows AND events that are not data-layer accesses. In the v2 hash material.
+    ["layer", "ALTER TABLE audit_events ADD COLUMN layer TEXT;"]
   ]],
   ["workflow_runs", [
     ["process_id", "ALTER TABLE workflow_runs ADD COLUMN process_id TEXT;"],
@@ -1441,6 +1552,25 @@ export const COLUMN_MIGRATIONS = [
   ["processes", [
     // Logical binding workflow -> process (no FK; selectProcessForWorkflow joins on it).
     ["workflow_key", "ALTER TABLE processes ADD COLUMN workflow_key TEXT;"]
+  ]],
+  // Three-layer pivot §7.0 (founder global decision 2026-07-02): Capability Registry
+  // columns — ONE storage, TWO authority surfaces. runtime_selectable defaults 0
+  // (fail-closed); the Executable Tool Catalog is the runtime_selectable=1 filter over
+  // the existing status/lifecycle/backing gates. Seeded from the spine YAML.
+  ["capabilities", [
+    ["registry_status", "ALTER TABLE capabilities ADD COLUMN registry_status TEXT;"],
+    ["runtime_selectable", "ALTER TABLE capabilities ADD COLUMN runtime_selectable INTEGER NOT NULL DEFAULT 0;"],
+    ["blocked_by_json", "ALTER TABLE capabilities ADD COLUMN blocked_by_json TEXT NOT NULL DEFAULT '[]';"],
+    ["planner_exposure_json", "ALTER TABLE capabilities ADD COLUMN planner_exposure_json TEXT NOT NULL DEFAULT '{}';"]
+  ]],
+  // Founder #5/#6 consent columns (plan §5.3): fail-closed defaults — no session reuse
+  // and no MRF pricing lookups until explicit re-consent. Grant/revoke transitions
+  // write through audit() (deliberately NO consent-events table).
+  ["user_consents", [
+    ["session_reuse_approved", "ALTER TABLE user_consents ADD COLUMN session_reuse_approved INTEGER NOT NULL DEFAULT 0;"],
+    ["mrf_pricing_lookup_approved", "ALTER TABLE user_consents ADD COLUMN mrf_pricing_lookup_approved INTEGER NOT NULL DEFAULT 0;"],
+    ["consent_document_hash", "ALTER TABLE user_consents ADD COLUMN consent_document_hash TEXT;"],
+    ["updated_at", "ALTER TABLE user_consents ADD COLUMN updated_at TEXT;"]
   ]]
 ];
 
@@ -1450,7 +1580,18 @@ export const INDEX_MIGRATIONS = [
   ["idx_conversation_messages_session_seq",
     "CREATE INDEX IF NOT EXISTS idx_conversation_messages_session_seq ON conversation_messages (session_id, sequence_number);"],
   ["idx_processes_workflow_key",
-    "CREATE INDEX IF NOT EXISTS idx_processes_workflow_key ON processes (workflow_key);"]
+    "CREATE INDEX IF NOT EXISTS idx_processes_workflow_key ON processes (workflow_key);"],
+  // Three-layer pivot (plan §5.3) indexes.
+  ["idx_credential_session_vault_user",
+    "CREATE INDEX IF NOT EXISTS idx_credential_session_vault_user ON credential_session_vault (user_id, status);"],
+  ["idx_member_plan_identities_user",
+    "CREATE INDEX IF NOT EXISTS idx_member_plan_identities_user ON member_plan_identities (user_id, verification_status);"],
+  ["idx_mrf_price_obs_payer_code",
+    "CREATE INDEX IF NOT EXISTS idx_mrf_price_obs_payer_code ON mrf_price_observations (payer, billing_code);"],
+  ["idx_mrf_price_obs_plan_code",
+    "CREATE INDEX IF NOT EXISTS idx_mrf_price_obs_plan_code ON mrf_price_observations (plan_external_id, billing_code);"],
+  ["idx_audit_events_layer",
+    "CREATE INDEX IF NOT EXISTS idx_audit_events_layer ON audit_events (layer, created_at);"]
 ];
 
 // SQL to backfill conversation_messages.sequence_number for legacy rows (run once per engine).

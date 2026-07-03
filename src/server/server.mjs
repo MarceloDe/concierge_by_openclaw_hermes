@@ -1261,10 +1261,7 @@ async function buildPhase57ExtensibleSkillsProof() {
         confidence: 0.9
       },
       data_layer: [],
-      risk_tier: "low",
-      workflow: "claim_status_navigation",
-      intent: "claim_status_question",
-      confidence: 0.9
+      risk_tier: "low"
     }
   });
   const proposal = buildOpenClawBoundedTaskProposal({

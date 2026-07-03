@@ -1,5 +1,6 @@
 import { createId, nowIso } from "./database.mjs";
 import { persistStructuredExtraction } from "./structuredExtraction.mjs";
+import { ingestPlanIdentity } from "./planIdentity.mjs";
 
 export async function persistEligibilitySnapshot(store, { user, session, portal, browserResult }) {
   const sourceUrl = browserResult?.page?.url ?? portal.portal_url;
@@ -18,6 +19,29 @@ export async function persistEligibilitySnapshot(store, { user, session, portal,
     created_at: nowIso()
   };
   await store.insert("eligibility_snapshots", snapshot);
+
+  // Three-layer pivot (plan §5.1/§5.5): a REAL portal extraction anchors the member's
+  // plan identity — source_pointer_id joins back to this snapshot; the masked identity
+  // later flips the planner's userDataSufficiency. Real page content only.
+  if (extraction) {
+    try {
+      await ingestPlanIdentity(store, {
+        userId: user.id,
+        portalAccountId: portal.id,
+        payer: portal.payer,
+        memberId: extraction.memberId ?? `portal_account:${portal.id}`,
+        planExternalId: extraction.planExternalId ?? null,
+        planName: extraction.planName ?? `${portal.payer} member plan`,
+        planType: extraction.planType ?? null,
+        sourceKind: "portal_extraction",
+        sourcePointerId: snapshot.id,
+        details: { sourceUrl, signals: extraction.signals ?? [] },
+        sessionId: session.id
+      });
+    } catch {
+      /* identity ingest is additive; the snapshot itself remains the evidence */
+    }
+  }
 
   const items = [];
   for (const signal of extraction?.signals ?? []) {

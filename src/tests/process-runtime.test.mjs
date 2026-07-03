@@ -22,7 +22,7 @@ async function freshStore() {
 }
 const reachedAll = (sessionId, userId, workflow) => ({
   user_id: userId, session_id: sessionId, workflow,
-  policy_result: { allowed: true }, llm_orchestration_decision: { workflow },
+  policy_result: { allowed: true }, llm_orchestration_decision: { classification: { workflow } },
   openclaw_worker_plan: { goal: "x" }, evidence_observation: { status: "ok" }, final_response: "done"
 });
 

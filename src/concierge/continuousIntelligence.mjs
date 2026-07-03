@@ -162,14 +162,14 @@ export function buildCaseState({
     decision: {
       policyAllowed: policyResult?.allowed ?? null,
       urgentEscalationRequired: Boolean(policyResult?.urgentEscalationRequired),
-      intent: llmDecision?.intent ?? llmDecision?.classification?.intent ?? null,
-      workflow: workflow ?? llmDecision?.workflow ?? null,
+      intent: llmDecision?.classification?.intent ?? null,
+      workflow: workflow ?? llmDecision?.classification?.workflow ?? null,
       taskClass: llmDecision?.classification?.taskClass ?? null,
       riskTier: llmDecision?.risk_tier ?? null,
       dataLayer: llmDecision?.data_layer ?? null,
       routeReason: routeReason ?? null,
       routeExecutableNow: workflowRoute?.executableNow ?? null,
-      classifierConfidence: llmDecision?.confidence ?? null,
+      classifierConfidence: llmDecision?.classification?.confidence ?? null,
       llmMode: llmDecision?.mode ?? null,
       llmUsedByRouter: Boolean(llmDecision?.usedByRouter)
     },

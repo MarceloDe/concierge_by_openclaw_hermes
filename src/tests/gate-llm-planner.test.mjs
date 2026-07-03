@@ -53,5 +53,5 @@ test("GATE LLM planner: a paraphrased question is decided by the LLM planner (no
   assert.equal(result.state.route_reason, "llm_orchestration_decision", "the live LLM planner decided the route");
   assert.equal(result.state.llm_orchestration_decision.mode, "openai_chatopenai_invoked");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
-  assert.ok(result.state.llm_orchestration_decision.confidence >= 0.5);
+  assert.ok(result.state.llm_orchestration_decision.classification.confidence >= 0.5);
 });

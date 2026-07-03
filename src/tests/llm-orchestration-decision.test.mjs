@@ -49,7 +49,6 @@ test("LLM orchestration decision parser accepts strict workflow JSON", () => {
   }, OPTIONS);
 
   assert.equal(decision.valid, true);
-  assert.equal(decision.workflow, "document_or_trace_review");
   assert.equal(decision.classification.workflow, "document_or_trace_review", "grouped v2 field populated");
   assert.equal(shouldUseLlmDecision(decision), true);
   assert.equal(confidenceBand(decision), "high");

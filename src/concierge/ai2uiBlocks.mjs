@@ -99,22 +99,22 @@ function sourcePointerRef(pointer = {}) {
 }
 
 function costComparisonRequested(state = {}) {
-  const text = `${state.user_input ?? ""} ${state.llm_orchestration_decision?.intent ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  const text = `${state.user_input ?? ""} ${state.llm_orchestration_decision?.classification?.intent ?? ""}`.toLowerCase();
   return /\b(cost|costs|estimate|comparison|compare|cheaper|lower[- ]cost|cash price|allowed amount|deductible|copay|co-pay|coinsurance|out[- ]of[- ]pocket|oop|owe|pay)\b/.test(text);
 }
 
 function pharmacyFormularyRequested(state = {}) {
-  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.classification?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""}`.toLowerCase();
   return /\b(pharmacy|formulary|prescription|medication|medicine|drug list|drug tier|tier\s+\d|rx\b|prior auth(?:orization)? for.*(?:drug|medicine|medication)|mail[- ]order|specialty drug|quantity limit|step therapy)\b/.test(text);
 }
 
 function procedureChecklistRequested(state = {}) {
-  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.classification?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""}`.toLowerCase();
   return /\b(procedure prep|procedure checklist|prep checklist|administrative checklist|pre[- ]op|preop|surgery prep|colonoscopy prep|appointment prep|before (?:my|the) (?:procedure|surgery|appointment)|bring.*(?:id|insurance card)|referral|order|pre[- ]register|registration|arrival time|arrive|driver|transportation|facility instructions|procedure instructions)\b/.test(text);
 }
 
 function providerNetworkRequested(state = {}) {
-  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""} ${state.llm_orchestration_decision?.primary_intent ?? ""}`.toLowerCase();
+  const text = `${state.user_input ?? ""} ${state.workflow ?? ""} ${state.llm_orchestration_decision?.classification?.intent ?? ""} ${state.llm_orchestration_decision?.classification?.taskClass ?? ""}`.toLowerCase();
   return /\b(provider|doctor|clinician|facility|hospital|clinic|lab|imaging center|specialist|directory|network|in[- ]network|out[- ]of[- ]network|participating|non[- ]participating|accepting new patients|npi)\b/.test(text);
 }
 
@@ -825,8 +825,8 @@ export function buildAi2UiBlocksFromState(state = {}, options = {}) {
       title: "Workflow",
       payload: {
         workflow: state.workflow ?? null,
-        intent: state.llm_orchestration_decision?.intent ?? state.intent ?? null,
-        confidence: state.llm_orchestration_decision?.confidence ?? null,
+        intent: state.llm_orchestration_decision?.classification?.intent ?? state.intent ?? null,
+        confidence: state.llm_orchestration_decision?.classification?.confidence ?? null,
         routeReason: state.route_reason ?? null,
         traceId: state.graph_trace_id ?? null,
         llmDecisionMode: state.llm_orchestration_decision?.mode ?? state.model_invocation?.mode ?? "not_reported"

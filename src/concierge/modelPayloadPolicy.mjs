@@ -95,8 +95,8 @@ export function buildRouteProofPayload(state) {
         owner: "langgraph_gpt",
         status: state.llm_orchestration_decision?.mode ?? "not_run",
         reason: state.llm_orchestration_decision?.usedByRouter
-          ? `used ${state.llm_orchestration_decision.workflow}`
-          : `not used ${state.llm_orchestration_decision?.workflow ?? "none"}`
+          ? `used ${state.llm_orchestration_decision.classification?.workflow}`
+          : `not used ${state.llm_orchestration_decision?.classification?.workflow ?? "none"}`
       },
       {
         key: "workflow_router",

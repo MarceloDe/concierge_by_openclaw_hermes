@@ -75,8 +75,7 @@ test("dynamic skill resolver mounts session memory and selects insurance plus cl
     context_packet: context.packet,
     workflow: "claim_status_navigation",
     llm_orchestration_decision: {
-      intent: "claim_status_question",
-      workflow: "claim_status_navigation"
+      classification: { intent: "claim_status_question", workflow: "claim_status_navigation" }
     }
   });
 
@@ -143,8 +142,7 @@ test("LLM orchestration payload includes dynamic skill hints", async () => {
     context_packet: context.packet,
     workflow: "eligibility_benefits_navigation",
     llm_orchestration_decision: {
-      intent: "eligibility_benefits_question",
-      workflow: "eligibility_benefits_navigation"
+      classification: { intent: "eligibility_benefits_question", workflow: "eligibility_benefits_navigation" }
     }
   });
 
@@ -232,7 +230,7 @@ test("dynamic skill resolver selects execution skills by score without hardcoded
   const resolved = await resolveDynamicSkillContext(null, {
     user_input: "Find claim and EOB status from the portal",
     workflow: "claim_status_navigation",
-    llm_orchestration_decision: { intent: "claim_status_question", workflow: "claim_status_navigation" },
+    llm_orchestration_decision: { classification: { intent: "claim_status_question", workflow: "claim_status_navigation" } },
     context_packet: { currentSession: { id: "session_score" }, user: { id: "user_score" } }
   }, { root });
 

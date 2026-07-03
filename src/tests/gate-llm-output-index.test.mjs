@@ -15,7 +15,7 @@ const URL = process.env.BRAINSTY_REDIS_URL;
 test("GATE LLM output index: real-Redis, cross-turn hydrate, used by the planner payload", { skip: URL ? false : "BRAINSTY_REDIS_URL required" }, async () => {
   const sid = createId("llmidx");
   // TURN 1: index a real LLM output (pointer-addressable in Redis).
-  const w = await indexLlmOutput({ sessionId: sid, step: "llm_orchestration_decision", model: "gpt-4.1", mode: "openai_chatopenai_invoked", content: '{"workflow":"eligibility_benefits_navigation","confidence":0.9}', parsed: { workflow: "eligibility_benefits_navigation" } });
+  const w = await indexLlmOutput({ sessionId: sid, step: "llm_orchestration_decision", model: "gpt-4.1", mode: "openai_chatopenai_invoked", content: '{"workflow":"eligibility_benefits_navigation","confidence":0.9}', parsed: { classification: { workflow: "eligibility_benefits_navigation" } } });
   assert.equal(w.ok, true);
   const writer = createRuntimeContextCache();
   assert.equal(writer.backend, "redis", "real Redis backend");

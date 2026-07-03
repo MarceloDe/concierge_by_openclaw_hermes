@@ -601,6 +601,16 @@ export async function buildContextPacket(store, { user, session = null, channel 
     packet.capabilityPortfolio = await attachCapabilityPortfolio(packet);
     packet.runtimeVectorIndex = await attachRuntimeVectorIndex(packet);
   }
+  // Three-layer pivot (plan §4.1/§5.1): plan_context is a PROJECTION of the context
+  // packet — masked, PHI-cleared plan identities only (member_plan_identities owner
+  // module read path); a verified identity is what flips the planner's
+  // userDataSufficiency without exposing PHI.
+  try {
+    const { loadPlannerPlanIdentities } = await import("./planIdentity.mjs");
+    packet.planIdentities = await loadPlannerPlanIdentities(store, { userId: user.id });
+  } catch {
+    packet.planIdentities = [];
+  }
   packet.promptBundle = buildPromptBundle(packet);
 
   const row = {

@@ -91,6 +91,35 @@ const TOOL_REGISTRY = [
     approval_required: "per_browser_action_scope",
     config: { boundary: "user_authenticated_chrome", noCredentialEntry: true }
   },
+  // Three-layer pivot Phase 85 tools (plan §7 canonical keys) — real backing modules
+  // with real runtime callers (owner modules landed in the same phase).
+  {
+    tool_key: "pricing_mrf_query_db",
+    tool_type: "internal_query",
+    title: "Transparency-in-Coverage MRF price evidence query",
+    risk_level: "low",
+    integration_status: "enabled",
+    approval_required: "none",
+    config: { owner: "src/concierge/mrfPricing.mjs", consentColumn: "mrf_pricing_lookup_approved", dataLayer: "layer_1_public" }
+  },
+  {
+    tool_key: "plan_identity_resolver",
+    tool_type: "internal_query",
+    title: "Member plan identity resolver (masked, PHI-cleared)",
+    risk_level: "medium",
+    integration_status: "enabled",
+    approval_required: "none",
+    config: { owner: "src/concierge/planIdentity.mjs", plannerVisibleColumns: ["plan_name_masked", "plan_type"], dataLayer: "layer_2_member_authorized_api" }
+  },
+  {
+    tool_key: "consent_session_vault",
+    tool_type: "internal_query",
+    title: "Consent-gated portal session vault (pointers + hashes only)",
+    risk_level: "medium",
+    integration_status: "enabled",
+    approval_required: "read_only_observation",
+    config: { owner: "src/concierge/credentialVault.mjs", consentColumn: "session_reuse_approved", dataLayer: "layer_3_portal_control" }
+  },
   {
     tool_key: "browser_remote_debugger",
     tool_type: "browser_control",

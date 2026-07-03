@@ -23,7 +23,6 @@ function missingEvidenceFromState(state, missingEvidence = []) {
   return [
     ...asArray(missingEvidence),
     ...asArray(state.evidence_observation?.missingEvidence),
-    ...asArray(state.llm_orchestration_decision?.missingEvidence),
     ...asArray(state.llm_orchestration_decision?.demand_and_evidence?.missingEvidence)
   ].filter(Boolean);
 }
@@ -87,7 +86,7 @@ export function buildGracefulDegradationMessages(state, { reason, missingEvidenc
       "Write a concise best-effort healthcare insurance navigation answer when trusted evidence is missing. Do not refuse for missing evidence. Mark every plan-specific factual claim as unsupported unless an allowed source pointer is cited.",
     safe_user_question: maskDirectIdentifiers(state.user_input, state),
     selected_workflow: state.workflow,
-    selected_journey: state.llm_orchestration_decision?.classification?.taskClass ?? state.llm_orchestration_decision?.intent ?? null,
+    selected_journey: state.llm_orchestration_decision?.classification?.taskClass ?? state.llm_orchestration_decision?.classification?.intent ?? null,
     reason: reasonLabel(state, reason),
     missing_evidence: missing,
     route_reason: state.route_reason ?? null,

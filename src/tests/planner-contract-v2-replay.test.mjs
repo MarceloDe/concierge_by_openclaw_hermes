@@ -55,14 +55,11 @@ test("v1 flat decisions lift LOSSLESSLY into the grouped v2 contract", () => {
   const d = normalizeLlmOrchestrationDecision(JSON.stringify(V1_FIXTURE), OPTIONS);
   assert.equal(d.contractVersion, LLM_ORCHESTRATION_DECISION_VERSION);
   assert.equal(d.valid, true, `expected valid, issues: ${d.issues}`);
-  // Field-by-field lift (plan §3.3 table): every v1 field lands in its v2 group AND
-  // stays readable through its flat alias for this release.
+  // Field-by-field lift (plan §3.3 table): every v1 field lands in its v2 group
+  // (Phase 85: the flat aliases are removed — grouped reads only).
   assert.equal(d.classification.workflow, V1_FIXTURE.workflow);
-  assert.equal(d.workflow, V1_FIXTURE.workflow);
   assert.equal(d.classification.intent, V1_FIXTURE.intent);
-  assert.equal(d.intent, V1_FIXTURE.intent);
   assert.equal(d.classification.confidence, V1_FIXTURE.confidence);
-  assert.equal(d.confidence, V1_FIXTURE.confidence);
   assert.equal(d.classification.extractedDemand, V1_FIXTURE.extractedDemand);
   assert.equal(d.classification.targetOutcome, V1_FIXTURE.targetOutcome);
   assert.equal(d.classification.rationale, V1_FIXTURE.rationale);
@@ -84,7 +81,7 @@ test("v1 flat decisions lift LOSSLESSLY into the grouped v2 contract", () => {
   // v1 lift risk rule: approvalRequired with read-only scope → medium.
   assert.equal(d.risk_tier, "medium");
   assert.deepEqual(d.selected_tools.capabilityPointers, V1_FIXTURE.selectedCapabilityPointers);
-  assert.deepEqual(d.selectedCapabilityPortfolioIds, V1_FIXTURE.selectedCapabilityPortfolioIds);
+  assert.deepEqual(d.selected_tools.selectedCapabilityPortfolioIds, V1_FIXTURE.selectedCapabilityPortfolioIds);
   assert.deepEqual(d.selected_tools.offeredProcessIds, V1_FIXTURE.offeredProcessIds);
   assert.equal(d.selected_tools.recommendedProcessId, V1_FIXTURE.recommendedProcessId);
   assert.equal(d.selected_tools.workerGoal, V1_FIXTURE.workerGoal);
@@ -121,7 +118,7 @@ test("v2 grouped decisions validate the draft-adopted enums", () => {
   assert.equal(d.auth_and_consent.authType, "payer_oauth_smart_fhir");
   assert.equal(d.fallback_strategy.length, 1, "unresolvable fallback dropped");
   assert.ok(d.warnings.some((w) => w.startsWith("fallback_unresolvable")), "drop recorded");
-  assert.equal(d.workflow, "pharmacy_formulary", "flat alias still readable");
+  assert.equal(d.classification.workflow, "pharmacy_formulary");
 });
 
 test("hard gates: empty allowedWorkflows, floor violation, invariant override, PAS delegation, registry gate", () => {

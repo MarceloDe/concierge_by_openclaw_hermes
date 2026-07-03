@@ -571,6 +571,28 @@ async function retrieveTrustedResearchEvidence(store, state, { session, user }) 
     limit: Number(state.raw_message?.trustedResearchEvidenceLimit ?? 3)
   });
   const sourcePointers = sourcePointersFromTrustedResearchEvidence(evidence.results ?? []);
+  // Three-layer pivot (plan §5.1): MRF price observations join the trusted-evidence
+  // pool as CITED pointers — consent-gated (mrf_pricing_lookup_approved, fail-closed)
+  // and code-gated (a shoppable CPT/HCPCS code in the question). Never planner
+  // metadata; prices flow only as evidence for the composer's source-pointer guard.
+  try {
+    if (state.consent_state?.mrfPricingLookupApproved === true) {
+      const { extractBillingCode, queryMrfPriceEvidence } = await import("./mrfPricing.mjs");
+      const billingCode = extractBillingCode(state.user_input);
+      if (billingCode) {
+        const priceRows = await queryMrfPriceEvidence(store, {
+          billingCode,
+          payer: state.auth_state?.payer ?? null,
+          limit: 3
+        });
+        for (const row of priceRows) {
+          sourcePointers.push({ table: row.table, id: row.id, summary: row.summary, sourceUrl: row.sourceUrl, sourcePointer: row.sourcePointer });
+        }
+      }
+    }
+  } catch {
+    /* MRF evidence is additive; research evidence flow continues */
+  }
   const status = sourcePointers.length
     ? "captured_trusted_research_evidence"
     : evidence.status === "pending_review_only"
@@ -732,7 +754,23 @@ async function recallContextNode(state) {
     productMemoryRecall: state.product_memory_recall,
     user: state.context_packet?.user ?? userFromContext(state.context_packet)
   });
+  // Three-layer pivot (plan §4.1): hydrate the consent/auth snapshots the planner
+  // payload projects as prompt-layer-3 context. DB-read only (fail-closed
+  // {missing:true} without a consent row); the graph never writes these channels.
+  let consentState = { missing: true, reason: "no_store" };
+  let authState = { loginState: "unknown", portalAccountId: null };
+  if (store && state.user_id) {
+    try {
+      const { loadConsentState, loadAuthState } = await import("./credentialVault.mjs");
+      consentState = await loadConsentState(store, { userId: state.user_id });
+      authState = await loadAuthState(store, { userId: state.user_id });
+    } catch (error) {
+      consentState = { missing: true, reason: `consent_hydration_failed:${error.message}` };
+    }
+  }
   return {
+    consent_state: consentState,
+    auth_state: authState,
     runtime_bundle: bundle,
     dynamic_skill_context: skillHints,
     memory_skill_tree: memorySkillTree,
@@ -780,8 +818,8 @@ function summarizeHydration(hydratedCapabilities) {
 // replayed) so the read-back is deterministic and feeds the worker dispatch.
 async function hydrateDecisionCapabilities(state, decision) {
   const selectedPointers = [
-    ...(decision?.selectedCapabilityPointers ?? []),
-    ...(decision?.selectedCapabilityPortfolioIds ?? [])
+    ...(decision?.selected_tools?.capabilityPointers ?? []),
+    ...(decision?.selected_tools?.selectedCapabilityPortfolioIds ?? [])
   ];
   if (!selectedPointers.length) return null;
   return withCheckpoint(
@@ -905,9 +943,7 @@ async function llmOrchestrationDecisionNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: "human_approval_escalation",
-        confidence: 0,
-        rationale: "Urgent or emergency content bypasses external LLM decisioning and routes directly to safe handoff.",
+        classification: { workflow: "human_approval_escalation", taskClass: null, intent: null, confidence: 0, rationale: "Urgent or emergency content bypasses external LLM decisioning and routes directly to safe handoff." },
         issues: ["urgent_emergency_escalation"],
         warnings: []
       },
@@ -923,9 +959,7 @@ async function llmOrchestrationDecisionNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: null,
-        confidence: 0,
-        rationale: "Deterministic safety policy blocked the request before any external LLM decision.",
+        classification: { workflow: null, taskClass: null, intent: null, confidence: 0, rationale: "Deterministic safety policy blocked the request before any external LLM decision." },
         issues: ["deterministic_policy_refusal"],
         warnings: []
       },
@@ -953,8 +987,8 @@ async function llmOrchestrationDecisionNode(state) {
       proof: appendProof(state, "llm_orchestration_decision", {
         mode: gated.mode,
         valid: gated.valid,
-        workflow: gated.workflow,
-        confidence: gated.confidence,
+        workflow: gated.classification?.workflow ?? null,
+        confidence: gated.classification?.confidence ?? 0,
         confidenceBand: confidenceBand(gated),
         riskTier: gated.risk_tier,
         dataLayer: gated.data_layer,
@@ -978,9 +1012,7 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
-        workflow: null,
-        confidence: 0,
-        rationale: "Live GPT orchestration decision was not requested.",
+        classification: { workflow: null, taskClass: null, intent: null, confidence: 0, rationale: "Live GPT orchestration decision was not requested." },
         issues: [],
         warnings: []
       },
@@ -1003,9 +1035,7 @@ async function llmOrchestrationDecisionNode(state) {
         usedByRouter: false,
         degraded: true,
         degradedReason: "missing_openai_api_key",
-        workflow: null,
-        confidence: 0,
-        rationale: "OPENAI_API_KEY is not configured: orchestration intelligence is DEGRADED and no workflow decision can be made.",
+        classification: { workflow: null, taskClass: null, intent: null, confidence: 0, rationale: "OPENAI_API_KEY is not configured: orchestration intelligence is DEGRADED and no workflow decision can be made." },
         issues: ["missing_openai_api_key"],
         warnings: ["intelligence_degraded_missing_key"]
       },
@@ -1085,8 +1115,8 @@ async function llmOrchestrationDecisionNode(state) {
       // selected pointers) as the span output; summary-only when off.
       traceFullPromptsEnabled()
         ? { decision }
-        : { workflow: decision.workflow, confidence: decision.confidence, valid: decision.valid },
-      { checkpoint_name: "planner.output", output_summary: { workflow: decision.workflow, confidence: decision.confidence, selectedPointerCount: (decision.selectedCapabilityPointers ?? []).length } }
+        : { workflow: decision.classification?.workflow ?? null, confidence: decision.classification?.confidence ?? 0, valid: decision.valid },
+      { checkpoint_name: "planner.output", output_summary: { workflow: decision.classification?.workflow ?? null, confidence: decision.classification?.confidence ?? 0, selectedPointerCount: (decision.selected_tools?.capabilityPointers ?? []).length } }
     );
     const llmOutputIndex = await indexLlmOutput({
       sessionId: state.session_id,
@@ -1129,8 +1159,8 @@ async function llmOrchestrationDecisionNode(state) {
       proof: appendProof(state, "llm_orchestration_decision", {
         mode: "openai_chatopenai_invoked",
         valid: gated.valid,
-        workflow: gated.workflow,
-        confidence: gated.confidence,
+        workflow: gated.classification?.workflow ?? null,
+        confidence: gated.classification?.confidence ?? 0,
         confidenceBand: confidenceBand(gated),
         riskTier: gated.risk_tier,
         dataLayer: gated.data_layer,
@@ -1153,9 +1183,7 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
-        workflow: null,
-        confidence: 0,
-        rationale: error.message,
+        classification: { workflow: null, taskClass: null, intent: null, confidence: 0, rationale: error.message },
         issues: [error.message],
         warnings: [],
         outboundPayloadObservation: payloadObservation
@@ -1231,9 +1259,7 @@ async function workflowRouterNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: "human_approval_escalation",
-        confidence: 0,
-        rationale: "Urgent or emergency content routes directly to safe handoff before external LLM decisioning.",
+        classification: { workflow: "human_approval_escalation", taskClass: null, intent: null, confidence: 0, rationale: "Urgent or emergency content routes directly to safe handoff before external LLM decisioning." },
         issues: ["urgent_emergency_escalation"],
         warnings: []
       },
@@ -1267,9 +1293,7 @@ async function workflowRouterNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: null,
-        confidence: 0,
-        rationale: "Deterministic safety policy blocked the request before external LLM decisioning.",
+        classification: { workflow: null, taskClass: null, intent: null, confidence: 0, rationale: "Deterministic safety policy blocked the request before external LLM decisioning." },
         issues: ["deterministic_policy_refusal"],
         warnings: []
       },
@@ -1361,19 +1385,17 @@ async function workflowRouterNode(state) {
   }
   const lowConfidenceLlmDecision =
     state.llm_orchestration_decision?.valid &&
-    state.llm_orchestration_decision?.workflow &&
+    state.llm_orchestration_decision?.classification?.workflow &&
     confidenceBand(state.llm_orchestration_decision) === "low";
   // The legacy classifier/positional fallback chain is DELETED (plan §3.4/§10.7):
   // the DB-validated decision workflow is the only selection source.
-  const selectedWorkflow = state.llm_orchestration_decision?.workflow ?? null;
+  const selectedWorkflow = state.llm_orchestration_decision?.classification?.workflow ?? null;
   const route =
     state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === selectedWorkflow) ??
     state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === selectedWorkflow) ??
     null;
   const clarifyQuestion =
-    state.llm_orchestration_decision?.response?.userFacingNextQuestion ||
-    state.llm_orchestration_decision?.userFacingNextQuestion ||
-    "";
+    state.llm_orchestration_decision?.response?.userFacingNextQuestion || "";
   return {
     workflow: route?.workflowKey ?? selectedWorkflow ?? "human_approval_escalation",
     workflow_route: route,
@@ -1396,11 +1418,11 @@ async function workflowRouterNode(state) {
       : null,
     proof: appendProof(state, "workflow_router", {
       route: route?.workflowKey ?? selectedWorkflow ?? "human_approval_escalation",
-      llmWorkflow: state.llm_orchestration_decision?.workflow ?? null,
+      llmWorkflow: state.llm_orchestration_decision?.classification?.workflow ?? null,
       llmDecisionUsed,
       lowConfidenceClarify: Boolean(lowConfidenceLlmDecision),
       llmConfidenceBand: state.llm_orchestration_decision ? confidenceBand(state.llm_orchestration_decision) : null,
-      llmConfidence: state.llm_orchestration_decision?.confidence ?? null,
+      llmConfidence: state.llm_orchestration_decision?.classification?.confidence ?? null,
       riskTier: state.llm_orchestration_decision?.risk_tier ?? null,
       dataLayer: state.llm_orchestration_decision?.data_layer ?? null,
       executableNow: Boolean(route?.executableNow)
@@ -3109,7 +3131,7 @@ async function attemptCapabilityProcessOffer(state) {
     workflow_outcome: "capability_reasoned_offer",
     memory_type: "capability_offer_event",
     should_remember: false,
-    capability_offer: { offeredProcessIds: offer.offeredProcessIds ?? [], recommendedProcessId: state.llm_orchestration_decision?.recommendedProcessId ?? null, processes: offeredProcesses },
+    capability_offer: { offeredProcessIds: offer.offeredProcessIds ?? [], recommendedProcessId: state.llm_orchestration_decision?.selected_tools?.recommendedProcessId ?? null, processes: offeredProcesses },
     proof: appendProof(state, "response_policy", {
       typeIIComposer: true,
       mode: offer.mode,
@@ -3123,11 +3145,11 @@ async function attemptCapabilityProcessOffer(state) {
 export function plannerWantsProcessOffer(decision) {
   if (!decision) return false;
   return (
-    decision.responseStrategy === "offer_process_and_ask" ||
-    decision.responseStrategy === "honest_capability_decline" ||
-    decision.capabilityAssessment?.canAnswerNow === false ||
-    (decision.offeredProcessIds?.length ?? 0) > 0 ||
-    Boolean(decision.recommendedProcessId)
+    decision.response?.responseStrategy === "offer_process_and_ask" ||
+    decision.response?.responseStrategy === "honest_capability_decline" ||
+    decision.response?.capabilityAssessment?.canAnswerNow === false ||
+    (decision.selected_tools?.offeredProcessIds?.length ?? 0) > 0 ||
+    Boolean(decision.selected_tools?.recommendedProcessId)
   );
 }
 
@@ -3393,9 +3415,9 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
               mode: state.llm_orchestration_decision.mode,
               valid: state.llm_orchestration_decision.valid,
               usedByRouter: state.llm_orchestration_decision.usedByRouter,
-              workflow: state.llm_orchestration_decision.workflow,
-              confidence: state.llm_orchestration_decision.confidence,
-              rationale: state.llm_orchestration_decision.rationale,
+              workflow: state.llm_orchestration_decision.classification?.workflow ?? null,
+              confidence: state.llm_orchestration_decision.classification?.confidence ?? 0,
+              rationale: state.llm_orchestration_decision.classification?.rationale ?? null,
               issues: state.llm_orchestration_decision.issues ?? []
             }
           : null
