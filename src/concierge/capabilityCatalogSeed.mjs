@@ -1,6 +1,6 @@
 import { BRAINSTY_GRAPH_NODE_NAMES } from "./langgraphRunner.mjs";
 
-export const CAPABILITY_CATALOG_VERSION = "2026-07-02.capability-catalog-seed.v2";
+export const CAPABILITY_CATALOG_VERSION = "2026-07-03.capability-catalog-seed.v3";
 
 const VALID_NODES = new Set(BRAINSTY_GRAPH_NODE_NAMES);
 
@@ -59,6 +59,11 @@ export const CAPABILITY_CATALOG = Object.freeze({
     { capability_key: "skill:insurance_knowledge_research", kind: "skill", skill_key: "insurance_knowledge_research", short_description: "Research authoritative published insurance/policy sources.", ...meta("a fact is published (formulary/SBC/policy) and not behind login", "retrieves + cites authoritative sources", "authoritative published research", 16) },
     // tools (FK tool_key)
     { capability_key: "tool:openclaw_authenticated_browser", kind: "tool", tool_key: "openclaw_authenticated_browser", short_description: "Dispatch handle for the OpenClaw browser arm.", ...meta("a worker dispatch to the read-only browser is required", "bridges worker dispatch + idempotency + lease", "browser worker dispatch", 14) },
+    // Three-layer pivot Phase 85 tools (plan §7 rows, scores 10-14): real owner
+    // modules with real runtime callers landed in the same phase.
+    { capability_key: "tool:pricing_mrf_query_db", kind: "tool", tool_key: "pricing_mrf_query_db", short_description: "Cited MRF negotiated-rate/allowed-amount evidence for a billing code.", ...meta("a cost/price question names a CPT/HCPCS code and the user consented to MRF pricing lookups", "returns CITED price observations (source_pointer per row); never planner metadata", "public price evidence", 13) },
+    { capability_key: "tool:plan_identity_resolver", kind: "tool", tool_key: "plan_identity_resolver", short_description: "Masked member plan identity (payer, plan name/type, verification status).", ...meta("plan context is needed (which plan/payer the member has) without asking again", "PHI-cleared identity satisfies plan-context information needs", "plan identity context", 12) },
+    { capability_key: "tool:consent_session_vault", kind: "tool", tool_key: "consent_session_vault", short_description: "Consent-gated reusable portal-session artifact (pointer + hash only).", ...meta("a portal observation could reuse a consented cached session instead of a fresh takeover login", "skips the takeover step when the user approved session reuse", "portal session reuse", 11) },
     { capability_key: "tool:payer_portal_reader", kind: "tool", tool_key: "payer_portal_reader", short_description: "Structured read-only portal extraction to source pointers.", ...meta("portal page content must be turned into cited evidence", "produces portal_page_snapshots + extraction_artifacts", "portal extraction", 14) },
     { capability_key: "tool:aetna_cpb_lookup", kind: "tool", tool_key: "aetna_cpb_lookup", short_description: "Aetna clinical policy bulletin criteria.", ...meta("PA/appeal needs payer clinical policy criteria", "retrieves CPB criteria with citation, no PHI sent", "payer policy criteria", 12) },
     { capability_key: "tool:cms_mcd_lookup", kind: "tool", tool_key: "cms_mcd_lookup", short_description: "Medicare NCD/LCD coverage determinations.", ...meta("coverage determination requires CMS NCD/LCD", "retrieves CMS coverage determinations + citation", "medicare coverage determination", 12) },
@@ -248,7 +253,15 @@ export async function seedCapabilityCatalog(store, { nowIso, createId, catalog =
       skill_key: cap.skill_key ?? null,
       tool_key: cap.tool_key ?? null,
       graph_subpath_json: cap.graph_subpath ? JSON.stringify(cap.graph_subpath) : null,
-      how_kind_ref: cap.workflow_key ? "workflow_definitions" : cap.skill_key ? "openclaw_skills" : cap.tool_key ? "tool_registry" : "self"
+      how_kind_ref: cap.workflow_key ? "workflow_definitions" : cap.skill_key ? "openclaw_skills" : cap.tool_key ? "tool_registry" : "self",
+      // §7.0 Capability Registry columns (founder global decision, 2026-07-02):
+      // seeded rows have real backing + real callers → implemented_runtime and
+      // runtime-selectable unless the catalog entry says otherwise. The fail-closed
+      // DEFAULT 0 stands for every row not explicitly seeded selectable.
+      registry_status: cap.registry_status ?? "implemented_runtime",
+      runtime_selectable: cap.runtime_selectable ?? 1,
+      blocked_by_json: JSON.stringify(cap.blocked_by ?? []),
+      planner_exposure_json: JSON.stringify(cap.planner_exposure ?? {})
     }, nowIso, createId);
     capIdByKey[cap.capability_key] = id;
   }

@@ -13,7 +13,7 @@ test("AI2UI builder returns typed blocks for a sourced LangGraph result", () => 
       graph_trace_id: "lgtrace_test",
       workflow: "eligibility_benefits_navigation",
       workflow_outcome: "evidence_captured",
-      llm_orchestration_decision: { intent: "eligibility_benefits", confidence: 0.86 },
+      llm_orchestration_decision: { classification: { intent: "eligibility_benefits", confidence: 0.86 } },
       route_reason: "llm_orchestration_decision",
       final_response: "A sourced answer.",
       source_pointers: [
@@ -168,7 +168,7 @@ test("AI2UI builder returns source-backed procedure checklist rows for procedure
   const blocks = buildAi2UiBlocksFromState({
     graph_trace_id: "lgtrace_procedure",
     workflow: "eligibility_benefits_navigation",
-    llm_orchestration_decision: { intent: "procedure_admin_checklist" },
+    llm_orchestration_decision: { classification: { intent: "procedure_admin_checklist" } },
     user_input: "Can you make a procedure prep checklist for my colonoscopy appointment?",
     final_response: "A sourced procedure preparation answer.",
     source_pointers: [
@@ -207,7 +207,7 @@ test("AI2UI procedure checklist fails closed when a procedure prep ask has no so
   const blocks = buildAi2UiBlocksFromState({
     graph_trace_id: "lgtrace_procedure_missing",
     workflow: "eligibility_benefits_navigation",
-    llm_orchestration_decision: { intent: "procedure_admin_checklist" },
+    llm_orchestration_decision: { classification: { intent: "procedure_admin_checklist" } },
     user_input: "What should I do before my procedure appointment?",
     final_response: "I cannot create a checklist without evidence.",
     source_pointers: [],
@@ -227,7 +227,7 @@ test("AI2UI builder returns source-backed provider network rows for provider/fac
   const blocks = buildAi2UiBlocksFromState({
     graph_trace_id: "lgtrace_provider_network",
     workflow: "eligibility_benefits_navigation",
-    llm_orchestration_decision: { intent: "provider_network" },
+    llm_orchestration_decision: { classification: { intent: "provider_network" } },
     user_input: "Is Midtown Imaging Center in network and accepting new patients?",
     final_response: "A sourced provider network answer.",
     source_pointers: [
@@ -268,7 +268,7 @@ test("AI2UI provider network card fails closed when provider ask has no source p
   const blocks = buildAi2UiBlocksFromState({
     graph_trace_id: "lgtrace_provider_missing",
     workflow: "eligibility_benefits_navigation",
-    llm_orchestration_decision: { intent: "provider_network" },
+    llm_orchestration_decision: { classification: { intent: "provider_network" } },
     user_input: "Is this doctor in network?",
     final_response: "I cannot verify network status without evidence.",
     source_pointers: [],

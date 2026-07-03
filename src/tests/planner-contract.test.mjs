@@ -19,11 +19,11 @@ const OPTIONS = { allowedWorkflows: ALLOWED, offerableProcessIds: ["process:port
 
 test("Phase B: missing/invalid fields fail closed", () => {
   const d = normalizeLlmOrchestrationDecision(JSON.stringify({ workflow: "eligibility_benefits_navigation", confidence: 0.9 }), OPTIONS);
-  assert.equal(d.capabilityAssessment.canAnswerNow, false, "canAnswerNow defaults false");
-  assert.equal(d.userDataSufficiency, "none", "userDataSufficiency defaults none");
-  assert.equal(d.clarificationNeeded, false);
-  assert.deepEqual(d.offeredProcessIds, []);
-  assert.equal(d.answerComposerMode, "capability_meta");
+  assert.equal(d.response.capabilityAssessment.canAnswerNow, false, "canAnswerNow defaults false");
+  assert.equal(d.demand_and_evidence.userDataSufficiency, "none", "userDataSufficiency defaults none");
+  assert.equal(d.response.clarificationNeeded, false);
+  assert.deepEqual(d.selected_tools.offeredProcessIds, []);
+  assert.equal(d.response.answerComposerMode, "capability_meta");
 });
 
 test("Phase B: offer+clarify without a question/process raises warnings", () => {
@@ -46,12 +46,12 @@ test("Phase B: a well-formed offer+clarify decision is captured", () => {
     recommendedProcessId: "process:portal_readonly_lookup",
     missingPlanDetails: ["which_payer_portal"]
   }), OPTIONS);
-  assert.equal(d.capabilityAssessment.canAnswerNow, false);
-  assert.equal(d.userDataSufficiency, "insufficient");
-  assert.equal(d.responseStrategy, "offer_process_and_ask");
-  assert.deepEqual(d.offeredProcessIds, ["process:portal_readonly_lookup"]);
-  assert.equal(d.recommendedProcessId, "process:portal_readonly_lookup");
-  assert.deepEqual(d.missingPlanDetails, ["which_payer_portal"]);
+  assert.equal(d.response.capabilityAssessment.canAnswerNow, false);
+  assert.equal(d.demand_and_evidence.userDataSufficiency, "insufficient");
+  assert.equal(d.response.responseStrategy, "offer_process_and_ask");
+  assert.deepEqual(d.selected_tools.offeredProcessIds, ["process:portal_readonly_lookup"]);
+  assert.equal(d.selected_tools.recommendedProcessId, "process:portal_readonly_lookup");
+  assert.deepEqual(d.demand_and_evidence.missingPlanDetails, ["which_payer_portal"]);
   assert.ok(!d.warnings.includes("clarification_needed_without_question"));
   assert.ok(!d.warnings.includes("capability_question_without_offer"));
 });
@@ -95,8 +95,8 @@ test("Phase 83: offered processes are filtered against the offerable set at norm
     offeredProcessIds: ["process:portal_readonly_lookup", "process:invented_by_model"],
     recommendedProcessId: "process:invented_by_model"
   }), OPTIONS);
-  assert.deepEqual(d.offeredProcessIds, ["process:portal_readonly_lookup"], "invented process dropped");
-  assert.equal(d.recommendedProcessId, "process:portal_readonly_lookup", "recommendation falls back to a real offer");
+  assert.deepEqual(d.selected_tools.offeredProcessIds, ["process:portal_readonly_lookup"], "invented process dropped");
+  assert.equal(d.selected_tools.recommendedProcessId, "process:portal_readonly_lookup", "recommendation falls back to a real offer");
   assert.ok(d.warnings.some((w) => w.startsWith("offered_process_not_offerable")));
   assert.equal(d.workflow_graph.processId, "process:portal_readonly_lookup", "workflow_graph binds the filtered recommendation");
 });

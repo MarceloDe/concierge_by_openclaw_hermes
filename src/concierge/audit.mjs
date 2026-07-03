@@ -2,11 +2,27 @@ import { createHash } from "node:crypto";
 import { createId, nowIso } from "./database.mjs";
 import { maskDirectIdentifiers } from "./modelPayloadPolicy.mjs";
 
-export const AUDIT_CHAIN_VERSION = "2026-05-27.audit-chain.v1";
+// Audit chain v2 (three-layer pivot, plan §5.3): the hash material gains the DATA
+// layer tag. verifyAuditChain dispatches hash material BY EACH ROW'S STORED
+// chain_version, so all v1 rows keep verifying — this dispatch is load-bearing and
+// has its own regression test in test:local.
+export const AUDIT_CHAIN_VERSION = "2026-07-02.audit-chain.v2";
+export const AUDIT_CHAIN_VERSION_V1 = "2026-05-27.audit-chain.v1";
 export const AUDIT_LOG_API_VERSION = "2026-06-01.phase10l-audit-log-api.v1";
 
+// Canonical data-layer vocabulary (draft-adopted; one enum everywhere — plan §8.7).
+export const AUDIT_DATA_LAYERS = Object.freeze([
+  "layer_1_public",
+  "layer_2_member_authorized_api",
+  "layer_3_portal_control"
+]);
+
+function normalizeAuditLayer(layer) {
+  return AUDIT_DATA_LAYERS.includes(String(layer ?? "")) ? String(layer) : null;
+}
+
 function eventHashMaterial(row) {
-  return JSON.stringify({
+  const base = {
     id: row.id,
     session_id: row.session_id ?? null,
     event_type: row.event_type,
@@ -14,7 +30,14 @@ function eventHashMaterial(row) {
     previous_event_hash: row.previous_event_hash ?? null,
     chain_version: row.chain_version,
     created_at: row.created_at
-  });
+  };
+  // Per-row chain_version dispatch: v1 rows (and legacy rows with no version) hash
+  // WITHOUT the layer tag exactly as they were written; v2 rows include it, so
+  // tampering a v2 row's layer breaks its hash.
+  if (!row.chain_version || row.chain_version === AUDIT_CHAIN_VERSION_V1) {
+    return JSON.stringify(base);
+  }
+  return JSON.stringify({ ...base, layer: row.layer ?? null });
 }
 
 function hashAuditEvent(row) {
@@ -124,6 +147,7 @@ function normalizeAuditRow(row) {
     previousEventHash: row.previous_event_hash ?? null,
     eventHash: row.event_hash ?? null,
     chainVersion: row.chain_version ?? null,
+    layer: row.layer ?? null,
     hashChained: Boolean(row.event_hash)
   };
 }
@@ -135,7 +159,7 @@ async function latestHash(store, sessionId) {
   return row?.event_hash ?? null;
 }
 
-export async function audit(store, sessionId, eventType, details) {
+export async function audit(store, sessionId, eventType, details, { layer = null } = {}) {
   const row = {
     id: createId("audit"),
     session_id: sessionId ?? null,
@@ -143,6 +167,7 @@ export async function audit(store, sessionId, eventType, details) {
     details: JSON.stringify(details),
     previous_event_hash: await latestHash(store, sessionId ?? null),
     chain_version: AUDIT_CHAIN_VERSION,
+    layer: normalizeAuditLayer(layer),
     created_at: nowIso()
   };
   row.event_hash = hashAuditEvent(row);

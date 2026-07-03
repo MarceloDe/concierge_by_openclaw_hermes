@@ -1,8 +1,11 @@
 # Postgres Database — Healthcare-Insurance AI Concierge
 
 > Authoritative, machine-readable schema: [`docs/db/postgres-schema.json`](./db/postgres-schema.json)
-> (74 tables, 948 columns, introspected from a live Postgres 16 `information_schema`).
-> This document is a human-readable companion. Where the two disagree, the JSON wins.
+> (78 tables, introspected from a live Postgres 16 `information_schema`).
+> Regenerate with `node scripts/generate-postgres-schema-json.mjs` against the live DB;
+> `src/tests/schema-parity.test.mjs` (in the blocking `test:local` gate) fails on drift
+> between the two engines. This document is a human-readable companion. Where the two
+> disagree, the JSON wins.
 
 ---
 

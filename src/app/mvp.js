@@ -1067,7 +1067,7 @@ function renderAnswer(result = null) {
     ${state.uiMode === "bento" ? '<p class="status-text">Bento mode shows every typed AI2UI block returned by LangGraph in a compact proof grid.</p>' : ""}
     ${state.uiMode === "chat" ? `<p>${escapeHtml(finalResponse)}</p>` : ""}
     <div class="answer-grid" aria-label="Latest run proof">
-      ${metric("Intent", classifier?.intent ?? stateSnapshot.intent ?? "not reported")}
+      ${metric("Intent", classifier?.classification?.intent ?? stateSnapshot.intent ?? "not reported")}
       ${metric("LLM", llmMode)}
       ${metric("Approval", approvalStatus(result))}
       ${metric("Worker", workerOutcome(result))}
@@ -2000,7 +2000,7 @@ function summarizeParityResult(result) {
   const pointers = sourcePointers(result);
   return {
     workflow,
-    intent: classifier.intent ?? stateSnapshot.intent ?? "not reported",
+    intent: classifier.classification?.intent ?? stateSnapshot.intent ?? "not reported",
     approval: approvalStatus(result),
     proposalStatus: proposalStatus(result),
     evidenceStatus: evidence.status ?? "not requested",

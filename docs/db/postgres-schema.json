@@ -1,7 +1,8 @@
 {
   "generatedFrom": "live Postgres 16 information_schema (real query)",
   "engine": "postgres (SCHEMA_SQL applied via PostgresStore.initialize)",
-  "tableCount": 74,
+  "generatedAt": "2026-07-03T04:42:28.222Z",
+  "tableCount": 78,
   "tables": {
     "agent_outbox": {
       "columns": [
@@ -88,16 +89,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "related_task_id",
+          "references": "agent_tasks.id"
         },
         {
           "column": "session_id",
           "references": "sessions.id"
         },
         {
-          "column": "related_task_id",
-          "references": "agent_tasks.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -228,16 +229,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "scheduled_job_id",
+          "references": "scheduled_jobs.id"
         },
         {
           "column": "session_id",
           "references": "sessions.id"
         },
         {
-          "column": "scheduled_job_id",
-          "references": "scheduled_jobs.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -367,6 +368,13 @@
           "nullable": false,
           "default": null,
           "position": 8
+        },
+        {
+          "name": "layer",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
         }
       ],
       "primaryKey": [
@@ -383,6 +391,10 @@
         {
           "name": "audit_events_pkey",
           "def": "CREATE UNIQUE INDEX audit_events_pkey ON public.audit_events USING btree (id)"
+        },
+        {
+          "name": "idx_audit_events_layer",
+          "def": "CREATE INDEX idx_audit_events_layer ON public.audit_events USING btree (layer, created_at)"
         }
       ]
     },
@@ -595,12 +607,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "session_id",
-          "references": "sessions.id"
-        },
-        {
           "column": "portal_account_id",
           "references": "portal_accounts.id"
+        },
+        {
+          "column": "session_id",
+          "references": "sessions.id"
         }
       ],
       "uniques": [],
@@ -803,18 +815,46 @@
           "position": 27
         },
         {
+          "name": "registry_status",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 28
+        },
+        {
+          "name": "runtime_selectable",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 29
+        },
+        {
+          "name": "blocked_by_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'[]'::text",
+          "position": 30
+        },
+        {
+          "name": "planner_exposure_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 31
+        },
+        {
           "name": "created_at",
           "type": "text",
           "nullable": false,
           "default": null,
-          "position": 28
+          "position": 32
         },
         {
           "name": "updated_at",
           "type": "text",
           "nullable": false,
           "default": null,
-          "position": 29
+          "position": 33
         }
       ],
       "primaryKey": [
@@ -822,16 +862,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "workflow_key",
-          "references": "workflow_definitions.workflow_key"
-        },
-        {
           "column": "skill_key",
           "references": "openclaw_skills.skill_key"
         },
         {
           "column": "tool_key",
           "references": "tool_registry.tool_key"
+        },
+        {
+          "column": "workflow_key",
+          "references": "workflow_definitions.workflow_key"
         }
       ],
       "uniques": [
@@ -842,12 +882,12 @@
       ],
       "indexes": [
         {
-          "name": "capabilities_pkey",
-          "def": "CREATE UNIQUE INDEX capabilities_pkey ON public.capabilities USING btree (id)"
-        },
-        {
           "name": "capabilities_capability_key_key",
           "def": "CREATE UNIQUE INDEX capabilities_capability_key_key ON public.capabilities USING btree (capability_key)"
+        },
+        {
+          "name": "capabilities_pkey",
+          "def": "CREATE UNIQUE INDEX capabilities_pkey ON public.capabilities USING btree (id)"
         }
       ]
     },
@@ -1155,12 +1195,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -1367,6 +1407,13 @@
           "nullable": false,
           "default": null,
           "position": 5
+        },
+        {
+          "name": "sequence_number",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 6
         }
       ],
       "primaryKey": [
@@ -1383,6 +1430,10 @@
         {
           "name": "conversation_messages_pkey",
           "def": "CREATE UNIQUE INDEX conversation_messages_pkey ON public.conversation_messages USING btree (id)"
+        },
+        {
+          "name": "idx_conversation_messages_session_seq",
+          "def": "CREATE INDEX idx_conversation_messages_session_seq ON public.conversation_messages USING btree (session_id, sequence_number)"
         }
       ]
     },
@@ -1476,6 +1527,164 @@
         }
       ]
     },
+    "credential_session_vault": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "portal_account_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "consent_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "artifact_kind",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "secret_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "envelope_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 7
+        },
+        {
+          "name": "secret_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "masked_preview",
+          "type": "text",
+          "nullable": false,
+          "default": "''::text",
+          "position": 9
+        },
+        {
+          "name": "scope_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'[]'::text",
+          "position": 10
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'active'::text",
+          "position": 11
+        },
+        {
+          "name": "issued_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "expires_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "last_used_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 14
+        },
+        {
+          "name": "revoked_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 15
+        },
+        {
+          "name": "revocation_reason",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 16
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 17
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 18
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "column": "consent_id",
+          "references": "user_consents.id"
+        },
+        {
+          "column": "portal_account_id",
+          "references": "portal_accounts.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
+        }
+      ],
+      "uniques": [],
+      "indexes": [
+        {
+          "name": "credential_session_vault_pkey",
+          "def": "CREATE UNIQUE INDEX credential_session_vault_pkey ON public.credential_session_vault USING btree (id)"
+        },
+        {
+          "name": "idx_credential_session_vault_user",
+          "def": "CREATE INDEX idx_credential_session_vault_user ON public.credential_session_vault USING btree (user_id, status)"
+        }
+      ]
+    },
     "eligibility_snapshots": {
       "columns": [
         {
@@ -1540,16 +1749,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "portal_account_id",
+          "references": "portal_accounts.id"
         },
         {
           "column": "session_id",
           "references": "sessions.id"
         },
         {
-          "column": "portal_account_id",
-          "references": "portal_accounts.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -1769,16 +1978,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "message_id",
+          "references": "conversation_messages.id"
         },
         {
           "column": "session_id",
           "references": "sessions.id"
         },
         {
-          "column": "message_id",
-          "references": "conversation_messages.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -2170,8 +2379,8 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "message_id",
+          "references": "conversation_messages.id"
         },
         {
           "column": "session_id",
@@ -2182,8 +2391,8 @@
           "references": "agent_tasks.id"
         },
         {
-          "column": "message_id",
-          "references": "conversation_messages.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -2351,6 +2560,184 @@
         }
       ]
     },
+    "member_plan_identities": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "portal_account_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "payer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "member_id_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "plan_external_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "plan_name_masked",
+          "type": "text",
+          "nullable": false,
+          "default": "''::text",
+          "position": 7
+        },
+        {
+          "name": "plan_type",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "group_number_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "coverage_start_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "coverage_end_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "source_kind",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "source_pointer_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "verification_status",
+          "type": "text",
+          "nullable": false,
+          "default": "'unverified'::text",
+          "position": 14
+        },
+        {
+          "name": "graphiti_entity_ref",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 15
+        },
+        {
+          "name": "metadata_phi_cleared",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 16
+        },
+        {
+          "name": "details_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 17
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 18
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 19
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "column": "portal_account_id",
+          "references": "portal_accounts.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
+        }
+      ],
+      "uniques": [
+        {
+          "column": "user_id",
+          "constraint": "member_plan_identities_user_id_payer_member_id_hash_key"
+        },
+        {
+          "column": "payer",
+          "constraint": "member_plan_identities_user_id_payer_member_id_hash_key"
+        },
+        {
+          "column": "member_id_hash",
+          "constraint": "member_plan_identities_user_id_payer_member_id_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_member_plan_identities_user",
+          "def": "CREATE INDEX idx_member_plan_identities_user ON public.member_plan_identities USING btree (user_id, verification_status)"
+        },
+        {
+          "name": "member_plan_identities_pkey",
+          "def": "CREATE UNIQUE INDEX member_plan_identities_pkey ON public.member_plan_identities USING btree (id)"
+        },
+        {
+          "name": "member_plan_identities_user_id_payer_member_id_hash_key",
+          "def": "CREATE UNIQUE INDEX member_plan_identities_user_id_payer_member_id_hash_key ON public.member_plan_identities USING btree (user_id, payer, member_id_hash)"
+        }
+      ]
+    },
     "memory_harness_runs": {
       "columns": [
         {
@@ -2422,12 +2809,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -2593,12 +2980,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -2680,12 +3067,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -2693,6 +3080,330 @@
         {
           "name": "memory_reflections_pkey",
           "def": "CREATE UNIQUE INDEX memory_reflections_pkey ON public.memory_reflections USING btree (id)"
+        }
+      ]
+    },
+    "mrf_price_observations": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "source_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "payer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "employer_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "plan_external_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "network_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "geography",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "billing_code",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "billing_code_type",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "billing_class",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "place_of_service",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "provider_npi",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "provider_tin_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "negotiated_type",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 14
+        },
+        {
+          "name": "negotiated_rate",
+          "type": "real",
+          "nullable": true,
+          "default": null,
+          "position": 15
+        },
+        {
+          "name": "allowed_amount",
+          "type": "real",
+          "nullable": true,
+          "default": null,
+          "position": 16
+        },
+        {
+          "name": "service_codes_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'[]'::text",
+          "position": 17
+        },
+        {
+          "name": "effective_from_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 18
+        },
+        {
+          "name": "effective_to_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 19
+        },
+        {
+          "name": "ingestion_run_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 20
+        },
+        {
+          "name": "row_content_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 21
+        },
+        {
+          "name": "source_pointer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 22
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 23
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "column": "source_id",
+          "references": "mrf_pricing_sources.id"
+        }
+      ],
+      "uniques": [
+        {
+          "column": "row_content_hash",
+          "constraint": "mrf_price_observations_row_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "idx_mrf_price_obs_payer_code",
+          "def": "CREATE INDEX idx_mrf_price_obs_payer_code ON public.mrf_price_observations USING btree (payer, billing_code)"
+        },
+        {
+          "name": "idx_mrf_price_obs_plan_code",
+          "def": "CREATE INDEX idx_mrf_price_obs_plan_code ON public.mrf_price_observations USING btree (plan_external_id, billing_code)"
+        },
+        {
+          "name": "mrf_price_observations_pkey",
+          "def": "CREATE UNIQUE INDEX mrf_price_observations_pkey ON public.mrf_price_observations USING btree (id)"
+        },
+        {
+          "name": "mrf_price_observations_row_content_hash_key",
+          "def": "CREATE UNIQUE INDEX mrf_price_observations_row_content_hash_key ON public.mrf_price_observations USING btree (row_content_hash)"
+        }
+      ]
+    },
+    "mrf_pricing_sources": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "payer",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "source_url",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "file_kind",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "file_month",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "effective_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 7
+        },
+        {
+          "name": "retrieved_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "ingestion_run_id",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 9
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'fetched'::text",
+          "position": 10
+        },
+        {
+          "name": "ingest_stats_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 11
+        },
+        {
+          "name": "failure_class",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 12
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 14
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [
+        {
+          "column": "source_url",
+          "constraint": "mrf_pricing_sources_source_url_content_hash_key"
+        },
+        {
+          "column": "content_hash",
+          "constraint": "mrf_pricing_sources_source_url_content_hash_key"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "mrf_pricing_sources_pkey",
+          "def": "CREATE UNIQUE INDEX mrf_pricing_sources_pkey ON public.mrf_pricing_sources USING btree (id)"
+        },
+        {
+          "name": "mrf_pricing_sources_source_url_content_hash_key",
+          "def": "CREATE UNIQUE INDEX mrf_pricing_sources_source_url_content_hash_key ON public.mrf_pricing_sources USING btree (source_url, content_hash)"
         }
       ]
     },
@@ -3206,12 +3917,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "candidate_id",
-          "references": "pems_candidate_maturity.candidate_id"
-        },
-        {
           "column": "advisory_draft_id",
           "references": "pems_candidate_evaluator_drafts.id"
+        },
+        {
+          "column": "candidate_id",
+          "references": "pems_candidate_maturity.candidate_id"
         }
       ],
       "uniques": [],
@@ -3740,12 +4451,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "candidate_id",
-          "references": "pems_candidate_maturity.candidate_id"
-        },
-        {
           "column": "advisory_draft_id",
           "references": "pems_candidate_evaluator_drafts.id"
+        },
+        {
+          "column": "candidate_id",
+          "references": "pems_candidate_maturity.candidate_id"
         },
         {
           "column": "claim_revision_id",
@@ -3870,12 +4581,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "candidate_id",
-          "references": "pems_candidate_maturity.candidate_id"
-        },
-        {
           "column": "advisory_draft_id",
           "references": "pems_candidate_evaluator_drafts.id"
+        },
+        {
+          "column": "candidate_id",
+          "references": "pems_candidate_maturity.candidate_id"
         }
       ],
       "uniques": [],
@@ -4108,12 +4819,12 @@
           "references": "browser_runs.id"
         },
         {
-          "column": "session_id",
-          "references": "sessions.id"
-        },
-        {
           "column": "portal_account_id",
           "references": "portal_accounts.id"
+        },
+        {
+          "column": "session_id",
+          "references": "sessions.id"
         }
       ],
       "uniques": [],
@@ -4313,23 +5024,15 @@
       ],
       "foreignKeys": [
         {
-          "column": "process_id",
-          "references": "processes.id"
-        },
-        {
           "column": "capability_id",
           "references": "capabilities.id"
+        },
+        {
+          "column": "process_id",
+          "references": "processes.id"
         }
       ],
       "uniques": [
-        {
-          "column": "process_id",
-          "constraint": "process_steps_process_id_step_order_key"
-        },
-        {
-          "column": "step_order",
-          "constraint": "process_steps_process_id_step_order_key"
-        },
         {
           "column": "process_id",
           "constraint": "process_steps_process_id_step_key_key"
@@ -4337,6 +5040,14 @@
         {
           "column": "step_key",
           "constraint": "process_steps_process_id_step_key_key"
+        },
+        {
+          "column": "process_id",
+          "constraint": "process_steps_process_id_step_order_key"
+        },
+        {
+          "column": "step_order",
+          "constraint": "process_steps_process_id_step_order_key"
         }
       ],
       "indexes": [
@@ -4345,12 +5056,12 @@
           "def": "CREATE UNIQUE INDEX process_steps_pkey ON public.process_steps USING btree (id)"
         },
         {
-          "name": "process_steps_process_id_step_order_key",
-          "def": "CREATE UNIQUE INDEX process_steps_process_id_step_order_key ON public.process_steps USING btree (process_id, step_order)"
-        },
-        {
           "name": "process_steps_process_id_step_key_key",
           "def": "CREATE UNIQUE INDEX process_steps_process_id_step_key_key ON public.process_steps USING btree (process_id, step_key)"
+        },
+        {
+          "name": "process_steps_process_id_step_order_key",
+          "def": "CREATE UNIQUE INDEX process_steps_process_id_step_order_key ON public.process_steps USING btree (process_id, step_order)"
         }
       ]
     },
@@ -4558,6 +5269,13 @@
           "nullable": false,
           "default": null,
           "position": 29
+        },
+        {
+          "name": "workflow_key",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 30
         }
       ],
       "primaryKey": [
@@ -4576,6 +5294,10 @@
         }
       ],
       "indexes": [
+        {
+          "name": "idx_processes_workflow_key",
+          "def": "CREATE INDEX idx_processes_workflow_key ON public.processes USING btree (workflow_key)"
+        },
         {
           "name": "processes_pkey",
           "def": "CREATE UNIQUE INDEX processes_pkey ON public.processes USING btree (id)"
@@ -4720,12 +5442,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -5961,12 +6683,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "source_id",
-          "references": "knowledge_sources.id"
-        },
-        {
           "column": "retry_of_run_id",
           "references": "research_runs.id"
+        },
+        {
+          "column": "source_id",
+          "references": "knowledge_sources.id"
         }
       ],
       "uniques": [],
@@ -6158,12 +6880,12 @@
       ],
       "indexes": [
         {
-          "name": "research_scheduler_daemon_state_pkey",
-          "def": "CREATE UNIQUE INDEX research_scheduler_daemon_state_pkey ON public.research_scheduler_daemon_state USING btree (id)"
-        },
-        {
           "name": "research_scheduler_daemon_state_daemon_key_key",
           "def": "CREATE UNIQUE INDEX research_scheduler_daemon_state_daemon_key_key ON public.research_scheduler_daemon_state USING btree (daemon_key)"
+        },
+        {
+          "name": "research_scheduler_daemon_state_pkey",
+          "def": "CREATE UNIQUE INDEX research_scheduler_daemon_state_pkey ON public.research_scheduler_daemon_state USING btree (id)"
         }
       ]
     },
@@ -6322,12 +7044,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "source_id",
-          "references": "knowledge_sources.id"
-        },
-        {
           "column": "last_run_id",
           "references": "research_runs.id"
+        },
+        {
+          "column": "source_id",
+          "references": "knowledge_sources.id"
         }
       ],
       "uniques": [
@@ -6498,12 +7220,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "subscription_id",
-          "references": "runtime_hook_subscriptions.id"
-        },
-        {
           "column": "runtime_event_id",
           "references": "runtime_events.id"
+        },
+        {
+          "column": "subscription_id",
+          "references": "runtime_hook_subscriptions.id"
         }
       ],
       "uniques": [],
@@ -6592,12 +7314,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -6721,12 +7443,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -6780,12 +7502,12 @@
       ],
       "indexes": [
         {
-          "name": "schema_migrations_pkey",
-          "def": "CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (id)"
-        },
-        {
           "name": "schema_migrations_migration_key_key",
           "def": "CREATE UNIQUE INDEX schema_migrations_migration_key_key ON public.schema_migrations USING btree (migration_key)"
+        },
+        {
+          "name": "schema_migrations_pkey",
+          "def": "CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (id)"
         }
       ]
     },
@@ -7297,6 +8019,34 @@
           "nullable": false,
           "default": null,
           "position": 8
+        },
+        {
+          "name": "session_reuse_approved",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 9
+        },
+        {
+          "name": "mrf_pricing_lookup_approved",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 10
+        },
+        {
+          "name": "consent_document_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 12
         }
       ],
       "primaryKey": [
@@ -7401,12 +8151,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -7460,12 +8210,12 @@
       ],
       "indexes": [
         {
-          "name": "users_pkey",
-          "def": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
-        },
-        {
           "name": "users_email_key",
           "def": "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)"
+        },
+        {
+          "name": "users_pkey",
+          "def": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
         }
       ]
     },
@@ -7603,8 +8353,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
+          "column": "last_runtime_event_id",
+          "references": "runtime_events.id"
+        },
+        {
+          "column": "scheduled_job_id",
+          "references": "scheduled_jobs.id"
         },
         {
           "column": "session_id",
@@ -7615,12 +8369,8 @@
           "references": "agent_tasks.id"
         },
         {
-          "column": "scheduled_job_id",
-          "references": "scheduled_jobs.id"
-        },
-        {
-          "column": "last_runtime_event_id",
-          "references": "runtime_events.id"
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],
@@ -7737,12 +8487,12 @@
       ],
       "indexes": [
         {
-          "name": "worker_leases_pkey",
-          "def": "CREATE UNIQUE INDEX worker_leases_pkey ON public.worker_leases USING btree (id)"
-        },
-        {
           "name": "worker_leases_lease_key_key",
           "def": "CREATE UNIQUE INDEX worker_leases_lease_key_key ON public.worker_leases USING btree (lease_key)"
+        },
+        {
+          "name": "worker_leases_pkey",
+          "def": "CREATE UNIQUE INDEX worker_leases_pkey ON public.worker_leases USING btree (id)"
         }
       ]
     },
@@ -8040,16 +8790,16 @@
       ],
       "foreignKeys": [
         {
-          "column": "workflow_run_id",
-          "references": "workflow_runs.id"
-        },
-        {
           "column": "process_id",
           "references": "processes.id"
         },
         {
           "column": "session_checkpoint_id",
           "references": "session_checkpoints.id"
+        },
+        {
+          "column": "workflow_run_id",
+          "references": "workflow_runs.id"
         }
       ],
       "uniques": [
@@ -8068,12 +8818,12 @@
       ],
       "indexes": [
         {
-          "name": "workflow_checkpoint_runs_pkey",
-          "def": "CREATE UNIQUE INDEX workflow_checkpoint_runs_pkey ON public.workflow_checkpoint_runs USING btree (id)"
-        },
-        {
           "name": "workflow_checkpoint_runs_idempotency_key_key",
           "def": "CREATE UNIQUE INDEX workflow_checkpoint_runs_idempotency_key_key ON public.workflow_checkpoint_runs USING btree (idempotency_key)"
+        },
+        {
+          "name": "workflow_checkpoint_runs_pkey",
+          "def": "CREATE UNIQUE INDEX workflow_checkpoint_runs_pkey ON public.workflow_checkpoint_runs USING btree (id)"
         },
         {
           "name": "workflow_checkpoint_runs_workflow_run_id_process_step_id_key",
@@ -8276,37 +9026,37 @@
           "position": 12
         },
         {
-          "name": "process_id",
+          "name": "created_at",
           "type": "text",
-          "nullable": true,
+          "nullable": false,
           "default": null,
           "position": 13
         },
         {
-          "name": "resume_count",
-          "type": "integer",
+          "name": "updated_at",
+          "type": "text",
           "nullable": false,
-          "default": "0",
+          "default": null,
           "position": 14
         },
         {
-          "name": "last_checkpoint_boundary",
+          "name": "process_id",
           "type": "text",
           "nullable": true,
           "default": null,
           "position": 15
         },
         {
-          "name": "created_at",
-          "type": "text",
+          "name": "resume_count",
+          "type": "integer",
           "nullable": false,
-          "default": null,
+          "default": "0",
           "position": 16
         },
         {
-          "name": "updated_at",
+          "name": "last_checkpoint_boundary",
           "type": "text",
-          "nullable": false,
+          "nullable": true,
           "default": null,
           "position": 17
         }
@@ -8316,12 +9066,12 @@
       ],
       "foreignKeys": [
         {
-          "column": "user_id",
-          "references": "users.id"
-        },
-        {
           "column": "session_id",
           "references": "sessions.id"
+        },
+        {
+          "column": "user_id",
+          "references": "users.id"
         }
       ],
       "uniques": [],

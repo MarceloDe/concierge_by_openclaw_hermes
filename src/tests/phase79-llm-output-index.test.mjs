@@ -112,7 +112,7 @@ test("Phase 79 injects prior LLM output index pointers into the next planner pay
     // classifier step was deleted, so the prior turn contributes one entry.
     assert.ok(payload.llmOutputIndex.entries.length >= 1);
     assert.ok(payload.llmOutputIndex.entries.every((entry) => entry.step === "llm_orchestration_decision"));
-    assert.ok(second.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 1);
+    assert.ok(second.state.llm_orchestration_decision.demand_and_evidence.priorLlmOutputPointersUsed.length >= 1);
     assert.doesNotMatch(serialized, /Phase 79 fake planner output/);
     assert.doesNotMatch(serialized, /Phase 79 fake structured-intent output/);
   }));

@@ -102,8 +102,8 @@ export function summarizeOrchestratorRun(caseSpec, graphRun) {
         key: "llm_orchestration_decision",
         status: state.llm_orchestration_decision?.mode ?? "not_run",
         detail: state.llm_orchestration_decision?.usedByRouter
-          ? `used ${state.llm_orchestration_decision.workflow}`
-          : `not used ${state.llm_orchestration_decision?.workflow ?? "none"}`
+          ? `used ${state.llm_orchestration_decision.classification?.workflow}`
+          : `not used ${state.llm_orchestration_decision?.classification?.workflow ?? "none"}`
       },
       {
         key: "openclaw_skill_validation",
@@ -168,9 +168,9 @@ export function summarizeOrchestratorRun(caseSpec, graphRun) {
       model: state.llm_orchestration_decision?.model ?? null,
       valid: state.llm_orchestration_decision?.valid ?? null,
       usedByRouter: state.llm_orchestration_decision?.usedByRouter ?? false,
-      workflow: state.llm_orchestration_decision?.workflow ?? null,
-      confidence: state.llm_orchestration_decision?.confidence ?? null,
-      rationale: state.llm_orchestration_decision?.rationale ?? null
+      workflow: state.llm_orchestration_decision?.classification?.workflow ?? null,
+      confidence: state.llm_orchestration_decision?.classification?.confidence ?? null,
+      rationale: state.llm_orchestration_decision?.classification?.rationale ?? null
     },
     finalResponse: state.final_response
   };

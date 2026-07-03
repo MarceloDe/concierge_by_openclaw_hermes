@@ -319,6 +319,9 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     // Prompt layer 3 consent/auth projections (channels land with Phase 84; null-safe).
     consentState: state.consent_state ?? null,
     authState: state.auth_state ?? null,
+    // Masked, PHI-cleared plan identities (member_plan_identities read path — plan
+    // §5.1): a portal_verified identity satisfies plan-context information needs.
+    planIdentities: (state.context_packet?.planIdentities ?? []).slice(0, 4),
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
     dynamicSkills: dynamicSkillHints(state),
@@ -719,32 +722,6 @@ function invalidResponseDecision(error, options, warnings) {
     },
     execution_policy: { ...EXECUTION_POLICY_PREFERENCE_DEFAULTS, ...EXECUTION_POLICY_INVARIANTS },
     fallback_strategy: [],
-    // Flat v1 aliases (one release; removed in Phase 85).
-    workflow: null,
-    confidence: 0,
-    intent: null,
-    extractedDemand: "",
-    targetOutcome: "",
-    informationNeeds: [],
-    collectedUserData: {},
-    rationale: error.message,
-    requiredEvidence: [],
-    missingEvidence: [],
-    approvalRequired: false,
-    approvalScope: null,
-    workerGoal: null,
-    responseStrategy: null,
-    userFacingNextQuestion: "",
-    capabilityAssessment: { canAnswerNow: false, reason: "invalid_response", limitations: [] },
-    userDataSufficiency: "none",
-    missingPlanDetails: [],
-    clarificationNeeded: false,
-    offeredProcessIds: [],
-    recommendedProcessId: null,
-    answerComposerMode: "degraded",
-    selectedCapabilityPortfolioIds: [],
-    selectedCapabilityPointers: [],
-    priorLlmOutputPointersUsed: [],
     issues: [error.message],
     warnings,
     rawDecision: null
@@ -984,6 +961,7 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     auth_and_consent: authAndConsent,
     selected_tools: {
       capabilityPointers,
+      selectedCapabilityPortfolioIds: asArray(g.selectedCapabilityPortfolioIds),
       toolPlan,
       offeredProcessIds,
       recommendedProcessId,
@@ -1000,33 +978,9 @@ export function normalizeLlmOrchestrationDecision(raw, options = {}) {
     },
     execution_policy: executionPolicy,
     fallback_strategy: fallbackStrategy,
-    // --- flat v1 aliases (ONE release; consumers migrate in this PR train, removal
-    // is the named Phase 85 task with a grep-zero acceptance) ---
-    workflow: valid ? workflow : (allowedWorkflows.includes(workflow) ? workflow : null),
-    confidence,
-    intent: g.intent ? String(g.intent) : null,
-    extractedDemand,
-    targetOutcome,
-    informationNeeds,
-    collectedUserData,
-    rationale,
-    requiredEvidence: asArray(g.requiredEvidence),
-    missingEvidence: asArray(g.missingEvidence),
-    approvalRequired: authAndConsent.approvalRequired,
-    approvalScope: authAndConsent.approvalScope,
-    workerGoal,
-    responseStrategy,
-    userFacingNextQuestion,
-    capabilityAssessment,
-    userDataSufficiency,
-    missingPlanDetails: asArray(g.missingPlanDetails),
-    clarificationNeeded,
-    offeredProcessIds,
-    recommendedProcessId,
-    answerComposerMode,
-    selectedCapabilityPortfolioIds: asArray(g.selectedCapabilityPortfolioIds),
-    selectedCapabilityPointers: capabilityPointers,
-    priorLlmOutputPointersUsed: asArray(g.priorLlmOutputPointersUsed),
+    // Flat v1 aliases REMOVED (Phase 85 — the §3.3 one-release affordance expired):
+    // consumers read ONLY the grouped v2 sections. The v1 INPUT lift above stays
+    // forever so recorded flat decisions keep normalizing.
     issues,
     warnings,
     rawDecision: parsed
@@ -1057,12 +1011,22 @@ export function applyDecisionCapabilityGates(decision, selectedCapabilityRows = 
   };
 }
 
+// Grouped-only reads (Phase 85): the flat aliases are gone; thresholds are
+// explicitly NOT resemanticized (plan §3.3).
+export function decisionWorkflow(decision) {
+  return decision?.classification?.workflow ?? null;
+}
+
+export function decisionConfidence(decision) {
+  return clampConfidence(decision?.classification?.confidence);
+}
+
 export function shouldUseLlmDecision(decision) {
-  return Boolean(decision?.valid && decision.workflow && Number(decision.confidence ?? 0) >= 0.5);
+  return Boolean(decision?.valid && decisionWorkflow(decision) && decisionConfidence(decision) >= 0.5);
 }
 
 export function confidenceBand(decision) {
-  const confidence = clampConfidence(decision?.confidence);
+  const confidence = decisionConfidence(decision);
   if (confidence >= 0.75) return "high";
   if (confidence >= 0.5) return "medium";
   return "low";

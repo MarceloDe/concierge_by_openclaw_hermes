@@ -36,7 +36,7 @@ test("GATE Redis targets: manifest+checkpoint pointers, portfolio, LLM index are
   assert.equal(p1.traceEvent, "cache.miss");
 
   // ---- TARGET 4: LLM output index ----
-  await indexLlmOutput({ sessionId: sid, step: "llm_orchestration_decision", model: "gpt-4.1", content: '{"workflow":"x"}', parsed: { workflow: "x" } });
+  await indexLlmOutput({ sessionId: sid, step: "llm_orchestration_decision", model: "gpt-4.1", content: '{"workflow":"x"}', parsed: { classification: { workflow: "x" } } });
 
   // ===== CROSS-TURN / CROSS-INSTANCE HYDRATION (a fresh cache object = next turn) =====
   resetRuntimeCacheMetrics();

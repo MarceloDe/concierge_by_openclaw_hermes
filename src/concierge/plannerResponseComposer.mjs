@@ -37,19 +37,19 @@ export async function composeProcessOfferResponse({ store, state, sessionId }) {
 
   // Phase B: prefer the processes the planner explicitly offered (recommended first),
   // falling back to all offerable processes if the planner did not select any.
-  const offeredIds = new Set([...(decision.offeredProcessIds ?? []), decision.recommendedProcessId].filter(Boolean));
+  const offeredIds = new Set([...(decision.selected_tools?.offeredProcessIds ?? []), decision.selected_tools?.recommendedProcessId].filter(Boolean));
   const ranked = offeredIds.size > 0
     ? [...processes].sort((a, b) => (offeredIds.has(b.portfolioId) ? 1 : 0) - (offeredIds.has(a.portfolioId) ? 1 : 0))
     : processes;
 
   const payload = {
     userRequest: String(state.user_input ?? "").slice(0, 300),
-    plannerResponseStrategy: decision.responseStrategy ?? null,
-    plannerClarifyingQuestion: decision.userFacingNextQuestion || null,
-    plannerClarificationNeeded: Boolean(decision.clarificationNeeded),
-    plannerMissingPlanDetails: decision.missingPlanDetails ?? decision.missingEvidence ?? [],
-    plannerApprovalScope: decision.approvalScope ?? null,
-    plannerRecommendedProcessId: decision.recommendedProcessId ?? null,
+    plannerResponseStrategy: decision.response?.responseStrategy ?? null,
+    plannerClarifyingQuestion: decision.response?.userFacingNextQuestion || null,
+    plannerClarificationNeeded: Boolean(decision.response?.clarificationNeeded),
+    plannerMissingPlanDetails: decision.demand_and_evidence?.missingPlanDetails ?? decision.demand_and_evidence?.missingEvidence ?? [],
+    plannerApprovalScope: decision.auth_and_consent?.approvalScope ?? null,
+    plannerRecommendedProcessId: decision.selected_tools?.recommendedProcessId ?? null,
     plannerOfferedProcessIds: [...offeredIds],
     offerableProcesses: ranked.map((p) => ({ id: p.portfolioId, title: p.title, whenToUse: p.whenToUse, whyUse: p.whyUse, approvalScope: p.approvalScope })),
     hydratedCapabilities: hydrated,

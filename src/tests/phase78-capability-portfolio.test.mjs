@@ -92,8 +92,8 @@ test("Phase 78 decision parser preserves selected capability portfolio IDs and c
   });
 
   assert.equal(decision.valid, true);
-  assert.deepEqual(decision.selectedCapabilityPortfolioIds, ["workflow:pharmacy_formulary", "skill:insurance_portal_browser"]);
-  assert.deepEqual(decision.selectedCapabilityPointers, [
+  assert.deepEqual(decision.selected_tools.selectedCapabilityPortfolioIds, ["workflow:pharmacy_formulary", "skill:insurance_portal_browser"]);
+  assert.deepEqual(decision.selected_tools.capabilityPointers, [
     "brainsty:capability-portfolio:session_1#workflow:pharmacy_formulary",
     "brainsty:capability-portfolio:session_1#skill:insurance_portal_browser"
   ]);

@@ -38,7 +38,7 @@ export async function buildSessionPortfolioFromPostgres(store, sessionId) {
   // frozen LLM_DECISION_WORKFLOWS enum (deleted, plan §10.6). Empty is a LOUD state:
   // the normalizer hard-fails with allowed_workflows_unavailable, never permissive.
   const workflowRows = await store.all(
-    "SELECT DISTINCT wd.workflow_key, wd.status FROM workflow_definitions wd JOIN capabilities c ON c.workflow_key = wd.workflow_key WHERE c.kind='workflow' AND c.status='active' AND c.lifecycle_state='production' ORDER BY wd.workflow_key ASC;"
+    "SELECT DISTINCT wd.workflow_key, wd.status FROM workflow_definitions wd JOIN capabilities c ON c.workflow_key = wd.workflow_key WHERE c.kind='workflow' AND c.status='active' AND c.lifecycle_state='production' AND c.runtime_selectable = 1 ORDER BY wd.workflow_key ASC;"
   );
   const allowedWorkflows = workflowRows
     .filter((row) => Boolean(row.status) && !DISABLED_BACKING_STATUS_RE.test(String(row.status)))
@@ -184,6 +184,15 @@ export async function hydrateCapabilityPointer(store, { pointer, requestRoute = 
   // 1. Lifecycle/quarantine policy (the catalog's own gate).
   if (cap.status !== "active") return refusal(capabilityKey, `capability_${cap.status}`);
   if (cap.lifecycle_state !== "production") return refusal(capabilityKey, "capability_not_production");
+
+  // 1b. §7.0 registry gate (founder global decision, 2026-07-02): the Executable Tool
+  // Catalog is the runtime_selectable=1 filter over the existing gates. A registry
+  // row that is visible-but-not-selectable (planned/blocked/disabled_policy) may be
+  // prepared/explained by the planner but NEVER hydrates as dispatchable. Fail-closed:
+  // the column defaults 0; the seed/PEMS ingest set 1 only for implemented rows.
+  if (cap.runtime_selectable !== undefined && cap.runtime_selectable !== null && Number(cap.runtime_selectable) !== 1) {
+    return refusal(capabilityKey, "capability_not_runtime_selectable");
+  }
 
   // 2. Backing-table precedence (backing row WINS over the catalog row).
   let backing = null;
@@ -417,7 +426,12 @@ export async function ingestMaturedCapability(store, {
     skill_key: backingKey && kind === "skill" ? backingKey : null,
     tool_key: backingKey && kind === "tool" ? backingKey : null,
     how_config_json: howConfigJson,
-    how_config_hash: stableHash(howConfigJson, "howcfg")
+    how_config_hash: stableHash(howConfigJson, "howcfg"),
+    // §7.0 registry columns: a PEMS-matured capability that passed the promotion gate
+    // has real backing → implemented_runtime + runtime-selectable (the deterministic
+    // capability-policy derivation, never a hand-edited flag).
+    registry_status: "implemented_runtime",
+    runtime_selectable: 1
   };
   const existing = await store.findOne("capabilities", { capability_key: capabilityKey });
   if (existing) {

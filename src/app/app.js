@@ -155,7 +155,7 @@ function isSatisfiedByCapturedPortalEvidence(line) {
 
 function missingInfoLines(state) {
   const lines = [
-    ...(state.llm_orchestration_decision?.missingEvidence ?? []).map((item) => `Missing evidence: ${item}`),
+    ...(state.llm_orchestration_decision?.demand_and_evidence?.missingEvidence ?? []).map((item) => `Missing evidence: ${item}`),
     ...(state.workflow_route?.missingUserFields ?? []).map((item) => `Missing user field: ${item}`),
     ...(state.workflow_route?.missingDataPointers ?? []).map((item) => `Missing data pointer: ${item}`),
     ...(state.workflow_route?.disabledTools ?? []).map((item) => `Tool disabled: ${item}`)
@@ -650,9 +650,9 @@ function renderChatProof(result) {
         <dt>Workflow</dt>
         <dd>${escapeHtml(state.workflow ?? "unknown")} · ${escapeHtml(state.route_reason ?? "unknown")}</dd>
         <dt>Intent</dt>
-        <dd>${escapeHtml(state.llm_orchestration_decision?.intent ?? state.intent ?? "unknown")} · confidence ${escapeHtml(state.llm_orchestration_decision?.confidence ?? "n/a")}</dd>
+        <dd>${escapeHtml(state.llm_orchestration_decision?.classification?.intent ?? state.intent ?? "unknown")} · confidence ${escapeHtml(state.llm_orchestration_decision?.classification?.confidence ?? "n/a")}</dd>
         <dt>GPT decision</dt>
-        <dd>${escapeHtml(llmDecision.mode ?? "not run")} · ${escapeHtml(llmDecision.usedByRouter ? "used by router" : "not used")} · ${escapeHtml(llmDecision.workflow ?? "no workflow")} · confidence ${escapeHtml(llmDecision.confidence ?? "n/a")}</dd>
+        <dd>${escapeHtml(llmDecision.mode ?? "not run")} · ${escapeHtml(llmDecision.usedByRouter ? "used by router" : "not used")} · ${escapeHtml(llmDecision.classification?.workflow ?? "no workflow")} · confidence ${escapeHtml(llmDecision.classification?.confidence ?? "n/a")}</dd>
         <dt>Missing info</dt>
         <dd>${escapeHtml(missing.join(" · ") || "none")}</dd>
         <dt>Dynamic skills</dt>

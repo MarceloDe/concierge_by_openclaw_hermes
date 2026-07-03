@@ -16,13 +16,14 @@ export function llmOutputIndexKey(sessionId) {
   return `brainsty:llm-output-index:${sessionId}`;
 }
 
+// `parsed` is a normalized planner decision (DECISION_CONTRACT_V2 grouped shape).
 function summarizeParsed(parsed = {}) {
   return {
-    workflow: parsed.workflow ?? null,
-    intent: parsed.intent ?? parsed.primary_intent ?? null,
-    confidence: parsed.confidence ?? parsed.candidate_journeys?.[0]?.confidence ?? null,
-    selectedCapabilityPortfolioIds: parsed.selectedCapabilityPortfolioIds ?? [],
-    selectedCapabilityPointers: parsed.selectedCapabilityPointers ?? [],
+    workflow: parsed.classification?.workflow ?? null,
+    intent: parsed.classification?.intent ?? null,
+    confidence: parsed.classification?.confidence ?? null,
+    selectedCapabilityPortfolioIds: parsed.selected_tools?.selectedCapabilityPortfolioIds ?? [],
+    selectedCapabilityPointers: parsed.selected_tools?.capabilityPointers ?? [],
     issueCount: parsed.issues?.length ?? 0,
     warningCount: parsed.warnings?.length ?? 0
   };

@@ -886,8 +886,8 @@ const dynamicSkillContext = await resolveDynamicSkillContext(null, {
   channel: "local_web_chat",
   user_input: "Why did Aetna not pay my last visit claim?",
   context_packet: buildCheckContextPacket,
-  // Phase 84: the planner decision is the single classification authority — the
-  // resolver must derive the workflow from the v2 decision (grouped + flat aliases).
+  // Phase 85: the planner decision is the single classification authority — the
+  // resolver must derive the workflow from the v2 decision (grouped fields only).
   intent: "claim_status_question",
   llm_orchestration_decision: {
     classification: {
@@ -897,10 +897,7 @@ const dynamicSkillContext = await resolveDynamicSkillContext(null, {
       confidence: 0.9
     },
     data_layer: [],
-    risk_tier: "low",
-    workflow: "claim_status_navigation",
-    intent: "claim_status_question",
-    confidence: 0.9
+    risk_tier: "low"
   }
 });
 if (

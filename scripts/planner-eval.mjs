@@ -42,11 +42,12 @@ async function main() {
     } catch (err) {
       d = { error: String(err?.message ?? err) };
     }
-    const offered = Array.isArray(d.offeredProcessIds) ? d.offeredProcessIds : [];
-    const workflowOk = d.workflow === c.expectWorkflow;
+    const offered = Array.isArray(d.selected_tools?.offeredProcessIds) ? d.selected_tools.offeredProcessIds : [];
+    const workflowOk = d.classification?.workflow === c.expectWorkflow;
     const processOk = c.expectProcess ? offered.includes(c.expectProcess) : true;
-    const demandOk = Boolean(d.extractedDemand) && d.extractedDemand.toLowerCase().includes(c.demandIncludes);
-    const needsOk = Array.isArray(d.informationNeeds) && d.informationNeeds.length > 0;
+    const extractedDemand = d.classification?.extractedDemand ?? "";
+    const demandOk = Boolean(extractedDemand) && extractedDemand.toLowerCase().includes(c.demandIncludes);
+    const needsOk = Array.isArray(d.demand_and_evidence?.informationNeeds) && d.demand_and_evidence.informationNeeds.length > 0;
     // DECISION_CONTRACT_V2 scoring (plan §11 Phase 83): draft-adopted enums.
     const floor = String(d.riskTierFloor ?? "low");
     const riskTierOk = ["low", "medium", "high", "critical"].includes(String(d.risk_tier)) &&
@@ -54,8 +55,9 @@ async function main() {
     const dataLayerOk = Array.isArray(d.data_layer) && d.data_layer.length > 0 && d.data_layer.every((v) => DATA_LAYERS.includes(v));
     const taskClass = d.classification?.taskClass ?? null;
     const taskClassOk = Boolean(taskClass) && (!c.expectTaskClass || c.expectTaskClass.includes(taskClass) || taskClass === "mixed");
-    const workflowGraphOk = !d.recommendedProcessId || d.workflow_graph?.processId === d.recommendedProcessId;
-    rows.push({ q: c.q, workflow: d.workflow, workflowOk, offered: offered.join(","), processOk, demand: d.extractedDemand, demandOk, needsOk, conf: d.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk });
+    const recommendedProcessId = d.selected_tools?.recommendedProcessId ?? null;
+    const workflowGraphOk = !recommendedProcessId || d.workflow_graph?.processId === recommendedProcessId;
+    rows.push({ q: c.q, workflow: d.classification?.workflow, workflowOk, offered: offered.join(","), processOk, demand: extractedDemand, demandOk, needsOk, conf: d.classification?.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk });
     await new Promise((s) => setTimeout(s, 800)); // gentle pacing for rate limits
   }
 

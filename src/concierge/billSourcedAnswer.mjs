@@ -30,9 +30,7 @@ function buildBillState(analysis = {}) {
     user_input: "Help me verify this medical bill and explain what can be concluded from the cited evidence.",
     workflow: "bill_verification_flow",
     llm_orchestration_decision: {
-      workflow: "bill_verification_flow",
-      intent: "bill_verification",
-      classification: { taskClass: "bill_verification" }
+      classification: { workflow: "bill_verification_flow", taskClass: "bill_verification", intent: "bill_verification" }
     },
     product_memory_recall: { facts: [] },
     source_pointers: [
