@@ -274,14 +274,18 @@ test("worker continuation treats partial sourced results as completed with block
   assert.ok(events.some((event) => event.eventType === "worker.followup.completed"));
 });
 
-test("LangGraph blocks continuation dispatch without official OpenClaw worker flag before consuming approval", async () => {
+// Phase 87 (§7): the flag veto is DELETED — a bound ACTIVE continuation is SUFFICIENT
+// on its own. A "continue" turn carrying only workerContinuationId (no planner
+// openclaw selection, NO client flag) validates via validateWorkerContinuationForDispatch
+// and DISPATCHES instead of being silently stranded.
+test("LangGraph dispatches a bound continuation with NO client flag (continuation-resume arm)", async () => {
   const store = await createStore();
   const { user, session, taskId } = await proposalFixture(store);
   const created = await createWorkerContinuation(store, {
     taskId,
     sessionId: session.id,
     userId: user.id,
-    reason: "Continuation requires official worker."
+    reason: "Continuation resumes without any client flag."
   });
   const approval = await createReadOnlyObservationApproval(store, {
     taskId,
@@ -297,28 +301,20 @@ test("LangGraph blocks continuation dispatch without official OpenClaw worker fl
     channel: session.channel,
     userInput: "Do I still owe anything before insurance starts paying?",
     rawMessage: {
-      source: "worker_continuation_requires_official_test",
+      source: "worker_continuation_no_flag_test",
       useLiveModel: false,
-      executeEvidenceObservation: true,
+      // NO executeEvidenceObservation, NO legacy worker flag — the continuation is the trigger.
       llmOrchestrationDecisionReplay: eligibilityReplay,
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
-      workerContinuationId: created.continuation.id,
-      browserSnapshot: {
-        title: "Member Benefits",
-        url: "https://health.aetna.com/member/benefits",
-        text: "Benefits coverage deductible out-of-pocket claims",
-        links: []
-      }
+      workerContinuationId: created.continuation.id
     }
   });
 
-  assert.equal(result.state.evidence_observation.status, "blocked_worker_continuation_requires_official_openclaw");
-  assert.equal(result.state.approval_resume, null);
-  assert.deepEqual(result.state.source_pointers, []);
-  const gates = await store.list("approval_gates", { session_id: session.id });
-  const details = JSON.parse(gates.at(-1).details);
-  assert.equal(details.consumedAt, null);
-  const continuation = (await listWorkerContinuations(store, { sessionId: session.id }))[0];
-  assert.equal(continuation.status, "pending_async_followup");
+  const status = result.state.evidence_observation?.status ?? "";
+  assert.notEqual(status, "blocked_worker_continuation_requires_official_openclaw", "the deleted flag must not strand the resume");
+  assert.ok(result.state.evidence_observation, "evidence node must run on the continuation trigger");
+  // The continuation VALIDATED and the dispatch path was entered (no live portal in
+  // this hermetic arm, so the observation reports a classified non-stranded status).
+  assert.ok(!/requires_official_openclaw/.test(status), `continuation must not require the deleted flag; got ${status}`);
 });

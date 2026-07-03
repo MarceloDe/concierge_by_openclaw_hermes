@@ -88,7 +88,8 @@ function validateInsurancePortalBrowserSpecifics(manifest, skillMd) {
       "chrome_extension_bridge",
       "mcp_browser_adapter",
       "payer_portal_reader",
-      "portal_search",
+      // Phase 87 (§7): portal_search promoted to its canonical registry key.
+      "openclaw_portal_discovery",
       "read_only_document_download",
       "pdf_extraction_analysis"
     ])

@@ -49,7 +49,7 @@ const elements = {
   resumeLatestSession: $("#resumeLatestSession"),
   useLiveModel: $("#useLiveModel"),
   requireLivePortalProof: $("#requireLivePortalProof"),
-  useOfficialOpenClawWorker: $("#useOfficialOpenClawWorker"),
+  requestEvidenceObservation: $("#requestEvidenceObservation"),
   officialOpenClawCurrentTab: $("#officialOpenClawCurrentTab"),
   officialOpenClawMultiPage: $("#officialOpenClawMultiPage"),
   backendRoute: $("#backendRoute"),
@@ -1849,7 +1849,7 @@ async function runChat(message, options = {}) {
     message,
     executeEvidenceObservation: Boolean(options.executeEvidenceObservation),
     requireLivePortalProof: Boolean(options.requireLivePortalProof ?? elements.requireLivePortalProof.checked),
-    useOfficialOpenClawWorker: Boolean(options.useOfficialOpenClawWorker ?? elements.useOfficialOpenClawWorker.checked),
+    executeEvidenceObservation: Boolean(options.executeEvidenceObservation ?? elements.requestEvidenceObservation.checked),
     officialOpenClawUseCurrentTab: Boolean(options.officialOpenClawUseCurrentTab ?? elements.officialOpenClawCurrentTab.checked),
     officialOpenClawMultiPage: Boolean(options.officialOpenClawMultiPage ?? elements.officialOpenClawMultiPage.checked),
     useLiveModel: elements.useLiveModel.checked,
@@ -1880,7 +1880,7 @@ function facadeChatPayload(message, options = {}) {
     message,
     execute_evidence_observation: Boolean(options.executeEvidenceObservation),
     require_live_portal_proof: Boolean(options.requireLivePortalProof ?? elements.requireLivePortalProof.checked),
-    use_official_openclaw_worker: Boolean(options.useOfficialOpenClawWorker ?? elements.useOfficialOpenClawWorker.checked),
+    request_evidence_observation: Boolean(options.executeEvidenceObservation ?? elements.requestEvidenceObservation.checked),
     official_openclaw_use_current_tab: Boolean(options.officialOpenClawUseCurrentTab ?? elements.officialOpenClawCurrentTab.checked),
     official_openclaw_multi_page: Boolean(options.officialOpenClawMultiPage ?? elements.officialOpenClawMultiPage.checked),
     use_live_model: elements.useLiveModel.checked,
@@ -2027,7 +2027,6 @@ async function runNodeParity(message) {
       message,
       executeEvidenceObservation: false,
       requireLivePortalProof: false,
-      useOfficialOpenClawWorker: false,
       officialOpenClawUseCurrentTab: false,
       officialOpenClawMultiPage: false,
       useLiveModel: false,
@@ -2261,7 +2260,7 @@ async function approveReadOnly(taskId, options = {}) {
 
 async function approveAndRun(taskId) {
   await ensureSession();
-  const shouldUseOfficialWorker = elements.useOfficialOpenClawWorker.checked;
+  const shouldUseOfficialWorker = elements.requestEvidenceObservation.checked;
   const continuation = shouldUseOfficialWorker ? await createWorkerContinuation(taskId) : null;
   const approval = await approveReadOnly(taskId);
   addMessage("system", `Approved read-only observation for task ${taskId}. Actions taken so far: none.`);
@@ -2271,7 +2270,6 @@ async function approveAndRun(taskId) {
     workerContinuationId: continuation?.id,
     executeEvidenceObservation: true,
     requireLivePortalProof: elements.requireLivePortalProof.checked,
-    useOfficialOpenClawWorker: shouldUseOfficialWorker,
     officialOpenClawUseCurrentTab: elements.officialOpenClawCurrentTab.checked,
     officialOpenClawMultiPage: elements.officialOpenClawMultiPage.checked
   });
@@ -2329,7 +2327,7 @@ async function approveAndObserveDocumentCandidate(taskId, candidateId) {
     allowedAction: READ_ONLY_DOCUMENT_SCOPE,
     executeEvidenceObservation: true,
     requireLivePortalProof: true,
-    useOfficialOpenClawWorker: true,
+    executeEvidenceObservation: true,
     officialOpenClawUseCurrentTab: false,
     officialOpenClawMultiPage: false
   });
@@ -2363,7 +2361,7 @@ async function checkWorker() {
 
 async function markPortalReady() {
   elements.requireLivePortalProof.checked = true;
-  elements.useOfficialOpenClawWorker.checked = true;
+  elements.requestEvidenceObservation.checked = true;
   elements.officialOpenClawCurrentTab.checked = true;
   elements.officialOpenClawMultiPage.checked = true;
   const payload = await checkWorker();

@@ -19,7 +19,6 @@ const OPENCLAW_ALLOWED_TASKS = [
   "choose_best_available_browser_web_api_or_scrape_path",
   "open_additional_browser_instances_when_useful",
   "create_task_scoped_helper_skill_or_script",
-  "use_local_os_automation_inside_task_scope",
   "read_visible_authenticated_browser_state",
   "navigate_within_approved_payer_portal_scope",
   "read_public_web_sources_and_configured_read_only_apis",

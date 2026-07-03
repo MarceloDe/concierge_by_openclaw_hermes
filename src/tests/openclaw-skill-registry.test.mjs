@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { loadOpenClawSkillRegistry } from "../concierge/openclaw/skillRegistry.mjs";
-import { selectExecutorForSkill, validateExecutorTask } from "../concierge/openclaw/executorRegistry.mjs";
+import { selectExecutorForSkill, selectExecutorForTool, validateExecutorTask } from "../concierge/openclaw/executorRegistry.mjs";
 import { buildOpenClawBoundedTaskProposal, evaluateOpenClawWorkerPolicy } from "../concierge/openclaw/workerPolicy.mjs";
 import { listOpenClawSkillArtifacts, loadOpenClawSkillArtifact } from "../concierge/openclawSkillArtifacts.mjs";
 
@@ -26,10 +26,33 @@ test("executor registry keeps OpenClaw bounded by LangGraph approval policy", as
   assert.equal(executor.executorKey, "read_only_browser");
   assert.equal(executor.writeActionsEnabled, false);
 
-  const blocked = validateExecutorTask({ skill: browserSkill, executor, action: "submit_claim_form" });
+  // Phase 87 (§7): the write gate is the tool_registry-declared write_capable flag —
+  // the signature-gated claim-submission worker is write-capable and blocked.
+  const blocked = validateExecutorTask({ skill: browserSkill, executor, action: "submit_claim_form", toolKey: "openclaw_claim_submission_worker" });
   assert.equal(blocked.ok, false);
   assert.ok(blocked.issues.includes("write_or_external_action_disabled"));
   assert.ok(blocked.issues.includes("approval_required"));
+  assert.ok(blocked.issues.includes("write_action_requires_bound_approval"));
+
+  // Previously FALSE-BLOCKED by the verb regex ("contact"): a read-only action whose
+  // NAME contains a verb now validates when its tool is read-only.
+  const readOnly = validateExecutorTask({
+    skill: browserSkill,
+    executor,
+    action: "payer_portal_reader.extract_provider_contact_details",
+    toolKey: "payer_portal_reader",
+    approvalToken: "approval:read_only_scope"
+  });
+  assert.equal(readOnly.ok, true, `read-only verb-named action must validate: ${readOnly.issues.join(",")}`);
+
+  // Unknown tool fails LOUD, never a silent bucket.
+  const unknown = selectExecutorForTool("tool_that_does_not_exist");
+  assert.equal(unknown.ok, false);
+  assert.equal(unknown.status, "executor_missing");
+  // NULL-executor write workers cannot dispatch by data.
+  const writeWorker = selectExecutorForTool("openclaw_claim_submission_worker");
+  assert.equal(writeWorker.ok, false);
+  assert.equal(writeWorker.status, "executor_missing");
 
   const policy = evaluateOpenClawWorkerPolicy({
     skill: browserSkill,

@@ -76,7 +76,8 @@ export const TABLES = [
   "credential_session_vault",
   "member_plan_identities",
   "mrf_pricing_sources",
-  "mrf_price_observations"
+  "mrf_price_observations",
+  "rag_chunks"
 ];
 
 export const SCHEMA_SQL = `
@@ -458,6 +459,8 @@ CREATE TABLE IF NOT EXISTS tool_registry (
   risk_level TEXT NOT NULL,
   integration_status TEXT NOT NULL,
   approval_required TEXT NOT NULL,
+  executor_key TEXT,
+  write_capable INTEGER NOT NULL DEFAULT 0,
   config_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -1473,6 +1476,34 @@ CREATE TABLE IF NOT EXISTS mrf_price_observations (
   created_at TEXT NOT NULL,
   FOREIGN KEY (source_id) REFERENCES mrf_pricing_sources(id)
 );
+
+-- Phase 87 (plan §5.1/§7): public-corpus retrieval chunks. Owner:
+-- src/concierge/knowledge/publicRagRetrieval.mjs (sole writer/retriever). Anchored to
+-- REAL extraction_artifacts rows; carries the founder-#16 embedding-policy metadata
+-- (spine YAML embedding_policy.required_chunk_metadata). Public data classes only —
+-- PHI-class embedding is blocked at the provider abstraction, so no PHI row can exist.
+CREATE TABLE IF NOT EXISTS rag_chunks (
+  id TEXT PRIMARY KEY,
+  source_key TEXT NOT NULL,
+  artifact_id TEXT NOT NULL,
+  chunk_text TEXT NOT NULL,
+  embedding_json TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  embedding_provider TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dimension INTEGER NOT NULL,
+  data_class TEXT NOT NULL,
+  embedding_policy_version TEXT NOT NULL,
+  source_document_id TEXT,
+  source_evidence_class TEXT NOT NULL,
+  phi_allowed INTEGER NOT NULL DEFAULT 0,
+  baa_required INTEGER NOT NULL DEFAULT 0,
+  baa_status TEXT NOT NULL DEFAULT 'not_required_public_class',
+  kms_profile TEXT NOT NULL DEFAULT 'none_public_class',
+  chunk_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (artifact_id) REFERENCES extraction_artifacts(id)
+);
 `;
 
 // Single source of truth for incremental ADD COLUMN migrations applied to BOTH engines
@@ -1480,6 +1511,12 @@ CREATE TABLE IF NOT EXISTS mrf_price_observations (
 // (TEXT/INTEGER, NOT NULL DEFAULT). Keeping one list prevents engine drift — the root
 // cause of the earlier Postgres-missing-column bug. Append new columns here only.
 export const COLUMN_MIGRATIONS = [
+  // Phase 87 (§7): explicit executor map + write gate are DATA on tool_registry rows;
+  // fail-closed (NULL executor_key -> executor_missing; write_capable defaults 0).
+  ["tool_registry", [
+    ["executor_key", "ALTER TABLE tool_registry ADD COLUMN executor_key TEXT;"],
+    ["write_capable", "ALTER TABLE tool_registry ADD COLUMN write_capable INTEGER NOT NULL DEFAULT 0;"]
+  ]],
   ["sessions", [
     ["title", "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT 'Eligibility and benefits session';"],
     ["current_step", "ALTER TABLE sessions ADD COLUMN current_step TEXT NOT NULL DEFAULT 'created';"],

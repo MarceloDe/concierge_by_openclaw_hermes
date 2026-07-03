@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 
-export const OPENCLAW_WORKER_CONTRACT_VERSION = "2026-06-21.openclaw-worker-contract.v3";
+// v4 (Phase 87, plan §7): the worker plan is built FROM the planner's hydrated
+// capability pointers, and every tool key the plan carries is ASSERTED REGISTERED in
+// the explicit tool->executor map — an unregistered or unmapped tool blocks the plan
+// loudly (tool_not_registered), never a silent default.
+export const OPENCLAW_WORKER_CONTRACT_VERSION = "2026-07-03.openclaw-worker-contract.phase87.v4";
+
+import { toolExecutorAssignments } from "./workflowArchitecture.mjs";
 
 export const DEFAULT_OPENCLAW_RUNTIME_TARGET = {
   runtime: "official_openclaw_cli",
@@ -238,7 +244,6 @@ export function buildOpenClawWorkerJob(envelope, validation, options = {}) {
         "inspect_likely_portal_sections",
         "read_needed_plan_documents_or_pdfs",
         "create_task_scoped_helper_skill_or_script",
-        "use_local_os_automation_within_task_scope",
         "observe_authenticated_pages",
         "select_safe_same_site_read_only_navigation_targets",
         "capture_per_page_dom_and_ocr_evidence",
@@ -358,8 +363,29 @@ export function buildOpenClawWorkerResultTemplate(job) {
 export function buildLangGraphOpenClawWorkerPlan(envelope, validation, options = {}) {
   const job = buildOpenClawWorkerJob(envelope, validation, options);
   const resultTemplate = buildOpenClawWorkerResultTemplate(job);
+  // v4 (Phase 87 §7): the plan is built from the planner's HYDRATED capability
+  // pointers; every tool key is asserted against the registered executor map.
+  const hydrated = Array.isArray(options.hydratedCapabilities) ? options.hydratedCapabilities : [];
+  const executorMap = options.toolExecutorMap ?? toolExecutorAssignments();
+  const unregisteredToolKeys = [
+    ...new Set(
+      hydrated
+        .filter((entry) => entry?.kind === "tool" && entry?.toolKey)
+        .map((entry) => String(entry.toolKey))
+        .filter((toolKey) => !executorMap[toolKey])
+    )
+  ];
+  const contractBlocked = !validation?.valid || unregisteredToolKeys.length > 0;
   return {
     schemaVersion: OPENCLAW_WORKER_CONTRACT_VERSION,
+    plannerSelectedCapabilities: hydrated.map((entry) => ({
+      portfolioId: entry.portfolioId ?? null,
+      kind: entry.kind ?? null,
+      skillKey: entry.skillKey ?? null,
+      toolKey: entry.toolKey ?? null,
+      executorKey: entry.toolKey ? executorMap[entry.toolKey]?.executorKey ?? null : null
+    })),
+    unregisteredToolKeys,
     planId:
       options.planId ??
       stableId("ocplan", {
@@ -368,7 +394,7 @@ export function buildLangGraphOpenClawWorkerPlan(envelope, validation, options =
         workflowKey: job.orchestrator.workflowKey
       }),
     owner: "langgraph",
-    status: validation?.valid ? "pending_approval" : "blocked_contract",
+    status: contractBlocked ? (unregisteredToolKeys.length ? "blocked_tool_not_registered" : "blocked_contract") : "pending_approval",
     executionMode: validation?.executionMode ?? "proposal_only",
     dispatchStatus: "not_dispatched",
     workerJobs: [job],

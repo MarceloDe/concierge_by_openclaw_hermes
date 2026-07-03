@@ -48,7 +48,7 @@ const operatorAssistantConsole = document.querySelector("#operatorAssistantConso
 const productAuthStatus = document.querySelector("#productAuthStatus");
 const productAuth = document.querySelector("#productAuth");
 const requireLivePortalProof = document.querySelector("#requireLivePortalProof");
-const useOfficialOpenClawWorker = document.querySelector("#useOfficialOpenClawWorker");
+const requestEvidenceObservation = document.querySelector("#requestEvidenceObservation");
 const officialOpenClawCurrentTab = document.querySelector("#officialOpenClawCurrentTab");
 const officialOpenClawMultiPage = document.querySelector("#officialOpenClawMultiPage");
 const chatJourney = document.querySelector("#chatJourney");
@@ -4085,7 +4085,7 @@ async function runPhase4Proof() {
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
       requireLivePortalProof: true,
-      useOfficialOpenClawWorker: Boolean(useOfficialOpenClawWorker.checked),
+      executeEvidenceObservation: Boolean(requestEvidenceObservation.checked),
       officialOpenClawUseCurrentTab: Boolean(officialOpenClawCurrentTab.checked),
       officialOpenClawMultiPage: Boolean(officialOpenClawMultiPage.checked),
       executeEvidenceObservation: true,
@@ -4102,7 +4102,7 @@ async function runPhase4Proof() {
 async function markPortalReady() {
   if (!requireSignedInBeforeWorkflow()) return;
   requireLivePortalProof.checked = true;
-  useOfficialOpenClawWorker.checked = true;
+  requestEvidenceObservation.checked = true;
   officialOpenClawCurrentTab.checked = true;
   officialOpenClawMultiPage.checked = true;
   let officialStatus = null;
@@ -4149,7 +4149,7 @@ function resetMvpJourneySurface(options = {}) {
   document.querySelector("#sessionId").value = "";
   document.querySelector("#resumeLatestSession").checked = false;
   requireLivePortalProof.checked = false;
-  useOfficialOpenClawWorker.checked = false;
+  requestEvidenceObservation.checked = false;
   officialOpenClawCurrentTab.checked = false;
   officialOpenClawMultiPage.checked = false;
   renderLiveWorkerGuide();
@@ -4227,7 +4227,7 @@ async function runProductChat(message, options = {}) {
     ...memberPayload(),
     executeEvidenceObservation: Boolean(options.executeEvidenceObservation),
     requireLivePortalProof: Boolean(options.requireLivePortalProof ?? requireLivePortalProof.checked),
-    useOfficialOpenClawWorker: Boolean(options.useOfficialOpenClawWorker ?? useOfficialOpenClawWorker.checked),
+    executeEvidenceObservation: Boolean(options.executeEvidenceObservation ?? requestEvidenceObservation.checked),
     officialOpenClawUseCurrentTab: Boolean(options.officialOpenClawUseCurrentTab ?? officialOpenClawCurrentTab.checked),
     officialOpenClawMultiPage: Boolean(options.officialOpenClawMultiPage ?? officialOpenClawMultiPage.checked),
     useLiveModel: document.querySelector("#useLiveModel").checked,
@@ -4299,7 +4299,7 @@ async function approveLatestReadOnly(taskId) {
     approvalTaskId: taskId,
     executeEvidenceObservation: true,
     requireLivePortalProof: requireLivePortalProof.checked,
-    useOfficialOpenClawWorker: useOfficialOpenClawWorker.checked,
+    executeEvidenceObservation: requestEvidenceObservation.checked,
     officialOpenClawUseCurrentTab: officialOpenClawCurrentTab.checked,
     officialOpenClawMultiPage: officialOpenClawMultiPage.checked
   });
@@ -4375,7 +4375,7 @@ async function proposeDocumentCandidate(candidateId) {
 
 async function approveAndObserveDocumentCandidate(taskId, candidateId) {
   if (!latestChatRun) throw new Error("Run a workflow first.");
-  useOfficialOpenClawWorker.checked = true;
+  requestEvidenceObservation.checked = true;
   const continuation = await api("/api/worker-continuations", {
     method: "POST",
     body: JSON.stringify({
@@ -4435,7 +4435,7 @@ async function approveAndObserveDocumentCandidate(taskId, candidateId) {
     approvedDocumentCandidateId: candidateId,
     executeEvidenceObservation: true,
     requireLivePortalProof: true,
-    useOfficialOpenClawWorker: true,
+    executeEvidenceObservation: true,
     officialOpenClawUseCurrentTab: false,
     officialOpenClawMultiPage: false
   });
@@ -4458,7 +4458,7 @@ async function continueAsyncWorkerFollowup(continuationId) {
 
 async function runApprovedWorkerFollowup(continuationId, taskId) {
   if (!latestChatRun) throw new Error("Run a workflow first.");
-  useOfficialOpenClawWorker.checked = true;
+  requestEvidenceObservation.checked = true;
   const approval = await api("/api/orchestrator/approve", {
     method: "POST",
     body: JSON.stringify({
@@ -4496,7 +4496,7 @@ async function runApprovedWorkerFollowup(continuationId, taskId) {
     workerContinuationId: continuationId,
     executeEvidenceObservation: true,
     requireLivePortalProof: requireLivePortalProof.checked,
-    useOfficialOpenClawWorker: true,
+    executeEvidenceObservation: true,
     officialOpenClawUseCurrentTab: officialOpenClawCurrentTab.checked,
     officialOpenClawMultiPage: officialOpenClawMultiPage.checked
   });
