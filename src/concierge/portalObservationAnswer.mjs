@@ -42,7 +42,11 @@ function buildState({ observation = {}, userMessage = "" } = {}) {
     session_id: observation.session_id ?? observation.sessionId ?? null,
     user_input: userMessage || "Summarize the read-only Aetna claims observation with citations.",
     workflow: "claim_status_navigation",
-    structured_intent: { reasoning: { primary_intent: "claim_status_navigation" } },
+    llm_orchestration_decision: {
+      workflow: "claim_status_navigation",
+      intent: "claim_status_navigation",
+      classification: { taskClass: "claim_status_navigation" }
+    },
     product_memory_recall: { facts: [] },
     source_pointers: sourcePointers.map((pointer) => ({
       table: pointer.table ?? "portal_page_snapshots",

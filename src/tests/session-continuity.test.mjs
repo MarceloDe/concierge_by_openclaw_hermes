@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import {
   SessionContinuityError,
   buildSessionExport,
@@ -15,7 +16,9 @@ import {
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-session-continuity-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 function uploadedDocument() {
@@ -66,6 +69,13 @@ test("session continuity loads protected history, source pointers, feedback, and
       source: "session_continuity_test",
       useLiveModel: false,
       executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "document_or_trace_review",
+        intent: "uploaded_document_review",
+        confidence: 0.9,
+        rationale: "Deterministic replay decision fixture for session continuity.",
+        workerGoal: "Read the uploaded document extraction and cite its fields."
+      },
       uploadedDocumentIds: ["upload_session_continuity"],
       uploadedDocuments: [uploadedDocument()]
     }

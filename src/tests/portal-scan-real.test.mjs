@@ -3,13 +3,28 @@ import assert from "node:assert/strict";
 import { readFile, mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-portal-scan-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat; spreads into rawMessage via runConciergeSlice).
+const portalScanReplay = {
+  workflow: "payer_portal_read_only_extraction",
+  intent: "portal_page_scan",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for portal page scans.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only structured extraction of the captured portal pages."
+};
 
 async function fixture(name) {
   return readFile(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
@@ -22,6 +37,7 @@ test("portal page scan persists sanitized captured Aetna home page text", async 
   const result = await runConciergeSlice(store, {
     message:
       "Run the multi-page Aetna portal scan from the already-open Chrome session and persist the page-level trace.",
+    llmOrchestrationDecisionReplay: portalScanReplay,
     portalPageSnapshots: [
       {
         pageKind: "home",
@@ -53,6 +69,7 @@ test("portal page scan review payload includes section-specific captured evidenc
 
   const result = await runConciergeSlice(store, {
     message: "Structure the sanitized captured Aetna home page.",
+    llmOrchestrationDecisionReplay: portalScanReplay,
     portalPageSnapshots: [
       {
         pageKind: "home_corrected",
@@ -90,6 +107,7 @@ test("sanitized captured Aetna claims page parses full claims rows", async () =>
 
   const result = await runConciergeSlice(store, {
     message: "Structure the sanitized captured Aetna claims page.",
+    llmOrchestrationDecisionReplay: portalScanReplay,
     portalPageSnapshots: [
       {
         pageKind: "claims_corrected",

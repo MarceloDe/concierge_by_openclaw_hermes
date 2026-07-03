@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import {
   resetTieredChatModelFactoryForTests,
   setTieredChatModelFactoryForTests
@@ -19,36 +20,6 @@ async function createStore() {
 function parseUserPayload(messages) {
   const userMessage = messages.find((message) => message.role === "user");
   return JSON.parse(userMessage.content);
-}
-
-function structuredIntentResponse(payload) {
-  const input = String(payload.user_input ?? "").toLowerCase();
-  const journey = input.includes("claim") ? "claims_eob_payment" : "pharmacy_formulary";
-  return {
-    primary_intent: journey,
-    candidate_journeys: [
-      {
-        journey,
-        confidence: 0.87,
-        rationale: "The user asked a general insurance question that needs workflow planning and source-backed evidence.",
-        required_evidence:
-          journey === "claims_eob_payment"
-            ? ["claim_record_or_eob", "patient_responsibility"]
-            : ["medication_name", "formulary_or_pharmacy_benefit", "member_plan_context"],
-        missing_evidence:
-          journey === "claims_eob_payment"
-            ? ["claim_record_or_eob"]
-            : ["medication_name", "formulary_or_pharmacy_benefit"],
-        safe_next_action: "request_or_retrieve_evidence",
-        requires_approval: true,
-        requires_human_handoff: false
-      }
-    ],
-    complexity: "moderate",
-    ambiguities: [],
-    policy_flags: [],
-    unsafe_action_requested: false
-  };
 }
 
 function plannerDecisionResponse(payload) {
@@ -89,14 +60,13 @@ async function runWithPlanner(question) {
   setTieredChatModelFactoryForTests(({ step, selection }) => ({
     invoke: async (messages) => {
       const payload = parseUserPayload(messages);
-      if (step === "structured_intent") {
-        return { content: JSON.stringify(structuredIntentResponse(payload)) };
-      }
       if (step === "llm_orchestration_decision") {
         assert.equal(selection.tier, "planner");
-        assert.equal(selection.model, "gpt-5");
+        assert.equal(selection.model, "gpt-4.1");
         assert.ok(Array.isArray(payload.routeCandidates));
         assert.ok(payload.routeCandidates.length > 0);
+        assert.ok(Array.isArray(payload.allowedWorkflows));
+        assert.ok(payload.allowedWorkflows.length > 0);
         assert.ok(payload.openclawCapabilityPolicy.workerMayCreateSubtasks);
         return { content: JSON.stringify(plannerDecisionResponse(payload)) };
       }
@@ -105,6 +75,7 @@ async function runWithPlanner(question) {
   }));
   try {
     const store = await createStore();
+    await seedCapabilityCatalog(store, { nowIso, createId });
     const { user, session } = await enrollDefaultMember(store);
     return await runLangGraphOrchestration(store, {
       user,
@@ -128,10 +99,11 @@ async function runWithPlanner(question) {
 test("Phase 76 routes a general medication copay question through the top-tier LLM planner", async () => {
   const result = await runWithPlanner("What is my copayment for a medication under my Aetna plan?");
 
-  assert.equal(result.state.structured_intent.primary_intent, "pharmacy_formulary");
+  assert.equal(result.state.llm_orchestration_decision.classification.intent, "medication_copay_and_formulary_scrutiny");
+  assert.equal(result.state.llm_orchestration_decision.classification.workflow, "pharmacy_formulary");
   assert.equal(result.state.llm_orchestration_decision.mode, "openai_chatopenai_invoked");
   assert.equal(result.state.llm_orchestration_decision.modelTier.tier, "planner");
-  assert.equal(result.state.llm_orchestration_decision.modelTier.model, "gpt-5");
+  assert.equal(result.state.llm_orchestration_decision.modelTier.model, "gpt-4.1");
   assert.equal(result.state.workflow, "pharmacy_formulary");
   assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
@@ -141,7 +113,8 @@ test("Phase 76 routes a general medication copay question through the top-tier L
 test("Phase 76 routes a general claim question through the top-tier LLM planner", async () => {
   const result = await runWithPlanner("What about my claim?");
 
-  assert.equal(result.state.structured_intent.primary_intent, "claims_eob_payment");
+  assert.equal(result.state.llm_orchestration_decision.classification.intent, "claim_status_and_payment_scrutiny");
+  assert.equal(result.state.llm_orchestration_decision.classification.workflow, "claim_status_navigation");
   assert.equal(result.state.llm_orchestration_decision.mode, "openai_chatopenai_invoked");
   assert.equal(result.state.llm_orchestration_decision.modelTier.tier, "planner");
   assert.equal(result.state.workflow, "claim_status_navigation");

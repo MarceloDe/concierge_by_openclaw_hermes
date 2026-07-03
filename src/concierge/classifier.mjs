@@ -1,5 +1,8 @@
 import { WORKFLOWS } from "./types.mjs";
 
+// Policy -> safety-intent mapping only. Workflow classification is owned by the
+// planner decision object (state.llm_orchestration_decision); ordinary free text
+// yields a null intent here.
 export function classifyIntent(message, policyResult) {
   if (policyResult.urgentEscalationRequired) {
     return WORKFLOWS.URGENT_HUMAN_HANDOFF;
@@ -22,9 +25,5 @@ export function classifyIntent(message, policyResult) {
 
   if (policyResult.approvalRequired) return WORKFLOWS.ESCALATE_APPROVAL;
 
-  if (/\b(enroll|eligibility|benefit|coverage|aetna|insurance|portal|logged|chrome)\b/i.test(message)) {
-    return WORKFLOWS.ENROLLMENT_PORTAL_DEPURATION;
-  }
-
-  return WORKFLOWS.ENROLLMENT_PORTAL_DEPURATION;
+  return null;
 }

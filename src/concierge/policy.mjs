@@ -71,7 +71,7 @@ export function detectUrgentEscalation(message) {
   };
 }
 
-export function evaluateInputPolicy(message, { llmScopesDomain = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0" } = {}) {
+export function evaluateInputPolicy(message, { llmScopesDomain = true } = {}) {
   const checks = [];
   const credentialRequest = CREDENTIAL_PATTERNS.some((pattern) => pattern.test(message));
   const medicalAdvice = MEDICAL_ADVICE_PATTERNS.some((pattern) => pattern.test(message));
@@ -188,6 +188,65 @@ export function evaluatePortalAction(action) {
       ? "Irreversible portal actions require a separate in-flow approval."
       : "Read-only navigation or extraction is allowed by the recorded slice approval."
   };
+}
+
+// ---------------------------------------------------------------------------
+// risk_tier (three-layer pivot, plan §8.1). ONE 4-value vocabulary shared by the
+// decision contract (§3.3) and this deterministic floor. Derived-only — never
+// persisted as a new authority (founder #15): authorities are the decision record,
+// the policy evaluation, and the risk_tier_assigned audit event.
+//   low      = evidence-only, no interrupt
+//   medium   = read-only portal/document observation (approval interrupt)
+//   high     = irreversible write (consumed single-use bound token only)
+//   critical = urgent escalation or credential/prompt-injection hard block
+// ---------------------------------------------------------------------------
+export const RISK_TIERS = Object.freeze(["low", "medium", "high", "critical"]);
+
+export function riskTierAtLeast(tier, floor) {
+  const a = RISK_TIERS.indexOf(String(tier));
+  const b = RISK_TIERS.indexOf(String(floor));
+  if (a < 0) return RISK_TIERS.includes(String(floor)) ? String(floor) : "low";
+  if (b < 0) return String(tier);
+  return RISK_TIERS[Math.max(a, b)];
+}
+
+const READ_ONLY_APPROVAL_SCOPES = new Set(["read_only_observation", "read_only", "login_takeover", "local", "none"]);
+const WRITE_SCOPE_RE = /\b(submit|send|file|appeal|authorize|change|cancel|delete|pay|write)\b/i;
+
+function capabilityRowTier(row) {
+  const scope = String(row?.approvalScope ?? row?.approval_scope ?? row?.hydrate?.approvalScope ?? "").trim();
+  const riskLevel = String(row?.riskLevel ?? row?.risk_level ?? row?.hydrate?.riskLevel ?? "").trim();
+  if (/critical/i.test(riskLevel)) return "critical";
+  // HIGH is gate-bound to irreversible WRITES (§8.1: consumed single-use bound token,
+  // evaluatePortalAction core) — a scope naming a write verb or a risk label that
+  // explicitly names write/irreversible. Legacy "high" risk labels on read-only-gated
+  // workers do NOT raise the floor to high; the write gate defines the tier, never a
+  // free string.
+  if (WRITE_SCOPE_RE.test(scope) || /write|irreversible/i.test(riskLevel)) return "high";
+  // Any other approval-gated capability (read-only portal/document observation gates,
+  // per-action browser scopes, boolean approval flags) floors at medium.
+  if (scope && !/^(none|local|0|false|no)$/i.test(scope)) return "medium";
+  if (/high|medium/i.test(riskLevel)) return "medium";
+  return "low";
+}
+
+// Pure projection over the two ladders that already exist: the per-check severity
+// ladder in evaluateInputPolicy and capability-side risk_level/approval_scope returned
+// by hydrateCapabilityPointer. Suppression ordering preserved: hard blocks and the
+// urgent bypass both floor at critical (handoff/refusal — never tool execution).
+export function computeRiskTierFloor(policyResult, selectedCapabilityRows = []) {
+  let floor = "low";
+  if (policyResult && typeof policyResult === "object") {
+    const checks = Array.isArray(policyResult.checks) ? policyResult.checks : [];
+    const hardBlocked = checks.some((check) => check?.severity === "block");
+    if (policyResult.urgentEscalationRequired === true || hardBlocked) return "critical";
+    if (policyResult.approvalRequired === true) floor = riskTierAtLeast("medium", floor);
+  }
+  for (const row of Array.isArray(selectedCapabilityRows) ? selectedCapabilityRows : []) {
+    floor = riskTierAtLeast(capabilityRowTier(row), floor);
+    if (floor === "critical") break;
+  }
+  return floor;
 }
 
 export function classifyUntrustedTextRisk(text) {

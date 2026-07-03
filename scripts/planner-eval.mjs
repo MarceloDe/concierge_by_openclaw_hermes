@@ -16,17 +16,18 @@ import { runLangGraphOrchestration } from "../src/concierge/langgraphRunner.mjs"
 // the planner should offer (or null if an answer is acceptable); demandIncludes: a keyword the
 // extractedDemand should contain (case-insensitive).
 const CASES = [
-  { q: "why was my last claim denied and what do I still owe?", expectWorkflow: "claim_status_navigation", expectProcess: "process:claim_status_lookup", demandIncludes: "deni" },
-  { q: "is Ozempic covered by my plan and how much will it cost?", expectWorkflow: "pharmacy_formulary", expectProcess: "process:pharmacy_formulary_lookup", demandIncludes: "ozempic" },
-  { q: "do I need approval before my knee replacement surgery?", expectWorkflow: "prior_authorization_navigation", expectProcess: "process:prior_auth_lookup", demandIncludes: "approval" },
-  { q: "what's my deductible and out-of-pocket so far this year?", expectWorkflow: "eligibility_benefits_navigation", expectProcess: "process:portal_readonly_lookup", demandIncludes: "deductible" },
-  { q: "help me appeal a denial my insurer sent me", expectWorkflow: "denial_appeal_preparation", expectProcess: "process:denial_appeal_support", demandIncludes: "appeal" },
-  { q: "can you read this EOB document I have and explain it?", expectWorkflow: "document_or_trace_review", expectProcess: "process:document_review", demandIncludes: "eob" }
+  { q: "why was my last claim denied and what do I still owe?", expectWorkflow: "claim_status_navigation", expectProcess: "process:claim_status_lookup", demandIncludes: "deni", expectTaskClass: ["claims_support", "member_specific_read"], expectTier: ["medium", "high"] },
+  { q: "is Ozempic covered by my plan and how much will it cost?", expectWorkflow: "pharmacy_formulary", expectProcess: "process:pharmacy_formulary_lookup", demandIncludes: "ozempic", expectTaskClass: ["medication_support", "cost_estimation"], expectTier: ["low", "medium"] },
+  { q: "do I need approval before my knee replacement surgery?", expectWorkflow: "prior_authorization_navigation", expectProcess: "process:prior_auth_lookup", demandIncludes: "approval", expectTaskClass: ["prior_auth_support"], expectTier: ["low", "medium"] },
+  { q: "what's my deductible and out-of-pocket so far this year?", expectWorkflow: "eligibility_benefits_navigation", expectProcess: "process:portal_readonly_lookup", demandIncludes: "deductible", expectTaskClass: ["member_specific_read", "cost_estimation"], expectTier: ["medium"] },
+  { q: "help me appeal a denial my insurer sent me", expectWorkflow: "denial_appeal_preparation", expectProcess: "process:denial_appeal_support", demandIncludes: "appeal", expectTaskClass: ["appeal_or_denial_support"], expectTier: ["medium", "high"] },
+  { q: "can you read this EOB document I have and explain it?", expectWorkflow: "document_or_trace_review", expectProcess: "process:document_review", demandIncludes: "eob", expectTaskClass: ["claims_support", "member_specific_read", "generic_public"], expectTier: ["low", "medium"] }
 ];
+
+const DATA_LAYERS = ["layer_1_public", "layer_2_member_authorized_api", "layer_3_portal_control"];
 
 async function main() {
   await loadLocalEnvOnce();
-  process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
   process.env.BRAINSTY_TYPE_II_COMPOSER = "1";
   const store = await new SqliteStore(join(await mkdtemp(join(tmpdir(), "planner-eval-")), "g.sqlite")).initialize();
   await seedCapabilityCatalog(store, { nowIso, createId });
@@ -46,7 +47,15 @@ async function main() {
     const processOk = c.expectProcess ? offered.includes(c.expectProcess) : true;
     const demandOk = Boolean(d.extractedDemand) && d.extractedDemand.toLowerCase().includes(c.demandIncludes);
     const needsOk = Array.isArray(d.informationNeeds) && d.informationNeeds.length > 0;
-    rows.push({ q: c.q, workflow: d.workflow, workflowOk, offered: offered.join(","), processOk, demand: d.extractedDemand, demandOk, needsOk, conf: d.confidence });
+    // DECISION_CONTRACT_V2 scoring (plan §11 Phase 83): draft-adopted enums.
+    const floor = String(d.riskTierFloor ?? "low");
+    const riskTierOk = ["low", "medium", "high", "critical"].includes(String(d.risk_tier)) &&
+      (!c.expectTier || c.expectTier.includes(String(d.risk_tier)) || String(d.risk_tier) === floor);
+    const dataLayerOk = Array.isArray(d.data_layer) && d.data_layer.length > 0 && d.data_layer.every((v) => DATA_LAYERS.includes(v));
+    const taskClass = d.classification?.taskClass ?? null;
+    const taskClassOk = Boolean(taskClass) && (!c.expectTaskClass || c.expectTaskClass.includes(taskClass) || taskClass === "mixed");
+    const workflowGraphOk = !d.recommendedProcessId || d.workflow_graph?.processId === d.recommendedProcessId;
+    rows.push({ q: c.q, workflow: d.workflow, workflowOk, offered: offered.join(","), processOk, demand: d.extractedDemand, demandOk, needsOk, conf: d.confidence, riskTier: d.risk_tier, riskTierOk, dataLayer: (d.data_layer ?? []).join(","), dataLayerOk, taskClass, taskClassOk, workflowGraphOk });
     await new Promise((s) => setTimeout(s, 800)); // gentle pacing for rate limits
   }
 
@@ -58,12 +67,17 @@ async function main() {
     console.log(`  workflow: ${r.workflow} ${r.workflowOk ? "✓" : "✗ (expected mismatch)"} | conf ${r.conf}`);
     console.log(`  offered:  ${r.offered || "(none)"} ${r.processOk ? "✓" : "✗"}`);
     console.log(`  demand:   "${r.demand}" ${r.demandOk ? "✓" : "✗"} | informationNeeds ${r.needsOk ? "✓" : "✗"}`);
+    console.log(`  v2:       taskClass=${r.taskClass ?? "(none)"} ${r.taskClassOk ? "✓" : "✗"} | data_layer=[${r.dataLayer}] ${r.dataLayerOk ? "✓" : "✗"} | risk_tier=${r.riskTier ?? "(none)"} ${r.riskTierOk ? "✓" : "✗"} | graph ${r.workflowGraphOk ? "✓" : "✗"}`);
   }
   console.log("\n---------------- SCORE ----------------");
   console.log(`  workflow selection : ${pct("workflowOk")}`);
   console.log(`  process selection  : ${pct("processOk")}`);
   console.log(`  demand extraction  : ${pct("demandOk")}`);
   console.log(`  information needs   : ${pct("needsOk")}`);
+  console.log(`  task class (v2)    : ${pct("taskClassOk")}`);
+  console.log(`  data layer (v2)    : ${pct("dataLayerOk")}`);
+  console.log(`  risk tier (v2)     : ${pct("riskTierOk")}`);
+  console.log(`  workflow graph (v2): ${pct("workflowGraphOk")}`);
   console.log("\n(Inspect the full per-node hydration of any case in Langfuse: planner.start -> Input.full_prompt.)");
   await store.close?.();
 }

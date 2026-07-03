@@ -151,7 +151,7 @@ test("LLM orchestration payload receives bounded memory skill-tree instructions"
     dynamic_skill_context: dynamicSkillContext,
     memory_skill_tree: memorySkillTree,
     policy_result: { allowed: true, approvalRequired: false, checks: [] },
-    structured_intent: { intent: "benefits_question", workflow: state.workflow }
+    llm_orchestration_decision: { intent: "benefits_question", workflow: state.workflow }
   });
 
   assert.equal(payload.memorySkillTree.selectedProcedureMemory.nonStandardDemand, true);

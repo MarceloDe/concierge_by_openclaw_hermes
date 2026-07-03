@@ -1,6 +1,6 @@
 import { BRAINSTY_GRAPH_NODE_NAMES } from "./langgraphRunner.mjs";
 
-export const CAPABILITY_CATALOG_VERSION = "2026-06-27.capability-catalog-seed.v1";
+export const CAPABILITY_CATALOG_VERSION = "2026-07-02.capability-catalog-seed.v2";
 
 const VALID_NODES = new Set(BRAINSTY_GRAPH_NODE_NAMES);
 
@@ -16,9 +16,9 @@ const meta = (when, why, best, score) => ({ when_to_use: when, why_use: why, bes
 // Spine A = portal/observe (user login takeover -> idempotent read-only worker dispatch -> cited evidence).
 // Spine B = research/parse (no login; gather published/uploaded evidence -> cited answer).
 // Spine C = approval (short native HITL pause).
-const SPINE_A_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "approval_pause", "case_state_shadow", "compose_response"];
-const SPINE_B_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "case_state_shadow", "compose_response"];
-const SPINE_C_GRAPH = ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router", "approval_pause", "compose_response"];
+const SPINE_A_GRAPH = ["input_policy", "recall_context", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "approval_pause", "case_state_shadow", "compose_response"];
+const SPINE_B_GRAPH = ["input_policy", "recall_context", "llm_decision", "workflow_router", "plan_journey", "skill_resolver", "workflow_executor", "observe_evidence", "case_state_shadow", "compose_response"];
+const SPINE_C_GRAPH = ["input_policy", "recall_context", "llm_decision", "workflow_router", "approval_pause", "compose_response"];
 // Founder edits these step lists after the first sketch. One step per checkpoint boundary in v1.
 const spineASteps = (observeCapKey, observeTitle) => [
   { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
@@ -50,6 +50,10 @@ export const CAPABILITY_CATALOG = Object.freeze({
     { capability_key: "workflow:document_or_trace_review", kind: "workflow", workflow_key: "document_or_trace_review", short_description: "Interpret uploaded EOB/SBC/ID/denial documents.", ...meta("user uploads a document to interpret; no login needed", "routes to local document extraction + review", "uploaded document interpretation", 26) },
     { capability_key: "workflow:denial_appeal_preparation", kind: "workflow", workflow_key: "denial_appeal_preparation", short_description: "Understand a denial and assemble appeal support (draft only).", ...meta("denied claim/PA; understand grounds and assemble support", "composes claim + document + policy lookups; draft only, never sends", "denial appeal support", 24) },
     { capability_key: "workflow:payer_portal_read_only_extraction", kind: "workflow", workflow_key: "payer_portal_read_only_extraction", short_description: "Read-only structured extraction from an authenticated portal.", ...meta("specific plan data only available behind portal login", "drives the read-only observation after user takeover login", "authenticated portal evidence capture", 26) },
+    // Terminal escalation workflow: the planner may legitimately select it (ambiguous
+    // high-stakes / explicit approval / human handoff), so it must appear in the
+    // DB-derived allowedWorkflows manifest (plan §3.3 — replaces the frozen enum's 8th key).
+    { capability_key: "workflow:human_approval_escalation", kind: "workflow", workflow_key: "human_approval_escalation", short_description: "Human approval escalation and safe handoff.", ...meta("the request is high-stakes/ambiguous, needs explicit human approval, or asks for a human", "terminal safe handoff; never executes tools", "human escalation and approval gates", 18) },
     // skills (FK skill_key)
     { capability_key: "skill:insurance_portal_browser", kind: "skill", skill_key: "insurance_portal_browser", short_description: "Execution arm: OBSERVE a user-authenticated portal (read-only).", ...meta("portal evidence is needed after the user logs in", "the OpenClaw read-only browser skill; never enters credentials", "read-only portal observation", 22) },
     { capability_key: "skill:insurance_knowledge_research", kind: "skill", skill_key: "insurance_knowledge_research", short_description: "Research authoritative published insurance/policy sources.", ...meta("a fact is published (formulary/SBC/policy) and not behind login", "retrieves + cites authoritative sources", "authoritative published research", 16) },
@@ -61,7 +65,7 @@ export const CAPABILITY_CATALOG = Object.freeze({
     { capability_key: "tool:document_trace_parser", kind: "tool", tool_key: "document_trace_parser", short_description: "Parse uploaded EOB/SBC/denial artifacts.", ...meta("an uploaded document must be parsed to structured fields", "structured extraction over extraction_artifacts", "document parsing", 12) },
     { capability_key: "tool:web_search_authoritative_sources", kind: "tool", tool_key: "web_search_authoritative_sources", short_description: "Authoritative web retrieval for published facts.", ...meta("a needed fact is published online and citation is acceptable", "authoritative web retrieval + citation", "published fact retrieval", 10) },
     // graph paths (NO FK; graph_subpath validated against the node registry)
-    { capability_key: "graph_path:input_policy_to_llm_planner", kind: "graph_path", graph_subpath: ["input_policy", "recall_context", "classify_intent", "llm_decision", "workflow_router"], short_description: "Safety-gated LLM planner entry path.", ...meta("entry path for any chat after safety gates pass", "the deterministic-rails -> LLM planner spine", "request routing", 10) },
+    { capability_key: "graph_path:input_policy_to_llm_planner", kind: "graph_path", graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"], short_description: "Safety-gated LLM planner entry path.", ...meta("entry path for any chat after safety gates pass", "the deterministic-rails -> LLM planner spine", "request routing", 10) },
     { capability_key: "graph_path:approval_interrupt_resume", kind: "graph_path", graph_subpath: ["observe_evidence", "approval_pause", "observe_evidence"], short_description: "Native HITL approval pause before worker/write.", ...meta("read-only worker execution needs explicit human approval", "native LangGraph interrupt + resume on approval token", "human-in-the-loop approval", 10) },
     { capability_key: "graph_path:evidence_to_sourced_answer", kind: "graph_path", graph_subpath: ["observe_evidence", "case_state_shadow", "compose_response"], short_description: "Cited answer once trusted source pointers exist.", ...meta("trusted source pointers exist and can be cited", "evidence -> case shadow -> cited compose", "sourced answer composition", 10) }
   ],

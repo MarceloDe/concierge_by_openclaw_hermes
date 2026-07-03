@@ -8,14 +8,17 @@ import {
   composeBestEffortAnswer,
   SANDBOX_PRIVACY_COPY
 } from "../concierge/gracefulDegradation.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { baseSafetyRules } from "../concierge/promptContracts.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-graceful-degradation-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 test("best-effort composer degrades without making uncited factual claims", async () => {
@@ -88,7 +91,20 @@ test("LangGraph turns missing trusted evidence into best-effort degradation, not
     session,
     channel: session.channel,
     userInput: "What does reviewed evidence say about my annual deductible before coinsurance?",
-    rawMessage: { source: "phase54_graceful_degradation_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "phase54_graceful_degradation_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "eligibility_benefits_navigation",
+        intent: "eligibility_benefits_question",
+        confidence: 0.9,
+        rationale: "Deterministic replay decision fixture for graceful degradation.",
+        approvalRequired: true,
+        approvalScope: "read_only_observation",
+        workerGoal: "Read-only benefits observation worker goal."
+      }
+    }
   });
 
   assert.equal(result.state.evidence_observation.status, "blocked_no_trusted_research_evidence");

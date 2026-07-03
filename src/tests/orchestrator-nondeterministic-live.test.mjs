@@ -16,14 +16,15 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 
 await loadLocalEnvOnce();
 
-// Acceptance test exercises the non-deterministic (LLM-always) chat path.
-process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
+// LLM-primary routing is unconditional since Phase 84 (the
+// BRAINSTY_ORCHESTRATOR_LLM_ALWAYS switch was deleted).
 
 const HAS_KEY = Boolean(process.env.OPENAI_API_KEY);
 
@@ -55,6 +56,9 @@ async function freshStore() {
 
 test("non-deterministic orchestrator: lay-person chat reaches the LLM planner and returns a usable response (no mocks)", { skip: HAS_KEY ? false : "OPENAI_API_KEY not set" }, async () => {
   const store = await freshStore();
+  // The DB capability catalog is the planner's workflow surface (Phase 83/84):
+  // an empty catalog hard-fails every decision with allowed_workflows_unavailable.
+  await seedCapabilityCatalog(store, { nowIso, createId });
   const { user, session } = await enrollDefaultMember(store);
 
   // Deterministic + comprehensive: exercise every lay-person phrasing so the
@@ -95,7 +99,6 @@ test("non-deterministic orchestrator: lay-person chat reaches the LLM planner an
 test("LLM-always: missing OPENAI_API_KEY surfaces degraded intelligence, not silent classifier success", async () => {
   const prevKey = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
-  process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
   try {
     const store = await freshStore();
     const { user, session } = await enrollDefaultMember(store);

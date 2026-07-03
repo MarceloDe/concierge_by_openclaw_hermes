@@ -1,0 +1,95 @@
+{
+  "actionsTaken": [
+    "steel_self_host_read_only_observation",
+    "current_page_claims_scan",
+    "structured_claim_rows_extracted"
+  ],
+  "browserSessionId": "hosted_browser_d9f69e32-684a-4728-bd43-cfd5266fbfd5",
+  "claimRowCount": 5,
+  "claimRowRefs": [
+    {
+      "claimRef": "portal-claim:d8b980db6b579443",
+      "descriptionHash": "cc4b61906165cc97a9c0b31699c36f5717ef78d1a233351b238caa1ad5732fef",
+      "serviceDateHash": "53623973067b7cc119b205cc05c071c0b9c8a6fe52feb318f3eb8147775d7738",
+      "shareAmountPresent": true,
+      "statusHash": "0b29bc3dbd3fc81d670f753f17effb0c3dd331110cee32facbfeb04e91143984"
+    },
+    {
+      "claimRef": "portal-claim:d4f515bf90c85430",
+      "descriptionHash": "0deaabf33812c4a8314df7813f25ce4f62fcbb99add56ff6c112e74d87a0d0bb",
+      "serviceDateHash": "ce58e746fc8b2d9f1880cb775da8ab9a53c5cc112e1ad81ed9d6c227fbbce7ef",
+      "shareAmountPresent": true,
+      "statusHash": "0b29bc3dbd3fc81d670f753f17effb0c3dd331110cee32facbfeb04e91143984"
+    },
+    {
+      "claimRef": "portal-claim:058027502ebeda7a",
+      "descriptionHash": "2e3b90fd1299e285fd8e0dfb7184ad5c067191d3fb08776b54c55bcf74789d99",
+      "serviceDateHash": "ce58e746fc8b2d9f1880cb775da8ab9a53c5cc112e1ad81ed9d6c227fbbce7ef",
+      "shareAmountPresent": true,
+      "statusHash": "0b29bc3dbd3fc81d670f753f17effb0c3dd331110cee32facbfeb04e91143984"
+    },
+    {
+      "claimRef": "portal-claim:6fd9bd906b2bd2f8",
+      "descriptionHash": "c63eb6720c6e88493897548d3620d45e539d18574465f7b26fdddcbade044ee2",
+      "serviceDateHash": "ce58e746fc8b2d9f1880cb775da8ab9a53c5cc112e1ad81ed9d6c227fbbce7ef",
+      "shareAmountPresent": true,
+      "statusHash": "0b29bc3dbd3fc81d670f753f17effb0c3dd331110cee32facbfeb04e91143984"
+    },
+    {
+      "claimRef": "portal-claim:b9004d3662291bc1",
+      "descriptionHash": "c63eb6720c6e88493897548d3620d45e539d18574465f7b26fdddcbade044ee2",
+      "serviceDateHash": "de8ef025d6c9e00b4495cbe0244a6de01decdd66ac39a60135459b10f668d7bf",
+      "shareAmountPresent": true,
+      "statusHash": "0b29bc3dbd3fc81d670f753f17effb0c3dd331110cee32facbfeb04e91143984"
+    }
+  ],
+  "createdAt": "2026-06-26T23:10:22.228898Z",
+  "currentTitleHash": "076fdfaf920e1b8550686ebb532a545bdb731d39ad8bd33482e9d9896d9002ad",
+  "currentUrlHost": "health.aetna.com",
+  "langchain": {
+    "finalResponseHash": "c1da7e3b4cb3970f6827bbdc1b1a23ab6dbd45502815a26d5043a473f309572d",
+    "mode": "live_llm_sourced_composer",
+    "sourcePointerIds": [
+      "portal_page_snapshots/aetna-portal-claims:296e74510a8d95d6"
+    ],
+    "status": "remote_portal_live_llm_sourced_answer_used",
+    "usedModelComposedText": true,
+    "validation": {
+      "issueCount": 0,
+      "valid": true
+    }
+  },
+  "ok": true,
+  "provider": "hosted_remote",
+  "providerStrategy": "steel-self-host",
+  "rawFieldsStored": {
+    "claimRowText": false,
+    "credentials": false,
+    "finalResponseText": false,
+    "frameContent": false,
+    "portalText": false,
+    "tokens": false
+  },
+  "safety": {
+    "agentCredentialEntryAllowed": false,
+    "allowedHost": true,
+    "externalWriteActionsAllowed": false,
+    "formSubmitAllowed": false,
+    "rawFrameRecorded": false,
+    "rawPortalTextReturned": false,
+    "readOnly": true
+  },
+  "schemaVersion": "brainstyworkers.claims-observe-proof.v1",
+  "sessionIdHash": "7aff7c327f393a9b2ce1fff0a77acbee1cb48f4c6152e2d7193dc9b5e4ac2b9d",
+  "sourcePointerCount": 1,
+  "sourcePointerRefs": [
+    {
+      "displayLabel": null,
+      "id": "aetna-portal-claims:296e74510a8d95d6",
+      "rawTextReturned": false,
+      "table": "portal_page_snapshots"
+    }
+  ],
+  "status": "claims_observed_with_source_pointers",
+  "userIdHash": "9a4b9de607d89787b60ba374fe826cfa4cb51d4d9fc718a7d36f105f7a43a559"
+}

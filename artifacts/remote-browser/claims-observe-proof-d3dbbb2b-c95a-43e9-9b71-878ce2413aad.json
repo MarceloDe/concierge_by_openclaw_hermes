@@ -1,0 +1,49 @@
+{
+  "actionsTaken": [
+    "steel_self_host_read_only_observation",
+    "login_page_detected_stop"
+  ],
+  "browserSessionId": "hosted_browser_login",
+  "claimRowCount": 0,
+  "claimRowRefs": [],
+  "createdAt": "2026-06-26T23:45:20.164467Z",
+  "currentTitleHash": "223d8a3f2e8056e964fa91ee2466bdd1a4783631263c6c220b0d6df23c799735",
+  "currentUrlHost": "health.aetna.com",
+  "langchain": {
+    "finalResponseHash": "1cbe73899e856eec74ab054ce5cc1411d6cca6c824a59b55c9704fb63c83fab0",
+    "mode": "deterministic_fallback",
+    "sourcePointerIds": [],
+    "status": "remote_portal_deterministic_fallback_no_source_pointer",
+    "usedModelComposedText": false,
+    "validation": {
+      "issueCount": 1,
+      "valid": false
+    }
+  },
+  "ok": false,
+  "provider": "hosted_remote",
+  "providerStrategy": "steel-self-host",
+  "rawFieldsStored": {
+    "claimRowText": false,
+    "credentials": false,
+    "finalResponseText": false,
+    "frameContent": false,
+    "portalText": false,
+    "tokens": false
+  },
+  "safety": {
+    "agentCredentialEntryAllowed": false,
+    "allowedHost": null,
+    "externalWriteActionsAllowed": false,
+    "formSubmitAllowed": false,
+    "rawFrameRecorded": false,
+    "rawPortalTextReturned": false,
+    "readOnly": true
+  },
+  "schemaVersion": "brainstyworkers.claims-observe-proof.v1",
+  "sessionIdHash": "36b213a28e4a658d841bfa4dc2f059595bf8d1c4578f7c64e64214fe66dec9be",
+  "sourcePointerCount": 0,
+  "sourcePointerRefs": [],
+  "status": "human_login_required",
+  "userIdHash": "974f7fe331d27eac3553d7a3681c8c38e0219e990fadfe1b47680e84faadba99"
+}

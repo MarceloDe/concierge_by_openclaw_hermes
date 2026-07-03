@@ -46,7 +46,7 @@ function sourcedShadow({ sessionId, graphTraceId }) {
       workflowArchitecture: { routeCandidates: [{ workflowKey: "eligibility_benefits_navigation" }] }
     },
     policyResult: { allowed: true },
-    structuredIntent: { intent: "check_benefits", workflow: "eligibility_benefits_navigation", confidence: 0.94 },
+    
     workflow: "eligibility_benefits_navigation",
     routeReason: "fixture_phase36_pems_workbench",
     dynamicSkillContext: {

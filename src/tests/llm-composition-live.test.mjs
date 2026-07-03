@@ -22,7 +22,7 @@ test("live LLM sourced answer composer uses source pointers causally", { skip: h
     session_id: session.id,
     user_input: "What matters for an MRI in this SBC?",
     workflow: "document_or_trace_review",
-    structured_intent: { reasoning: { primary_intent: "document_review" } },
+    llm_orchestration_decision: { workflow: "document_or_trace_review", intent: "document_review", confidence: 0.9, extractedDemand: "explain what matters for an MRI in the uploaded SBC", classification: { taskClass: "plan_specific_public", intent: "document_review" } },
     context_packet: { user: { id: user.id } },
     product_memory_recall: { facts: [] },
     source_pointers: [

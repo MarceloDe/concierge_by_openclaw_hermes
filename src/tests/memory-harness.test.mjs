@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { createId, nowIso, SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { getMemoryContextForUser, listHarnessState, planTaskFollowups, runUserHeartbeat } from "../concierge/memoryHarness.mjs";
 
 async function createStore() {
@@ -21,8 +22,21 @@ test("memory harness injects cross-session context and retains database pointers
 
   assert.ok(sourceSnapshot, "Run the logged Aetna extraction before this real-data memory harness test.");
 
+  // Decision-first runtime (Phase 84): idempotent catalog seed (matches server boot) so
+  // allowedWorkflows is non-empty, plus a recorded replay decision (no classifier fallback).
+  await seedCapabilityCatalog(store, { nowIso, createId });
+
   const result = await runConciergeSlice(store, {
     message: "Use the existing Aetna portal data to prepare my ongoing memory harness.",
+    llmOrchestrationDecisionReplay: {
+      workflow: "payer_portal_read_only_extraction",
+      intent: "portal_memory_harness",
+      confidence: 0.9,
+      rationale: "Deterministic replay decision fixture for the memory harness.",
+      approvalRequired: true,
+      approvalScope: "read_only_observation",
+      workerGoal: "Read-only structured extraction of the captured portal page."
+    },
     portalPageSnapshots: [
       {
         pageKind: "home_memory_harness",

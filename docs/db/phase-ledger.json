@@ -1,0 +1,117 @@
+{
+  "version": "2026-07-02.phase-ledger.v1",
+  "source_of_truth_note": "Machine-readable phase ledger (founder decision #12, spine YAML phase_ledger_policy). Agents must never infer phase order from prose. Numbering reconciled against the Cortex ledger 2026-07-02: no conflict, 83-92 kept. Statuses: planned | in_progress | landed | blocked_external.",
+  "plan": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md",
+  "phases": [
+    {
+      "phase": 83,
+      "title": "Decision contract v2 + 3-layer prompt + phase ledger",
+      "status": "in_progress",
+      "dependencies": [],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#3", "docs/db/phase-ledger.json"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-83",
+      "owner": "claude-code",
+      "blockers": ["one-PR-train with Phase 84: no Phase-83-only deployment permitted"]
+    },
+    {
+      "phase": 84,
+      "title": "Graph topology + router fail-loud + legacy classification removal",
+      "status": "in_progress",
+      "dependencies": [83],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#3.4", "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#10"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-84",
+      "owner": "claude-code",
+      "blockers": ["lands in the same PR train as Phase 83"]
+    },
+    {
+      "phase": 85,
+      "title": "Postgres schema deltas + owner modules + audit v2 + v1-alias removal",
+      "status": "planned",
+      "dependencies": [84],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#5", "docs/db/postgres-schema.json"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-85",
+      "owner": null,
+      "blockers": []
+    },
+    {
+      "phase": 86,
+      "title": "Redis runtime deltas + legacy portfolio removal",
+      "status": "planned",
+      "dependencies": [85],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#6", "docs/DATABASE_REDIS.md", "docs/db/redis-keys.json"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-86",
+      "owner": null,
+      "blockers": ["boot-seed fail-loud precondition landed in Phase 84 (plan §10.26)"]
+    },
+    {
+      "phase": 87,
+      "title": "Tool/executor registry + dispatch trigger + RAG/public-data substrate",
+      "status": "planned",
+      "dependencies": [86],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#7"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-87",
+      "owner": null,
+      "blockers": ["write workers stay Capability-Registry rows with runtime_selectable=0 (founder #11)", "PHI-class embeddings blocked until BAA/Bedrock-KMS profile (founder #16)"]
+    },
+    {
+      "phase": 88,
+      "title": "Interrupt kinds + mcpPolicyGuard + durable-interrupt gate",
+      "status": "planned",
+      "dependencies": [87],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#4.3", "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#8"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-88",
+      "owner": null,
+      "blockers": []
+    },
+    {
+      "phase": 89,
+      "title": "Early no-signature connectors (Plan-Net directory, MRF pipeline, CMS PDP PUFs, PA-policy corpus)",
+      "status": "planned",
+      "dependencies": [88],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-89",
+      "owner": null,
+      "blockers": ["ENTRY GATE: first unauthenticated MRF fetch committed as an artifacts/ transcript (UNVERIFIED external claim)"]
+    },
+    {
+      "phase": 90,
+      "title": "Mid connectors (Aetna sandbox Patient Access, PDex formulary, Stedi mock contract_ready)",
+      "status": "planned",
+      "dependencies": [89],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-90",
+      "owner": null,
+      "blockers": ["founder action S1: Aetna developer-portal sandbox registration (click-through, no signature)"]
+    },
+    {
+      "phase": 91,
+      "title": "SIGNATURE-GATED production data rails (Aetna production FHIR, Stedi production, Optum/Availity registry, MRF vendor)",
+      "status": "blocked_external",
+      "dependencies": [90],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-91",
+      "owner": null,
+      "blockers": [
+        "SIGNATURE: Aetna Interoperability production vetting (founder action S2)",
+        "SIGNATURE: Stedi BAA + information-receiver standing (founder decision #7: production_transactions_allowed=false until confirmed)",
+        "SIGNATURE: Optum/Availity contracts (registry-only until signed)",
+        "SIGNATURE: commercial MRF vendor data agreement + display/redistribution legal review (founder decision #6)"
+      ]
+    },
+    {
+      "phase": 92,
+      "title": "SIGNATURE-GATED write/submission track (Da Vinci PAS contract_ready, CRD/DTR, ADR-002 v2 write enablement)",
+      "status": "blocked_external",
+      "dependencies": [91],
+      "docs_touched": ["docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9", "docs/EXECUTION_ARCHITECTURE_V2.md"],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-92",
+      "owner": null,
+      "blockers": [
+        "SIGNATURE: provider delegation agreements + BAA (founder becomes the provider's submitting agent)",
+        "SIGNATURE: clearinghouse trading-partner enrollment + per-payer submitter IDs + certification testing",
+        "out-of-band compliance/legal sign-off per docs/EXECUTION_ARCHITECTURE_V2.md",
+        "WEFELLA_EXECUTION_WRITE_ENABLED=0 remains the committed default; write workers flip runtime_selectable only via the deterministic capability-policy derivation"
+      ]
+    }
+  ]
+}

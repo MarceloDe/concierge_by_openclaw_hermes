@@ -21,7 +21,18 @@ test("public chat endpoints share the LangGraph product runtime contract", async
       member,
       message: "Use my Aetna portal memory to check eligibility and benefits.",
       executeEvidenceObservation: false,
-      useLiveModel: false
+      useLiveModel: false,
+      // Decision-first runtime (Phase 84): both endpoints spread the body into
+      // rawMessage, so the recorded replay decision routes the workflow (no classifier).
+      llmOrchestrationDecisionReplay: {
+        workflow: "eligibility_benefits_navigation",
+        intent: "eligibility_benefits_question",
+        confidence: 0.9,
+        rationale: "Deterministic replay decision fixture for the runtime collapse contract.",
+        approvalRequired: true,
+        approvalScope: "read_only_observation",
+        workerGoal: "Read-only benefits observation worker goal."
+      }
     };
     const chatResponse = await fetch(`http://127.0.0.1:${port}/api/chat`, {
       method: "POST",

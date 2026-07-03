@@ -3,16 +3,31 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { verifyAuthenticatedPortalEvidence } from "../concierge/portalEvidenceVerifier.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-portal-proof-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat; the normalizer lifts it) — no classifier fallback.
+const eligibilityReplay = {
+  workflow: "eligibility_benefits_navigation",
+  intent: "eligibility_benefits_question",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for portal evidence verification.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only benefits observation worker goal."
+};
 
 async function approvedProposal(store) {
   const { user, session } = await enrollDefaultMember(store, {
@@ -26,7 +41,7 @@ async function approvedProposal(store) {
     session,
     channel: session.channel,
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
-    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false }
+    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false, llmOrchestrationDecisionReplay: eligibilityReplay }
   });
   const approval = await createReadOnlyObservationApproval(store, {
     taskId: proposalRun.state.openclaw_skill_proposal.task.id,
@@ -83,6 +98,7 @@ test("live portal proof blocks login page without creating false healthcare evid
       rawMessage: {
         source: "test",
         requireLivePortalProof: true,
+        llmOrchestrationDecisionReplay: eligibilityReplay,
         approvalToken: approval.approvalToken,
         approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
         browserSnapshot: {
@@ -119,6 +135,7 @@ test("live portal proof requires explicit BRAINSTY_PORTAL_LIVE flag before creat
       rawMessage: {
         source: "test",
         requireLivePortalProof: true,
+        llmOrchestrationDecisionReplay: eligibilityReplay,
         approvalToken: approval.approvalToken,
         approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
         browserSnapshot: {
@@ -155,6 +172,7 @@ test("live portal proof blocks public page without creating false healthcare evi
       rawMessage: {
         source: "test",
         requireLivePortalProof: true,
+        llmOrchestrationDecisionReplay: eligibilityReplay,
         approvalToken: approval.approvalToken,
         approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
         browserSnapshot: {
@@ -192,6 +210,7 @@ test("live portal proof stores source pointer hashes for verified authenticated 
       rawMessage: {
         source: "test",
         requireLivePortalProof: true,
+        llmOrchestrationDecisionReplay: eligibilityReplay,
         approvalToken: approval.approvalToken,
         approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
         browserSnapshot: {

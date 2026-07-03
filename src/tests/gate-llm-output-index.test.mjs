@@ -7,7 +7,7 @@ import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
 import { createId } from "../concierge/database.mjs";
 import { indexLlmOutput, loadLlmOutputIndex, llmOutputIndexKey } from "../concierge/llmOutputIndex.mjs";
 import { createRuntimeContextCache } from "../concierge/runtimeContextCache.mjs";
-import { buildLlmOrchestrationDecisionPayload } from "../concierge/llmOrchestrationDecision.mjs";
+import { buildLlmOrchestrationDecisionPayload, DECISION_CONTRACT_V2_PROMPT_SHAPE } from "../concierge/llmOrchestrationDecision.mjs";
 
 await loadLocalEnvOnce();
 const URL = process.env.BRAINSTY_REDIS_URL;
@@ -36,5 +36,10 @@ test("GATE LLM output index: real-Redis, cross-turn hydrate, used by the planner
   });
   assert.ok(payload.llmOutputIndex, "llm output index reaches the planner payload");
   assert.ok(payload.llmOutputIndex.entries.some((e) => e.outputId === entry.outputId), "the indexed output is consultable by the planner");
-  assert.ok(payload.expectedJsonShape.priorLlmOutputPointersUsed, "contract lets the planner cite consulted output pointers");
+  // DECISION_CONTRACT_V2: the contract shape lives once in the prompt-shape constant
+  // (payload.expectedJsonShape was deleted with the legacy contract rendering).
+  assert.ok(
+    DECISION_CONTRACT_V2_PROMPT_SHAPE.demand_and_evidence.priorLlmOutputPointersUsed,
+    "contract lets the planner cite consulted output pointers"
+  );
 });

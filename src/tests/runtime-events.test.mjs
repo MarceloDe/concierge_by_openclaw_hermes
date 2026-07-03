@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { ORCHESTRATOR_FLOW_CASES, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import {
   createRuntimeHookSubscription,
@@ -17,8 +18,22 @@ import {
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-runtime-events-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat; the normalizer lifts it) — no classifier fallback.
+const eligibilityReplay = {
+  workflow: "eligibility_benefits_navigation",
+  intent: "eligibility_benefits_question",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for runtime events.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only benefits observation worker goal."
+};
 
 test("runtime event bus records events and in-process code hooks", async () => {
   const store = await createStore();
@@ -89,7 +104,12 @@ test("LangGraph publishes Phase 8 lifecycle events", async () => {
     session,
     channel: session.channel,
     userInput: "Do I still owe anything before insurance starts paying?",
-    rawMessage: { source: "runtime_events_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "runtime_events_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: eligibilityReplay
+    }
   });
 
   assert.equal(result.state.workflow, "eligibility_benefits_navigation");
@@ -111,7 +131,12 @@ test("LangGraph publishes approval consumption and worker status events during r
     session,
     channel: session.channel,
     userInput: "Use my portal in read-only mode to check benefits.",
-    rawMessage: { source: "runtime_events_resume_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "runtime_events_resume_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: eligibilityReplay
+    }
   });
   const taskId = proposal.state.openclaw_skill_proposal.task.id;
   const approval = await createReadOnlyObservationApproval(store, {
@@ -130,6 +155,7 @@ test("LangGraph publishes approval consumption and worker status events during r
       source: "runtime_events_resume_test",
       useLiveModel: false,
       executeEvidenceObservation: true,
+      llmOrchestrationDecisionReplay: eligibilityReplay,
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
       browserSnapshot: {

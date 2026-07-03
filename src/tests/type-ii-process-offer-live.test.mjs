@@ -14,7 +14,6 @@ import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 
 await loadLocalEnvOnce();
 process.env.BRAINSTY_TYPE_II_COMPOSER = "1";
-process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
 const HAS_KEY = Boolean(process.env.OPENAI_API_KEY);
 
 test("Type-II Phase A: capability question yields a process offer, not a flat refusal/template", { skip: HAS_KEY ? false : "OPENAI_API_KEY not set" }, async () => {

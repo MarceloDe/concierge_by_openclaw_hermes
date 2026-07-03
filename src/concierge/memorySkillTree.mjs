@@ -246,7 +246,7 @@ export function selectMemorySkillTree({
     state.workflow ??
     caseState.decision?.workflow ??
     dynamicSkillContext.contextSummary?.workflow ??
-    state.structured_intent?.workflow ??
+    state.llm_orchestration_decision?.workflow ??
     "document_or_trace_review";
   const payer =
     dynamicSkillContext.contextSummary?.payer ??
