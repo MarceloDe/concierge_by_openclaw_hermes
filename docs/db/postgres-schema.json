@@ -1,8 +1,8 @@
 {
   "generatedFrom": "live Postgres 16 information_schema (real query)",
   "engine": "postgres (SCHEMA_SQL applied via PostgresStore.initialize)",
-  "generatedAt": "2026-07-03T21:35:26.600Z",
-  "tableCount": 85,
+  "generatedAt": "2026-07-03T23:19:46.902Z",
+  "tableCount": 87,
   "tables": {
     "agent_outbox": {
       "columns": [
@@ -1220,6 +1220,124 @@
         {
           "name": "connector_endpoints_pkey",
           "def": "CREATE UNIQUE INDEX connector_endpoints_pkey ON public.connector_endpoints USING btree (id)"
+        }
+      ]
+    },
+    "connector_oauth_grants": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "payer_key",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "scope",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "access_token_ciphertext",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "refresh_token_ciphertext",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "token_envelope_json",
+          "type": "text",
+          "nullable": false,
+          "default": "'{}'::text",
+          "position": 7
+        },
+        {
+          "name": "access_token_hash",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 8
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "'connected'::text",
+          "position": 9
+        },
+        {
+          "name": "expires_at",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 10
+        },
+        {
+          "name": "consent_recorded_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 11
+        },
+        {
+          "name": "reauth_required",
+          "type": "integer",
+          "nullable": false,
+          "default": "0",
+          "position": 12
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 13
+        },
+        {
+          "name": "updated_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 14
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "column": "user_id",
+          "references": "users.id"
+        }
+      ],
+      "uniques": [],
+      "indexes": [
+        {
+          "name": "connector_oauth_grants_pkey",
+          "def": "CREATE UNIQUE INDEX connector_oauth_grants_pkey ON public.connector_oauth_grants USING btree (id)"
         }
       ]
     },
@@ -2649,6 +2767,75 @@
         {
           "name": "knowledge_sources_source_key_key",
           "def": "CREATE UNIQUE INDEX knowledge_sources_source_key_key ON public.knowledge_sources USING btree (source_key)"
+        }
+      ]
+    },
+    "member_data_rails": {
+      "columns": [
+        {
+          "name": "id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 1
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 2
+        },
+        {
+          "name": "payer_key",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 3
+        },
+        {
+          "name": "rail",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 4
+        },
+        {
+          "name": "probe_evidence_pointer",
+          "type": "text",
+          "nullable": true,
+          "default": null,
+          "position": 5
+        },
+        {
+          "name": "probed_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 6
+        },
+        {
+          "name": "created_at",
+          "type": "text",
+          "nullable": false,
+          "default": null,
+          "position": 7
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "column": "user_id",
+          "references": "users.id"
+        }
+      ],
+      "uniques": [],
+      "indexes": [
+        {
+          "name": "member_data_rails_pkey",
+          "def": "CREATE UNIQUE INDEX member_data_rails_pkey ON public.member_data_rails USING btree (id)"
         }
       ]
     },

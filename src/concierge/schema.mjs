@@ -83,7 +83,9 @@ export const TABLES = [
   "pdp_plans",
   "pdp_formulary",
   "pdp_pharmacy_network",
-  "pdp_pricing"
+  "pdp_pricing",
+  "connector_oauth_grants",
+  "member_data_rails"
 ];
 
 export const SCHEMA_SQL = `
@@ -1609,6 +1611,41 @@ CREATE TABLE IF NOT EXISTS pdp_pharmacy_network (
   dataset_pointer TEXT NOT NULL,
   row_content_hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
+);
+
+-- Phase 90 (plan §5.2): member-consent OAuth grants for API rails. Ciphertexts resolve
+-- ONLY through the secret backend (founder #5); token METADATA lives in columns,
+-- separately from the secret. An expired grant flips reauth_required and surfaces as a
+-- user-facing reconnect ask — never a silent retry. Owner: connectors/tokenVault.mjs.
+CREATE TABLE IF NOT EXISTS connector_oauth_grants (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  payer_key TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  access_token_ciphertext TEXT NOT NULL,
+  refresh_token_ciphertext TEXT,
+  token_envelope_json TEXT NOT NULL DEFAULT '{}',
+  access_token_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'connected',
+  expires_at TEXT,
+  consent_recorded_at TEXT NOT NULL,
+  reauth_required INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Phase 90 (plan §5.2/§9): per-member data-rail selection — a PROBED STORED FACT
+-- feeding the planner feasibility filter (rail selection is DATA, never a code switch).
+CREATE TABLE IF NOT EXISTS member_data_rails (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  payer_key TEXT NOT NULL,
+  rail TEXT NOT NULL,
+  probe_evidence_pointer TEXT,
+  probed_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS pdp_pricing (

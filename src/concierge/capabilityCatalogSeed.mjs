@@ -1,6 +1,6 @@
 import { BRAINSTY_GRAPH_NODE_NAMES } from "./langgraphRunner.mjs";
 
-export const CAPABILITY_CATALOG_VERSION = "2026-07-03.capability-catalog-seed.v5";
+export const CAPABILITY_CATALOG_VERSION = "2026-07-03.capability-catalog-seed.v6";
 
 const VALID_NODES = new Set(BRAINSTY_GRAPH_NODE_NAMES);
 
@@ -102,6 +102,67 @@ export const CAPABILITY_CATALOG = Object.freeze({
   // 8 canonical processes + the Phase 89 connector-backed pair — one per allowed workflow. Spine A (portal/observe), B (research/parse),
   // C (approval). Each binds via workflow_key so the router selects it (selectProcessForWorkflow).
   processes: [
+    // Phase 90 catalog reshuffle (plan §11): the API-rail processes land OFFERABLE but
+    // rail-FILTERED (member_data_rails feeds feasibility; pre-S1 every member is
+    // portal_only, so the portal processes remain the offered route — catalog data,
+    // never a code switch). process:pharmacy_formulary_lookup is KEPT per §10 item 23.
+    {
+      process_key: "process:formulary_lookup",
+      workflow_key: "pharmacy_formulary",
+      title: "Formulary lookup (member API rail)",
+      journey_stage: "pharmacy_benefit_scrutiny",
+      offerable: 1,
+      display_order: 11,
+      short_description: "Plan-specific drug tier and rules via the member-authorized API once your plan is connected.",
+      ...meta("a formulary question for a member whose data rail is api covered", "the PDex rail answers without portal login; portal stays the fallback rail", "API-rail formulary answers", 20),
+      required_user_inputs: [{ key: "medication_name", label: "Medication", why: "to find the drug's tier and rules", sensitive: false }],
+      approval_scope: "none",
+      graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"],
+      steps: [
+        { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+        { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Rail-gated formulary read", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
+      ]
+    },
+    {
+      process_key: "process:eligibility_snapshot_refresh",
+      workflow_key: "eligibility_benefits_navigation",
+      title: "Eligibility snapshot refresh (member API rail)",
+      journey_stage: "coverage_understanding",
+      offerable: 1,
+      display_order: 12,
+      short_description: "Refresh coverage and balances via the member-authorized API once your plan is connected.",
+      ...meta("a coverage/balance question for a member whose data rail is api covered", "the Patient Access rail refreshes eligibility snapshots without portal login", "API-rail eligibility refresh", 20),
+      required_user_inputs: [],
+      approval_scope: "none",
+      graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"],
+      steps: [
+        { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+        { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Rail-gated coverage read", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Compose cited answer", capability_key: "graph_path:evidence_to_sourced_answer" }
+      ]
+    },
+    {
+      process_key: "process:pa_packet_preparation",
+      workflow_key: "prior_authorization_navigation",
+      title: "Prior-authorization packet preparation (prepare-only)",
+      journey_stage: "prior_auth_navigation",
+      offerable: 1,
+      display_order: 13,
+      short_description: "I assemble a cited PA support packet for your review — nothing is ever submitted.",
+      ...meta("the user wants help assembling prior-authorization support", "composes stored policy evidence + plan identity into a prepared-for-review packet", "PA packet preparation", 20),
+      required_user_inputs: [{ key: "procedure", label: "Procedure or service", why: "to match the payer's policy criteria", sensitive: false }],
+      approval_scope: "none",
+      graph_subpath: ["input_policy", "recall_context", "llm_decision", "workflow_router"],
+      steps: [
+        { step_key: "policy", checkpoint_boundary: "after_policy_gate", title: "Safety gate", capability_key: "graph_path:input_policy_to_llm_planner" },
+        { step_key: "plan", checkpoint_boundary: "after_planner", title: "Plan route" },
+        { step_key: "evidence", checkpoint_boundary: "after_evidence", title: "Gather cited policy evidence", capability_key: "tool:prior_auth_requirements_api", expected_source_pointer: 1 },
+        { step_key: "respond", checkpoint_boundary: "after_response", title: "Prepared-for-review packet", capability_key: "graph_path:evidence_to_sourced_answer" }
+      ]
+    },
     // Phase 89 (plan §9/§11): connector-backed public-data processes (layer_1 — no login).
     {
       process_key: "process:provider_network_search",
