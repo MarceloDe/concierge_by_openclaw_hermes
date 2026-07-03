@@ -76,7 +76,7 @@ async function main() {
     console.log(`  offered:  ${r.offered || "(none)"} ${r.processOk ? "✓" : "✗"}`);
     console.log(`  demand:   "${r.demand}" ${r.demandOk ? "✓" : "✗"} | informationNeeds ${r.needsOk ? "✓" : "✗"}`);
     console.log(`  v2:       taskClass=${r.taskClass ?? "(none)"} ${r.taskClassOk ? "✓" : "✗"} | data_layer=[${r.dataLayer}] ${r.dataLayerOk ? "✓" : "✗"} | risk_tier=${r.riskTier ?? "(none)"} ${r.riskTierOk ? "✓" : "✗"} | graph ${r.workflowGraphOk ? "✓" : "✗"}`);
-    console.log(`  source:   plannerCapabilitySource=${r.capabilitySource ?? "(none)"} ${r.capabilitySourceOk ? "✓" : "✗"}`);
+    console.log(`  source:   plannerCapabilitySource=${r.capabilitySource ?? "(none)"} ${r.capabilitySourceOk ? "✓" : "✗"} | mode=${r.mode ?? "(none)"}`);
   }
   console.log("\n---------------- SCORE ----------------");
   console.log(`  workflow selection : ${pct("workflowOk")}`);

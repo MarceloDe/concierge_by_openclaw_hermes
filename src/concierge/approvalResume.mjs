@@ -16,6 +16,56 @@ export const WRITE_ACTION_APPROVAL_GATE = "openclaw_approved_single_write_action
 export const WRITE_ACTION_APPROVAL_SCOPE = "approved_single_write_action";
 export const WRITE_ACTION_EXECUTION_MODE = "approved_single_write_action_only";
 
+// Phase 88 (plan §4.3): the two NEW gate kinds on the SAME create/consume pattern —
+// approval_gates rows, binding checks, single-use consumedAt, bounded expiry. No new
+// table, no second mechanism.
+export const CONSENT_GRANT_GATE = "consent_grant";
+export const AUTH_HANDOFF_GATE = "auth_handoff";
+
+// Phase 88 (plan §4.3, founder #4/#17 — spine YAML interrupt_policy.required_interrupt_fields):
+// the versioned fields EVERY interrupt payload / approval record carries. ADDITIVE to
+// (never a replacement for) the byte-compatible payload type strings and the
+// digest/targetUrl/candidate token bindings.
+export const INTERRUPT_SCHEMA_VERSION = "2026-07-03.interrupt-payload.v1";
+
+export function interruptRecordFields({
+  workflowId = null,
+  userId = null,
+  actionType = null,
+  riskTierDerived = null,
+  targetSiteOrApi = null,
+  dataToBeSubmittedSummary = "",
+  userVisibleReviewText = "",
+  approvalStatus = "pending",
+  expiresAt = null,
+  plannerSchemaVersion = null,
+  workflowSchemaVersion = null,
+  replaySafetyMetadata = {}
+} = {}) {
+  return {
+    interrupt_id: createId("interrupt"),
+    interrupt_schema_version: INTERRUPT_SCHEMA_VERSION,
+    workflow_schema_version: workflowSchemaVersion ?? "workflow_definitions.v1",
+    planner_schema_version: plannerSchemaVersion ?? "2026-07-02.llm-orchestration-decision.v2",
+    workflow_id: workflowId,
+    user_id: userId,
+    action_type: actionType,
+    risk_tier_derived: riskTierDerived,
+    target_site_or_api: targetSiteOrApi,
+    data_to_be_submitted_summary: String(dataToBeSubmittedSummary ?? "").slice(0, 300),
+    user_visible_review_text: String(userVisibleReviewText ?? "").slice(0, 500),
+    approval_status: approvalStatus,
+    created_at: nowIso(),
+    expires_at: expiresAt,
+    replay_safety_metadata: {
+      singleUse: true,
+      bindingChecked: true,
+      resumeCommand: "Command.resume",
+      ...replaySafetyMetadata
+    }
+  };
+}
+
 function parseJson(value, fallback = {}) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -170,7 +220,18 @@ export async function createReadOnlyObservationApproval(
     candidateType: config.candidate?.type ?? null,
     expiresAt: addMinutes(expiresInMinutes),
     actionsTaken: [],
-    consumedAt: null
+    consumedAt: null,
+    // Phase 88 (§4.3): additive versioned interrupt-record fields.
+    ...interruptRecordFields({
+      workflowId: task.workflow_key,
+      userId: task.user_id,
+      actionType: config.allowedAction,
+      riskTierDerived: "medium",
+      targetSiteOrApi: config.candidate?.url ?? null,
+      userVisibleReviewText: `Approve ${config.allowedAction} for workflow ${task.workflow_key ?? "unknown"}.`,
+      approvalStatus: decision,
+      expiresAt: addMinutes(expiresInMinutes)
+    })
   };
   const row = {
     id: createId("gate"),
@@ -366,7 +427,21 @@ export async function createWriteActionApproval(
     actionSchemaDigest: normalized.digest,
     expiresAt: addMinutes(expiresInMinutes),
     actionsTaken: [],
-    consumedAt: null
+    consumedAt: null,
+    // Phase 88 (§4.3): additive versioned interrupt-record fields. The summary is the
+    // MASKED human-readable schema summary — never raw field values.
+    ...interruptRecordFields({
+      workflowId: workflow,
+      userId: task.user_id,
+      actionType: normalized.normalized.actionType,
+      riskTierDerived: "high",
+      targetSiteOrApi: normalized.normalized.targetUrl,
+      dataToBeSubmittedSummary: normalized.normalized.humanReadableSummary,
+      userVisibleReviewText: `Approve the single write action ${normalized.normalized.actionType} at ${normalized.normalized.targetUrl}.`,
+      approvalStatus: decision,
+      expiresAt: addMinutes(expiresInMinutes),
+      replaySafetyMetadata: { actionSchemaDigest: normalized.digest }
+    })
   };
   const row = {
     id: createId("gate"),
@@ -506,5 +581,195 @@ export async function consumeWriteActionApproval(
     targetUrl: details.targetUrl,
     executionMode: WRITE_ACTION_EXECUTION_MODE,
     actionsTaken: ["approved_single_write_action_token_consumed"]
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 88 (plan §4.3): consent_grant + auth_handoff gates — the SAME
+// approval_gates create/consume pattern (binding checks, single-use consumedAt,
+// bounded expiry, audit through the one writer). consent_grant's consumption is
+// what AUTHORIZES flipping the authoritative user_consents flag (the caller
+// performs the write + mirror eviction); auth_handoff binds the login/2FA/captcha
+// takeover to the session's portal account. Return edge for both: plan_journey.
+// ---------------------------------------------------------------------------
+
+export async function createConsentGrantGate(
+  store,
+  { sessionId, userId, workflow = null, consentField, dataLayer = "layer_3_portal_control", expiresInMinutes = 15, decision = "approved" }
+) {
+  if (!sessionId || !userId || !consentField) {
+    return { ok: false, status: "missing_consent_gate_binding", error: "Consent gate requires sessionId, userId, and consentField." };
+  }
+  const token = createId("consent");
+  const details = {
+    version: "2026-07-03.consent-grant-gate.v1",
+    approvalToken: token,
+    sessionId,
+    userId,
+    workflow,
+    consentField: String(consentField),
+    dataLayer,
+    approvalScope: CONSENT_GRANT_GATE,
+    allowedAction: `grant_consent:${consentField}`,
+    expiresAt: addMinutes(expiresInMinutes),
+    actionsTaken: [],
+    consumedAt: null,
+    ...interruptRecordFields({
+      workflowId: workflow,
+      userId,
+      actionType: `grant_consent:${consentField}`,
+      riskTierDerived: "medium",
+      targetSiteOrApi: dataLayer,
+      userVisibleReviewText: `Grant consent (${consentField}) so the requested ${dataLayer} step can run.`,
+      approvalStatus: decision,
+      expiresAt: addMinutes(expiresInMinutes)
+    })
+  };
+  const row = {
+    id: createId("gate"),
+    session_id: sessionId,
+    gate_type: CONSENT_GRANT_GATE,
+    decision,
+    details: JSON.stringify(details),
+    created_at: nowIso()
+  };
+  await store.insert("approval_gates", row);
+  await audit(store, sessionId, "consent.grant_gate_created", {
+    gateId: row.id, sessionId, userId, workflow, consentField, dataLayer, expiresAt: details.expiresAt
+  });
+  return { ok: decision === "approved", status: decision, approvalGate: row, approvalToken: token, approval: details };
+}
+
+export async function consumeConsentGrantGate(store, { approvalToken, sessionId, userId, consentField, workflow = null }) {
+  const blocked = async (status, reason, extra = {}) => {
+    if (sessionId && store?.insert) {
+      await audit(store, sessionId, "consent.grant_gate_blocked", { status, reason, sessionId, userId: userId ?? null, consentField: consentField ?? null, ...extra });
+    }
+    return { ok: false, status, reason, actionsTaken: [], ...extra };
+  };
+  if (!approvalToken) return blocked("missing_approval_token", "Consent grant requires an approval token.");
+  const rows = await store.all(
+    "SELECT * FROM approval_gates WHERE session_id = ? AND gate_type = ? ORDER BY created_at DESC;",
+    [sessionId, CONSENT_GRANT_GATE]
+  );
+  const gate = rows.find((row) => parseJson(row.details).approvalToken === approvalToken);
+  if (!gate) return blocked("approval_not_found", "Consent-grant token was not found for this session.");
+  const details = parseJson(gate.details);
+  for (const [key, expected] of [["sessionId", sessionId], ["userId", userId], ["consentField", consentField], ["workflow", workflow]]) {
+    if (expected && details[key] !== expected) {
+      return blocked("approval_binding_mismatch", `Consent gate ${key} binding mismatch.`, { approvalGateId: gate.id });
+    }
+  }
+  if (details.consumedAt) return blocked("approval_already_consumed", "Consent-grant token was already consumed.", { approvalGateId: gate.id });
+  if (gate.decision !== "approved") return blocked("approval_denied", "Consent grant was denied.", { approvalGateId: gate.id });
+  if (new Date(details.expiresAt).getTime() <= Date.now()) return blocked("approval_expired", "Consent-grant token expired.", { approvalGateId: gate.id });
+
+  const consumedAt = nowIso();
+  await store.update(
+    "approval_gates",
+    { details: JSON.stringify({ ...details, consumedAt, approval_status: "consumed" }), decision: "approved_consumed" },
+    { id: gate.id }
+  );
+  await audit(store, sessionId, "consent.granted", {
+    approvalGateId: gate.id, sessionId, userId, workflow: details.workflow, consentField: details.consentField,
+    dataLayer: details.dataLayer, consumedAt, actionsTaken: ["consent_grant_token_consumed"]
+  });
+  return {
+    ok: true,
+    status: "approved_consumed",
+    approvalGateId: gate.id,
+    approval: { ...details, consumedAt },
+    consentField: details.consentField,
+    actionsTaken: ["consent_grant_token_consumed"]
+  };
+}
+
+export async function createAuthHandoffGate(
+  store,
+  { sessionId, userId, workflow = null, portalAccountId = null, targetUrl = null, expiresInMinutes = 15, decision = "approved" }
+) {
+  if (!sessionId || !userId) {
+    return { ok: false, status: "missing_auth_handoff_binding", error: "Auth handoff requires sessionId and userId." };
+  }
+  const token = createId("authhandoff");
+  const details = {
+    version: "2026-07-03.auth-handoff-gate.v1",
+    approvalToken: token,
+    sessionId,
+    userId,
+    workflow,
+    portalAccountId,
+    targetUrl,
+    approvalScope: AUTH_HANDOFF_GATE,
+    allowedAction: "user_login_takeover",
+    expiresAt: addMinutes(expiresInMinutes),
+    actionsTaken: [],
+    consumedAt: null,
+    ...interruptRecordFields({
+      workflowId: workflow,
+      userId,
+      actionType: "user_login_takeover",
+      riskTierDerived: "medium",
+      targetSiteOrApi: targetUrl,
+      userVisibleReviewText: "Take over the browser to log in yourself — the system never enters credentials.",
+      approvalStatus: decision,
+      expiresAt: addMinutes(expiresInMinutes)
+    })
+  };
+  const row = {
+    id: createId("gate"),
+    session_id: sessionId,
+    gate_type: AUTH_HANDOFF_GATE,
+    decision,
+    details: JSON.stringify(details),
+    created_at: nowIso()
+  };
+  await store.insert("approval_gates", row);
+  await audit(store, sessionId, "auth.handoff_gate_created", {
+    gateId: row.id, sessionId, userId, workflow, portalAccountId, targetUrl, expiresAt: details.expiresAt
+  });
+  return { ok: decision === "approved", status: decision, approvalGate: row, approvalToken: token, approval: details };
+}
+
+export async function consumeAuthHandoffGate(store, { approvalToken, sessionId, userId, portalAccountId = null, workflow = null }) {
+  const blocked = async (status, reason, extra = {}) => {
+    if (sessionId && store?.insert) {
+      await audit(store, sessionId, "auth.handoff_gate_blocked", { status, reason, sessionId, userId: userId ?? null, portalAccountId: portalAccountId ?? null, ...extra });
+    }
+    return { ok: false, status, reason, actionsTaken: [], ...extra };
+  };
+  if (!approvalToken) return blocked("missing_approval_token", "Auth handoff requires an approval token.");
+  const rows = await store.all(
+    "SELECT * FROM approval_gates WHERE session_id = ? AND gate_type = ? ORDER BY created_at DESC;",
+    [sessionId, AUTH_HANDOFF_GATE]
+  );
+  const gate = rows.find((row) => parseJson(row.details).approvalToken === approvalToken);
+  if (!gate) return blocked("approval_not_found", "Auth-handoff token was not found for this session.");
+  const details = parseJson(gate.details);
+  for (const [key, expected] of [["sessionId", sessionId], ["userId", userId], ["portalAccountId", portalAccountId], ["workflow", workflow]]) {
+    if (expected && details[key] !== expected) {
+      return blocked("approval_binding_mismatch", `Auth handoff ${key} binding mismatch.`, { approvalGateId: gate.id });
+    }
+  }
+  if (details.consumedAt) return blocked("approval_already_consumed", "Auth-handoff token was already consumed.", { approvalGateId: gate.id });
+  if (gate.decision !== "approved") return blocked("approval_denied", "Auth handoff was denied.", { approvalGateId: gate.id });
+  if (new Date(details.expiresAt).getTime() <= Date.now()) return blocked("approval_expired", "Auth-handoff token expired.", { approvalGateId: gate.id });
+
+  const consumedAt = nowIso();
+  await store.update(
+    "approval_gates",
+    { details: JSON.stringify({ ...details, consumedAt, approval_status: "consumed" }), decision: "approved_consumed" },
+    { id: gate.id }
+  );
+  await audit(store, sessionId, "auth.handoff_consumed", {
+    approvalGateId: gate.id, sessionId, userId, workflow: details.workflow, portalAccountId: details.portalAccountId,
+    targetUrl: details.targetUrl, consumedAt, actionsTaken: ["auth_handoff_token_consumed"]
+  });
+  return {
+    ok: true,
+    status: "approved_consumed",
+    approvalGateId: gate.id,
+    approval: { ...details, consumedAt },
+    actionsTaken: ["auth_handoff_token_consumed"]
   };
 }

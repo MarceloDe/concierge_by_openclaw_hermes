@@ -21,7 +21,7 @@ import { indexLlmOutput } from "./llmOutputIndex.mjs";
 import { selectMemorySkillTree } from "./memorySkillTree.mjs";
 import { composeResponse } from "./outputPolicy.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
-import { evaluateInputPolicy } from "./policy.mjs";
+import { deriveRiskTier, evaluateInputPolicy } from "./policy.mjs";
 import { persistEligibilitySnapshot } from "./portalExtraction.mjs";
 import {
   recordBlockedPortalEvidence,
@@ -129,6 +129,10 @@ const BrainstyState = Annotation.Root({
   consent_state: field(null),
   auth_state: field(null),
   errors: appendArrayField(),
+  // Phase 88 (§4.3): interrupt-kind discriminator + the pending consent/auth gate.
+  // Old checkpoints hydrate null (tolerant defaults — the Phase 84 new-channel pattern).
+  approval_interrupt_kind: field(null),
+  consent_gate: field(null),
   llm_orchestration_decision: field(null),
   hydrated_capabilities: field(null),
   worker_runtime_state: field(null),
@@ -726,8 +730,63 @@ async function publishGraphRuntimeEvent(store, state, { eventType, payload, sess
   }
 }
 
+
+// Phase 88 (§8.1): re-derive the tier WITH the hydrated capability rows, stamp the
+// (possibly raised) floor back onto policy_result, and audit risk_tier_assigned with
+// the capability ids. The LLM's asserted tier may only raise above this floor.
+async function assignDecisionRiskTier(state, gatedDecision, hydratedCapabilities) {
+  const store = activeStores.get(state.session_id);
+  const rows = hydratedCapabilityRows(hydratedCapabilities);
+  const derived = deriveRiskTier(state.policy_result, { selectedCapabilityRows: rows });
+  const policyResult = state.policy_result ?? {};
+  policyResult.riskTier = derived.riskTier;
+  policyResult.riskTierReasonCode = derived.reasonCode;
+  if (store) {
+    try {
+      await audit(store, state.session_id, "risk_tier_assigned", {
+        workflow_id: gatedDecision.classification?.workflow ?? state.workflow ?? null,
+        capability_id: rows[0]?.capabilityKey ?? rows[0]?.capability_key ?? null,
+        capability_ids: rows.map((row) => row.capabilityKey ?? row.capability_key).filter(Boolean),
+        risk_tier: gatedDecision.risk_tier ?? derived.riskTier,
+        risk_tier_floor: derived.riskTier,
+        reason_code: derived.reasonCode,
+        policy_version: derived.policyVersion,
+        timestamp: nowIso(),
+        stage: "llm_decision"
+      });
+    } catch {
+      /* chain verifier surfaces audit failures */
+    }
+  }
+  return policyResult;
+}
+
 async function inputPolicyNode(state) {
   const policyResult = evaluateInputPolicy(state.user_input);
+  // Phase 88 (§8.1): the derived tier is stamped on policy_result at the gate and
+  // audited (risk_tier_assigned). The decision node re-derives WITH the hydrated
+  // capability rows and audits again if the tier moved (LLM may only raise).
+  const derived = deriveRiskTier(policyResult);
+  policyResult.riskTier = derived.riskTier;
+  policyResult.riskTierReasonCode = derived.reasonCode;
+  {
+    const store = activeStores.get(state.session_id);
+    if (store) {
+      try {
+        await audit(store, state.session_id, "risk_tier_assigned", {
+          workflow_id: state.workflow ?? null,
+          capability_id: null,
+          risk_tier: derived.riskTier,
+          reason_code: derived.reasonCode,
+          policy_version: derived.policyVersion,
+          timestamp: nowIso(),
+          stage: "input_policy"
+        });
+      } catch {
+        /* audit failure surfaces via the chain verifier; the gate itself stays deterministic */
+      }
+    }
+  }
   const intent = classifyIntent(state.user_input, policyResult);
   // Append the current user turn to the canonical messages channel. Cold start (fresh process,
   // empty/lost checkpoint): rehydrate prior turns from the authoritative DB in order, dropping
@@ -893,10 +952,18 @@ async function hydrateDecisionCapabilities(state, decision) {
       // switch are DELETED — a pointer the catalog cannot resolve reports missing, loud.
       const store = activeStores.get(state.session_id);
       const { hydrateCapabilityPointer } = await import("./capabilityCatalog.mjs");
+      // Phase 88 (§8.1): the authorized tier for this turn derives from the SATISFIED
+      // gates (riskTierAuthorizedByGates): a consumed single-use write token authorizes
+      // high; otherwise the read-only baseline (medium). Never a free string.
+      const { riskTierAuthorizedByGates } = await import("./policy.mjs");
+      const authorizedTier = riskTierAuthorizedByGates({
+        writeTokenConsumed: state.approval_resume?.ok === true && state.approval_resume?.executionMode === "approved_single_write_action_only",
+        readOnlyGateSatisfied: true
+      });
       const resolved = [];
       const missing = [];
       for (const pointer of selectedPointers) {
-        const r = await hydrateCapabilityPointer(store, { pointer });
+        const r = await hydrateCapabilityPointer(store, { pointer, authorizedTier });
         if (r.resolved) resolved.push({ portfolioId: r.capabilityKey, kind: r.kind, title: r.hydrate?.title ?? r.capabilityKey, pointer, hydrate: r.hydrate });
         else missing.push(pointer);
       }
@@ -1031,8 +1098,10 @@ async function llmOrchestrationDecisionNode(state) {
     // registry runtime_selectable, capability-driven risk floor) — same implementation
     // the normalizer uses, applied post-hydration.
     const gated = applyDecisionCapabilityGates(decision, hydratedCapabilityRows(hydratedCapabilities), { policyResult: state.policy_result });
+    const tieredPolicyResult = await assignDecisionRiskTier(state, gated, hydratedCapabilities);
     return {
       hydrated_capabilities: hydratedCapabilities,
+      policy_result: tieredPolicyResult,
       llm_orchestration_decision: { ...gated, hydratedCapabilities },
       proof: appendProof(state, "llm_orchestration_decision", {
         mode: gated.mode,
@@ -1185,8 +1254,10 @@ async function llmOrchestrationDecisionNode(state) {
     // runtime_selectable, capability-driven risk floor) — same gate implementation
     // as the normalizer, no dual logic.
     const gated = applyDecisionCapabilityGates(decision, hydratedCapabilityRows(hydratedCapabilities), { policyResult: state.policy_result });
+    const tieredPolicyResult = await assignDecisionRiskTier(state, gated, hydratedCapabilities);
     return {
       hydrated_capabilities: hydratedCapabilities,
+      policy_result: tieredPolicyResult,
       llm_orchestration_decision: {
         ...gated,
         baseURL,
@@ -1548,6 +1619,86 @@ async function planJourneyNode(state) {
   const workflowGraph = decision.workflow_graph ?? {};
   let workflowGraphValidation = { valid: false, rejectedSteps: [], reason: "no_process_bound" };
   const store = activeStores.get(state.session_id);
+
+  // Phase 88 (§4.3): consent_grant interrupt. When the DECISION requires
+  // layer_3_portal_control and the consent snapshot denies it, the graph pauses with
+  // kind=consent_grant; the SAME Command.resume path re-runs this node, where token
+  // CONSUMPTION is what authorizes flipping the authoritative user_consents flag
+  // (mirror evicted synchronously — Phase 86 §6.1 rule).
+  const requiresPortalConsent = (decision.data_layer ?? []).includes("layer_3_portal_control");
+  const portalConsentAllowed = state.consent_state?.layers?.layer_3_portal_control?.allowed === true;
+  // The RESUME path re-enters this node from approval_pause WITHOUT re-running
+  // llm_decision — the pending gate on the channel (not the decision) is the record
+  // of why the graph paused, so the consume path keys on it.
+  const resumeToken = state.raw_message?.consentGrantToken ?? state.raw_message?.approvalToken ?? null;
+  const pendingGateToken = state.consent_gate?.status === "pending" ? state.consent_gate?.approvalToken ?? null : null;
+  const consentConsumePending = Boolean(store && resumeToken && pendingGateToken && resumeToken === pendingGateToken);
+  if (consentConsumePending || (store && requiresPortalConsent && !portalConsentAllowed && !state.policy_result?.urgentEscalationRequired)) {
+    if (consentConsumePending) {
+      const { consumeConsentGrantGate } = await import("./approvalResume.mjs");
+      const consumed = await consumeConsentGrantGate(store, {
+        approvalToken: resumeToken,
+        sessionId: state.session_id,
+        userId: state.user_id,
+        consentField: "read_only_extraction_approved"
+      });
+      if (consumed.ok) {
+        // Consumption authorizes the AUTHORITATIVE consent write + synchronous mirror eviction.
+        await store.all("UPDATE user_consents SET read_only_extraction_approved = 1, updated_at = ? WHERE user_id = ?;", [nowIso(), state.user_id]);
+        const { evictConsentState } = await import("./consentStateRuntime.mjs");
+        await evictConsentState([state.session_id]);
+        const { loadConsentState: loadConsentSnapshot } = await import("./credentialVault.mjs");
+        const refreshedConsent = await loadConsentSnapshot(store, { userId: state.user_id });
+        state = {
+          ...state,
+          consent_state: refreshedConsent,
+          approval_interrupt_kind: null,
+          consent_gate: { ...state.consent_gate, status: "consumed", consumedGateId: consumed.approvalGateId }
+        };
+      } else {
+        // Rejected consume (binding mismatch / double-consume / expired) is LOUD and
+        // audited inside the gate; the journey stays consent-blocked.
+        return {
+          approval_interrupt_kind: null,
+          consent_gate: { ...(state.consent_gate ?? {}), status: consumed.status, blocked: true },
+          journey_plan: {
+            version: "2026-07-03.phase88-consent-blocked-journey.v1",
+            workflow: state.workflow,
+            outcome: "consent_grant_rejected",
+            reason: consumed.reason ?? consumed.status
+          },
+          proof: appendProof(state, "plan_journey", { consentGrant: consumed.status, blocked: true })
+        };
+      }
+    } else {
+      const { createConsentGrantGate } = await import("./approvalResume.mjs");
+      const gate = await createConsentGrantGate(store, {
+        sessionId: state.session_id,
+        userId: state.user_id,
+        workflow: state.workflow,
+        consentField: "read_only_extraction_approved",
+        dataLayer: "layer_3_portal_control"
+      });
+      return {
+        approval_interrupt_kind: "consent_grant",
+        consent_gate: {
+          approvalToken: gate.approvalToken,
+          approvalGateId: gate.approvalGate?.id ?? null,
+          consentField: "read_only_extraction_approved",
+          status: "pending",
+          userVisibleReviewText: gate.approval?.user_visible_review_text ?? null,
+          expiresAt: gate.approval?.expiresAt ?? null
+        },
+        journey_plan: {
+          version: "2026-07-03.phase88-consent-pending-journey.v1",
+          workflow: state.workflow,
+          outcome: "consent_grant_required",
+          reason: "The selected route requires layer_3_portal_control and the user has not granted read-only extraction consent."
+        },
+        proof: appendProof(state, "plan_journey", { consentGrant: "gate_created", gateId: gate.approvalGate?.id ?? null })
+      };
+    }
+  }
   if (store && workflowGraph.processId) {
     try {
       const { validateWorkflowGraph } = await import("./capabilityCatalog.mjs");
@@ -1601,6 +1752,9 @@ async function planJourneyNode(state) {
   };
   return {
     journey_plan: journeyPlan,
+    approval_interrupt_kind: null,
+    consent_state: state.consent_state,
+    consent_gate: state.consent_gate,
     proof: appendProof(state, "plan_journey", {
       workflow: journeyPlan.workflow,
       processId: journeyPlan.processId,
@@ -2922,17 +3076,43 @@ async function evidenceObservationNode(state) {
 
 async function approvalInterruptNode(state) {
   const evidence = state.evidence_observation ?? {};
+  // Phase 88 (§4.3): the ONE interrupt mechanism gains a kind DISCRIMINATOR. The
+  // existing read-only payload type string stays BYTE-COMPATIBLE; consent/auth kinds
+  // are new payloads on the same mechanism. Kind precedence: an explicit upstream
+  // kind (consent_grant/auth_handoff from plan_journey) > document candidate > default.
+  const kind =
+    state.approval_interrupt_kind ??
+    (evidence.candidateId ? "document_candidate_approval" : "read_only_observation_approval");
+  const { interruptRecordFields } = await import("./approvalResume.mjs");
   const payload = {
-    type: "read_only_observation_approval",
+    type: kind === "read_only_observation_approval" ? "read_only_observation_approval" : kind,
+    kind,
     version: "2026-06-21.phase55-native-langgraph-interrupt.v1",
     sessionId: state.session_id,
     userId: state.user_id,
     workflow: state.workflow,
     taskId: evidence.taskId ?? state.raw_message?.approvalTaskId ?? state.raw_message?.taskId ?? null,
-    approvalScope: evidence.approvalScope ?? "read_only_observation",
-    allowedAction: evidence.allowedAction ?? "read_only_observation",
+    approvalScope: kind === "consent_grant" ? "consent_grant" : kind === "auth_handoff" ? "auth_handoff" : evidence.approvalScope ?? "read_only_observation",
+    allowedAction: kind === "consent_grant" ? `grant_consent:${state.consent_gate?.consentField ?? "read_only_extraction_approved"}` : evidence.allowedAction ?? "read_only_observation",
     candidateId: evidence.candidateId ?? null,
     candidateUrl: evidence.candidateUrl ?? null,
+    consentGate: kind === "consent_grant"
+      ? { approvalGateId: state.consent_gate?.approvalGateId ?? null, consentField: state.consent_gate?.consentField ?? null, expiresAt: state.consent_gate?.expiresAt ?? null }
+      : null,
+    // §4.3 versioned interrupt fields — ADDITIVE, never replacing the bindings above.
+    ...interruptRecordFields({
+      workflowId: state.workflow,
+      userId: state.user_id,
+      actionType: kind,
+      riskTierDerived: state.policy_result?.riskTier ?? null,
+      targetSiteOrApi: evidence.candidateUrl ?? state.raw_message?.portalUrl ?? null,
+      userVisibleReviewText:
+        kind === "consent_grant"
+          ? state.consent_gate?.userVisibleReviewText ?? "Grant consent so the requested portal step can run."
+          : evidence.reason ?? "Read-only worker observation requires explicit human approval.",
+      approvalStatus: "pending",
+      expiresAt: state.consent_gate?.expiresAt ?? null
+    }),
     reason: evidence.reason ?? state.approval_resume?.reason ?? "Read-only worker observation requires explicit human approval.",
     terminalOutcome: "not_possible_policy_or_approval_block",
     blockedActions: [
@@ -2959,10 +3139,12 @@ async function approvalInterruptNode(state) {
     raw_message: {
       ...(state.raw_message ?? {}),
       approvalTaskId: payload.taskId,
-      approvalToken
+      approvalToken,
+      ...(kind === "consent_grant" ? { consentGrantToken: approvalToken } : {})
     },
     approval_interrupt: {
       status: "resumed",
+      kind,
       payload,
       resumedAt: nowIso(),
       approvalTokenReceived: Boolean(approvalToken)
@@ -3537,14 +3719,20 @@ export function createBrainstyLangGraph() {
       compose_response: "compose_response",
       plan_journey: "plan_journey"
     })
-    .addEdge("plan_journey", "skill_resolver")
+    .addConditionalEdges("plan_journey", routeAfterPlanJourney, {
+      approval_pause: "approval_pause",
+      skill_resolver: "skill_resolver"
+    })
     .addEdge("skill_resolver", "workflow_executor")
     .addEdge("workflow_executor", "observe_evidence")
     .addConditionalEdges("observe_evidence", routeAfterEvidenceObservation, {
       approval_pause: "approval_pause",
       case_state_shadow: "case_state_shadow"
     })
-    .addEdge("approval_pause", "observe_evidence")
+    .addConditionalEdges("approval_pause", routeAfterApprovalPause, {
+      plan_journey: "plan_journey",
+      observe_evidence: "observe_evidence"
+    })
     .addEdge("case_state_shadow", "compose_response")
     .addEdge("compose_response", END)
     .compile({ checkpointer });
@@ -3560,6 +3748,18 @@ export function routeAfterWorkflowRouter(state) {
   if (refusalForIntent(state.intent)) return "compose_response";
   if (["urgent_handoff_created", "blocked"].includes(state.workflow_outcome)) return "compose_response";
   return state.final_response ? "compose_response" : "plan_journey";
+}
+
+// Phase 88 (§4.3): consent/auth interrupts pause BEFORE execution planning completes;
+// their return edge re-runs plan_journey (the token consume happens there).
+export function routeAfterPlanJourney(state) {
+  if (["consent_grant", "auth_handoff"].includes(state.approval_interrupt_kind)) return "approval_pause";
+  return "skill_resolver";
+}
+
+export function routeAfterApprovalPause(state) {
+  if (["consent_grant", "auth_handoff"].includes(state.approval_interrupt?.kind ?? state.approval_interrupt_kind)) return "plan_journey";
+  return "observe_evidence";
 }
 
 export function routeAfterEvidenceObservation(state) {
@@ -3606,13 +3806,15 @@ export function describeBrainstyLangGraphTopology() {
         proves: ["native_hitl_interrupt", "evidence_blocked", "evidence_found", "case_state_shadow"]
       }
     ],
+    conditionalEdgesPhase88: [
+      { from: "plan_journey", cases: ["approval_pause", "skill_resolver"], proves: ["consent_or_auth_interrupt", "journey_execution"] },
+      { from: "approval_pause", cases: ["plan_journey", "observe_evidence"], proves: ["kind_aware_return_edge"] }
+    ],
     linearEdges: [
       ["recall_context", "llm_decision"],
       ["llm_decision", "workflow_router"],
-      ["plan_journey", "skill_resolver"],
       ["skill_resolver", "workflow_executor"],
       ["workflow_executor", "observe_evidence"],
-      ["approval_pause", "observe_evidence"],
       ["case_state_shadow", "compose_response"],
       ["compose_response", "__end__"]
     ],

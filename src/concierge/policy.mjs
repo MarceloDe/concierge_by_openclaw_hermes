@@ -150,7 +150,9 @@ export function evaluateInputPolicy(message, { llmScopesDomain = true } = {}) {
   };
 }
 
-export function evaluatePortalAction(action) {
+// Phase 88 (§8.2): evaluatePortalAction is the guard's INTERNAL write-gate core — it
+// ceased to be a public entry point; every call site goes through mcpPolicyGuard.
+function evaluatePortalActionCore(action) {
   const actionText = typeof action === "string" ? action : `${action?.action ?? action?.instruction ?? action?.actionSchema?.actionType ?? ""}`;
   const targetUrl = typeof action === "string" ? null : action?.targetUrl ?? action?.url ?? action?.actionSchema?.targetUrl ?? null;
   const actionSchema = typeof action === "string" ? null : action?.actionSchema ?? null;
@@ -213,8 +215,11 @@ export function riskTierAtLeast(tier, floor) {
 const READ_ONLY_APPROVAL_SCOPES = new Set(["read_only_observation", "read_only", "login_takeover", "local", "none"]);
 const WRITE_SCOPE_RE = /\b(submit|send|file|appeal|authorize|change|cancel|delete|pay|write)\b/i;
 
-function capabilityRowTier(row) {
-  const scope = String(row?.approvalScope ?? row?.approval_scope ?? row?.hydrate?.approvalScope ?? "").trim();
+// Exported for the Phase 88 hydrate-time tier ceiling (capabilityCatalog).
+export function capabilityRowTier(row) {
+  // Underscore-joined scopes (the canonical approved_single_write_action constant)
+  // normalize to spaces so the word-boundary write test cannot miss them.
+  const scope = String(row?.approvalScope ?? row?.approval_scope ?? row?.hydrate?.approvalScope ?? "").replaceAll("_", " ").trim();
   const riskLevel = String(row?.riskLevel ?? row?.risk_level ?? row?.hydrate?.riskLevel ?? "").trim();
   if (/critical/i.test(riskLevel)) return "critical";
   // HIGH is gate-bound to irreversible WRITES (§8.1: consumed single-use bound token,
@@ -247,6 +252,143 @@ export function computeRiskTierFloor(policyResult, selectedCapabilityRows = []) 
     if (floor === "critical") break;
   }
   return floor;
+}
+
+export const POLICY_VERSION = "2026-07-03.policy.phase88.v1";
+
+// Phase 88 (§8.1): the ONE derived risk-tier authority — a pure projection with a
+// named reason code, consumed by policy_result.riskTier and the risk_tier_assigned
+// audit event (workflow_id, capability_id, risk_tier, reason_code, policy_version,
+// timestamp). Derived-only, never persisted as a new authority table (founder #15).
+export function deriveRiskTier(policyResult, { selectedCapabilityRows = [], pemsCeiling = null } = {}) {
+  const checks = Array.isArray(policyResult?.checks) ? policyResult.checks : [];
+  const hardBlocked = checks.some((check) => check?.severity === "block");
+  if (policyResult?.urgentEscalationRequired === true) {
+    return { riskTier: "critical", reasonCode: "urgent_escalation_required", policyVersion: POLICY_VERSION };
+  }
+  if (hardBlocked) {
+    return { riskTier: "critical", reasonCode: "hard_safety_block", policyVersion: POLICY_VERSION };
+  }
+  let tier = "low";
+  let reasonCode = "evidence_only_no_interrupt";
+  if (policyResult?.approvalRequired === true) {
+    tier = "medium";
+    reasonCode = "external_action_gate";
+  }
+  for (const row of Array.isArray(selectedCapabilityRows) ? selectedCapabilityRows : []) {
+    const rowTier = capabilityRowTier(row);
+    if (riskTierAtLeast(rowTier, tier) !== tier) {
+      tier = riskTierAtLeast(rowTier, tier);
+      reasonCode = rowTier === "high" ? "irreversible_write_capability" : rowTier === "medium" ? "approval_gated_capability" : reasonCode;
+    }
+  }
+  // PEMS maturity CEILING (consulted at hydrate time): untrusted/non-production
+  // capabilities never lower the tier — they can only keep it at/above medium.
+  if (pemsCeiling && ["medium", "high", "critical"].includes(String(pemsCeiling)) ) {
+    const ceiled = riskTierAtLeast(String(pemsCeiling), tier);
+    if (ceiled !== tier) {
+      tier = ceiled;
+      reasonCode = "pems_maturity_ceiling";
+    }
+  }
+  return { riskTier: tier, reasonCode, policyVersion: POLICY_VERSION };
+}
+
+// Phase 88 (§8.1): the tier -> authorized-scope map is DERIVED from the three gate
+// constants (never free strings). What a turn's satisfied interrupts authorize:
+//   consumed write token             -> high
+//   read-only / document gate        -> medium
+//   nothing                          -> low
+export function riskTierAuthorizedByGates({ writeTokenConsumed = false, readOnlyGateSatisfied = false } = {}) {
+  if (writeTokenConsumed) return "high";
+  if (readOnlyGateSatisfied) return "medium";
+  return "low";
+}
+
+// ---------------------------------------------------------------------------
+// Phase 88 (§8.2): mcp_policy_guard — the SINGLE pre-tool-call chokepoint, composed
+// entirely of existing primitives: normalizeWriteActionSchema, the fail-closed
+// evaluatePortalAction core, classifyUntrustedTextRisk over tool OUTPUT (stamped
+// safeForInstructionUse:false), and the consume* token functions. Token consumption
+// happens BEFORE any allow verdict (no over-broad approvals, no global write boolean).
+// The model cannot skip or select this guard — it runs in code on every tool call.
+// ---------------------------------------------------------------------------
+export async function mcpPolicyGuard(store, {
+  tool = null,
+  action = null,
+  actionSchema = null,
+  targetUrl = null,
+  approval = null,
+  approvalToken = null,
+  taskId = null,
+  sessionId = null,
+  userId = null,
+  workflow = null,
+  toolOutput = null
+} = {}) {
+  const actionText = String(action ?? actionSchema?.actionType ?? "");
+  const irreversible = /\b(submit|send|file|appeal|authorize|change|cancel|delete|pay)\b/i.test(actionText.replaceAll("_", " "));
+
+  // 1. CONSUME BEFORE VERDICT: an irreversible action carrying a raw token consumes it
+  //    first; a failed consume is a fail-closed block (audited inside the consumer).
+  let consumedApproval = approval;
+  let tokenConsumedHere = false;
+  if (irreversible && !consumedApproval && approvalToken && store) {
+    const { consumeWriteActionApproval } = await import("./approvalResume.mjs");
+    consumedApproval = await consumeWriteActionApproval(store, {
+      approvalToken, taskId, sessionId, userId, workflow, actionSchema, targetUrl
+    });
+    tokenConsumedHere = consumedApproval?.ok === true;
+  }
+
+  // 2. The fail-closed core verdict (digest + targetUrl bound for writes).
+  const verdict = evaluatePortalActionCore({
+    action: actionText,
+    targetUrl,
+    actionSchema,
+    approvalToken: consumedApproval
+  });
+
+  // 3. Tool OUTPUT is hostile/untrusted DATA — never instructions.
+  const outputRisk = toolOutput !== null && toolOutput !== undefined
+    ? classifyUntrustedTextRisk(String(toolOutput))
+    : null;
+
+  // 4. Audit through the ONE writer (guard decisions are chain events).
+  if (store && sessionId) {
+    try {
+      const { audit } = await import("./audit.mjs");
+      if (!verdict.allowed) {
+        await audit(store, sessionId, "mcp_policy_guard_blocked", {
+          tool, action: actionText.slice(0, 200), targetUrl: verdict.targetUrl ?? targetUrl ?? null,
+          reason: verdict.reason, failClosed: verdict.failClosed ?? !verdict.allowed,
+          irreversible, approvalStatus: consumedApproval?.status ?? null, workflow, taskId
+        });
+      } else if (irreversible && (tokenConsumedHere || consumedApproval?.status === "approved_consumed")) {
+        await audit(store, sessionId, "mcp_policy_guard_write_token_consumed", {
+          tool, action: actionText.slice(0, 200), targetUrl: verdict.targetUrl ?? targetUrl ?? null,
+          approvalGateId: consumedApproval?.approvalGateId ?? null,
+          actionSchemaDigest: consumedApproval?.actionSchemaDigest ?? verdict.actionSchemaDigest ?? null,
+          workflow, taskId
+        });
+      }
+    } catch {
+      /* the chain verifier surfaces audit failures; the verdict itself is deterministic */
+    }
+  }
+
+  return {
+    ...verdict,
+    guard: "mcp_policy_guard",
+    guardVersion: POLICY_VERSION,
+    tool,
+    irreversible,
+    tokenConsumed: tokenConsumedHere || consumedApproval?.status === "approved_consumed" || false,
+    approval: consumedApproval
+      ? { ok: consumedApproval.ok ?? null, status: consumedApproval.status ?? null, approvalGateId: consumedApproval.approvalGateId ?? null }
+      : null,
+    outputRisk
+  };
 }
 
 export function classifyUntrustedTextRisk(text) {

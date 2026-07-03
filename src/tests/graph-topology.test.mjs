@@ -14,8 +14,11 @@ test("LangGraph topology exposes conditional routing boundaries", () => {
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("evidence_blocked")));
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("evidence_found")));
   assert.ok(topology.conditionalEdges.some((edge) => edge.proves.includes("case_state_shadow")));
-  assert.ok(topology.linearEdges.some(([from, to]) => from === "plan_journey" && to === "skill_resolver"));
-  assert.ok(topology.linearEdges.some(([from, to]) => from === "approval_pause" && to === "observe_evidence"));
+  // Phase 88 (§4.3): plan_journey -> skill_resolver became CONDITIONAL (consent/auth
+  // interrupts route to approval_pause; the kind-aware return edge re-runs plan_journey).
+  assert.ok(topology.conditionalEdgesPhase88.some((edge) => edge.from === "plan_journey" && edge.cases.includes("skill_resolver") && edge.cases.includes("approval_pause")));
+  assert.ok(topology.conditionalEdgesPhase88.some((edge) => edge.from === "approval_pause" && edge.cases.includes("plan_journey") && edge.cases.includes("observe_evidence")));
+  // approval_pause return edge is now kind-aware (asserted above).
   assert.ok(topology.linearEdges.some(([from, to]) => from === "case_state_shadow" && to === "compose_response"));
   assert.ok(topology.linearEdges.some(([from, to]) => from === "compose_response" && to === "__end__"));
   assert.ok(!topology.linearEdges.some(([from, to]) => from === "compose_response" && to === "maybe_model"));

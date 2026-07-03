@@ -1,6 +1,6 @@
 import { audit } from "./audit.mjs";
 import { createId, nowIso } from "./database.mjs";
-import { evaluatePortalAction } from "./policy.mjs";
+import { mcpPolicyGuard } from "./policy.mjs";
 
 const DEFAULT_REMOTE_DEBUGGER = "http://127.0.0.1:9222";
 
@@ -247,7 +247,13 @@ export async function runPortalExtraction({ store, session, portal, remoteDebugg
 
   let target = findPortalTab(probe.tabs, portal.portal_url);
   if (!target) {
-    const actionPolicy = evaluatePortalAction(`navigate to ${portal.portal_url}`);
+    // Phase 88 (§8.2): every direct portal-action check goes through the guard.
+    const actionPolicy = await mcpPolicyGuard(store, {
+      tool: "browser_remote_debugger",
+      action: `navigate to ${portal.portal_url}`,
+      targetUrl: portal.portal_url,
+      sessionId: browserRun.session_id ?? null
+    });
     await store.insert("browser_actions", {
       id: createId("action"),
       browser_run_id: browserRun.id,

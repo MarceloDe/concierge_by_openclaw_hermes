@@ -9,7 +9,7 @@ import { consumeWriteActionApproval, WRITE_ACTION_EXECUTION_MODE } from "./appro
 import { createId, nowIso } from "./database.mjs";
 import { READ_ONLY_DOCUMENT_ALLOWED_ACTION, candidateIdFor } from "./documentCandidateApproval.mjs";
 import { recordOutboundPayloadObservation } from "./outboundPayloadObservability.mjs";
-import { evaluatePortalAction } from "./policy.mjs";
+import { mcpPolicyGuard } from "./policy.mjs";
 import { start_checkpoint } from "../observability/checkpoints.mjs";
 import { classifyFailureClass } from "../observability/failures.mjs";
 
@@ -1689,11 +1689,18 @@ export async function runOfficialOpenClawApprovedWriteAction({
     });
   }
   actionsTaken.push("approved_single_write_action_token_consumed");
-  const policy = evaluatePortalAction({
+  // Phase 88 (§8.2): the guard verdict runs over the ALREADY-consumed token (the
+  // consume-before-verdict ordering is preserved — consumption happened above).
+  const policy = await mcpPolicyGuard(store, {
+    tool: "openclaw_approved_write",
     action: consumed.actionSchema?.actionType ?? actionSchema?.actionType ?? "",
     targetUrl,
     actionSchema,
-    approvalToken: consumed
+    approval: consumed,
+    taskId,
+    sessionId: session.id,
+    userId,
+    workflow
   });
   if (!policy.allowed) {
     return blocked("portal_action_policy_denied", policy.reason, {
