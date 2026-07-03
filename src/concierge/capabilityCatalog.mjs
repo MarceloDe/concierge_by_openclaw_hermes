@@ -3,7 +3,12 @@ import { redact_text, stableHash } from "../observability/redaction.mjs";
 import { createRuntimeContextCache } from "./runtimeContextCache.mjs";
 import { audit } from "./audit.mjs";
 
-export const CATALOG_PORTFOLIO_MIRROR_VERSION = "2026-06-27.catalog-portfolio-mirror.v1";
+export const CATALOG_PORTFOLIO_MIRROR_VERSION = "2026-07-02.catalog-portfolio-mirror.v2";
+
+// Mirrors backingEnabled("workflow", row) below: a workflow_definitions row counts as
+// enabled unless its status names a disabled-ish state. Kept as ONE regex so the
+// allowedWorkflows derivation and pointer hydration can never disagree.
+const DISABLED_BACKING_STATUS_RE = /disabled|deprecated|retired|quarantined|revoked/i;
 
 // Distinct key from the legacy per-turn portfolio (brainsty:capability-portfolio:*)
 // so the DB-sourced catalog mirror does not collide during the transition.
@@ -27,7 +32,18 @@ export async function buildSessionPortfolioFromPostgres(store, sessionId) {
     ...caps.map((c) => ({ portfolioId: c.capability_key, kind: c.kind, title: c.short_description || c.capability_key, whenToUse: c.when_to_use, whyUse: c.why_use, shortDescription: c.short_description, pointer: `${cacheKey}#${c.capability_key}`, score: c.planner_score }))
   ];
   const entries = Object.fromEntries(promptTable.map((row) => [row.portfolioId, { portfolioId: row.portfolioId, kind: row.kind, pointer: row.pointer }]));
-  return { version: CATALOG_PORTFOLIO_MIRROR_VERSION, cacheKey, sessionId, promptTable, entries, capabilityCount: caps.length, processCount: procs.length };
+  // Prompt layer 2 (plan §3.1/§3.3): the ONLY workflow keys the planner may select —
+  // workflow_definitions joined with active+production workflow capabilities, filtered
+  // by the same backing-status rule hydrateCapabilityPointer enforces. Replaces the
+  // frozen LLM_DECISION_WORKFLOWS enum (deleted, plan §10.6). Empty is a LOUD state:
+  // the normalizer hard-fails with allowed_workflows_unavailable, never permissive.
+  const workflowRows = await store.all(
+    "SELECT DISTINCT wd.workflow_key, wd.status FROM workflow_definitions wd JOIN capabilities c ON c.workflow_key = wd.workflow_key WHERE c.kind='workflow' AND c.status='active' AND c.lifecycle_state='production' ORDER BY wd.workflow_key ASC;"
+  );
+  const allowedWorkflows = workflowRows
+    .filter((row) => Boolean(row.status) && !DISABLED_BACKING_STATUS_RE.test(String(row.status)))
+    .map((row) => row.workflow_key);
+  return { version: CATALOG_PORTFOLIO_MIRROR_VERSION, cacheKey, sessionId, promptTable, entries, allowedWorkflows, capabilityCount: caps.length, processCount: procs.length };
 }
 
 // WRITE half (Postgres-before-Redis): read authoritative PG, then mirror to cache.
@@ -459,6 +475,49 @@ export async function hydrateProcess(store, processKey) {
     workerSkillKey,
     steps
   };
+}
+
+// Deterministic guard for DECISION_CONTRACT_V2 workflow_graph (plan §3.3): the planner
+// composes ONLY from DB-authored process_steps rows — it may never invent nodes/edges.
+// processId must hydrate, each submitted step must match the authored row at the same
+// position, and the denylist is IDENTICAL to validateCapabilityAnswer's credential-step
+// rule. Consumed by the rewritten plan_journey node (Phase 84).
+const FORBIDDEN_STEP_RE = /credential|password|2fa|passkey|login_submit/i;
+
+export async function validateWorkflowGraph(store, { processId, steps = [] } = {}) {
+  if (!processId) return { valid: false, rejectedSteps: [], reason: "process_id_missing" };
+  const h = await hydrateProcess(store, processId);
+  if (!h.ok) return { valid: false, rejectedSteps: [], reason: h.reason };
+  const authored = await store.all(
+    `SELECT ps.step_order, ps.step_key, ps.checkpoint_boundary, c.capability_key
+     FROM process_steps ps LEFT JOIN capabilities c ON c.id = ps.capability_id
+     WHERE ps.process_id = ? ORDER BY ps.step_order;`,
+    [h.process.id]
+  );
+  const rejectedSteps = [];
+  const submitted = Array.isArray(steps) ? steps : [];
+  submitted.forEach((step, index) => {
+    const boundary = String(step?.boundary ?? "").trim();
+    const pointer = String(step?.capabilityPointer ?? step?.capability ?? "").trim();
+    const row = authored[index];
+    if (!row) {
+      rejectedSteps.push({ index, boundary, capabilityPointer: pointer || null, reason: "step_not_authored" });
+      return;
+    }
+    if (FORBIDDEN_STEP_RE.test(boundary) || FORBIDDEN_STEP_RE.test(pointer) || FORBIDDEN_STEP_RE.test(String(row.step_key ?? ""))) {
+      rejectedSteps.push({ index, boundary, capabilityPointer: pointer || null, reason: "credential_step_forbidden" });
+      return;
+    }
+    if (boundary && boundary !== String(row.checkpoint_boundary ?? "")) {
+      rejectedSteps.push({ index, boundary, capabilityPointer: pointer || null, reason: `boundary_mismatch:${row.checkpoint_boundary}` });
+      return;
+    }
+    const authoredCapability = String(row.capability_key ?? "");
+    if (pointer && authoredCapability && pointer !== authoredCapability && !pointer.endsWith(`#${authoredCapability}`)) {
+      rejectedSteps.push({ index, boundary, capabilityPointer: pointer, reason: `capability_mismatch:${authoredCapability}` });
+    }
+  });
+  return { valid: rejectedSteps.length === 0, rejectedSteps, processId, authoredStepCount: authored.length };
 }
 
 const COVERAGE_NUMBER_RE = /\$\s?\d|\b\d+(?:\.\d+)?\s?(?:usd|dollars)\b/i;

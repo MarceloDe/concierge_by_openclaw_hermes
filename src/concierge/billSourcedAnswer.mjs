@@ -29,7 +29,11 @@ function buildBillState(analysis = {}) {
     session_id: analysis.sessionId ?? null,
     user_input: "Help me verify this medical bill and explain what can be concluded from the cited evidence.",
     workflow: "bill_verification_flow",
-    structured_intent: { reasoning: { primary_intent: "bill_verification" } },
+    llm_orchestration_decision: {
+      workflow: "bill_verification_flow",
+      intent: "bill_verification",
+      classification: { taskClass: "bill_verification" }
+    },
     product_memory_recall: { facts: [] },
     source_pointers: [
       {

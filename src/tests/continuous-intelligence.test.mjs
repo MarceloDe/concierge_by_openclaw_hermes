@@ -30,7 +30,7 @@ test("CaseState is typed, sanitized, and keeps Cortex out of product memory", ()
       memoryItems: [{ id: "memory_1" }]
     },
     policyResult: { allowed: true },
-    structuredIntent: { intent: "check_benefits", workflow: "eligibility_check", confidence: 0.91 },
+    llmDecision: { intent: "check_benefits", workflow: "eligibility_check", confidence: 0.91 },
     workflow: "eligibility_check",
     sourcePointers: [{ table: "eligibility_snapshots", id: "snap_1", sourceUrl: "https://member.example.test/private/path" }],
     productMemoryRecall: { adapter: "graphiti", facts: [{ uuid: "fact_1" }] }
@@ -56,9 +56,9 @@ test("G0-G8 universal gates are evaluated in order and remain shadow-safe", () =
     userInput: "Check benefits",
     contextPacket: { user: { id: "user_123" }, workflowArchitecture: { routeCandidates: [{ workflowKey: "eligibility_check" }] } },
     policyResult: { allowed: true },
-    structuredIntent: { intent: "check_benefits", workflow: "eligibility_check", confidence: 0.9 },
+    llmDecision: { intent: "check_benefits", workflow: "eligibility_check", confidence: 0.9 },
     workflow: "eligibility_check",
-    routeReason: "structured_intent_classifier",
+    routeReason: "llm_orchestration_decision",
     evidenceObservation: { status: "not_requested", actionsTaken: [] },
     workflowOutcome: "openclaw_skill_proposal_prepared",
     finalResponse: "proof only"

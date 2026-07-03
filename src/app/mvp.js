@@ -1044,7 +1044,7 @@ function renderAnswer(result = null) {
   const memory = productMemoryRetain(result);
   const llmMode = stateSnapshot.llm_decision?.mode ?? stateSnapshot.llm_response?.mode ?? "not reported";
   const workflow = stateSnapshot.workflow ?? result.intent?.workflow ?? "not routed";
-  const classifier = stateSnapshot.structured_intent;
+  const classifier = stateSnapshot.llm_orchestration_decision ?? {};
   const pointerLabels = pointers
     .slice(0, 4)
     .map(sourcePointerLabel)
@@ -1270,7 +1270,7 @@ function renderSequence(result = state.latestRun) {
   const handoff = humanHandoff(result);
   const sequence = {
     auth: state.session?.id ? ["done", "signed in"] : ["active", "waiting"],
-    route: graphState(result).structured_intent ? ["done", graphState(result).workflow ?? "routed"] : ["active", "waiting"],
+    route: graphState(result).llm_orchestration_decision ? ["done", graphState(result).workflow ?? "routed"] : ["active", "waiting"],
     skill: dynamicSkillContext(result) ? ["done", dynamicSkillSelectedLine(dynamicSkillContext(result))] : ["", "waiting"],
     approval: approvalConsumed(result) ? ["done", approval] : approval === "needed" || approval === "pending" ? ["active", approval] : ["", "waiting"],
     worker: handoff
@@ -1995,7 +1995,7 @@ function parityMemberPayload() {
 function summarizeParityResult(result) {
   const stateSnapshot = graphState(result);
   const workflow = stateSnapshot.workflow ?? result.intent?.workflow ?? "not routed";
-  const classifier = stateSnapshot.structured_intent ?? {};
+  const classifier = stateSnapshot.llm_orchestration_decision ?? {};
   const evidence = evidenceObservation(result);
   const pointers = sourcePointers(result);
   return {

@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { listRuntimeEvents } from "../concierge/runtimeEvents.mjs";
 import {
   cancelWorkerContinuation,
@@ -20,8 +21,22 @@ import {
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-worker-continuations-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat; the normalizer lifts it) — no classifier fallback.
+const eligibilityReplay = {
+  workflow: "eligibility_benefits_navigation",
+  intent: "eligibility_benefits_question",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for worker continuations.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only benefits observation worker goal."
+};
 
 async function proposalFixture(store) {
   const { user, session } = await enrollDefaultMember(store);
@@ -30,7 +45,12 @@ async function proposalFixture(store) {
     session,
     channel: session.channel,
     userInput: "Do I still owe anything before insurance starts paying?",
-    rawMessage: { source: "worker_continuation_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "worker_continuation_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: eligibilityReplay
+    }
   });
   return { user, session, proposal, taskId: proposal.state.openclaw_skill_proposal.task.id };
 }
@@ -280,6 +300,7 @@ test("LangGraph blocks continuation dispatch without official OpenClaw worker fl
       source: "worker_continuation_requires_official_test",
       useLiveModel: false,
       executeEvidenceObservation: true,
+      llmOrchestrationDecisionReplay: eligibilityReplay,
       approvalToken: approval.approvalToken,
       approvalTaskId: taskId,
       workerContinuationId: created.continuation.id,

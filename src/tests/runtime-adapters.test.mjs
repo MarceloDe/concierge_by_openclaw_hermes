@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { runConciergeSlice } from "../concierge/langgraphCompatibility.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { getMemoryContextForUser } from "../concierge/memoryHarness.mjs";
 import {
   buildRuntimeCompatibilityBundle,
@@ -18,13 +19,28 @@ import {
 
 async function testStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-runtime-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat; spreads into rawMessage via runConciergeSlice).
+const eligibilityReplay = {
+  workflow: "eligibility_benefits_navigation",
+  intent: "eligibility_benefits_question",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for runtime adapters.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only benefits observation worker goal."
+};
 
 test("runtime adapters map context packet to LangChain and LangGraph shapes", async () => {
   const store = await testStore();
   const result = await runConciergeSlice(store, {
     message: "Use the already open Aetna Chrome tab to review my benefits.",
+    llmOrchestrationDecisionReplay: eligibilityReplay,
     browserSnapshot: {
       title: "Home - Aetna",
       url: "https://health.aetna.com/",

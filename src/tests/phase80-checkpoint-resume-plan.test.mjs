@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { buildLlmOrchestrationDecisionMessages } from "../concierge/llmOrchestrationDecision.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import {
@@ -19,13 +20,28 @@ async function createStore() {
 
 test("Phase 80 builds a checkpoint resume plan from achieved runtime checkpoints", async () => {
   const store = await createStore();
+  await seedCapabilityCatalog(store, { nowIso, createId });
   const { user, session } = await enrollDefaultMember(store);
+  const eligibilityReplay = {
+    workflow: "eligibility_benefits_navigation",
+    intent: "eligibility_benefits_question",
+    confidence: 0.9,
+    rationale: "Phase 80 deterministic replay decision.",
+    approvalRequired: true,
+    approvalScope: "read_only_observation",
+    workerGoal: "Read-only benefits observation worker goal."
+  };
   await runLangGraphOrchestration(store, {
     user,
     session,
     channel: session.channel,
     userInput: "Please check my Aetna benefits.",
-    rawMessage: { source: "phase80_seed", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "phase80_seed",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: eligibilityReplay
+    }
   });
   const resumed = await runLangGraphOrchestration(store, {
     user,
@@ -36,7 +52,8 @@ test("Phase 80 builds a checkpoint resume plan from achieved runtime checkpoints
       source: "phase80_resume",
       useLiveModel: false,
       executeEvidenceObservation: false,
-      resumeFromRuntimeContext: true
+      resumeFromRuntimeContext: true,
+      llmOrchestrationDecisionReplay: eligibilityReplay
     }
   });
   const plan = resumed.state.checkpoint_resume_plan;
@@ -57,28 +74,8 @@ test("Phase 80 exposes checkpoint resume plan and prior LLM pointers to the plan
   setTieredChatModelFactoryForTests(({ step }) => ({
     invoke: async (messages) => {
       const payload = JSON.parse(messages.find((message) => message.role === "user").content);
-      if (step === "structured_intent") {
-        return {
-          content: JSON.stringify({
-            primary_intent: /claim/i.test(payload.user_input ?? "") ? "claims_eob_payment" : "pharmacy_formulary",
-            candidate_journeys: [
-              {
-                journey: /claim/i.test(payload.user_input ?? "") ? "claims_eob_payment" : "pharmacy_formulary",
-                confidence: 0.84,
-                rationale: "Phase 80 structured output.",
-                required_evidence: ["source_pointer"],
-                missing_evidence: ["source_pointer"],
-                safe_next_action: "request_or_retrieve_evidence",
-                requires_approval: true,
-                requires_human_handoff: false
-              }
-            ],
-            complexity: "moderate",
-            ambiguities: [],
-            policy_flags: [],
-            unsafe_action_requested: false
-          })
-        };
+      if (step !== "llm_orchestration_decision") {
+        throw new Error(`unexpected model step in phase 80 harness: ${step}`);
       }
       return {
         content: JSON.stringify({
@@ -100,6 +97,7 @@ test("Phase 80 exposes checkpoint resume plan and prior LLM pointers to the plan
   }));
   try {
     const store = await createStore();
+    await seedCapabilityCatalog(store, { nowIso, createId });
     const { user, session } = await enrollDefaultMember(store);
     await runLangGraphOrchestration(store, {
       user,
@@ -126,8 +124,10 @@ test("Phase 80 exposes checkpoint resume plan and prior LLM pointers to the plan
     assert.equal(payload.checkpointResumePlan.requested, true);
     assert.equal(payload.checkpointResumePlan.available, true);
     assert.ok(payload.checkpointResumePlan.resumeCheckpointId);
-    assert.ok(payload.checkpointResumePlan.priorLlmOutputPointers.length >= 2);
-    assert.ok(resumed.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 2);
+    // One LLM step (the planner) is indexed per turn since the legacy classifier
+    // step was deleted, so the prior turn contributes one pointer.
+    assert.ok(payload.checkpointResumePlan.priorLlmOutputPointers.length >= 1);
+    assert.ok(resumed.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 1);
   } finally {
     resetTieredChatModelFactoryForTests();
     if (priorKey) process.env.OPENAI_API_KEY = priorKey;

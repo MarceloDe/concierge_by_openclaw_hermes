@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { buildLlmOrchestrationDecisionMessages } from "../concierge/llmOrchestrationDecision.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { llmOutputIndexKey, loadLlmOutputIndex } from "../concierge/llmOutputIndex.mjs";
@@ -20,29 +21,6 @@ async function createStore() {
 
 function parsePayload(messages) {
   return JSON.parse(messages.find((message) => message.role === "user").content);
-}
-
-function fakeStructured(payload) {
-  const journey = /claim/i.test(payload.user_input ?? "") ? "claims_eob_payment" : "pharmacy_formulary";
-  return {
-    primary_intent: journey,
-    candidate_journeys: [
-      {
-        journey,
-        confidence: 0.86,
-        rationale: "Phase 79 fake structured-intent output.",
-        required_evidence: journey === "claims_eob_payment" ? ["claim_record_or_eob"] : ["medication_name"],
-        missing_evidence: journey === "claims_eob_payment" ? ["claim_record_or_eob"] : ["medication_name"],
-        safe_next_action: "request_or_retrieve_evidence",
-        requires_approval: true,
-        requires_human_handoff: false
-      }
-    ],
-    complexity: "moderate",
-    ambiguities: [],
-    policy_flags: [],
-    unsafe_action_requested: false
-  };
 }
 
 function fakePlanner(payload) {
@@ -72,7 +50,6 @@ async function withFakeModels(fn) {
   setTieredChatModelFactoryForTests(({ step }) => ({
     invoke: async (messages) => {
       const payload = parsePayload(messages);
-      if (step === "structured_intent") return { content: JSON.stringify(fakeStructured(payload)) };
       if (step === "llm_orchestration_decision") return { content: JSON.stringify(fakePlanner(payload)) };
       throw new Error(`unexpected model step ${step}`);
     }
@@ -89,6 +66,7 @@ async function withFakeModels(fn) {
 test("Phase 79 indexes live LLM outputs as pointers and hashes", async () =>
   withFakeModels(async () => {
     const store = await createStore();
+    await seedCapabilityCatalog(store, { nowIso, createId });
     const { user, session } = await enrollDefaultMember(store);
     const run = await runLangGraphOrchestration(store, {
       user,
@@ -101,7 +79,6 @@ test("Phase 79 indexes live LLM outputs as pointers and hashes", async () =>
 
     assert.equal(index.status, "hit");
     assert.equal(index.cacheKey, llmOutputIndexKey(session.id));
-    assert.ok(index.entries.some((entry) => entry.step === "structured_intent"));
     assert.ok(index.entries.some((entry) => entry.step === "llm_orchestration_decision"));
     assert.ok(index.entries.every((entry) => entry.pointer && entry.outputHash && entry.rawOutputStored === false));
     assert.equal(run.state.llm_orchestration_decision.llmOutputIndex.rawOutputStored, false);
@@ -110,6 +87,7 @@ test("Phase 79 indexes live LLM outputs as pointers and hashes", async () =>
 test("Phase 79 injects prior LLM output index pointers into the next planner payload", async () =>
   withFakeModels(async () => {
     const store = await createStore();
+    await seedCapabilityCatalog(store, { nowIso, createId });
     const { user, session } = await enrollDefaultMember(store);
     await runLangGraphOrchestration(store, {
       user,
@@ -130,8 +108,11 @@ test("Phase 79 injects prior LLM output index pointers into the next planner pay
     const serialized = JSON.stringify(payload.llmOutputIndex);
 
     assert.equal(payload.llmOutputIndex.cacheKey, llmOutputIndexKey(session.id));
-    assert.ok(payload.llmOutputIndex.entries.length >= 2);
-    assert.ok(second.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 2);
+    // Exactly one LLM step (the planner) is indexed per turn since the legacy
+    // classifier step was deleted, so the prior turn contributes one entry.
+    assert.ok(payload.llmOutputIndex.entries.length >= 1);
+    assert.ok(payload.llmOutputIndex.entries.every((entry) => entry.step === "llm_orchestration_decision"));
+    assert.ok(second.state.llm_orchestration_decision.priorLlmOutputPointersUsed.length >= 1);
     assert.doesNotMatch(serialized, /Phase 79 fake planner output/);
     assert.doesNotMatch(serialized, /Phase 79 fake structured-intent output/);
   }));

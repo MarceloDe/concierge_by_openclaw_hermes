@@ -13,7 +13,6 @@ import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { flush_langfuse } from "../observability/langfuseClient.mjs";
 
 await loadLocalEnvOnce();
-process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS = "1";
 const HAS_KEY = Boolean(process.env.OPENAI_API_KEY);
 const LF = process.env.LANGFUSE_HOST && process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY;
 let lfUp = false;

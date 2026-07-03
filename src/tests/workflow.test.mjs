@@ -3,26 +3,48 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { runConciergeSlice, traceForSession } from "../concierge/langgraphCompatibility.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { WORKFLOWS } from "../concierge/types.mjs";
 
 async function testStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-workflow-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
+}
+
+// Phase 84: routing is decision-first (the keyword classifier and its
+// enrollment-depuration default are deleted, plan §10.1) — slice tests inject the
+// planner decision via replay, exactly like a recorded live decision.
+function eligibilityDecisionReplay() {
+  return {
+    workflow: "eligibility_benefits_navigation",
+    intent: "eligibility_benefits_review",
+    confidence: 0.9,
+    rationale: "The user asked to review eligibility and benefits from their portal.",
+    requiredEvidence: ["authenticated_portal_page"],
+    missingEvidence: ["authenticated_portal_page"],
+    approvalRequired: true,
+    approvalScope: "read_only_observation",
+    workerGoal: "Review eligibility and benefits evidence (read-only).",
+    responseStrategy: "offer_process_and_ask",
+    userFacingNextQuestion: ""
+  };
 }
 
 test("workflow gives safe guidance instead of probing Chrome when no evidence or approval is supplied", async () => {
   const store = await testStore();
   const result = await runConciergeSlice(store, {
     message:
-      "Enroll me as Marcelo Felix, connect to my logged insurance website in Chrome, review my eligibility and benefits, and show the trace of what you found."
+      "Enroll me as Marcelo Felix, connect to my logged insurance website in Chrome, review my eligibility and benefits, and show the trace of what you found.",
+    llmOrchestrationDecisionReplay: eligibilityDecisionReplay()
   });
   const trace = await traceForSession(store, result.session.id);
 
-  assert.equal(result.intent, WORKFLOWS.ENROLLMENT_PORTAL_DEPURATION);
   assert.equal(result.user.email, "mocfelix@gmail.com");
-  assert.match(result.finalResponse, /upload|screenshots|portal/i);
+  assert.match(result.finalResponse, /upload|screenshots|portal|approval|read.only/i);
   assert.equal(result.browserResult, null);
   assert.equal(trace.browserRuns.length, 0);
   assert.equal(trace.snapshots.length, 0);
@@ -65,6 +87,7 @@ test("workflow can persist an already-open claimed Chrome Aetna snapshot", async
   const result = await runConciergeSlice(store, {
     message:
       "Enroll me as Marcelo Felix and use the already open Aetna Chrome tab to review my eligibility and benefits.",
+    llmOrchestrationDecisionReplay: eligibilityDecisionReplay(),
     browserSnapshot: {
       title: "Home - Aetna",
       url: "https://health.aetna.com/",

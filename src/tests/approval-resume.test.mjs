@@ -3,15 +3,31 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { consumeReadOnlyObservationApproval, createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-approval-resume-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): seed the catalog so allowedWorkflows is non-empty.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Injected recorded planner decision (v1 flat shape; the normalizer lifts it) —
+// there is no classifier fallback, so routed-workflow tests must replay a decision.
+const eligibilityReplay = {
+  workflow: "eligibility_benefits_navigation",
+  intent: "eligibility_benefits_question",
+  confidence: 0.9,
+  rationale: "Deterministic replay decision fixture for approval-resume tests.",
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Read-only benefits observation worker goal."
+};
 
 test("approval resume blocks expired approvals and preserves no-action state", async () => {
   const store = await createStore();
@@ -21,7 +37,7 @@ test("approval resume blocks expired approvals and preserves no-action state", a
     session,
     channel: session.channel,
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
-    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false }
+    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false, llmOrchestrationDecisionReplay: eligibilityReplay }
   });
   const approval = await createReadOnlyObservationApproval(store, {
     taskId: proposalRun.state.openclaw_skill_proposal.task.id,
@@ -38,6 +54,7 @@ test("approval resume blocks expired approvals and preserves no-action state", a
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
     rawMessage: {
       source: "test",
+      llmOrchestrationDecisionReplay: eligibilityReplay,
       approvalToken: approval.approvalToken,
       approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
       browserSnapshot: {
@@ -77,7 +94,8 @@ test("orchestrator approval API binds proposal task and enables one read-only gr
         member,
         message: "Use my Aetna portal memory to check eligibility and benefits.",
         executeEvidenceObservation: false,
-        useLiveModel: false
+        useLiveModel: false,
+        llmOrchestrationDecisionReplay: eligibilityReplay
       })
     });
     const proposalPayload = await proposalResponse.json();
@@ -115,6 +133,7 @@ test("orchestrator approval API binds proposal task and enables one read-only gr
         member,
         sessionId: proposalPayload.session.id,
         message: "Use my Aetna portal memory to check eligibility and benefits.",
+        llmOrchestrationDecisionReplay: eligibilityReplay,
         approvalToken: approvalPayload.approvalToken,
         approvalTaskId: taskId,
         browserSnapshot: {
@@ -155,7 +174,7 @@ test("approval consumption binds hostile-looking session ids literally", async (
     session,
     channel: session.channel,
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
-    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false }
+    rawMessage: { source: "test", executeEvidenceObservation: false, useLiveModel: false, llmOrchestrationDecisionReplay: eligibilityReplay }
   });
   const taskId = proposalRun.state.openclaw_skill_proposal.task.id;
   const approval = await createReadOnlyObservationApproval(store, {

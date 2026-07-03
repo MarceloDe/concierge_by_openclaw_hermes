@@ -133,7 +133,20 @@ export function fullOrchestrationStateSnapshot(state = {}) {
     messages: trim((state.messages || []).map((m) => ({ role: m?.role, content: m?.content })), 20),
     conversation_history: trim(state.conversation_history, 12),
     policy_result: state.policy_result,
-    structured_intent: state.structured_intent,
+    // Phase 84: planner decision is the single classification authority (grouped v2
+    // fields with flat v1 aliases). Summarized here; the full decision follows.
+    llm_decision_classification: state.llm_orchestration_decision
+      ? {
+          taskClass: state.llm_orchestration_decision.classification?.taskClass ?? null,
+          dataLayer: state.llm_orchestration_decision.data_layer ?? null,
+          riskTier: state.llm_orchestration_decision.risk_tier ?? null,
+          workflow: state.llm_orchestration_decision.classification?.workflow ?? state.llm_orchestration_decision.workflow ?? null,
+          intent: state.llm_orchestration_decision.classification?.intent ?? state.llm_orchestration_decision.intent ?? null,
+          confidence: state.llm_orchestration_decision.classification?.confidence ?? state.llm_orchestration_decision.confidence ?? null,
+          responseStrategy: state.llm_orchestration_decision.response?.responseStrategy ?? null,
+          answerComposerMode: state.llm_orchestration_decision.response?.answerComposerMode ?? null
+        }
+      : null,
     llm_orchestration_decision: state.llm_orchestration_decision,
     workflow: state.workflow,
     workflow_route: state.workflow_route,

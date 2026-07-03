@@ -21,6 +21,21 @@ test("OpenClaw validate-envelope API returns proposal-only proof", async () => {
           email: "openclaw-api-test@example.com",
           payer: "Aetna",
           portalUrl: "https://www.aetna.com/"
+        },
+        // Decision-first routing (Phase 84): the envelope pipeline runs behind a
+        // recorded planner decision (normalized + DB-validated like any live decision).
+        llmOrchestrationDecisionReplay: {
+          workflow: "eligibility_benefits_navigation",
+          intent: "eligibility_benefits_review",
+          confidence: 0.9,
+          rationale: "Recorded decision: validate the read-only portal observation envelope.",
+          requiredEvidence: ["authenticated_portal_page"],
+          missingEvidence: ["authenticated_portal_page"],
+          approvalRequired: true,
+          approvalScope: "read_only_observation",
+          workerGoal: "Validate the insurance portal browser envelope (read-only).",
+          responseStrategy: "offer_process_and_ask",
+          userFacingNextQuestion: ""
         }
       })
     });

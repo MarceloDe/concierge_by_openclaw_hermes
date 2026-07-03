@@ -31,7 +31,7 @@ function sourcedShadow({ sessionId = "session_1", graphTraceId = "trace_1" } = {
       workflowArchitecture: { routeCandidates: [{ workflowKey: "eligibility_benefits_navigation" }] }
     },
     policyResult: { allowed: true },
-    structuredIntent: { intent: "check_benefits", workflow: "eligibility_benefits_navigation", confidence: 0.9 },
+    
     workflow: "eligibility_benefits_navigation",
     routeReason: "fixture_shadow_source_pointer",
     dynamicSkillContext: {

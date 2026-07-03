@@ -31,7 +31,7 @@ test("product memory contract builds safe source-pointer summaries without raw d
         }
       },
       workflow: "eligibility_benefits_navigation",
-      route_reason: "structured_intent_classifier",
+      route_reason: "llm_orchestration_decision",
       workflow_outcome: "evidence_captured",
       approval_resume: { status: "approved" },
       evidence_observation: { status: "captured_visible_page" },

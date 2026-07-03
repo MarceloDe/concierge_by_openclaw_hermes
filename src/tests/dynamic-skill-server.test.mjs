@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import {
   loadDynamicSkillDefinitions,
   resolveDynamicSkillContext,
@@ -73,7 +74,7 @@ test("dynamic skill resolver mounts session memory and selects insurance plus cl
     user_input: "Why did Aetna not pay my last visit claim?",
     context_packet: context.packet,
     workflow: "claim_status_navigation",
-    structured_intent: {
+    llm_orchestration_decision: {
       intent: "claim_status_question",
       workflow: "claim_status_navigation"
     }
@@ -92,6 +93,7 @@ test("dynamic skill resolver mounts session memory and selects insurance plus cl
 
 test("LangGraph carries dynamic skill context through claim orchestration", async () => {
   const store = await createStore();
+  await seedCapabilityCatalog(store, { nowIso, createId });
   const { user, session } = await enrollDefaultMember(store);
 
   const result = await runLangGraphOrchestration(store, {
@@ -99,7 +101,19 @@ test("LangGraph carries dynamic skill context through claim orchestration", asyn
     session,
     channel: session.channel,
     userInput: "Why did Aetna not pay my last visit?",
-    rawMessage: { source: "dynamic_skill_server_test", useLiveModel: false }
+    rawMessage: {
+      source: "dynamic_skill_server_test",
+      useLiveModel: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "claim_status_navigation",
+        intent: "claim_status_question",
+        confidence: 0.9,
+        rationale: "Deterministic replay decision fixture for claim orchestration.",
+        approvalRequired: true,
+        approvalScope: "read_only_observation",
+        workerGoal: "Read-only claim observation worker goal."
+      }
+    }
   });
 
   assert.equal(result.state.workflow, "claim_status_navigation");
@@ -128,7 +142,7 @@ test("LLM orchestration payload includes dynamic skill hints", async () => {
     user_input: "Does my Aetna plan cover specialist visits?",
     context_packet: context.packet,
     workflow: "eligibility_benefits_navigation",
-    structured_intent: {
+    llm_orchestration_decision: {
       intent: "eligibility_benefits_question",
       workflow: "eligibility_benefits_navigation"
     }
@@ -137,10 +151,6 @@ test("LLM orchestration payload includes dynamic skill hints", async () => {
   const payload = buildLlmOrchestrationDecisionPayload({
     user_input: "Does my Aetna plan cover specialist visits?",
     policy_result: { allowed: true, approvalRequired: false, checks: [] },
-    structured_intent: {
-      intent: "eligibility_benefits_question",
-      workflow: "eligibility_benefits_navigation"
-    },
     context_packet: context.packet,
     dynamic_skill_context: dynamicSkillContext,
     product_memory_recall: null
@@ -222,7 +232,7 @@ test("dynamic skill resolver selects execution skills by score without hardcoded
   const resolved = await resolveDynamicSkillContext(null, {
     user_input: "Find claim and EOB status from the portal",
     workflow: "claim_status_navigation",
-    structured_intent: { intent: "claim_status_question", workflow: "claim_status_navigation" },
+    llm_orchestration_decision: { intent: "claim_status_question", workflow: "claim_status_navigation" },
     context_packet: { currentSession: { id: "session_score" }, user: { id: "user_score" } }
   }, { root });
 

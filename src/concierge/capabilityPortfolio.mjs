@@ -68,7 +68,7 @@ function graphPathEntries(cacheKey) {
     {
       id: "graph:input_policy_to_llm_planner",
       title: "Safety-gated LLM planner path",
-      description: "input_policy -> recall_context -> classify_intent -> llm_decision -> workflow_router",
+      description: "input_policy -> recall_context -> llm_decision -> workflow_router",
       useWhen: "General chat or user actions after deterministic safety gates pass."
     },
     {

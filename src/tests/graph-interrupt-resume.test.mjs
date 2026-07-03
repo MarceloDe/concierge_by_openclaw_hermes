@@ -4,9 +4,10 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import {
   getBrainstyLangGraphCheckpointState,
   runLangGraphOrchestration
@@ -15,8 +16,27 @@ import { FileBackedMemorySaver } from "../concierge/graphCheckpointer.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-hitl-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
+
+// Phase 84: routing is decision-first — the run is driven by a replayed planner
+// decision (the classifier fallback is deleted). The interrupt payload string and
+// approval_pending_interrupt outcome stay byte-compatible (plan §4.3/Phase 88 arm).
+const PORTAL_DECISION_REPLAY = {
+  workflow: "payer_portal_read_only_extraction",
+  intent: "deductible_balance_lookup",
+  confidence: 0.9,
+  rationale: "The user asked for their live deductible balance behind the portal.",
+  requiredEvidence: ["authenticated_portal_page"],
+  missingEvidence: ["authenticated_portal_page"],
+  approvalRequired: true,
+  approvalScope: "read_only_observation",
+  workerGoal: "Observe the deductible balance on the authenticated Aetna portal (read-only).",
+  responseStrategy: "offer_process_and_ask",
+  userFacingNextQuestion: ""
+};
 
 test("LangGraph native interrupt pauses read-only observation until an approved token resumes it", async () => {
   const store = await createStore();
@@ -28,7 +48,7 @@ test("LangGraph native interrupt pauses read-only observation until an approved 
     session,
     channel: session.channel,
     userInput: message,
-    rawMessage: { source: "phase55_hitl", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: { source: "phase55_hitl", useLiveModel: false, executeEvidenceObservation: false, llmOrchestrationDecisionReplay: PORTAL_DECISION_REPLAY }
   });
   const taskId = proposalRun.state.openclaw_skill_proposal.task.id;
 
@@ -41,6 +61,7 @@ test("LangGraph native interrupt pauses read-only observation until an approved 
       source: "phase55_hitl",
       useLiveModel: false,
       approvalTaskId: taskId,
+      llmOrchestrationDecisionReplay: PORTAL_DECISION_REPLAY,
       browserSnapshot: {
         title: "Should Pause Before Capture",
         url: "https://health.aetna.com/member/benefits",

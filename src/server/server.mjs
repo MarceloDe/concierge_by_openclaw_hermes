@@ -222,13 +222,29 @@ console.log(`[runtime] openclaw gateway reachable=${openClawRuntimeReadiness.gat
 
 const store = await createDatabaseStore(process.env).initialize();
 // Seed the capability/process catalog (idempotent) so the Type-II process-offer
-// composer has offerable processes to reason over.
+// composer has offerable processes to reason over. FAIL LOUD (Phase 84 §10.26): a
+// silently-skipped seed leaves the planner with zero offerable capabilities, so any
+// seed failure — or an empty seeded catalog — aborts boot.
 try {
   const { seedCapabilityCatalog } = await import("../concierge/capabilityCatalogSeed.mjs");
   const { nowIso, createId } = await import("../concierge/database.mjs");
-  await seedCapabilityCatalog(store, { nowIso, createId });
+  const seedResult = await seedCapabilityCatalog(store, { nowIso, createId });
+  const activeCapabilityCount =
+    (await store.get(
+      "SELECT COUNT(*) AS count FROM capabilities WHERE status = 'active' AND lifecycle_state = 'production';"
+    ))?.count ?? 0;
+  if (!activeCapabilityCount) {
+    console.error(
+      `[runtime] capability_catalog_seed_failed: seeded catalog is empty (0 active production capabilities; seed reported version=${seedResult?.version ?? "unknown"} capabilities=${seedResult?.capabilities ?? 0} processes=${seedResult?.processes ?? 0})`
+    );
+    process.exit(1);
+  }
+  console.log(
+    `[runtime] capability catalog seeded version=${seedResult.version} capabilities=${seedResult.capabilities} processes=${seedResult.processes} activeProduction=${activeCapabilityCount}`
+  );
 } catch (error) {
-  console.log(`[runtime] capability catalog seed skipped: ${error?.message ?? "unknown"}`);
+  console.error(`[runtime] capability_catalog_seed_failed: seed threw at boot: ${error?.message ?? "unknown"}`);
+  process.exit(1);
 }
 const researchSchedulerDaemon = createResearchSchedulerDaemon(store);
 const retentionSweepDaemon = createRetentionSweepDaemon(store);
@@ -1236,10 +1252,19 @@ async function buildPhase57ExtensibleSkillsProof() {
       request: { userInput: "Why did Aetna not pay my last visit claim?" },
       dbPointers: [{ table: "source_pointers", id: "phase57_source_pointer" }]
     },
-    workflow: "claim_status_navigation",
-    structured_intent: {
+    intent: "claim_status_question",
+    llm_orchestration_decision: {
+      classification: {
+        workflow: "claim_status_navigation",
+        taskClass: "process",
+        intent: "claim_status_question",
+        confidence: 0.9
+      },
+      data_layer: [],
+      risk_tier: "low",
+      workflow: "claim_status_navigation",
       intent: "claim_status_question",
-      workflow: "claim_status_navigation"
+      confidence: 0.9
     }
   });
   const proposal = buildOpenClawBoundedTaskProposal({
@@ -3904,6 +3929,23 @@ async function handleApi(req, res, url) {
       channel: enrollment.session.channel,
       userInput
     });
+    // Phase 84 (§10.25): workflow/skill selection derives ONLY from the planner's STORED
+    // decision for this session — client-supplied selection inputs (structuredIntent,
+    // llmDecision, workflow) are no longer accepted. Stored decision sources, in order:
+    // the session's LLM output index (latest planner decision summary), then the
+    // planner-routed workflow_runs row; absent both, null (resolver handles absence).
+    const storedDecisionEntry =
+      (packet.llmOutputIndex?.entries ?? []).find(
+        (entry) => entry.step === "llm_orchestration_decision" && entry.parsedSummary?.workflow
+      ) ?? null;
+    const storedRun = storedDecisionEntry
+      ? null
+      : await store
+          .get(
+            "SELECT workflow_key FROM workflow_runs WHERE session_id = ? AND workflow_key IS NOT NULL AND workflow_key != 'unknown' ORDER BY updated_at DESC LIMIT 1;",
+            [enrollment.session.id]
+          )
+          .catch(() => null);
     const dynamicSkillContext = await resolveDynamicSkillContext(store, {
       user_id: enrollment.user.id,
       session_id: enrollment.session.id,
@@ -3911,9 +3953,8 @@ async function handleApi(req, res, url) {
       channel: enrollment.session.channel,
       user_input: userInput,
       context_packet: packet,
-      structured_intent: body.structuredIntent ?? null,
-      llm_orchestration_decision: body.llmDecision ?? null,
-      workflow: body.workflow ?? body.structuredIntent?.workflow ?? body.llmDecision?.workflow ?? null,
+      workflow: storedDecisionEntry?.parsedSummary?.workflow ?? storedRun?.workflow_key ?? null,
+      intent: storedDecisionEntry?.parsedSummary?.intent ?? null,
       product_memory_recall: body.productMemoryRecall ?? null
     });
     sendJson(res, 200, {
@@ -3955,7 +3996,13 @@ async function handleApi(req, res, url) {
         member: body.member ?? {},
         portalUrl: body.portalUrl ?? body.member?.portalUrl ?? null,
         approvalScope: body.approvalScope ?? "read_only_observation",
-        useLiveModel: false,
+        // Decision-first routing (Phase 84): the envelope pipeline runs only behind a
+        // valid planner decision. Callers pass a recorded decision replay (normalized
+        // and DB-validated like any live decision — this is NOT a client selection
+        // surface, §10.25); with neither replay nor live model the route degrades
+        // honestly instead of producing an envelope.
+        llmOrchestrationDecisionReplay: body.llmOrchestrationDecisionReplay ?? null,
+        useLiveModel: body.useLiveModel ?? false,
         requestedAt: new Date().toISOString()
       }
     });

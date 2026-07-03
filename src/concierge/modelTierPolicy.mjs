@@ -17,8 +17,6 @@ const DEFAULT_MODELS = Object.freeze({
 });
 
 const STEP_TIERS = Object.freeze({
-  structured_intent: "classifier",
-  classify_intent: "classifier",
   llm_orchestration_decision: "planner",
   workflow_planner: "planner",
   sourced_answer: "reasoner",

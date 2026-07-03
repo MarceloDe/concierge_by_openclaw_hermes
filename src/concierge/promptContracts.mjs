@@ -4,16 +4,14 @@ import { SANDBOX_PRIVACY_COPY } from "./gracefulDegradation.mjs";
 
 export const PROMPT_CONTRACT_VERSION = "2026-05-17.prompt-contract.v1";
 
-const ORCHESTRATOR_ALLOWED_WORKFLOWS = [
-  "eligibility_benefits_navigation",
-  "claim_status_navigation",
-  "pharmacy_formulary",
-  "prior_authorization_navigation",
-  "denial_appeal_preparation",
-  "payer_portal_read_only_extraction",
-  "document_or_trace_review",
-  "human_approval_escalation"
-];
+// The frozen ORCHESTRATOR_ALLOWED_WORKFLOWS enum is deleted (plan §10.6): allowed
+// workflows are DB-derived (manifest.allowedWorkflows from the capability catalog)
+// and passed in by the caller — one source of truth, no duplicate list.
+function resolveAllowedWorkflows(contextPacket, options = {}) {
+  const fromOptions = Array.isArray(options.allowedWorkflows) ? options.allowedWorkflows : null;
+  const fromPacket = Array.isArray(contextPacket?.allowedWorkflows) ? contextPacket.allowedWorkflows : null;
+  return (fromOptions ?? fromPacket ?? []).map((item) => String(item));
+}
 
 const OPENCLAW_ALLOWED_TASKS = [
   "decompose_delegated_task_into_subtasks",
@@ -175,10 +173,11 @@ export function baseSafetyRules() {
   ];
 }
 
-export function buildOrchestratorPromptContract(contextPacket) {
+export function buildOrchestratorPromptContract(contextPacket, options = {}) {
   const packet = contextPacket ?? {};
   const user = packet.user ?? {};
   const currentSession = packet.currentSession ?? {};
+  const allowedWorkflows = resolveAllowedWorkflows(packet, options);
   const body = [
     section(
       "Identity",
@@ -188,7 +187,12 @@ export function buildOrchestratorPromptContract(contextPacket) {
         "Your job is to help with US health insurance navigation, not general chat or clinical care."
       ].join("\n")
     ),
-    section("Allowed Workflows", ORCHESTRATOR_ALLOWED_WORKFLOWS.map((item) => `- ${item}`).join("\n")),
+    section(
+      "Allowed Workflows",
+      allowedWorkflows.length
+        ? allowedWorkflows.map((item) => `- ${item}`).join("\n")
+        : "- Derived from the DB capability catalog at planner time (payload.allowedWorkflows); never select a workflow outside that list."
+    ),
     section("Non-Negotiable Guardrails", baseSafetyRules().map((item) => `- ${item}`).join("\n")),
     section(
       "Current Session",
@@ -235,7 +239,7 @@ export function buildOrchestratorPromptContract(contextPacket) {
     version: PROMPT_CONTRACT_VERSION,
     role: "orchestrator",
     prompt: body,
-    allowedWorkflows: ORCHESTRATOR_ALLOWED_WORKFLOWS,
+    allowedWorkflows,
     guardrails: baseSafetyRules()
   };
 }

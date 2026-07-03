@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import {
   buildLlmOrchestrationDecisionMessages,
   confidenceBand,
@@ -13,9 +14,23 @@ import {
 } from "../concierge/llmOrchestrationDecision.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 
+const ALLOWED = [
+  "eligibility_benefits_navigation",
+  "claim_status_navigation",
+  "pharmacy_formulary",
+  "prior_authorization_navigation",
+  "denial_appeal_preparation",
+  "payer_portal_read_only_extraction",
+  "document_or_trace_review",
+  "human_approval_escalation"
+];
+const OPTIONS = { allowedWorkflows: ALLOWED };
+
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-llm-decision-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 test("LLM orchestration decision parser accepts strict workflow JSON", () => {
@@ -31,10 +46,11 @@ test("LLM orchestration decision parser accepts strict workflow JSON", () => {
     workerGoal: "Review stored trace artifacts and return source pointers.",
     responseStrategy: "Explain what evidence is available and what is missing.",
     userFacingNextQuestion: ""
-  });
+  }, OPTIONS);
 
   assert.equal(decision.valid, true);
   assert.equal(decision.workflow, "document_or_trace_review");
+  assert.equal(decision.classification.workflow, "document_or_trace_review", "grouped v2 field populated");
   assert.equal(shouldUseLlmDecision(decision), true);
   assert.equal(confidenceBand(decision), "high");
 });
@@ -45,7 +61,7 @@ test("LLM orchestration decision parser rejects unknown workflows", () => {
     confidence: 0.9,
     rationale: "Bad workflow",
     workerGoal: "Call payer."
-  });
+  }, OPTIONS);
 
   assert.equal(decision.valid, false);
   assert.ok(decision.issues.some((issue) => issue.includes("workflow_not_allowed")));
@@ -59,14 +75,14 @@ test("LLM orchestration decision confidence bands keep weak decisions from being
     confidence: 0.49,
     rationale: "The request is too ambiguous to route confidently.",
     workerGoal: "Ask a clarifying question."
-  });
+  }, OPTIONS);
   const medium = normalizeLlmOrchestrationDecision({
     workflow: "eligibility_benefits_navigation",
     intent: "benefit_question",
     confidence: 0.62,
     rationale: "The request appears to be about eligibility.",
     workerGoal: "Check eligibility evidence."
-  });
+  }, OPTIONS);
 
   assert.equal(low.valid, true);
   assert.equal(confidenceBand(low), "low");
@@ -97,7 +113,7 @@ test("LLM orchestration decision messages mask direct identifiers", async () => 
   assert.ok(!serialized.includes("W123456789"));
 });
 
-test("LangGraph can route from a replayed live LLM decision instead of curated classifier", async () => {
+test("LangGraph routes from a replayed live LLM decision (single classification authority)", async () => {
   const store = await createStore();
   const { user, session } = await enrollDefaultMember(store);
   const result = await runLangGraphOrchestration(store, {
@@ -125,10 +141,12 @@ test("LangGraph can route from a replayed live LLM decision instead of curated c
     }
   });
 
-  assert.equal(result.state.structured_intent.workflow, "claim_status_navigation");
   assert.equal(result.state.workflow, "document_or_trace_review");
   assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, true);
+  assert.equal(result.state.llm_orchestration_decision.classification.workflow, "document_or_trace_review");
+  assert.ok(result.state.llm_orchestration_decision.risk_tier, "risk tier derived on lift");
+  assert.equal(result.state.structured_intent, undefined, "structured_intent channel is deleted");
 });
 
 test("LangGraph labels valid low-confidence LLM decisions as clarify instead of silently adopting them", async () => {
@@ -161,4 +179,31 @@ test("LangGraph labels valid low-confidence LLM decisions as clarify instead of 
 
   assert.equal(result.state.route_reason, "low_confidence_clarify");
   assert.equal(result.state.llm_orchestration_decision.usedByRouter, false);
+  assert.ok(String(result.state.final_response ?? "").length > 0, "clarify branch composes an ask, never a guessed route");
+});
+
+test("Phase 84: an invalid replayed decision escalates loud — no silent fallback", async () => {
+  const store = await createStore();
+  const { user, session } = await enrollDefaultMember(store);
+  const result = await runLangGraphOrchestration(store, {
+    user,
+    session,
+    channel: session.channel,
+    userInput: "Check my claim please",
+    rawMessage: {
+      source: "invalid_decision_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "workflow_the_catalog_never_authored",
+        confidence: 0.95,
+        rationale: "Recorded decision names a workflow outside the DB-derived allowlist."
+      }
+    }
+  });
+
+  assert.equal(result.state.route_reason, "llm_invalid_decision_no_silent_fallback");
+  assert.equal(result.state.workflow, "human_approval_escalation");
+  assert.equal(result.state.llm_orchestration_decision.usedByRouter, false);
+  assert.ok(result.state.llm_orchestration_decision.issues.some((issue) => issue.startsWith("workflow_not_allowed")));
 });

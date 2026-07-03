@@ -3,13 +3,16 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-uploaded-document-chat-"));
-  return new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 function uploadedBenefitsDocument() {
@@ -80,6 +83,13 @@ test("LangGraph answers from uploaded document extraction with source pointers",
       source: "uploaded_document_chat_test",
       useLiveModel: false,
       executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: {
+        workflow: "document_or_trace_review",
+        intent: "uploaded_document_review",
+        confidence: 0.9,
+        rationale: "Deterministic replay decision fixture for uploaded document review.",
+        workerGoal: "Read the uploaded document extraction and cite its fields."
+      },
       uploadedDocumentIds: ["upload_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
       uploadedDocuments: [uploadedBenefitsDocument()]
     }

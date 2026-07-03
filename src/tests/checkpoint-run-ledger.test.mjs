@@ -9,11 +9,16 @@ import { tmpdir } from "node:os";
 import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { RUN_LEDGER_BOUNDARIES } from "../concierge/checkpointRunLedger.mjs";
 
 async function freshStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-ledger-"));
-  return new SqliteStore(join(dir, "l.sqlite")).initialize();
+  const store = await new SqliteStore(join(dir, "l.sqlite")).initialize();
+  // Decision-first runtime (Phase 84): the replayed decision validates against the
+  // DB-derived allowedWorkflows, so the catalog must be seeded.
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 const replayRaw = {

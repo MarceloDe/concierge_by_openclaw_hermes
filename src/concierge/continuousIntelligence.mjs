@@ -108,7 +108,6 @@ export function buildCaseState({
   userInput,
   contextPacket,
   policyResult,
-  structuredIntent,
   llmDecision,
   workflow,
   routeReason,
@@ -163,11 +162,14 @@ export function buildCaseState({
     decision: {
       policyAllowed: policyResult?.allowed ?? null,
       urgentEscalationRequired: Boolean(policyResult?.urgentEscalationRequired),
-      intent: structuredIntent?.intent ?? structuredIntent?.primary_intent ?? null,
-      workflow: workflow ?? structuredIntent?.workflow ?? null,
+      intent: llmDecision?.intent ?? llmDecision?.classification?.intent ?? null,
+      workflow: workflow ?? llmDecision?.workflow ?? null,
+      taskClass: llmDecision?.classification?.taskClass ?? null,
+      riskTier: llmDecision?.risk_tier ?? null,
+      dataLayer: llmDecision?.data_layer ?? null,
       routeReason: routeReason ?? null,
       routeExecutableNow: workflowRoute?.executableNow ?? null,
-      classifierConfidence: structuredIntent?.confidence ?? null,
+      classifierConfidence: llmDecision?.confidence ?? null,
       llmMode: llmDecision?.mode ?? null,
       llmUsedByRouter: Boolean(llmDecision?.usedByRouter)
     },
@@ -2361,7 +2363,6 @@ export async function persistFinalContinuousIntelligenceShadow(store, { user, se
     userInput: userInput ?? state?.user_input,
     contextPacket: contextPacket ?? state?.context_packet,
     policyResult: state?.policy_result,
-    structuredIntent: state?.structured_intent,
     llmDecision: state?.llm_orchestration_decision,
     workflow: state?.workflow,
     routeReason: state?.route_reason,
@@ -3337,7 +3338,12 @@ export function buildContinuousIntelligenceReadinessProof() {
       workflowArchitecture: { routeCandidates: [{ workflowKey: "eligibility_check" }] }
     },
     policyResult: { allowed: true, urgentEscalationRequired: false },
-    structuredIntent: { intent: "check_benefits", workflow: "eligibility_check", confidence: 0.91 },
+    llmDecision: {
+      intent: "check_benefits",
+      workflow: "eligibility_check",
+      confidence: 0.91,
+      classification: { taskClass: "check_benefits" }
+    },
     workflow: "eligibility_check",
     routeReason: "proof_fixture_no_phi",
     workflowRoute: { executableNow: true },

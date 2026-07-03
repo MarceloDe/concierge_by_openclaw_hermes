@@ -20,21 +20,23 @@ test("model tier policy selects explicit classifier reasoner and planner tiers",
     BRAINSTY_OPENAI_BASE_URL: "https://models.example.invalid/v1"
   };
 
-  assert.deepEqual(selectModelForStep("structured_intent", { env }), {
+  assert.deepEqual(selectModelForStep("llm_orchestration_decision", { env }), {
     policyVersion: "2026-06-21.phase53-model-tier-policy.v1",
-    step: "structured_intent",
-    tier: "classifier",
-    model: "classifier-test",
+    step: "llm_orchestration_decision",
+    tier: "planner",
+    model: "planner-test",
     baseURL: "https://models.example.invalid/v1"
   });
   assert.equal(selectModelForStep("sourced_answer", { env }).model, "reasoner-test");
-  assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "planner-test");
+  // The classifier tier survives only as an explicitly requested tier (the
+  // structured_intent step was deleted with the legacy classification pathway).
+  assert.equal(selectModelForStep("explicit_classifier_step", { tier: "classifier", env }).model, "classifier-test");
 });
 
 test("planner tier does not inherit classifier-sized OPENAI_MODEL fallback", () => {
   const env = { OPENAI_MODEL: "gpt-5-mini" };
 
-  assert.equal(selectModelForStep("structured_intent", { env }).model, "gpt-5-mini");
+  assert.equal(selectModelForStep("explicit_classifier_step", { tier: "classifier", env }).model, "gpt-5-mini");
   // Planner/reasoner default to the fast flagship gpt-4.1 (latency), and must NOT
   // inherit the classifier-sized OPENAI_MODEL fallback.
   assert.equal(selectModelForStep("llm_orchestration_decision", { env }).model, "gpt-4.1");
@@ -53,12 +55,12 @@ test("tiered chat model factory can be injected for deterministic harnesses", as
     invoke: async () => ({ content: JSON.stringify({ tier: selection.tier, model: selection.model }) })
   }));
   try {
-    const { llm, selection } = createTieredChatModel("structured_intent", {
-      env: { BRAINSTY_CLASSIFIER_MODEL: "fake-classifier" }
+    const { llm, selection } = createTieredChatModel("llm_orchestration_decision", {
+      env: { BRAINSTY_PLANNER_MODEL: "fake-planner" }
     });
     const response = await llm.invoke([]);
-    assert.equal(selection.tier, "classifier");
-    assert.equal(JSON.parse(response.content).model, "fake-classifier");
+    assert.equal(selection.tier, "planner");
+    assert.equal(JSON.parse(response.content).model, "fake-planner");
   } finally {
     resetTieredChatModelFactoryForTests();
   }
@@ -67,7 +69,6 @@ test("tiered chat model factory can be injected for deterministic harnesses", as
 test("ChatOpenAI construction is centralized in modelTierPolicy", async () => {
   const files = [
     "concierge/langgraphRunner.mjs",
-    "concierge/intelligence/structuredIntentReasoner.mjs",
     "concierge/intelligence/sourcedAnswerComposer.mjs",
     "concierge/continuousIntelligence.mjs"
   ];

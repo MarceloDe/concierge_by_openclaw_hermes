@@ -39,7 +39,6 @@ import {
   runtimeContextKey,
   storeRuntimeContextManifest
 } from "./runtimeContextCache.mjs";
-import { classifyHealthcareIntent } from "./structuredIntentClassifier.mjs";
 import { WORKFLOWS } from "./types.mjs";
 import { composeUrgentEscalationResponse, createHumanHandoffItem } from "./humanHandoffs.mjs";
 import { loadOpenClawSkillArtifact } from "./openclawSkillArtifacts.mjs";
@@ -52,20 +51,16 @@ import { recallProductMemoryForRequest, retainProductMemoryFromGraphRun } from "
 import { searchResearchEvidence } from "./researchOps.mjs";
 import { resolveDynamicSkillContext } from "./dynamicSkillServer.mjs";
 import {
+  applyDecisionCapabilityGates,
   buildLlmOrchestrationDecisionMessages,
   confidenceBand,
+  LLM_ORCHESTRATION_DECISION_VERSION,
   normalizeLlmOrchestrationDecision,
   shouldUseLlmDecision
 } from "./llmOrchestrationDecision.mjs";
-import {
-  buildDeterministicStructuredReasoning,
-  invokeLiveStructuredIntentReasoner
-} from "./intelligence/structuredIntentReasoner.mjs";
 import { createTieredChatModel, selectModelForStep, traceFullPromptsEnabled } from "./modelTierPolicy.mjs";
-import { planJourneyFromIntent } from "./intelligence/journeyPlanner.mjs";
 import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComposer.mjs";
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
-import { JOURNEY_TO_WORKFLOW } from "./intelligence/reasoningSchemas.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
@@ -79,7 +74,7 @@ import {
   validateWorkerContinuationForDispatch
 } from "./workerContinuations.mjs";
 
-export const LANGGRAPH_RUNNER_VERSION = "2026-06-01.langgraph-runner.phase10s-ai2ui-modes.v1";
+export const LANGGRAPH_RUNNER_VERSION = "2026-07-02.langgraph-runner.phase83-84-three-layer-planner.v2";
 
 const { checkpointer, readiness: graphCheckpointerReadiness } = createGraphCheckpointer();
 const activeStores = new Map();
@@ -127,7 +122,13 @@ const BrainstyState = Annotation.Root({
   continuous_intelligence_persistence: field(null),
   policy_result: field(null),
   intent: field(null),
-  structured_intent: field(null),
+  // Three-layer pivot (Phase 84): the structured_intent channel is DELETED — the
+  // planner decision is the single classification authority. consent_state/auth_state
+  // are the Layer-3 prompt projections (plan §3.1/§4.1); errors is the loud-failure
+  // channel the draft's state contract names.
+  consent_state: field(null),
+  auth_state: field(null),
+  errors: appendArrayField(),
   llm_orchestration_decision: field(null),
   hydrated_capabilities: field(null),
   worker_runtime_state: field(null),
@@ -163,7 +164,6 @@ const BrainstyState = Annotation.Root({
   model_invocation: field(null),
   final_response: field(null),
   ai2ui_blocks: appendArrayField(),
-  journey_decisions: appendArrayField(),
   answer_claims: appendArrayField(),
   should_remember: field(false),
   memory_summary: field(null),
@@ -763,96 +763,6 @@ async function recallContextNode(state) {
   };
 }
 
-async function structuredIntentNode(state) {
-  const curatedIntent = classifyHealthcareIntent({
-    message: state.user_input,
-    policyResult: state.policy_result,
-    contextPacket: state.context_packet
-  });
-  const deterministicReasoning = buildDeterministicStructuredReasoning({
-    message: state.user_input,
-    policyResult: state.policy_result,
-    curatedIntent,
-    contextPacket: state.context_packet
-  });
-  const store = activeStores.get(state.session_id);
-  const user = userFromContext(state.context_packet);
-  let liveReasoner = null;
-  let reasoning = deterministicReasoning;
-  // Latency: under LLM-primary routing the live structured-intent call is redundant
-  // (its output is only a hint; the orchestration LLM is authority). Skip it and use
-  // deterministic reasoning as the hint, removing one sequential gpt-5 call per turn.
-  const llmPrimary = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
-  if (
-    !llmPrimary &&
-    state.raw_message?.useLiveModel !== false &&
-    !state.policy_result?.urgentEscalationRequired &&
-    state.policy_result?.allowed !== false
-  ) {
-    try {
-      liveReasoner = await invokeLiveStructuredIntentReasoner({
-        state: {
-          ...state,
-          structured_intent: {
-            ...curatedIntent,
-            reasoning: deterministicReasoning,
-            primary_intent: deterministicReasoning.primary_intent,
-            candidate_journeys: deterministicReasoning.candidate_journeys
-          }
-        },
-        store,
-        sessionId: state.session_id,
-        user
-      });
-      if (liveReasoner.valid && liveReasoner.reasoning) {
-        reasoning = liveReasoner.reasoning;
-      }
-    } catch (error) {
-      liveReasoner = {
-        mode: "openai_structured_intent_failed",
-        valid: false,
-        issues: [error.message]
-      };
-    }
-  } else {
-    liveReasoner = {
-      mode: llmPrimary
-        ? "skipped_llm_primary_orchestrator_authority"
-        : state.raw_message?.useLiveModel === false
-          ? "explicitly_disabled_by_request"
-          : "skipped_by_deterministic_safety_gate",
-      valid: false,
-      issues: []
-    };
-  }
-  const journeyPlan = planJourneyFromIntent(reasoning);
-  const workflowFromReasoning = JOURNEY_TO_WORKFLOW[reasoning.primary_intent] ?? curatedIntent.workflow;
-  const structuredIntent = {
-    ...curatedIntent,
-    workflow: workflowFromReasoning,
-    reasoning,
-    primary_intent: reasoning.primary_intent,
-    candidate_journeys: reasoning.candidate_journeys,
-    reasoning_source: reasoning.reasoning_source ?? "curated_fallback",
-    liveReasoner
-  };
-  return {
-    structured_intent: structuredIntent,
-    journey_decisions: [journeyPlan],
-    proof: appendProof(state, "structured_intent_classifier", {
-      classifier: structuredIntent.classifier,
-      intent: structuredIntent.intent,
-      workflow: structuredIntent.workflow,
-      journey: reasoning.primary_intent,
-      reasoningSource: structuredIntent.reasoning_source,
-      liveReasonerMode: liveReasoner?.mode ?? null,
-      confidence: structuredIntent.confidence,
-      refusalOrEscalationFlag: structuredIntent.refusalOrEscalationFlag,
-      missingEvidence: structuredIntent.missingEvidence
-    })
-  };
-}
-
 function summarizeHydration(hydratedCapabilities) {
   if (!hydratedCapabilities) return null;
   return {
@@ -907,6 +817,85 @@ async function hydrateDecisionCapabilities(state, decision) {
   );
 }
 
+// Flatten hydrated capability entries into the row shape the §3.3 gates and the
+// risk-tier floor consume (approvalScope/riskLevel/toolKey/capabilityKey).
+function hydratedCapabilityRows(hydratedCapabilities) {
+  return (hydratedCapabilities?.resolved ?? [])
+    .map((entry) => (entry?.hydrate ? { ...entry.hydrate, capabilityKey: entry.hydrate.capabilityKey ?? entry.portfolioId } : entry))
+    .filter(Boolean);
+}
+
+// Prompt layer 2 surface (plan §3.1): DB-catalog processes, promptTable, and the
+// DB-derived allowedWorkflows manifest. Loaded once per decision turn and shared by
+// the live and replay paths so both normalize with identical options. An empty
+// allowedWorkflows list is a LOUD state downstream (allowed_workflows_unavailable).
+async function loadPlannerCatalogSurface(state) {
+  const surface = { offerableProcesses: [], dbCatalogPortfolio: null, allowedWorkflows: [], knownCapabilityKeys: [] };
+  const store = activeStores.get(state.session_id);
+  if (!store) return surface;
+  try {
+    const { loadSessionPortfolio } = await import("./capabilityCatalog.mjs");
+    const portfolio = await loadSessionPortfolio(store, { sessionId: state.session_id });
+    const table = portfolio.manifest?.promptTable ?? [];
+    surface.allowedWorkflows = (portfolio.manifest?.allowedWorkflows ?? []).map((key) => String(key));
+    surface.knownCapabilityKeys = table.map((row) => String(row.portfolioId));
+    const processRows = table.filter((row) => row.kind === "process");
+    // Lever 2: surface each process's ORDERED STEPS (boundary + the tool/skill bound to it) so the
+    // planner reasons about feasibility ("can these steps reach the user's target?"). Tool/skill
+    // selection is authored into process_steps (deterministic), not LLM-guessed. Batched (1 query).
+    let stepsByProc = {};
+    try {
+      const procDbIds = processRows.map((p) => `proc:${p.portfolioId}`);
+      if (procDbIds.length) {
+        const placeholders = procDbIds.map(() => "?").join(", ");
+        const stepRows = await store.all(
+          `SELECT ps.process_id, ps.step_order, ps.step_key, ps.checkpoint_boundary, c.capability_key
+           FROM process_steps ps LEFT JOIN capabilities c ON c.id = ps.capability_id
+           WHERE ps.process_id IN (${placeholders}) ORDER BY ps.process_id, ps.step_order;`,
+          procDbIds
+        );
+        for (const r of stepRows) {
+          (stepsByProc[r.process_id] ??= []).push({ boundary: r.checkpoint_boundary, capability: r.capability_key || null });
+        }
+      }
+    } catch {
+      stepsByProc = {};
+    }
+    surface.offerableProcesses = processRows.map((p) => ({
+      id: p.portfolioId,
+      title: p.title,
+      whenToUse: p.whenToUse,
+      target: p.whyUse || p.bestUsedFor || p.title,
+      approvalScope: p.approvalScope,
+      steps: stepsByProc[`proc:${p.portfolioId}`] ?? []
+    }));
+    if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0" && table.length > 0) {
+      surface.dbCatalogPortfolio = {
+        cacheBackend: portfolio.backend,
+        cacheKey: portfolio.cacheKey,
+        portfolioHash: portfolio.manifest?.version ?? "db_catalog",
+        entryCount: table.length,
+        promptTable: table,
+        source: "db_catalog"
+      };
+    }
+  } catch {
+    /* loud downstream: empty allowedWorkflows hard-fails normalization */
+  }
+  return surface;
+}
+
+function plannerNormalizeOptions(state, surface, extra = {}) {
+  return {
+    allowedWorkflows: surface.allowedWorkflows,
+    offerableProcessIds: surface.offerableProcesses.map((process) => process.id),
+    knownCapabilityKeys: surface.knownCapabilityKeys,
+    policyResult: state.policy_result ?? null,
+    consentState: state.consent_state ?? null,
+    ...extra
+  };
+}
+
 async function llmOrchestrationDecisionNode(state) {
   if (state.policy_result?.urgentEscalationRequired) {
     return {
@@ -934,7 +923,7 @@ async function llmOrchestrationDecisionNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: state.structured_intent?.workflow ?? null,
+        workflow: null,
         confidence: 0,
         rationale: "Deterministic safety policy blocked the request before any external LLM decision.",
         issues: ["deterministic_policy_refusal"],
@@ -945,22 +934,32 @@ async function llmOrchestrationDecisionNode(state) {
   }
 
   if (state.raw_message?.llmOrchestrationDecisionReplay) {
-    const decision = normalizeLlmOrchestrationDecision(state.raw_message.llmOrchestrationDecisionReplay, {
-      mode: "replayed_live_decision",
-      model: state.raw_message.llmOrchestrationDecisionReplay.model ?? "replay",
-      fallbackWorkflow: state.structured_intent?.workflow
-    });
+    const surface = await loadPlannerCatalogSurface(state);
+    const decision = normalizeLlmOrchestrationDecision(
+      state.raw_message.llmOrchestrationDecisionReplay,
+      plannerNormalizeOptions(state, surface, {
+        mode: "replayed_live_decision",
+        model: state.raw_message.llmOrchestrationDecisionReplay.model ?? "replay"
+      })
+    );
     const hydratedCapabilities = await hydrateDecisionCapabilities(state, decision);
+    // §3.3 row gates re-run once the selected pointers are hydrated (PAS delegation,
+    // registry runtime_selectable, capability-driven risk floor) — same implementation
+    // the normalizer uses, applied post-hydration.
+    const gated = applyDecisionCapabilityGates(decision, hydratedCapabilityRows(hydratedCapabilities), { policyResult: state.policy_result });
     return {
       hydrated_capabilities: hydratedCapabilities,
-      llm_orchestration_decision: { ...decision, hydratedCapabilities },
+      llm_orchestration_decision: { ...gated, hydratedCapabilities },
       proof: appendProof(state, "llm_orchestration_decision", {
-        mode: decision.mode,
-        valid: decision.valid,
-        workflow: decision.workflow,
-        confidence: decision.confidence,
-        confidenceBand: confidenceBand(decision),
-        issues: decision.issues,
+        mode: gated.mode,
+        valid: gated.valid,
+        workflow: gated.workflow,
+        confidence: gated.confidence,
+        confidenceBand: confidenceBand(gated),
+        riskTier: gated.risk_tier,
+        dataLayer: gated.data_layer,
+        taskClass: gated.classification?.taskClass ?? null,
+        issues: gated.issues,
         capabilityHydration: summarizeHydration(hydratedCapabilities)
       })
     };
@@ -979,7 +978,7 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
-        workflow: state.structured_intent?.workflow ?? null,
+        workflow: null,
         confidence: 0,
         rationale: "Live GPT orchestration decision was not requested.",
         issues: [],
@@ -990,10 +989,9 @@ async function llmOrchestrationDecisionNode(state) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    // Under LLM-always, a missing key is a LOUD degraded-intelligence state, not a
-    // silent success: routing must not pretend the curated classifier is the
-    // planner. The router surfaces intelligence_status=degraded and a clarify path.
-    const llmAlways = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
+    // A missing key is UNCONDITIONALLY a loud degraded-intelligence state (plan §10.13):
+    // degraded mode is determined solely by real dependency absence, never by a flag,
+    // and there is no classifier to pretend with.
     return {
       llm_orchestration_decision: {
         mode: "skipped_missing_openai_api_key",
@@ -1003,74 +1001,23 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
-        degraded: llmAlways,
-        degradedReason: llmAlways ? "missing_openai_api_key" : null,
-        workflow: state.structured_intent?.workflow ?? null,
+        degraded: true,
+        degradedReason: "missing_openai_api_key",
+        workflow: null,
         confidence: 0,
-        rationale: llmAlways
-          ? "OPENAI_API_KEY is not configured: orchestration intelligence is DEGRADED. The curated classifier is a safety hint only, not the planner."
-          : "OPENAI_API_KEY is not configured, so LangGraph fell back to the curated classifier.",
+        rationale: "OPENAI_API_KEY is not configured: orchestration intelligence is DEGRADED and no workflow decision can be made.",
         issues: ["missing_openai_api_key"],
-        warnings: llmAlways ? ["intelligence_degraded_missing_key"] : []
+        warnings: ["intelligence_degraded_missing_key"]
       },
-      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_missing_openai_api_key", degraded: llmAlways })
+      proof: appendProof(state, "llm_orchestration_decision", { mode: "skipped_missing_openai_api_key", degraded: true })
     };
   }
 
   const store = activeStores.get(state.session_id);
-  // Phase B + go-live 3/3: feed the planner the DB-catalog. offerableProcesses lets it
-  // populate offeredProcessIds; when BRAINSTY_PLANNER_DB_CATALOG!=0 and the catalog is
-  // non-empty, the DB catalog promptTable REPLACES the legacy per-turn portfolio as the
-  // planner's surface (legacy remains the fallback when the catalog is empty).
-  let offerableProcesses = [];
-  let dbCatalogPortfolio = null;
-  try {
-    const { loadSessionPortfolio } = await import("./capabilityCatalog.mjs");
-    const portfolio = await loadSessionPortfolio(store, { sessionId: state.session_id });
-    const table = portfolio.manifest?.promptTable ?? [];
-    const processRows = table.filter((row) => row.kind === "process");
-    // Lever 2: surface each process's ORDERED STEPS (boundary + the tool/skill bound to it) so the
-    // planner reasons about feasibility ("can these steps reach the user's target?"). Tool/skill
-    // selection is authored into process_steps (deterministic), not LLM-guessed. Batched (1 query).
-    let stepsByProc = {};
-    try {
-      const procDbIds = processRows.map((p) => `proc:${p.portfolioId}`);
-      if (procDbIds.length) {
-        const placeholders = procDbIds.map(() => "?").join(", ");
-        const stepRows = await store.all(
-          `SELECT ps.process_id, ps.step_order, ps.step_key, ps.checkpoint_boundary, c.capability_key
-           FROM process_steps ps LEFT JOIN capabilities c ON c.id = ps.capability_id
-           WHERE ps.process_id IN (${placeholders}) ORDER BY ps.process_id, ps.step_order;`,
-          procDbIds
-        );
-        for (const r of stepRows) {
-          (stepsByProc[r.process_id] ??= []).push({ boundary: r.checkpoint_boundary, capability: r.capability_key || null });
-        }
-      }
-    } catch {
-      stepsByProc = {};
-    }
-    offerableProcesses = processRows.map((p) => ({
-      id: p.portfolioId,
-      title: p.title,
-      whenToUse: p.whenToUse,
-      target: p.whyUse || p.bestUsedFor || p.title,
-      approvalScope: p.approvalScope,
-      steps: stepsByProc[`proc:${p.portfolioId}`] ?? []
-    }));
-    if (process.env.BRAINSTY_PLANNER_DB_CATALOG !== "0" && table.length > 0) {
-      dbCatalogPortfolio = {
-        cacheBackend: portfolio.backend,
-        cacheKey: portfolio.cacheKey,
-        portfolioHash: portfolio.manifest?.version ?? "db_catalog",
-        entryCount: table.length,
-        promptTable: table,
-        source: "db_catalog"
-      };
-    }
-  } catch {
-    offerableProcesses = [];
-  }
+  // Phase B + go-live 3/3 + Phase 83: feed the planner the DB-catalog surface —
+  // offerableProcesses, the promptTable, and the DB-derived allowedWorkflows manifest.
+  const surface = await loadPlannerCatalogSurface(state);
+  const { offerableProcesses, dbCatalogPortfolio } = surface;
   // Recent conversation turns so the planner does NOT re-offer / re-ask, and can ADVANCE when the
   // user accepts a prior offer. Read from the canonical messages channel (populated by
   // inputPolicyNode, carried across turns by the checkpointer) — not a DB re-read. The current
@@ -1083,8 +1030,8 @@ async function llmOrchestrationDecisionNode(state) {
   }
   conversationHistory = conversationHistory.slice(-6);
   const plannerState = dbCatalogPortfolio
-    ? { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
-    : { ...state, offerable_processes: offerableProcesses, conversation_history: conversationHistory };
+    ? { ...state, offerable_processes: offerableProcesses, allowed_workflows: surface.allowedWorkflows, conversation_history: conversationHistory, context_packet: { ...state.context_packet, capabilityPortfolio: dbCatalogPortfolio } }
+    : { ...state, offerable_processes: offerableProcesses, allowed_workflows: surface.allowedWorkflows, conversation_history: conversationHistory };
   const messages = buildLlmOrchestrationDecisionMessages(plannerState);
   const payloadObservation = store
     ? await recordOutboundPayloadObservation(store, {
@@ -1104,8 +1051,11 @@ async function llmOrchestrationDecisionNode(state) {
       trace_id: state.graph_trace_id,
       session_id: state.session_id,
       model,
+      prompt_version: "v2",
+      contract_version: LLM_ORCHESTRATION_DECISION_VERSION,
       prompt_message_count: messages.length,
-      capability_rows: state.context_packet?.capabilityPortfolio?.promptTable?.length ?? 0
+      allowed_workflow_count: surface.allowedWorkflows.length,
+      capability_rows: plannerState.context_packet?.capabilityPortfolio?.promptTable?.length ?? 0
     },
     // Debug trace mode: capture the FULL hydrated planner prompt (system + the payload
     // with capability portfolio text, pointers, runtime context) as the span input.
@@ -1122,12 +1072,14 @@ async function llmOrchestrationDecisionNode(state) {
       maxRetries: Number(process.env.BRAINSTY_PLANNER_MAX_RETRIES || 3)
     });
     const response = await llm.invoke(messages);
-    const decision = normalizeLlmOrchestrationDecision(response.content, {
-      mode: "openai_chatopenai_invoked",
-      provider: "openai",
-      model,
-      fallbackWorkflow: state.structured_intent?.workflow
-    });
+    const decision = normalizeLlmOrchestrationDecision(
+      response.content,
+      plannerNormalizeOptions(state, surface, {
+        mode: "openai_chatopenai_invoked",
+        provider: "openai",
+        model
+      })
+    );
     plannerCheckpoint.end_checkpoint(
       // Debug trace mode: capture the FULL normalized decision (every contract field +
       // selected pointers) as the span output; summary-only when off.
@@ -1149,15 +1101,19 @@ async function llmOrchestrationDecisionNode(state) {
     // Dereference the pointers the planner selected: read the portfolio back from
     // the runtime cache (Redis) and hydrate the selected entries (capability.hydrate).
     const hydratedCapabilities = await hydrateDecisionCapabilities(state, decision);
+    // §3.3 row gates re-run post-hydration (PAS delegation, registry
+    // runtime_selectable, capability-driven risk floor) — same gate implementation
+    // as the normalizer, no dual logic.
+    const gated = applyDecisionCapabilityGates(decision, hydratedCapabilityRows(hydratedCapabilities), { policyResult: state.policy_result });
     return {
       hydrated_capabilities: hydratedCapabilities,
       llm_orchestration_decision: {
-        ...decision,
+        ...gated,
         baseURL,
         modelTier: selection,
         llmOutputIndex,
         hydratedCapabilities,
-        confidenceBand: confidenceBand(decision),
+        confidenceBand: confidenceBand(gated),
         response: response.content,
         outboundPayloadObservation: payloadObservation
           ? {
@@ -1172,12 +1128,16 @@ async function llmOrchestrationDecisionNode(state) {
       },
       proof: appendProof(state, "llm_orchestration_decision", {
         mode: "openai_chatopenai_invoked",
-        valid: decision.valid,
-        workflow: decision.workflow,
-        confidence: decision.confidence,
-        confidenceBand: confidenceBand(decision),
-        issues: decision.issues,
+        valid: gated.valid,
+        workflow: gated.workflow,
+        confidence: gated.confidence,
+        confidenceBand: confidenceBand(gated),
+        riskTier: gated.risk_tier,
+        dataLayer: gated.data_layer,
+        taskClass: gated.classification?.taskClass ?? null,
+        issues: gated.issues,
         plannerSurface: dbCatalogPortfolio ? "db_catalog" : "legacy",
+        allowedWorkflowCount: surface.allowedWorkflows.length,
         offerableProcessCount: offerableProcesses.length,
         capabilityHydration: summarizeHydration(hydratedCapabilities)
       })
@@ -1193,11 +1153,11 @@ async function llmOrchestrationDecisionNode(state) {
         modelTier: selection,
         valid: false,
         usedByRouter: false,
-        workflow: state.structured_intent?.workflow ?? null,
+        workflow: null,
         confidence: 0,
         rationale: error.message,
         issues: [error.message],
-        warnings: ["falling_back_to_curated_classifier"],
+        warnings: [],
         outboundPayloadObservation: payloadObservation
           ? {
               eventType: "outbound_payload_observed",
@@ -1218,14 +1178,9 @@ async function llmOrchestrationDecisionNode(state) {
 }
 
 async function workflowRouterNode(state) {
+  // Urgent/handoff rail: safety semantics kept verbatim (plan §3.4); the legacy
+  // classifier backfill is deleted with the structured_intent channel (plan §10.3).
   if (state.policy_result?.urgentEscalationRequired || state.intent === WORKFLOWS.URGENT_HUMAN_HANDOFF) {
-    const structuredIntent =
-      state.structured_intent ??
-      classifyHealthcareIntent({
-        message: state.user_input,
-        policyResult: state.policy_result,
-        contextPacket: state.context_packet
-      });
     const store = activeStores.get(state.session_id);
     const user = userFromContext(state.context_packet) ?? { id: state.user_id };
     const session = sessionFromState(state);
@@ -1262,7 +1217,6 @@ async function workflowRouterNode(state) {
     }
     return {
       workflow: "human_approval_escalation",
-      structured_intent: structuredIntent,
       workflow_route: route,
       route_reason: "urgent_emergency_handoff_required",
       human_handoff: handoff,
@@ -1299,18 +1253,12 @@ async function workflowRouterNode(state) {
     };
   }
 
+  // Refusal rail: safety semantics kept verbatim (plan §3.4); classifier backfill and
+  // structured_intent write deleted with the channel (plan §10.3/§10.11).
   const refusal = refusalForIntent(state.intent);
   if (refusal) {
-    const structuredIntent =
-      state.structured_intent ??
-      classifyHealthcareIntent({
-        message: state.user_input,
-        policyResult: state.policy_result,
-        contextPacket: state.context_packet
-      });
     return {
       workflow: state.intent,
-      structured_intent: structuredIntent,
       workflow_route: null,
       route_reason: "blocked_by_input_policy",
       llm_orchestration_decision: state.llm_orchestration_decision ?? {
@@ -1319,7 +1267,7 @@ async function workflowRouterNode(state) {
         model: process.env.OPENAI_MODEL || "gpt-5-mini",
         valid: false,
         usedByRouter: false,
-        workflow: state.structured_intent?.workflow ?? null,
+        workflow: null,
         confidence: 0,
         rationale: "Deterministic safety policy blocked the request before external LLM decisioning.",
         issues: ["deterministic_policy_refusal"],
@@ -1330,7 +1278,7 @@ async function workflowRouterNode(state) {
       proof: appendProof(state, "workflow_router", { route: state.intent, reason: "blocked_by_input_policy" })
     };
   }
-  if (state.intent === WORKFLOWS.ESCALATE_APPROVAL || state.structured_intent?.refusalOrEscalationFlag === "escalation_required") {
+  if (state.intent === WORKFLOWS.ESCALATE_APPROVAL) {
     const route =
       state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === "human_approval_escalation") ??
       state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === "human_approval_escalation") ??
@@ -1347,15 +1295,15 @@ async function workflowRouterNode(state) {
     };
   }
   const llmDecisionUsed = shouldUseLlmDecision(state.llm_orchestration_decision);
-  // GATE (LLM planner): in LLM-primary mode an UNAVAILABLE planner (no key / invocation
-  // failure / unparseable) must NOT silently fall back to the deterministic regex
-  // classifier and route confidently. Fail loud: degrade honestly, emit an audit event.
-  const llmPrimaryRouting = process.env.BRAINSTY_ORCHESTRATOR_LLM_ALWAYS !== "0";
+  // GATE (LLM planner): LLM-primary routing is UNCONDITIONAL (plan §10.13 — the
+  // legacy orchestrator-mode env switch is deleted). An UNAVAILABLE planner
+  // (no key / invocation failure / unparseable / not requested) must NOT silently
+  // fall back to any keyword shortcut. Fail loud: degrade honestly, emit an audit event.
   const llmDecisionMode = String(state.llm_orchestration_decision?.mode ?? "");
   const llmUnavailable =
-    ["openai_chatopenai_failed", "invalid_response", "skipped_missing_openai_api_key"].includes(llmDecisionMode) ||
+    ["openai_chatopenai_failed", "invalid_response", "skipped_missing_openai_api_key", "not_requested", ""].includes(llmDecisionMode) ||
     /missing_openai|api_key|unavailable/i.test(llmDecisionMode);
-  if (llmPrimaryRouting && llmUnavailable && !llmDecisionUsed) {
+  if (llmUnavailable && !llmDecisionUsed) {
     const store = activeStores.get(state.session_id);
     if (store) {
       await audit(store, state.session_id, "llm_planner_unavailable_no_silent_regex", {
@@ -1381,29 +1329,65 @@ async function workflowRouterNode(state) {
       })
     };
   }
+  // NEW branch (plan §3.4.2): the planner RAN (live or replayed recorded decision)
+  // but its decision is invalid (workflow_not_allowed, allowed_workflows_unavailable,
+  // risk_tier_below_floor, PAS-delegation gate, registry gate...). Never silently
+  // re-route — escalate loud.
+  if (["openai_chatopenai_invoked", "replayed_live_decision"].includes(llmDecisionMode) && state.llm_orchestration_decision?.valid === false) {
+    const store = activeStores.get(state.session_id);
+    if (store) {
+      await audit(store, state.session_id, "llm_invalid_decision_no_silent_fallback", {
+        trace_id: state.graph_trace_id,
+        mode: llmDecisionMode,
+        issues: state.llm_orchestration_decision?.issues ?? []
+      }).catch(() => {});
+    }
+    return {
+      workflow: "human_approval_escalation",
+      workflow_route: null,
+      route_reason: "llm_invalid_decision_no_silent_fallback",
+      workflow_outcome: "llm_invalid_decision",
+      final_response:
+        "I can't act on the plan I produced for this request because it failed the safety contract checks. I won't guess — please rephrase, try again in a moment, or I can connect you with a human.",
+      llm_orchestration_decision: { ...state.llm_orchestration_decision, usedByRouter: false },
+      should_remember: false,
+      proof: appendProof(state, "workflow_router", {
+        route: "human_approval_escalation",
+        reason: "llm_invalid_decision_no_silent_fallback",
+        issues: state.llm_orchestration_decision?.issues ?? [],
+        silentFallbackPrevented: true
+      })
+    };
+  }
   const lowConfidenceLlmDecision =
     state.llm_orchestration_decision?.valid &&
     state.llm_orchestration_decision?.workflow &&
     confidenceBand(state.llm_orchestration_decision) === "low";
-  const classifierWorkflow = state.structured_intent?.workflow;
-  const selectedWorkflow = llmDecisionUsed ? state.llm_orchestration_decision.workflow : classifierWorkflow;
+  // The legacy classifier/positional fallback chain is DELETED (plan §3.4/§10.7):
+  // the DB-validated decision workflow is the only selection source.
+  const selectedWorkflow = state.llm_orchestration_decision?.workflow ?? null;
   const route =
     state.context_packet?.workflowArchitecture?.readiness?.find((item) => item.workflowKey === selectedWorkflow) ??
     state.context_packet?.workflowArchitecture?.routeCandidates?.find((item) => item.workflowKey === selectedWorkflow) ??
-    state.context_packet?.workflowArchitecture?.routeCandidates?.[0] ??
     null;
+  const clarifyQuestion =
+    state.llm_orchestration_decision?.response?.userFacingNextQuestion ||
+    state.llm_orchestration_decision?.userFacingNextQuestion ||
+    "";
   return {
-    workflow: route?.workflowKey ?? "human_approval_escalation",
+    workflow: route?.workflowKey ?? selectedWorkflow ?? "human_approval_escalation",
     workflow_route: route,
-    route_reason: llmDecisionUsed
-      ? "llm_orchestration_decision"
-      : lowConfidenceLlmDecision
-        ? "low_confidence_clarify"
-        : classifierWorkflow
-        ? "structured_intent_classifier"
-        : route?.routeScore > 0
-          ? "matched_user_input_memory_or_pointers"
-          : "default_preflight_route",
+    route_reason: llmDecisionUsed ? "llm_orchestration_decision" : "low_confidence_clarify",
+    // Founder rule (docs/FOUNDER_IMPLEMENTATION_PROMPT_TEMPLATES.md:102): on low
+    // confidence, ASK — never default to a guessed workflow.
+    ...(llmDecisionUsed
+      ? {}
+      : {
+          final_response:
+            clarifyQuestion ||
+            "I want to make sure I route this correctly — could you tell me a bit more about what you need (for example the payer, the document, or the claim involved)?",
+          workflow_outcome: "low_confidence_clarify"
+        }),
     llm_orchestration_decision: state.llm_orchestration_decision
       ? {
           ...state.llm_orchestration_decision,
@@ -1411,13 +1395,14 @@ async function workflowRouterNode(state) {
         }
       : null,
     proof: appendProof(state, "workflow_router", {
-      route: route?.workflowKey ?? "human_approval_escalation",
-      classifierWorkflow,
+      route: route?.workflowKey ?? selectedWorkflow ?? "human_approval_escalation",
       llmWorkflow: state.llm_orchestration_decision?.workflow ?? null,
       llmDecisionUsed,
+      lowConfidenceClarify: Boolean(lowConfidenceLlmDecision),
       llmConfidenceBand: state.llm_orchestration_decision ? confidenceBand(state.llm_orchestration_decision) : null,
-      classifierConfidence: state.structured_intent?.confidence ?? null,
       llmConfidence: state.llm_orchestration_decision?.confidence ?? null,
+      riskTier: state.llm_orchestration_decision?.risk_tier ?? null,
+      dataLayer: state.llm_orchestration_decision?.data_layer ?? null,
       executableNow: Boolean(route?.executableNow)
     })
   };
@@ -1483,10 +1468,27 @@ async function maybeComposeLiveSourcedAnswer(state, deterministicAnswer) {
   }
 }
 
+// Node NAME kept (protects seeded graph_subpath rows, plan §10.5); body rewritten:
+// the journey plan materializes from decision.workflow_graph — steps validated
+// row-by-row against DB-authored process_steps via validateWorkflowGraph (§3.3).
 async function planJourneyNode(state) {
-  const existingPlan = state.journey_decisions?.at?.(-1) ?? planJourneyFromIntent(state.structured_intent?.reasoning ?? {});
+  const decision = state.llm_orchestration_decision ?? {};
+  const workflowGraph = decision.workflow_graph ?? {};
+  let workflowGraphValidation = { valid: false, rejectedSteps: [], reason: "no_process_bound" };
+  const store = activeStores.get(state.session_id);
+  if (store && workflowGraph.processId) {
+    try {
+      const { validateWorkflowGraph } = await import("./capabilityCatalog.mjs");
+      workflowGraphValidation = await validateWorkflowGraph(store, {
+        processId: workflowGraph.processId,
+        steps: workflowGraph.steps ?? []
+      });
+    } catch (error) {
+      workflowGraphValidation = { valid: false, rejectedSteps: [], reason: error.message };
+    }
+  }
   const neededEvidence = [
-    ...(state.structured_intent?.reasoning?.missingEvidence ?? []),
+    ...(decision.demand_and_evidence?.missingEvidence ?? decision.missingEvidence ?? []),
     ...(state.workflow_route?.missingDataPointers ?? [])
   ]
     .filter(Boolean)
@@ -1497,10 +1499,14 @@ async function planJourneyNode(state) {
     state.raw_message?.uploadedDocuments?.length ||
     state.raw_message?.approvalToken;
   const journeyPlan = {
-    version: "2026-06-21.phase55-native-hitl-journey-plan.v1",
+    version: "2026-07-02.phase84-decision-first-journey-plan.v2",
     workflow: state.workflow,
     routeReason: state.route_reason,
-    primaryIntent: state.structured_intent?.primary_intent ?? null,
+    processId: workflowGraph.processId ?? null,
+    workflowGraph: { ...workflowGraph, validation: workflowGraphValidation },
+    riskTier: decision.risk_tier ?? null,
+    dataLayer: decision.data_layer ?? [],
+    // Consumer-facing plan step keys preserved (plan §10.5).
     steps: [
       "resolve_openclaw_skill",
       "prepare_bounded_worker_contract",
@@ -1519,14 +1525,15 @@ async function planJourneyNode(state) {
       nativeLangGraphInterrupt: true,
       approvalTokenAuthorizationOfRecord: true,
       approvalScope: "read_only_observation"
-    },
-    priorPlan: existingPlan
+    }
   };
   return {
     journey_plan: journeyPlan,
-    journey_decisions: [journeyPlan],
     proof: appendProof(state, "plan_journey", {
       workflow: journeyPlan.workflow,
+      processId: journeyPlan.processId,
+      workflowGraphValid: workflowGraphValidation.valid,
+      rejectedStepCount: workflowGraphValidation.rejectedSteps?.length ?? 0,
       stepCount: journeyPlan.steps.length,
       neededEvidenceCount: journeyPlan.neededEvidence.length,
       degradeIfMissing: journeyPlan.degradeIfMissing,
@@ -2943,7 +2950,6 @@ async function caseStateShadowNode(state) {
     userInput: state.user_input,
     contextPacket: state.context_packet,
     policyResult: state.policy_result,
-    structuredIntent: state.structured_intent,
     llmDecision: state.llm_orchestration_decision,
     workflow: state.workflow,
     routeReason: state.route_reason,
@@ -3379,7 +3385,9 @@ async function publishLangGraphLifecycleEvents(store, { user, session, state, pr
     {
       eventType: "workflow.classified",
       payload: {
-        curatedIntent: state.structured_intent,
+        taskClass: state.llm_orchestration_decision?.classification?.taskClass ?? null,
+        dataLayer: state.llm_orchestration_decision?.data_layer ?? [],
+        riskTier: state.llm_orchestration_decision?.risk_tier ?? null,
         llmDecision: state.llm_orchestration_decision
           ? {
               mode: state.llm_orchestration_decision.mode,
@@ -3475,7 +3483,6 @@ export function createBrainstyLangGraph() {
   return new StateGraph(BrainstyState)
     .addNode("input_policy", observedLangGraphNode("input_policy", "guardrail.check", inputPolicyNode))
     .addNode("recall_context", observedLangGraphNode("recall_context", "memory.read", recallContextNode))
-    .addNode("classify_intent", observedLangGraphNode("classify_intent", "router.intent_classified", structuredIntentNode))
     .addNode("llm_decision", observedLangGraphNode("llm_decision", "planner.output", llmOrchestrationDecisionNode))
     .addNode("workflow_router", observedLangGraphNode("workflow_router", "router.route_selected", workflowRouterNode))
     .addNode("plan_journey", observedLangGraphNode("plan_journey", "launcher.agent_selected", planJourneyNode))
@@ -3490,8 +3497,7 @@ export function createBrainstyLangGraph() {
       workflow_router: "workflow_router",
       recall_context: "recall_context"
     })
-    .addEdge("recall_context", "classify_intent")
-    .addEdge("classify_intent", "llm_decision")
+    .addEdge("recall_context", "llm_decision")
     .addEdge("llm_decision", "workflow_router")
     .addConditionalEdges("workflow_router", routeAfterWorkflowRouter, {
       compose_response: "compose_response",
@@ -3533,7 +3539,6 @@ export function routeAfterEvidenceObservation(state) {
 export const BRAINSTY_GRAPH_NODE_NAMES = Object.freeze([
   "input_policy",
   "recall_context",
-  "classify_intent",
   "llm_decision",
   "workflow_router",
   "plan_journey",
@@ -3568,8 +3573,7 @@ export function describeBrainstyLangGraphTopology() {
       }
     ],
     linearEdges: [
-      ["recall_context", "classify_intent"],
-      ["classify_intent", "llm_decision"],
+      ["recall_context", "llm_decision"],
       ["llm_decision", "workflow_router"],
       ["plan_journey", "skill_resolver"],
       ["skill_resolver", "workflow_executor"],
@@ -3671,7 +3675,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     continuous_intelligence_persistence: null,
     policy_result: null,
     intent: null,
-    structured_intent: null,
+    consent_state: null,
+    auth_state: null,
+    errors: [],
     llm_orchestration_decision: null,
     workflow: null,
     workflow_route: null,
@@ -3702,7 +3708,6 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     model_invocation: null,
     final_response: null,
     ai2ui_blocks: [],
-    journey_decisions: [],
     answer_claims: [],
     should_remember: false,
     memory_summary: null,
@@ -3751,8 +3756,8 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
       user_hash: user.id,
       agent_version: LANGGRAPH_RUNNER_VERSION,
       route: null,
-      planner_version: "llm_orchestration_decision.v1",
-      router_version: "structured_intent_classifier",
+      planner_version: "llm_orchestration_decision.v2",
+      router_version: "llm_primary_no_silent_fallback",
       profile_name: "brainstyworkers",
       langchain_runtime: "@langchain/langgraph",
       openclaw_enabled: Boolean(rawMessage.useOfficialOpenClawWorker || rawMessage.workerContinuationId),

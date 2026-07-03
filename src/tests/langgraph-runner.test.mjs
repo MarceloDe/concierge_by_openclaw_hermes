@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { LANGGRAPH_RUNNER_VERSION, runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import {
   executeResearchRun,
@@ -18,6 +19,29 @@ import {
 async function createStore() {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-"));
   return new SqliteStore(join(dir, "test.sqlite")).initialize();
+}
+
+// Decision-first runtime (Phase 84): tests that need a routed workflow seed the
+// DB capability catalog (so allowedWorkflows is non-empty) and inject a recorded
+// planner decision via rawMessage.llmOrchestrationDecisionReplay. There is no
+// classifier fallback of any kind.
+async function createSeededStore() {
+  const store = await createStore();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
+}
+
+function replayDecision({ workflow, intent, confidence = 0.9, ...extras }) {
+  return {
+    workflow,
+    intent,
+    confidence,
+    rationale: `Deterministic replay decision fixture routing to ${workflow}.`,
+    approvalRequired: true,
+    approvalScope: "read_only_observation",
+    workerGoal: `Read-only observation worker goal for ${workflow}.`,
+    ...extras
+  };
 }
 
 function fixtureFetch(html, contentType = "text/html; charset=utf-8") {
@@ -68,7 +92,7 @@ async function createResearchFixtureArtifact(store, { actorUserId, url, title, h
 }
 
 test("LangGraph runner routes an insurance request and prepares OpenClaw envelope", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const { user, session } = await enrollDefaultMember(store);
 
   const result = await runLangGraphOrchestration(store, {
@@ -76,7 +100,11 @@ test("LangGraph runner routes an insurance request and prepares OpenClaw envelop
     session,
     channel: session.channel,
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
-    rawMessage: { source: "test", useLiveModel: false }
+    rawMessage: {
+      source: "test",
+      useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+    }
   });
 
   assert.equal(result.version, LANGGRAPH_RUNNER_VERSION);
@@ -103,7 +131,9 @@ test("LangGraph runner routes an insurance request and prepares OpenClaw envelop
   assert.equal(result.state.openclaw_skill_proposal.task.task_type, "openclaw_skill_invocation_proposal");
   assert.equal(result.state.openclaw_skill_proposal.task.status, "pending_approval");
   assert.equal(result.state.model_invocation, null);
-  assert.equal(result.state.llm_orchestration_decision.mode, "not_requested");
+  assert.equal(result.state.llm_orchestration_decision.mode, "replayed_live_decision");
+  assert.equal(result.state.llm_orchestration_decision.valid, true);
+  assert.equal(result.state.route_reason, "llm_orchestration_decision");
   assert.equal(result.state.journey_plan.hitl.nativeLangGraphInterrupt, true);
   assert.equal(result.state.evidence_observation.status, "blocked_no_trusted_research_evidence");
   assert.equal(result.state.workflow_outcome, "best_effort_degraded");
@@ -215,7 +245,7 @@ test("LangGraph runner records missing OpenAI key instead of leaking or requirin
 });
 
 test("LangGraph runner waits for approval before read-only browser evidence capture", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const { user, session } = await enrollDefaultMember(store);
 
   const result = await runLangGraphOrchestration(store, {
@@ -226,6 +256,7 @@ test("LangGraph runner waits for approval before read-only browser evidence capt
     rawMessage: {
       source: "test",
       useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
       browserSnapshot: {
         title: "Member Benefits",
         url: "https://health.aetna.com/member/benefits",
@@ -245,14 +276,19 @@ test("LangGraph runner waits for approval before read-only browser evidence capt
 });
 
 test("LangGraph runner consumes approval and captures exactly read-only browser evidence", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const { user, session } = await enrollDefaultMember(store);
   const proposalRun = await runLangGraphOrchestration(store, {
     user,
     session,
     channel: session.channel,
     userInput: "Use my Aetna portal memory to check eligibility and benefits.",
-    rawMessage: { source: "test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+    }
   });
   const approval = await createReadOnlyObservationApproval(store, {
     taskId: proposalRun.state.openclaw_skill_proposal.task.id,
@@ -271,6 +307,7 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
     rawMessage: {
       source: "test",
       useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
       approvalToken: approval.approvalToken,
       approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
       browserSnapshot: {
@@ -300,14 +337,19 @@ test("LangGraph runner consumes approval and captures exactly read-only browser 
 });
 
 test("LangGraph runner composes a best-effort answer when live portal evidence is unavailable", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const { user, session } = await enrollDefaultMember(store);
   const proposalRun = await runLangGraphOrchestration(store, {
     user,
     session,
     channel: session.channel,
     userInput: "Do I still owe anything before insurance starts paying?",
-    rawMessage: { source: "blocked_live_portal_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "blocked_live_portal_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+    }
   });
   const approval = await createReadOnlyObservationApproval(store, {
     taskId: proposalRun.state.openclaw_skill_proposal.task.id,
@@ -325,6 +367,7 @@ test("LangGraph runner composes a best-effort answer when live portal evidence i
     rawMessage: {
       source: "blocked_live_portal_test",
       useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
       approvalToken: approval.approvalToken,
       approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
       remoteDebuggerUrl: "http://127.0.0.1:1"
@@ -343,7 +386,7 @@ test("LangGraph runner composes a best-effort answer when live portal evidence i
 });
 
 test("LangGraph answers user questions from trusted reviewed research evidence", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-research-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
   process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
@@ -373,7 +416,12 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
       session,
       channel: session.channel,
       userInput: "Can you compare my deductible and coinsurance cost options from reviewed evidence?",
-      rawMessage: { source: "phase10i_research_grounding_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase10i_research_grounding_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+      }
     });
 
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
@@ -407,7 +455,7 @@ test("LangGraph answers user questions from trusted reviewed research evidence",
 });
 
 test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-rx-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
   process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
@@ -437,10 +485,16 @@ test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", a
       session,
       channel: session.channel,
       userInput: "Is Ozempic on my plan formulary and what drug tier is it?",
-      rawMessage: { source: "phase50_pharmacy_formulary_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase50_pharmacy_formulary_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "pharmacy_formulary", intent: "pharmacy_formulary_question" })
+      }
     });
 
-    assert.equal(result.state.structured_intent.primary_intent, "pharmacy_formulary");
+    assert.equal(result.state.llm_orchestration_decision.intent, "pharmacy_formulary_question");
+    assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "pharmacy_formulary");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
     assert.equal(result.state.workflow_outcome, "trusted_research_answered");
@@ -468,7 +522,7 @@ test("LangGraph answers pharmacy formulary questions with sourced AI2UI rows", a
 });
 
 test("LangGraph answers procedure prep questions with sourced AI2UI checklist rows", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-procedure-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
   process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
@@ -499,10 +553,16 @@ test("LangGraph answers procedure prep questions with sourced AI2UI checklist ro
       session,
       channel: session.channel,
       userInput: "Can you make an administrative checklist before my imaging appointment?",
-      rawMessage: { source: "phase51_procedure_checklist_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase51_procedure_checklist_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "procedure_admin_checklist" })
+      }
     });
 
-    assert.equal(result.state.structured_intent.primary_intent, "procedure_admin_checklist");
+    assert.equal(result.state.llm_orchestration_decision.intent, "procedure_admin_checklist");
+    assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "eligibility_benefits_navigation");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
     assert.equal(result.state.workflow_outcome, "trusted_research_answered");
@@ -531,7 +591,7 @@ test("LangGraph answers procedure prep questions with sourced AI2UI checklist ro
 });
 
 test("LangGraph answers provider network questions with sourced AI2UI provider rows", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-provider-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
   process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
@@ -562,10 +622,16 @@ test("LangGraph answers provider network questions with sourced AI2UI provider r
       session,
       channel: session.channel,
       userInput: "Is Midtown Imaging Center in network and accepting new patients?",
-      rawMessage: { source: "phase52_provider_network_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase52_provider_network_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "provider_network" })
+      }
     });
 
-    assert.equal(result.state.structured_intent.primary_intent, "provider_network");
+    assert.equal(result.state.llm_orchestration_decision.intent, "provider_network");
+    assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.equal(result.state.workflow, "eligibility_benefits_navigation");
     assert.equal(result.state.evidence_observation.status, "captured_trusted_research_evidence");
     assert.equal(result.state.workflow_outcome, "trusted_research_answered");
@@ -593,7 +659,7 @@ test("LangGraph answers provider network questions with sourced AI2UI provider r
 });
 
 test("LangGraph degrades gracefully for pending research artifacts until citation review approves them", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const artifactDir = await mkdtemp(join(tmpdir(), "brainsty-langgraph-research-artifacts-"));
   const previousArtifactDir = process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR;
   process.env.BRAINSTY_RESEARCH_ARTIFACT_DIR = artifactDir;
@@ -621,7 +687,12 @@ test("LangGraph degrades gracefully for pending research artifacts until citatio
       session,
       channel: session.channel,
       userInput: "What does reviewed evidence say about my annual deductible before coinsurance?",
-      rawMessage: { source: "phase10i_pending_research_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase10i_pending_research_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+      }
     });
 
     assert.equal(result.state.evidence_observation.status, "blocked_pending_research_evidence_review");
@@ -646,14 +717,19 @@ test("LangGraph verified portal proof returns structured benefit rows and source
   const previous = process.env.BRAINSTY_PORTAL_LIVE;
   process.env.BRAINSTY_PORTAL_LIVE = "1";
   try {
-    const store = await createStore();
+    const store = await createSeededStore();
     const { user, session } = await enrollDefaultMember(store);
     const proposalRun = await runLangGraphOrchestration(store, {
       user,
       session,
       channel: session.channel,
       userInput: "Do I still owe anything before insurance starts paying?",
-      rawMessage: { source: "phase_8d_test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "phase_8d_test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+      }
     });
     const approval = await createReadOnlyObservationApproval(store, {
       taskId: proposalRun.state.openclaw_skill_proposal.task.id,
@@ -672,6 +748,7 @@ test("LangGraph verified portal proof returns structured benefit rows and source
         source: "phase_8d_test",
         useLiveModel: false,
         requireLivePortalProof: true,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
         approvalToken: approval.approvalToken,
         approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
         browserSnapshot: {
@@ -725,7 +802,7 @@ test("LangGraph verified portal proof returns structured benefit rows and source
 });
 
 test("LangGraph manages the worker cycle from proposal to single-use approval to result ingest", async () => {
-  const store = await createStore();
+  const store = await createSeededStore();
   const { user, session } = await enrollDefaultMember(store);
   const message = "Do I still owe anything before insurance starts paying?";
 
@@ -734,30 +811,34 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     session,
     channel: session.channel,
     userInput: message,
-    rawMessage: { source: "worker_cycle_test", useLiveModel: false, executeEvidenceObservation: false }
+    rawMessage: {
+      source: "worker_cycle_test",
+      useLiveModel: false,
+      executeEvidenceObservation: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" })
+    }
   });
 
   const proposalSteps = proposalRun.state.proof.map((item) => item.step);
-  assert.deepEqual(proposalSteps.slice(0, 8), [
+  assert.deepEqual(proposalSteps.slice(0, 7), [
     "input_policy",
     "memory_recall_context",
-    "structured_intent_classifier",
     "llm_orchestration_decision",
     "workflow_router",
     "plan_journey",
     "skill_resolver",
     "workflow_executor"
   ]);
-  assert.equal(proposalSteps[8], "evidence_observation");
-  assert.equal(proposalSteps[9], "continuous_intelligence_shadow");
-  assert.equal(proposalSteps[10], "response_policy");
+  assert.equal(proposalSteps[7], "evidence_observation");
+  assert.equal(proposalSteps[8], "continuous_intelligence_shadow");
+  assert.equal(proposalSteps[9], "response_policy");
   assert.equal(proposalRun.state.continuous_intelligence.mode, "shadow_only");
   assert.equal(proposalRun.state.continuous_intelligence.productionDrivingAllowed, false);
   assert.equal(proposalRun.state.continuous_intelligence.pems.trusted, false);
   assert.ok(proposalSteps.includes("openclaw_skill_invocation_proposal"));
   assert.ok(proposalSteps.includes("product_memory_retain"));
   assert.equal(proposalRun.state.workflow, "eligibility_benefits_navigation");
-  assert.equal(proposalRun.state.route_reason, "structured_intent_classifier");
+  assert.equal(proposalRun.state.route_reason, "llm_orchestration_decision");
   assert.equal(proposalRun.state.openclaw_worker_plan.owner, "langgraph");
   assert.equal(proposalRun.state.openclaw_worker_plan.dispatchStatus, "not_dispatched");
   assert.equal(proposalRun.state.openclaw_worker_plan.workerJobs[0].deterministicControls.workerMayChooseWorkflow, false);
@@ -790,6 +871,7 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     rawMessage: {
       source: "worker_cycle_test",
       useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
       approvalToken: approval.approvalToken,
       approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
       browserSnapshot: {
@@ -818,6 +900,7 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
     rawMessage: {
       source: "worker_cycle_test",
       useLiveModel: false,
+      llmOrchestrationDecisionReplay: replayDecision({ workflow: "eligibility_benefits_navigation", intent: "eligibility_benefits_question" }),
       approvalToken: approval.approvalToken,
       approvalTaskId: proposalRun.state.openclaw_skill_proposal.task.id,
       browserSnapshot: {
@@ -848,7 +931,7 @@ test("LangGraph manages the worker cycle from proposal to single-use approval to
   assert.ok(auditTypes.includes("response_composed"));
 });
 
-test("LangGraph runner routes from structured classifier output, not route keyword scoring", async () => {
+test("LangGraph runner routes from the validated LLM orchestration decision, not route keyword scoring", async () => {
   const cases = [
     ["My doctor wants approval for an MRI next month", "prior_authorization_navigation", "prior_authorization_question"],
     ["Why didn't insurance pay my last visit?", "claim_status_navigation", "claim_status_question"],
@@ -857,23 +940,29 @@ test("LangGraph runner routes from structured classifier output, not route keywo
   ];
 
   for (const [message, workflow, intent] of cases) {
-    const store = await createStore();
+    const store = await createSeededStore();
     const { user, session } = await enrollDefaultMember(store);
     const result = await runLangGraphOrchestration(store, {
       user,
       session,
       channel: session.channel,
       userInput: message,
-      rawMessage: { source: "test", useLiveModel: false, executeEvidenceObservation: false }
+      rawMessage: {
+        source: "test",
+        useLiveModel: false,
+        executeEvidenceObservation: false,
+        llmOrchestrationDecisionReplay: replayDecision({ workflow, intent })
+      }
     });
 
-    assert.equal(result.state.structured_intent.workflow, workflow, message);
-    assert.equal(result.state.structured_intent.intent, intent, message);
+    assert.equal(result.state.llm_orchestration_decision.workflow, workflow, message);
+    assert.equal(result.state.llm_orchestration_decision.intent, intent, message);
+    assert.equal(result.state.llm_orchestration_decision.usedByRouter, true, message);
     assert.equal(result.state.workflow, workflow, message);
-    assert.equal(result.state.route_reason, "structured_intent_classifier");
+    assert.equal(result.state.route_reason, "llm_orchestration_decision");
     assert.ok(
       result.state.proof.some(
-        (step) => step.step === "structured_intent_classifier" && step.workflow === workflow
+        (step) => step.step === "llm_orchestration_decision" && step.workflow === workflow
       ),
       message
     );
@@ -891,8 +980,10 @@ test("LangGraph runner blocks credential-entry requests before structured routin
     rawMessage: { source: "test", useLiveModel: false }
   });
 
-  assert.equal(result.state.structured_intent.refusalOrEscalationFlag, "refusal");
   assert.equal(result.state.workflow, "refuse_credential_entry");
+  assert.equal(result.state.route_reason, "blocked_by_input_policy");
+  assert.equal(result.state.workflow_outcome, "blocked");
   assert.equal(result.state.openclaw_envelope, null);
+  assert.ok(String(result.state.final_response ?? "").trim().length > 0);
   assert.match(result.state.final_response, /cannot enter or request passwords/);
 });
