@@ -82,7 +82,7 @@
     {
       "phase": 88,
       "title": "Interrupt kinds + mcpPolicyGuard + durable-interrupt gate",
-      "status": "in_progress",
+      "status": "landed",
       "dependencies": [
         87
       ],
@@ -97,7 +97,7 @@
     {
       "phase": 89,
       "title": "Early no-signature connectors (Plan-Net directory, MRF pipeline, CMS PDP PUFs, PA-policy corpus)",
-      "status": "planned",
+      "status": "in_progress",
       "dependencies": [
         88
       ],
@@ -105,7 +105,7 @@
         "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-89",
-      "owner": null,
+      "owner": "claude-code",
       "blockers": [
         "ENTRY GATE: first unauthenticated MRF fetch committed as an artifacts/ transcript (UNVERIFIED external claim)"
       ]
