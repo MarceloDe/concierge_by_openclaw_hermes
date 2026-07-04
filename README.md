@@ -12,21 +12,42 @@ The project is not a generic chatbot. It is a proof-driven healthcare workflow e
 6. Final answers cite source pointers or explain exactly what evidence is missing.
 7. Product memory is server-side Graphiti/Zep-style memory; Cortex is project memory only.
 
-## Current Status
+## Current Scope — the Three-Layer Planner Pivot (2026-07)
 
-The local/pilot MVP is implemented and verified for pre-login flows, remote-browser handoff, default facade configuration, and sanitized proof artifacts.
+The system was pivoted from a restricted-context MVP to a **three-data-layer planner architecture** (binding spec: `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md`; authoritative config: `docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml`; machine-readable phase authority: `docs/db/phase-ledger.json`). Every planner decision is a grouped DECISION_CONTRACT_V2 carrying `data_layer` (`layer_1_public` | `layer_2_member_authorized_api` | `layer_3_portal_control`), a derived `risk_tier` (`low`→`critical`), demand/evidence extraction, and a DB-validated workflow graph. One Capability Registry table is the durable roadmap; the Executable Tool Catalog is its `runtime_selectable=1` filter; planned-but-unimplemented capabilities surface honestly (`notYetExecutable` + planner exposure contracts) and can never dispatch. Every phase lands only with real-runtime proofs (`docs/NON_MOCKED_PROOF_RULES.md`) — no mocks, no scaffolds, no dual pathways.
+
+### Pivot phase status (ledger-authoritative)
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 83 | DECISION_CONTRACT_V2 + 3-layer planner prompt + phase ledger | landed |
+| 84 | Graph topology, fail-loud router, legacy classification removal | landed |
+| 85 | Postgres deltas (vault/plan-identity/MRF tables), audit chain v2, flat-alias removal | landed |
+| 86 | Redis runtime mirrors (consent-state, oauth-session), layer fields, legacy portfolio removal | landed |
+| 87 | Explicit tool→executor registry, decision-first dispatch trigger, RAG/public-data substrate (live embeddings, live CMS client) | landed |
+| 88 | Interrupt kinds (consent_grant/auth_handoff gates), mcpPolicyGuard chokepoint, risk-tier authority, durable-interrupt boot gate | landed |
+| 89 | Early no-signature connectors: **verified** MRF entry gate (`mrf.healthsparq.com`), Plan-Net directory (live Humana R4), streaming MRF ingest of a real Aetna file, all four CMS PDP PUF tables proven, PA-policy corpus (real CMS LCD) | landed |
+| 90 | Mid connectors: token vault + member data rails landed (Part 1); sandbox OAuth member flow **blocked on founder action S1** (Aetna developer-portal registration) | in progress |
+| 91 | Production data rails (Aetna production FHIR, Stedi production, MRF vendor) | signature-gated |
+| 92 | Write/submission track (Da Vinci PAS, approved-write workers) | signature-gated |
+
+### Runtime surface
 
 | Area | State |
 | --- | --- |
-| Regular-user app | Implemented as React/Vite PWA at `/userapp` |
-| Operator dashboard | Implemented at `/` and legacy/parity `/mvp` |
+| Regular-user app | React/Vite PWA at `/userapp` |
+| Operator dashboard | `/` and legacy/parity `/mvp` |
 | Public connector | FastAPI `/api/v1/*` at `:8000` |
-| Internal runtime | Node/LangGraph/OpenClaw at `:4173` by default, often run as `:4226` for proof |
+| Internal runtime | Node/LangGraph/OpenClaw at `:4173` (proof runs often `:4226`) |
+| Planner | Decision-first LLM planner over the DB capability catalog; fail-loud (no regex/classifier fallback); live eval harness `npm run eval:planner` (8 cases, 9 scored dimensions) |
+| Data layers | layer_1 public connectors LIVE (Plan-Net directory, MRF pricing, CMS PDP PUFs, PA-policy corpus, RAG w/ real embeddings); layer_2 member API rail probed + rail-filtered (S1-gated); layer_3 portal control approval-gated read-only |
+| Interrupts | One native LangGraph mechanism, five discriminated kinds, versioned payloads, single-use bound tokens, durable-checkpointer boot gate for production profiles |
+| Safety rails | mcpPolicyGuard pre-tool chokepoint, consume-before-verdict write tokens, PHI masking on all outbound args, hash-chained audit (v2, layer-tagged), evidence-class taxonomy w/ trust ranks |
+| Storage | 87-table dialect-neutral schema (SQLite dev / Postgres 16 live-parity-gated); Redis runtime mirrors (fail-loud, TTL, documented namespace set) |
 | Remote browser | Self-hosted Steel on AWS via private tunnel and default FastAPI facade |
-| Human takeover | Implemented; user handles credentials, 2FA, captcha, and login screens |
-| Claims observation | Pre-login fail-closed; signed-in proof still requires manual login and return-control |
-| Proof artifacts | Sanitized `brainstyworkers.claims-observe-proof.v1` artifacts |
-| Production blockers | Signed-in Aetna proof, production Postgres rollout, production memory, hosted browser ops hardening |
+| Human takeover | User handles credentials, 2FA, captcha, login — the system never enters credentials |
+| Proof discipline | Per-phase acceptance artifacts under `artifacts/phase8x/`; `test:local` 431 passing; live suites per phase (`test:phase89:live`, `test:redis:*`) |
+| Current blockers | Founder S1 (Aetna portal registration → Phase 90 Part 2), S2 + signatures (Phases 91/92), production Postgres checkpointer (named Phase 91-window item) |
 
 ## Screenshots
 
