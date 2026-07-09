@@ -63,6 +63,7 @@ import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComp
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
+import { CHECKPOINT_RUNTIME_VERSIONS, resumeCompatibility } from "./graphCheckpointerStore.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
 import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
 import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
@@ -3857,6 +3858,34 @@ function hasPendingApprovalInterrupt(snapshot) {
   return Boolean(snapshot.tasks?.some((task) => task?.name === "approval_pause" || task?.interrupts?.length));
 }
 
+// Phase 91 (§4.3 deploy acceptance, founder #17): a pending interrupt written by a
+// PREVIOUS deploy may encode a different interrupt/planner/checkpointer schema. Resuming
+// it would replay an approval whose meaning has changed — an ambiguous post-deploy
+// action. Durable savers stamp their runtime versions; on a mismatch we EXPIRE the stale
+// thread and let the run re-raise the interrupt, so the user is asked again with the
+// current contract. Non-durable savers carry no stamp and are never resumed across a
+// restart anyway, so they report compatible and behave exactly as before.
+async function resolveResumeCompatibility(store, { threadId, sessionId }) {
+  if (typeof checkpointer.runtimeVersionsForThread !== "function") {
+    return { compatible: true, action: "resume", reason: "checkpointer_not_version_stamped" };
+  }
+  const stored = await checkpointer.runtimeVersionsForThread(threadId);
+  if (stored === null) return { compatible: true, action: "resume", reason: "no_stored_checkpoint" };
+  const verdict = resumeCompatibility(stored);
+  if (!verdict.compatible) {
+    await checkpointer.deleteThread(threadId);
+    await audit(store, sessionId, "graph_interrupt.expired_schema_change", {
+      threadId,
+      reason: verdict.reason,
+      mismatched: verdict.mismatched ?? [],
+      storedRuntimeVersions: stored,
+      currentRuntimeVersions: CHECKPOINT_RUNTIME_VERSIONS,
+      userFacingEffect: "the pending approval was re-asked under the current contract; nothing was executed"
+    });
+  }
+  return verdict;
+}
+
 function interruptedStatePatch(state) {
   const interrupts = Array.isArray(state.__interrupt__) ? state.__interrupt__ : state.__interrupt__ ? [state.__interrupt__] : [];
   if (!interrupts.length) return state;
@@ -4039,8 +4068,15 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
   let state;
   try {
     const checkpointState = rawMessage?.approvalToken ? await graph.getState(config).catch(() => null) : null;
+    const pendingInterrupt = Boolean(rawMessage?.approvalToken) && hasPendingApprovalInterrupt(checkpointState);
+    const resumeVerdict = pendingInterrupt
+      ? await resolveResumeCompatibility(store, {
+          threadId: session.langgraph_thread_id,
+          sessionId: session.id
+        })
+      : { compatible: true, action: "resume", reason: "no_pending_interrupt" };
     const graphInput =
-      rawMessage?.approvalToken && hasPendingApprovalInterrupt(checkpointState)
+      pendingInterrupt && resumeVerdict.compatible
         ? new Command({
             resume: rawMessage.approvalToken,
             update: initialState

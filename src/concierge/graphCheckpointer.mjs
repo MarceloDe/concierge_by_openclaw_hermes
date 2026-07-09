@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { MemorySaver } from "@langchain/langgraph";
+import { STORE_CHECKPOINTER_VERSION, StoreBackedCheckpointSaver } from "./graphCheckpointerStore.mjs";
 
 export const GRAPH_CHECKPOINTER_VERSION = "2026-06-22.phase56-encrypted-hitl-checkpointer.v2";
 export const GRAPH_CHECKPOINTER_CIPHER = "aes-256-gcm";
@@ -202,14 +203,56 @@ export function durableInterruptsRequired(env = process.env) {
   return ["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
 }
 
-export function createGraphCheckpointer(env = process.env) {
+const FILE_MODES = ["file", "local_file", "durable_file"];
+const POSTGRES_MODES = ["postgres", "pg", "durable_postgres"];
+
+export function durableCheckpointerMode(mode) {
+  if (POSTGRES_MODES.includes(mode)) return "postgres";
+  if (FILE_MODES.includes(mode)) return "file";
+  return null;
+}
+
+export function createGraphCheckpointer(env = process.env, { storeFactory = null } = {}) {
   const mode = String(env.BRAINSTY_GRAPH_CHECKPOINTER ?? "memory").trim().toLowerCase();
-  if (durableInterruptsRequired(env) && !["file", "local_file", "durable_file"].includes(mode)) {
+  if (durableInterruptsRequired(env) && !durableCheckpointerMode(mode)) {
     const error = new Error(
-      "[graph-checkpointer] production/staging profile requires a DURABLE checkpointer — a pending interrupt in MemorySaver does not survive restart. Set BRAINSTY_GRAPH_CHECKPOINTER=file (dev/closed-pilot) — the Postgres checkpointer is the declared production target (plan §4.3, founder #4)."
+      "[graph-checkpointer] production/staging profile requires a DURABLE checkpointer — a pending interrupt in MemorySaver does not survive restart. Set BRAINSTY_GRAPH_CHECKPOINTER=postgres (the declared production target, plan §4.3 / founder #4); file mode remains available for dev and closed pilots."
     );
     error.failureClass = "non_durable_interrupts_in_production_profile";
     throw error;
+  }
+  if (POSTGRES_MODES.includes(mode)) {
+    const encryption = encryptionConfigFromEnv(env);
+    if (!encryption) {
+      throw new Error(
+        "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY is required when BRAINSTY_GRAPH_CHECKPOINTER=postgres — graph state carries PHI and is stored ciphertext-only."
+      );
+    }
+    // Lazy: the graph is compiled at module load, long before a store is open.
+    const factory = storeFactory ?? (async () => {
+      const { PostgresStore } = await import("./postgresStore.mjs");
+      return new PostgresStore().initialize({ seed: false });
+    });
+    return {
+      checkpointer: new StoreBackedCheckpointSaver({ storeFactory: factory, encryptionKey: encryption.key }),
+      readiness: {
+        version: GRAPH_CHECKPOINTER_VERSION,
+        storeCheckpointerVersion: STORE_CHECKPOINTER_VERSION,
+        mode: "postgres",
+        durable: true,
+        survivesRestart: true,
+        path: null,
+        phiAtRest: "encrypted_at_rest_aes_256_gcm",
+        productionTarget: "postgres",
+        encryption: {
+          required: true,
+          configured: true,
+          keySource: encryption.keySource,
+          rawKeyReturned: false
+        },
+        status: "ready"
+      }
+    };
   }
   if (["file", "local_file", "durable_file"].includes(mode)) {
     const path = defaultCheckpointPath(env);
@@ -225,8 +268,13 @@ export function createGraphCheckpointer(env = process.env) {
         version: GRAPH_CHECKPOINTER_VERSION,
         mode: "file",
         durable: true,
+        survivesRestart: true,
         path,
         phiAtRest: "encrypted_at_rest_aes_256_gcm",
+        productionTarget: "postgres",
+        // Honest, not a throw: file mode is single-instance and dev/closed-pilot ONLY
+        // (plan §4.3). Two app instances cannot share a pending interrupt through a file.
+        warning: durableInterruptsRequired(env) ? "file_mode_not_production_target" : null,
         encryption: {
           required: true,
           configured: true,
@@ -243,8 +291,10 @@ export function createGraphCheckpointer(env = process.env) {
       version: GRAPH_CHECKPOINTER_VERSION,
       mode: "memory",
       durable: false,
+      survivesRestart: false,
       path: null,
       phiAtRest: "process_memory_only",
+      productionTarget: "postgres",
       status: "ready"
     }
   };
