@@ -121,9 +121,9 @@
         "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-90",
-      "owner": "claude-code",
+      "owner": "codex",
       "blockers": [
-        "founder action S1: Aetna developer-portal sandbox registration (click-through, no signature)"
+        "Aetna Interoperability review pending after Third-Party Developer sandbox questionnaire submission on 2026-07-11; client credentials and test-member issuance require approval"
       ]
     },
     {

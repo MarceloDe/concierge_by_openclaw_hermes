@@ -140,6 +140,13 @@ import { buildPhase82RuntimeIntelligenceReadinessProof } from "../concierge/phas
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile } from "../concierge/databaseSecretProfile.mjs";
 import { checkOfficialOpenClawReadiness, getOfficialOpenClawConfig } from "../concierge/openclawOfficialRuntime.mjs";
 import {
+  buildAetnaSandboxAuthorizationUrl,
+  completeAetnaSandboxOAuth,
+  consumeAetnaOauthStateGate,
+  createAetnaOauthStateGate,
+  syncAetnaSandboxPatientAccess
+} from "../concierge/connectors/aetnaPatientAccess.mjs";
+import {
   startScreencast,
   stopScreencast,
   screencastStatus,
@@ -278,6 +285,29 @@ async function readJsonIfExists(path) {
   } catch {
     return null;
   }
+}
+
+async function readRequiredSecretFile(envName) {
+  const path = process.env[envName];
+  if (!path) {
+    const error = new Error(`${envName} is not configured.`);
+    error.failureClass = "connector_secret_file_unset";
+    throw error;
+  }
+  let value;
+  try {
+    value = (await readFile(resolve(path), "utf8")).trim();
+  } catch {
+    const error = new Error(`${envName} secret file is unavailable.`);
+    error.failureClass = "connector_secret_file_unavailable";
+    throw error;
+  }
+  if (!value) {
+    const error = new Error(`${envName} points to an empty secret file.`);
+    error.failureClass = "connector_secret_file_empty";
+    throw error;
+  }
+  return value;
 }
 
 async function readTextIfExists(path) {
@@ -4131,6 +4161,79 @@ async function handleApi(req, res, url) {
         episodeUuid: body.episodeUuid
       })
     );
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/connectors/aetna/oauth/start") {
+    const body = await readJson(req);
+    const enrollment = await enrollDefaultMember(store, body.member ?? {}, {
+      sessionId: body.sessionId,
+      resumeLatestSession: Boolean(body.resumeLatestSession),
+      title: body.sessionTitle ?? "Connect Aetna Patient Access"
+    });
+    const clientId = await readRequiredSecretFile("BRAINSTY_AETNA_CLIENT_ID_FILE");
+    const redirectUri = process.env.BRAINSTY_AETNA_REDIRECT_URI;
+    if (!redirectUri) {
+      sendJson(res, 503, { error: "BRAINSTY_AETNA_REDIRECT_URI is not configured.", status: "external_blocked" });
+      return;
+    }
+    const stateGate = await createAetnaOauthStateGate(store, {
+      userId: enrollment.user.id,
+      sessionId: enrollment.session.id,
+      portalAccountId: enrollment.portal.id,
+      redirectUri
+    });
+    sendJson(res, 200, {
+      status: "authorization_required",
+      sessionId: enrollment.session.id,
+      authorizationUrl: buildAetnaSandboxAuthorizationUrl({
+        clientId,
+        redirectUri,
+        state: stateGate.state
+      }),
+      stateExpiresAt: stateGate.expiresAt
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/connectors/aetna/oauth/callback") {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (!code || !state) {
+      sendJson(res, 400, { error: "Aetna OAuth callback requires code and state.", status: "failed" });
+      return;
+    }
+    const stateGate = await consumeAetnaOauthStateGate(store, { state });
+    const [clientId, clientSecret] = await Promise.all([
+      readRequiredSecretFile("BRAINSTY_AETNA_CLIENT_ID_FILE"),
+      readRequiredSecretFile("BRAINSTY_AETNA_CLIENT_SECRET_FILE")
+    ]);
+    const oauth = await completeAetnaSandboxOAuth(store, {
+      userId: stateGate.userId,
+      sessionId: stateGate.sessionId,
+      code,
+      clientId,
+      clientSecret,
+      redirectUri: stateGate.redirectUri
+    });
+    const sync = await syncAetnaSandboxPatientAccess(store, {
+      userId: stateGate.userId,
+      sessionId: stateGate.sessionId,
+      portalAccountId: stateGate.portalAccountId,
+      grantId: oauth.grantId,
+      patientId: oauth.patientId
+    });
+    sendJson(res, sync.synced ? 200 : 409, {
+      status: sync.synced ? "connected" : "reauth_required",
+      sessionId: stateGate.sessionId,
+      grantId: oauth.grantId,
+      expiresAt: oauth.expiresAt,
+      snapshotId: sync.snapshot?.id ?? null,
+      rail: sync.rail ?? null,
+      proofPointer: sync.proofPointer ?? oauth.proofPointer,
+      failureClass: sync.failureClass ?? null,
+      reconnectAsk: Boolean(sync.reconnectAsk)
+    });
     return;
   }
 

@@ -10162,3 +10162,45 @@ Remaining follow-up:
 
 - Run against a real local/self-hosted Langfuse instance with private keys and capture a live trace URL for the next operator verification cycle.
 - Install a LangChain callback package only after a version compatible with LangChain v1 is available; manual spans are the current supported trace path.
+
+# Phase 90 Part 2 — Aetna Sandbox Registration and Patient Access Contract
+
+Date: 2026-07-11
+
+RALPH state:
+
+- Requirements: register the contract-free Third-Party Developer sandbox role,
+  preserve truthful security and IAL2 claims, and implement the member OAuth/FHIR
+  path without representing a local contract test as live Aetna readiness.
+- Architecture: the Aetna connector composes the existing `fhirClient.mjs`,
+  `tokenVault.mjs`, audit chain, approval-gate table, structured evidence tables,
+  and data-driven `member_data_rails`. The server exposes one start/callback path;
+  credentials are read only from secret files.
+- Loop: submitted the portal questionnaire, completed the initial annual security
+  review, remediated the Vite/esbuild advisory, implemented the authorization-code
+  and FHIR sync contract, and wired a real runtime caller.
+- Prove: the focused connector tests pass 3/3, the build passes, the dependency
+  audit reports zero vulnerabilities, and 34 targeted security tests pass.
+- Harden: OAuth state is expiring and single-use; raw tokens never enter database
+  columns or responses; IAL2 remains explicitly `No`; `api_covered` is written
+  only after a successful member read.
+
+Implemented:
+
+- Added the annual security-review policy, initial review, and repeatable
+  `npm run security:review` evidence command.
+- Upgraded Vite to the patched `^6.4.3` line.
+- Submitted the authenticated Aetna Third-Party Developer sandbox questionnaire;
+  the portal confirmed submission and a 2–4 business-day review window.
+- Added `src/concierge/connectors/aetnaPatientAccess.mjs`.
+- Added `/api/connectors/aetna/oauth/start` and
+  `/api/connectors/aetna/oauth/callback`.
+- Added `src/tests/phase90-aetna-patient-access.test.mjs` to `test:local`.
+- Updated the phase ledger blocker from registration to Aetna approval/credential issuance.
+
+Proof and remaining risk:
+
+- See `artifacts/phase90/phase90-aetna-sandbox-submission-and-contract-proof.md`.
+- The focused HTTP service is contract evidence only, never a live-provider claim.
+- Real sandbox OAuth, test-member EOB read-back, token-expiry live proof, PDex
+  formulary, Stedi mock contract proof, and planner rail evals remain before Phase 90 completion.
