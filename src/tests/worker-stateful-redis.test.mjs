@@ -10,11 +10,11 @@ import { dirname, join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { recordWorkerDispatchState, readWorkerRuntimeState } from "../concierge/workerRuntimeState.mjs";
-import { createId } from "../concierge/database.mjs";
+import { createId } from "./support/sqliteTestStore.mjs";
 
 await loadLocalEnvOnce();
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { access, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { buildPhase61GeneratedSkillPrMaterializationPackage, buildPhase61GeneratedSkillPrProof } from "../concierge/generatedSkillPrWorkflow.mjs";
 import { enqueueGeneratedSkillReview, recordGeneratedSkillReviewDecision } from "../concierge/generatedSkillReviewQueue.mjs";
 import {

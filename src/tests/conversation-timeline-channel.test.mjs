@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
@@ -20,7 +20,7 @@ const REPO = fileURLToPath(new URL("../../", import.meta.url));
 // workflow so it needs no live LLM. Prints CHANNEL_LEN=<messages channel length after the turns>.
 const CHILD = `
 const repo = process.env.REPO;
-const { SqliteStore } = await import(repo + "src/concierge/database.mjs");
+const { SqliteStore } = await import(repo + "src/tests/support/sqliteTestStore.mjs");
 const { runLangGraphOrchestration } = await import(repo + "src/concierge/langgraphRunner.mjs");
 const store = await new SqliteStore(process.env.BRAINSTY_DB_PATH).initialize();
 const session = await store.findOne("sessions", { id: process.env.SID });

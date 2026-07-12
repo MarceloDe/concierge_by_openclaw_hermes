@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore, createId } from "../concierge/database.mjs";
+import { SqliteStore, createId } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 
 const PORTFOLIO_TABLES = ["capabilities", "processes", "process_steps", "workflow_checkpoint_runs", "capability_provenance"];

@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { toolExecutorAssignments } from "../concierge/workflowArchitecture.mjs";
 import { selectExecutorForTool } from "../concierge/openclaw/executorRegistry.mjs";
 

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { resolveDatabaseDriver } from "./databaseFactory.mjs";
 import { getStorageReadiness } from "./storageReadiness.mjs";
 
-export const PHASE68_PRODUCTION_DATABASE_VERSION = "2026-06-22.phase68-postgres-production-default.v1";
+export const PHASE68_PRODUCTION_DATABASE_VERSION = "2026-07-12.phase68-postgres-single-authority.v2";
 
 export const PHASE68_RUNTIME_STATE_SCOPE = Object.freeze([
   "sessions",
@@ -50,7 +50,7 @@ export function buildPhase68ProductionDatabaseProof({ rootDir = process.cwd() } 
   const runbook = existsSync(runbookPath) ? readFileSync(runbookPath, "utf8") : "";
   const checks = {
     productionDefaultsToPostgres: resolveDatabaseDriver(productionEnv) === "postgres",
-    localDefaultStillSqlite: resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }) === "sqlite",
+    localDefaultIsPostgres: resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }) === "postgres",
     storageReadinessFullMigrationReady: readiness.fullMigrationReady === true,
     storageScoreIsProductionReady: readiness.score === 100 && readiness.status === "postgres_production_ready",
     migrationScopeLocked: PHASE68_RUNTIME_STATE_SCOPE.length >= 7,
@@ -59,8 +59,8 @@ export function buildPhase68ProductionDatabaseProof({ rootDir = process.cwd() } 
     encryptedCloudBackupRequired: true,
     providerBackupPolicyRequired: readiness.postgres.providerBackupPolicyReady === true,
     secretProfileRequired: readiness.safety.secretProfileReady === true,
-    sqliteShellOutAbsent: readiness.sqlite.sqliteShellOut === false,
-    boundedParameters: readiness.sqlite.boundedParameters === true && readiness.postgres.adapterReady === true
+    sqliteRuntimeRemoved: readiness.sqlite.enabled === false && readiness.sqlite.runtimeSelectable === false,
+    boundedParameters: readiness.postgres.adapterReady === true
   };
   const entries = Object.entries(checks);
   const passed = entries.filter(([, ok]) => ok).length;

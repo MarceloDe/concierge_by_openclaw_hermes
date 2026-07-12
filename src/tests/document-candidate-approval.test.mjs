@@ -4,7 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createReadOnlyObservationApproval, consumeReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import {
   DOCUMENT_CANDIDATE_TASK_TYPE,
   READ_ONLY_DOCUMENT_APPROVAL_SCOPE,

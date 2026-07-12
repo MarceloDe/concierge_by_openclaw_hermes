@@ -6,19 +6,19 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import {
   CHECKPOINT_RUNTIME_VERSIONS,
   StoreBackedCheckpointSaver,
   resumeCompatibility
 } from "../concierge/graphCheckpointerStore.mjs";
 import { createGraphCheckpointer, durableCheckpointerMode } from "../concierge/graphCheckpointer.mjs";
+import { closeRuntimeDatabaseStore } from "../concierge/databaseFactory.mjs";
 
 // Phase 91 (plan §4.3, founder #4/#17): the durable checkpointer is the declared
-// production target. The blocking property is RESTART SURVIVAL — a consent interrupt
-// paused before a restart must resume after it. Every arm below runs the real saver
-// against a real SQLite file (the same code path Postgres takes through the store
-// abstraction); nothing here is mocked.
+// production target. The hermetic arms below are contract tests over the isolated
+// test-only adapter and do NOT count as runtime acceptance. Live PostgreSQL acceptance
+// is provided by the live arm below and postgres-single-authority-live.test.mjs.
 
 const KEY_B64 = randomBytes(32).toString("base64");
 // PHI-shaped payload: this exact string must never appear in the database in cleartext.
@@ -203,16 +203,16 @@ test("durable checkpointer: runtime versions are stamped on every checkpoint row
   assert.equal(await saver.runtimeVersionsForThread("thread-that-does-not-exist"), null);
 });
 
-test("boot gate: postgres is a durable mode; production + memory still throws", async () => {
+test("boot gate: PostgreSQL is the only runtime checkpointer mode", async () => {
   assert.equal(durableCheckpointerMode("postgres"), "postgres");
-  assert.equal(durableCheckpointerMode("file"), "file");
+  assert.equal(durableCheckpointerMode("file"), null);
   assert.equal(durableCheckpointerMode("memory"), null);
 
   // Production profile on memory: unchanged fail-loud boot error.
   assert.throws(
     () => createGraphCheckpointer({ BRAINSTY_RUNTIME_ENV: "production", BRAINSTY_GRAPH_CHECKPOINTER: "memory" }),
     (error) => {
-      assert.equal(error.failureClass, "non_durable_interrupts_in_production_profile");
+      assert.equal(error.failureClass, "non_postgres_checkpointer_forbidden");
       return true;
     }
   );
@@ -248,14 +248,10 @@ test("boot gate: postgres is a durable mode; production + memory still throws", 
   const snapshot = await graph.getState(config);
   assert.deepEqual(snapshot.next, ["approval_pause"]);
 
-  // File mode under a production profile boots, but names postgres as the target.
-  const fileReadiness = createGraphCheckpointer({
-    BRAINSTY_RUNTIME_ENV: "production",
-    BRAINSTY_GRAPH_CHECKPOINTER: "file",
-    BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY: KEY_B64,
-    BRAINSTY_GRAPH_CHECKPOINTER_PATH: `${dbPath}.json`
-  }).readiness;
-  assert.equal(fileReadiness.warning, "file_mode_not_production_target");
+  assert.throws(
+    () => createGraphCheckpointer({ BRAINSTY_GRAPH_CHECKPOINTER: "file", BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY: KEY_B64 }),
+    (error) => error.failureClass === "non_postgres_checkpointer_forbidden"
+  );
 });
 
 // LIVE arm (skip-loud, per docs/NON_MOCKED_PROOF_RULES.md): the arms above inject a
@@ -291,7 +287,7 @@ test("LIVE Postgres: default wiring survives a restart on the declared productio
   assert.equal(first.readiness.mode, "postgres");
   await buildPausingGraph(first.checkpointer).invoke({ note: PHI_NOTE }, config);
 
-  // process 2 — a brand-new checkpointer, its own pool, same live database.
+  // second saver — same process-global PostgreSQL pool and authority.
   const second = createGraphCheckpointer(env);
   const graphB = buildPausingGraph(second.checkpointer);
   const snapshot = await graphB.getState(config);
@@ -314,4 +310,5 @@ test("LIVE Postgres: default wiring survives a restart on the declared productio
   const left = await store.all("SELECT id FROM langgraph_checkpoints WHERE thread_id = $1;", [threadId]);
   assert.equal(left.length, 0, "deleteThread must clean the live thread");
   await store.close();
+  await closeRuntimeDatabaseStore();
 });

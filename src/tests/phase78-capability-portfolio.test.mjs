@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildLlmOrchestrationDecisionMessages,
@@ -12,7 +12,7 @@ import {
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { catalogPortfolioKey, loadSessionPortfolio } from "../concierge/capabilityCatalog.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
-import { createId, nowIso } from "../concierge/database.mjs";
+import { createId, nowIso } from "./support/sqliteTestStore.mjs";
 
 // Hermetic precondition: verifies the no-Redis in-memory fallback path, pinned
 // independent of ambient .env.local (which now configures BRAINSTY_REDIS_URL).

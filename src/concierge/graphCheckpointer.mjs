@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { MemorySaver } from "@langchain/langgraph";
 import { STORE_CHECKPOINTER_VERSION, StoreBackedCheckpointSaver } from "./graphCheckpointerStore.mjs";
+import { getRuntimeDatabaseStore, runtimePostgresAuthority } from "./databaseFactory.mjs";
 
 export const GRAPH_CHECKPOINTER_VERSION = "2026-06-22.phase56-encrypted-hitl-checkpointer.v2";
 export const GRAPH_CHECKPOINTER_CIPHER = "aes-256-gcm";
@@ -191,110 +192,57 @@ export class FileBackedMemorySaver extends MemorySaver {
   }
 }
 
-// Phase 88 (§4.3 interrupt durability — fail-loud, NO new env flag): a pending
-// interrupt in MemorySaver does not survive a restart, so a production/staging
-// profile that resolves to memory mode is a BOOT ERROR. The gate derives purely from
-// the runtime profile (same profile ladder redisRequired uses); dev default stays
-// memory. File mode (AES-256-GCM) is acceptable for dev/local/closed-pilot ONLY; the
-// Postgres LangGraph checkpointer is the DECLARED PRODUCTION TARGET (founder #4 —
-// named late work item in the Phase 91/92 window).
+// A pending interrupt is authoritative workflow state. Every runtime profile therefore
+// uses the same PostgreSQL checkpointer; memory/file savers remain exportable only for
+// legacy migration tests and can never be selected by runtime configuration.
 export function durableInterruptsRequired(env = process.env) {
   const runtimeEnv = String(env.BRAINSTY_RUNTIME_ENV ?? env.NODE_ENV ?? env.APP_ENV ?? "").toLowerCase();
   return ["production", "prod", "staging", "production-candidate"].includes(runtimeEnv);
 }
 
-const FILE_MODES = ["file", "local_file", "durable_file"];
 const POSTGRES_MODES = ["postgres", "pg", "durable_postgres"];
 
 export function durableCheckpointerMode(mode) {
   if (POSTGRES_MODES.includes(mode)) return "postgres";
-  if (FILE_MODES.includes(mode)) return "file";
   return null;
 }
 
 export function createGraphCheckpointer(env = process.env, { storeFactory = null } = {}) {
-  const mode = String(env.BRAINSTY_GRAPH_CHECKPOINTER ?? "memory").trim().toLowerCase();
-  if (durableInterruptsRequired(env) && !durableCheckpointerMode(mode)) {
+  const mode = String(env.BRAINSTY_GRAPH_CHECKPOINTER ?? "postgres").trim().toLowerCase();
+  if (!POSTGRES_MODES.includes(mode)) {
     const error = new Error(
-      "[graph-checkpointer] production/staging profile requires a DURABLE checkpointer — a pending interrupt in MemorySaver does not survive restart. Set BRAINSTY_GRAPH_CHECKPOINTER=postgres (the declared production target, plan §4.3 / founder #4); file mode remains available for dev and closed pilots."
+      `[graph-checkpointer] '${mode || "empty"}' is forbidden. LangGraph checkpoints are authoritative workflow state and must use PostgreSQL in every runtime profile.`
     );
-    error.failureClass = "non_durable_interrupts_in_production_profile";
+    error.failureClass = "non_postgres_checkpointer_forbidden";
     throw error;
   }
-  if (POSTGRES_MODES.includes(mode)) {
-    const encryption = encryptionConfigFromEnv(env);
-    if (!encryption) {
-      throw new Error(
-        "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY is required when BRAINSTY_GRAPH_CHECKPOINTER=postgres — graph state carries PHI and is stored ciphertext-only."
-      );
-    }
-    // Lazy: the graph is compiled at module load, long before a store is open.
-    const factory = storeFactory ?? (async () => {
-      const { PostgresStore } = await import("./postgresStore.mjs");
-      return new PostgresStore().initialize({ seed: false });
-    });
-    return {
-      checkpointer: new StoreBackedCheckpointSaver({ storeFactory: factory, encryptionKey: encryption.key }),
-      readiness: {
-        version: GRAPH_CHECKPOINTER_VERSION,
-        storeCheckpointerVersion: STORE_CHECKPOINTER_VERSION,
-        mode: "postgres",
-        durable: true,
-        survivesRestart: true,
-        path: null,
-        phiAtRest: "encrypted_at_rest_aes_256_gcm",
-        productionTarget: "postgres",
-        encryption: {
-          required: true,
-          configured: true,
-          keySource: encryption.keySource,
-          rawKeyReturned: false
-        },
-        status: "ready"
-      }
-    };
+  const encryption = encryptionConfigFromEnv(env);
+  if (!encryption) {
+    throw new Error(
+      "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY is required when BRAINSTY_GRAPH_CHECKPOINTER=postgres — graph state carries PHI and is stored ciphertext-only."
+    );
   }
-  if (["file", "local_file", "durable_file"].includes(mode)) {
-    const path = defaultCheckpointPath(env);
-    const encryption = encryptionConfigFromEnv(env);
-    if (!encryption) {
-      throw new Error(
-        "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY is required when BRAINSTY_GRAPH_CHECKPOINTER=file."
-      );
-    }
-    return {
-      checkpointer: new FileBackedMemorySaver({ path, encryptionKey: encryption.key }),
-      readiness: {
-        version: GRAPH_CHECKPOINTER_VERSION,
-        mode: "file",
-        durable: true,
-        survivesRestart: true,
-        path,
-        phiAtRest: "encrypted_at_rest_aes_256_gcm",
-        productionTarget: "postgres",
-        // Honest, not a throw: file mode is single-instance and dev/closed-pilot ONLY
-        // (plan §4.3). Two app instances cannot share a pending interrupt through a file.
-        warning: durableInterruptsRequired(env) ? "file_mode_not_production_target" : null,
-        encryption: {
-          required: true,
-          configured: true,
-          keySource: encryption.keySource,
-          rawKeyReturned: false
-        },
-        status: "ready"
-      }
-    };
-  }
+  // Lazy: the graph is compiled at module load, long before a store is open.
+  const factory = storeFactory ?? (() => getRuntimeDatabaseStore(env, { seed: false }));
+  const authority = runtimePostgresAuthority(env);
   return {
-    checkpointer: new MemorySaver(),
+    checkpointer: new StoreBackedCheckpointSaver({ storeFactory: factory, encryptionKey: encryption.key }),
     readiness: {
       version: GRAPH_CHECKPOINTER_VERSION,
-      mode: "memory",
-      durable: false,
-      survivesRestart: false,
+      storeCheckpointerVersion: STORE_CHECKPOINTER_VERSION,
+      mode: "postgres",
+      durable: true,
+      survivesRestart: true,
       path: null,
-      phiAtRest: "process_memory_only",
+      phiAtRest: "encrypted_at_rest_aes_256_gcm",
       productionTarget: "postgres",
+      databaseAuthority: authority.authorityId,
+      encryption: {
+        required: true,
+        configured: true,
+        keySource: encryption.keySource,
+        rawKeyReturned: false
+      },
       status: "ready"
     }
   };

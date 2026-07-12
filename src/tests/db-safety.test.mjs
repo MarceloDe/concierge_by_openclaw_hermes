@@ -9,7 +9,7 @@ import {
   assertSafeSqlIdentifier,
   assertSafeTableName,
   SqliteStore
-} from "../concierge/database.mjs";
+} from "./support/sqliteTestStore.mjs";
 
 test("database high-level helpers reject unsafe table and column identifiers", async () => {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-db-safety-"));
@@ -25,7 +25,7 @@ test("database high-level helpers reject unsafe table and column identifiers", a
 });
 
 test("database store uses native sqlite adapter with migration ledger and no sqlite3 shell", async () => {
-  const source = await readFile(new URL("../concierge/database.mjs", import.meta.url), "utf8");
+  const source = await readFile(new URL("./support/sqliteTestStore.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /node:child_process|spawn\(|execFile\(|sqlite3/);
   assert.match(source, /node:sqlite/);
 

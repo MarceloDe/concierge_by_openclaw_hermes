@@ -20,7 +20,9 @@
 //
 // Usage:
 //   node scripts/ingest-cms-pdp-puf.mjs --release <cycle-id> --dir <extracted-puf-dir> \
-//     --db <sqlite-path> [--state FL] [--contract H1609] [--limit-rows N] [--pointer <url>]
+//     [--state FL] [--contract H1609] [--limit-rows N] [--pointer <url>]
+//   The authoritative PostgreSQL target comes from BRAINSTY_DATABASE_URL or
+//   BRAINSTY_DATABASE_URL_FILE; no embedded database target is accepted.
 //
 //   --state     filters pdp_plans rows by the plan-information STATE column.
 //   --contract  filters all contract-keyed files to one CONTRACT_ID; the formulary file
@@ -36,7 +38,8 @@ import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { SqliteStore, createId, nowIso } from "../src/concierge/database.mjs";
+import { createId, nowIso } from "../src/concierge/database.mjs";
+import { closeRuntimeDatabaseStore, getRuntimeDatabaseStore } from "../src/concierge/databaseFactory.mjs";
 
 const TAG = "[ingest-cms-pdp-puf]";
 
@@ -167,7 +170,6 @@ const { values: args } = parseArgs({
   options: {
     release: { type: "string" },
     dir: { type: "string" },
-    db: { type: "string" },
     state: { type: "string" },
     contract: { type: "string" },
     "limit-rows": { type: "string" },
@@ -175,8 +177,8 @@ const { values: args } = parseArgs({
   }
 });
 
-if (!args.release || !args.dir || !args.db) {
-  failLoud("pdp_usage", "--release <cycle-id> --dir <extracted-puf-dir> --db <sqlite-path> are required");
+if (!args.release || !args.dir) {
+  failLoud("pdp_usage", "--release <cycle-id> and --dir <extracted-puf-dir> are required; PostgreSQL is resolved from the runtime secret profile");
 }
 
 const releaseCycle = args.release;
@@ -189,7 +191,6 @@ if (!datasetPointer) {
 }
 
 const puf_dir = resolve(args.dir);
-const dbPath = resolve(args.db);
 const stateFilter = args.state ? args.state.trim().toUpperCase() : null;
 const contractFilter = args.contract ? args.contract.trim().toUpperCase() : null;
 const limitRows = args["limit-rows"] ? Number(args["limit-rows"]) : null;
@@ -229,7 +230,7 @@ function kindPattern(kind) {
 
 // --- ingest core ------------------------------------------------------------------------
 
-const store = await new SqliteStore(dbPath).initialize();
+const store = await getRuntimeDatabaseStore(process.env);
 
 async function preloadHashes(table) {
   const rows = await store.all(
@@ -503,4 +504,4 @@ if (totalMatched === 0) {
 }
 
 console.log(`${TAG} SUMMARY ${JSON.stringify(summary)}`);
-store.close();
+await closeRuntimeDatabaseStore();

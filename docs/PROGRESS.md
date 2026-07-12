@@ -10197,3 +10197,28 @@ Remaining follow-up:
 
 - Production PHI use remains contingent on the configured HIPAA boundary and explicit `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1`; the runtime refuses provider payloads without it.
 - Authenticated payer-portal proof remains a separate user-controlled, approval-gated OpenClaw requirement and is not implied by the Graphiti memory proof.
+
+## 2026-07-12 - PostgreSQL Single Runtime Authority and Restart/Pointer Proof
+
+Implemented:
+
+- Removed the embedded database from application runtime and made PostgreSQL the only accepted driver in every profile.
+- Added one secret-file-aware, process-global PostgreSQL store/pool shared by the server and LangGraph checkpointer, with a hashed authority guard against mid-process database changes.
+- Made PostgreSQL the only selectable LangGraph checkpointer; memory and file modes fail with `non_postgres_checkpointer_forbidden`.
+- Converted runtime ingestion, provider-directory, planner-evaluation, Redis cross-process, remote-browser, and pilot-readiness scripts to the PostgreSQL authority.
+- Added PostgreSQL-only deferred-pointer dereference with loud `deferred_pointer_missing` and `deferred_pointer_backing_missing` negative arms.
+- Updated registry keys and OpenClaw skill contracts from local-database names to PostgreSQL runtime/pointer names.
+- Added `docs/POSTGRES_RUNTIME_AUTHORITY.md` and permanent runtime architecture contract tests.
+
+Runtime proof:
+
+- `npm run test:postgres:single-authority`: 3/3 passed. The live arm created a real temporary PostgreSQL database from a secret file and proved shared app/checkpointer identity, encrypted interrupt persistence and resume across pool restart, PostgreSQL rows for sessions/context/checkpoints/approvals/tasks/audit/RAG, real deferred-pointer/backing-artifact resolution, loud nonexistent-pointer rejection, and Redis rebuild from PostgreSQL.
+- `npm run test:memory:architecture`: 5/5 passed; Graphiti is long-term memory, LangGraph/PostgreSQL owns workflow memory, Graphify has no runtime dependency, and OpenClaw product-memory writes are blocked.
+- Live Graphiti/FalkorDB arms passed for safe temporal facts and cross-session uploaded-document pointer recall using the real Graphiti bridge and OpenAI.
+- Running `/api/health` returned driver `postgres` and the complete single-authority role contract. `/api/runtime/compatibility` returned LangGraph/database workflow ownership, Zep Graphiti long-term ownership, and `openclawProductMemoryWriteBlocked=true`.
+- Codex in-app browser loaded the local application with the correct title and zero console errors.
+- Compose contract, storage contract, PostgreSQL production-profile contract, build check, syntax checks, and `git diff --check` passed.
+
+Remaining:
+
+- The large legacy unit-test suite still uses a test-only embedded compatibility store for fast isolated contract tests. That module is outside runtime selection and is explicitly marked test-only; live acceptance is PostgreSQL-only. Migrating every historical unit fixture to ephemeral PostgreSQL is a separate test-infrastructure cleanup, not a runtime fallback.

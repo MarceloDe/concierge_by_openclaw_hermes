@@ -55,7 +55,7 @@ export function buildPhase64MvpCompletionAudit({
   const essentialScore = scoreChecks(essentialChecks);
   const productionScore = scoreChecks(productionChecks);
   const blockers = [];
-  if (!postgresProductionReady) blockers.push("Postgres production/default rollout remains a production blocker; SQLite is acceptable for local MVP proof.");
+  if (!postgresProductionReady) blockers.push("PostgreSQL single-authority runtime proof remains a production blocker; no SQLite runtime fallback is allowed.");
   if (!graphitiReady) blockers.push(`Graphiti/Zep memory is ${productMemory.status ?? "not schema-ready"} and remains advisory/degraded until live schema proof is green.`);
   if (!hostedBrowserProductionReady && !remoteSteelReady) blockers.push("Hosted/remote browser production readiness is not fully green; local/contract proof remains separate.");
   if (!liveReadiness.readyForReadOnlyObservation) blockers.push("Authenticated live OpenClaw portal proof is still live-gated and requires a user-controlled signed-in session.");

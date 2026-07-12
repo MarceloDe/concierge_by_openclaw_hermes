@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join, resolve } from "node:path";
 
 // Secret-backend INTERFACE (three-layer pivot, plan §5.2 — founder decision #5,
 // spine YAML secret_vault_policy). One abstraction behind which
@@ -44,8 +44,7 @@ export function resolveSecretBackend(env = process.env) {
 }
 
 function secretStoreDir(env = process.env) {
-  const dbPath = String(env.BRAINSTY_DB_PATH ?? "data/brainsty.sqlite");
-  return join(dirname(dbPath), "secret-store");
+  return resolve(String(env.BRAINSTY_SECRET_STORE_DIR ?? "data/secret-store"));
 }
 
 export function sha256Hex(value) {

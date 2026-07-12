@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
@@ -85,7 +85,7 @@ test("dynamic skill resolver mounts session memory and selects insurance plus cl
   assert.ok(resolved.matches.some((item) => item.skillKey === "insurance_portal_browser" && item.skillKind === "execution_specific" && item.fit.score > 0));
   assert.ok(resolved.requiredOpenClawTasks.includes("insurance_portal_browser.read_only_claims_observation"));
   assert.ok(resolved.requiredOpenClawTasks.includes("insurance_portal_browser.read_only_observation"));
-  assert.ok(resolved.requiredApis.includes("local_sqlite_claim_lookup"));
+  assert.ok(resolved.requiredApis.includes("postgres_claim_lookup"));
   assert.ok(resolved.successEstimate.overallChance > 0);
   assert.equal(resolved.generatorEditContract.forbiddenEdits.includes("raw_sql"), true);
 });

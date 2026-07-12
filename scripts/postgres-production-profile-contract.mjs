@@ -21,7 +21,7 @@ const REQUIRED_FILES = [
 ];
 
 const BASE_COMPOSE_FRAGMENTS = [
-  "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
+  "BRAINSTY_DB_DRIVER: postgres",
   "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
   "BRAINSTY_DATABASE_SECRET_SOURCE: ${BRAINSTY_DATABASE_SECRET_SOURCE:-direct_env}",
   "BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: ${BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY:-0}"
@@ -155,7 +155,7 @@ export async function assertPostgresProductionProfileContract({ verifyDockerConf
     ok: true,
     version: POSTGRES_PRODUCTION_PROFILE_CONTRACT_VERSION,
     files: REQUIRED_FILES,
-    baseRuntimeDriverDefault: "sqlite",
+    baseRuntimeDriverDefault: "postgres",
     profileRuntimeDriverDefault: "postgres",
     secretSource: "docker_secret",
     secretMount: "/run/secrets/brainsty_database_url",

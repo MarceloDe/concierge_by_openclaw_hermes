@@ -32,7 +32,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 
 const SCRIPT_PATH = resolve(import.meta.dirname, "../../scripts/ingest-cms-pdp-puf.mjs");
 const RELEASE_CYCLE = "2026Q1_SPUF_20260408";

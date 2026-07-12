@@ -13,7 +13,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { buildContextPacket } from "../concierge/memoryHarness.mjs";

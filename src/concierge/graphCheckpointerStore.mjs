@@ -10,7 +10,8 @@ import { LLM_ORCHESTRATION_DECISION_VERSION } from "./llmOrchestrationDecision.m
 
 // Phase 91 (plan §4.3, founder #4): the DURABLE store-backed LangGraph checkpointer —
 // the declared production target. Written against the store ABSTRACTION, not a raw pg
-// Pool, so the identical code path is proven on mkdtemp SQLite and on live Postgres.
+// Pool. Runtime acceptance is proven on live PostgreSQL; hermetic unit tests may use
+// the isolated test-only adapter but never satisfy the runtime gate.
 //
 // Graph state carries PHI (user_input, memory_context). The upstream Postgres saver
 // persists checkpoints as plaintext JSONB; that is a downgrade from the file-mode saver
