@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
+import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { getProductMemoryStatus, probeProductMemory } from "../concierge/productMemory.mjs";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
@@ -16,6 +17,13 @@ function configureLiveGraphitiGroup(suffix) {
   process.env.FALKORDB_PORT = process.env.FALKORDB_PORT ?? "6380";
   process.env.GRAPHITI_GROUP_ID = `brainstyworkers_test_${suffix}_${Date.now()}`;
   process.env.GRAPHITI_STORE_RAW_EPISODES = "0";
+}
+
+async function createLiveTestStore(prefix) {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  await seedCapabilityCatalog(store, { nowIso, createId });
+  return store;
 }
 
 function uploadedBenefitsDocument(uploadId = "upload_graphiti_doc") {
@@ -81,8 +89,7 @@ test("real Graphiti/FalkorDB product memory schema retains and recalls safe fact
   await loadLocalEnvOnce();
   configureLiveGraphitiGroup("schema");
 
-  const dir = await mkdtemp(join(tmpdir(), "brainsty-graphiti-memory-"));
-  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await createLiveTestStore("brainsty-graphiti-memory-");
   const enrollment = await enrollDefaultMember(store, {
     name: "Graphiti Memory Member",
     email: "graphiti-memory@example.com",
@@ -148,8 +155,7 @@ test("real Graphiti/FalkorDB recalls a safe uploaded-document source pointer acr
   await loadLocalEnvOnce();
   configureLiveGraphitiGroup("uploaded_document");
 
-  const dir = await mkdtemp(join(tmpdir(), "brainsty-graphiti-uploaded-document-"));
-  const store = await new SqliteStore(join(dir, "test.sqlite")).initialize();
+  const store = await createLiveTestStore("brainsty-graphiti-uploaded-document-");
   const member = {
     name: "Graphiti Upload Member",
     email: "graphiti-upload-memory@example.com",
@@ -166,12 +172,22 @@ test("real Graphiti/FalkorDB recalls a safe uploaded-document source pointer acr
     rawMessage: {
       source: "product_memory_uploaded_document_graphiti_test",
       executeEvidenceObservation: false,
-      useLiveModel: false,
+      useLiveModel: true,
       uploadedDocumentIds: [uploadId],
       uploadedDocuments: [uploadedBenefitsDocument(uploadId)]
     }
   });
 
+  assert.ok(
+    firstRun.state.evidence_observation,
+    JSON.stringify({
+      decision: firstRun.state.llm_orchestration_decision,
+      workflow: firstRun.state.workflow,
+      routeReason: firstRun.state.route_reason,
+      outcome: firstRun.state.workflow_outcome,
+      finalResponse: firstRun.state.final_response
+    })
+  );
   assert.equal(firstRun.state.evidence_observation.status, "captured_uploaded_document_extraction");
   assert.equal(firstRun.state.source_pointers[0].table, "uploaded_document_extractions");
   assert.equal(firstRun.productMemory.retain.retained, true, JSON.stringify(firstRun.productMemory.retain));

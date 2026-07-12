@@ -1,4 +1,4 @@
-export const FINAL_MVP_GOAL_EVALUATION_VERSION = "2026-06-22.phase65-final-mvp-goal-evaluation.v1";
+export const FINAL_MVP_GOAL_EVALUATION_VERSION = "2026-07-12.phase65-final-mvp-goal-evaluation.v2";
 
 export function buildPhase65FinalMvpGoalEvaluation({ phase64MvpCompletionAudit = {} } = {}) {
   const localPilotAchieved = phase64MvpCompletionAudit.ok === true && phase64MvpCompletionAudit.score >= phase64MvpCompletionAudit.target;
@@ -32,8 +32,14 @@ export function buildPhase65FinalMvpGoalEvaluation({ phase64MvpCompletionAudit =
     },
     {
       key: "memory_learning_loop",
-      status: "achieved_advisory_not_production_memory",
-      evidence: "Graphiti/Zep advisory memory feeds memory skill tree, reviewer queue, and PR executor dry-run; schema-ready production memory remains blocked",
+      status: "achieved_with_review_gated_procedural_promotion",
+      evidence: "Zep Graphiti provides the configured long-term retain/recall runtime; learned procedural promotion remains advisory and reviewer-gated",
+      requiredForMvp: true
+    },
+    {
+      key: "memory_layer_authority",
+      status: "achieved_with_live_runtime_gate",
+      evidence: "LangGraph owns workflow memory and Graphiti retain/recall; OpenClaw receives a bounded read-only projection and has no product-memory write authority",
       requiredForMvp: true
     },
     {

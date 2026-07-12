@@ -27,7 +27,9 @@ test("runtime registries are seeded during database initialization", async () =>
   assert.ok(workflows.some((row) => row.workflow_key === "pharmacy_formulary"));
   assert.ok(workflows.some((row) => row.workflow_key === "denial_appeal_preparation"));
   assert.ok(tools.some((row) => row.tool_key === "openclaw_authenticated_browser"));
-  assert.ok(tools.some((row) => row.tool_key === "hindsight_memory_adapter"));
+  const graphitiMemory = tools.find((row) => row.tool_key === "zep_graphiti_memory_adapter");
+  assert.ok(graphitiMemory);
+  assert.equal(graphitiMemory.integration_status, "enabled_when_runtime_and_phi_clearance_are_configured");
   assert.ok(sources.some((row) => row.source_key === "cms_icd10_files"));
   assert.ok(sources.some((row) => row.source_key === "aetna_clinical_policy_bulletins"));
   const browserSkill = skills.find((row) => row.skill_key === "insurance_portal_browser");

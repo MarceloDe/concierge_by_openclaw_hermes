@@ -1,7 +1,32 @@
 import { PROMPT_CONTRACT_VERSION } from "./promptContracts.mjs";
 
-export const RUNTIME_ADAPTER_VERSION = "2026-05-17.runtime-adapters.v1";
+export const RUNTIME_ADAPTER_VERSION = "2026-07-12.runtime-adapters.v2";
 const CHECKPOINT_NS = "brainstyworkers";
+
+export const MEMORY_LAYER_AUTHORITY = Object.freeze({
+  projectMemory: Object.freeze({
+    runtime: "cortex",
+    purpose: "agent_project_context_only",
+    productRuntime: false
+  }),
+  workflowMemory: Object.freeze({
+    runtime: "langgraph_checkpointer_and_database",
+    owner: "langgraph",
+    purpose: "workflow_state_sessions_approvals_tasks_and_audit"
+  }),
+  longTermProductMemory: Object.freeze({
+    runtime: "zep_graphiti",
+    owner: "langgraph",
+    purpose: "temporal_retain_recall",
+    access: "recall_before_graph_retain_after_graph"
+  }),
+  workerMemory: Object.freeze({
+    runtime: "openclaw_task_runtime_state",
+    owner: "langgraph_orchestrator",
+    purpose: "bounded_worker_continuity",
+    productMemoryWriteAuthority: false
+  })
+});
 
 function truncate(value, limit = 320) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -143,6 +168,7 @@ export function toOpenClawChannelEnvelope(packet, rawInput = {}) {
     prompt_contract: packet.promptBundle?.openclawArm ?? null,
     memory_context: buildMemoryContextText(packet),
     product_memory: packet.productMemory ?? null,
+    memory_authority: MEMORY_LAYER_AUTHORITY,
     prior_sessions: packet.recentSessions ?? [],
     workflow_architecture: {
       route_candidates: packet.workflowArchitecture?.routeCandidates ?? [],
@@ -200,9 +226,12 @@ export function toOpenClawHeartbeatEnvelope(packet) {
   };
 }
 
-export function toHindsightRetainCandidates(packet) {
+export function toGraphitiRetainCandidates(packet) {
   return (packet.memoryItems ?? []).map((item) => ({
     adapter_version: RUNTIME_ADAPTER_VERSION,
+    adapter: "graphiti",
+    provider: "zep_graphiti",
+    owner: "langgraph",
     memory_id: item.id,
     user_id: packet.user?.id ?? null,
     session_id: item.source?.table === "session_state" ? item.source.id : currentSession(packet).id,
@@ -244,8 +273,12 @@ export function buildRuntimeCompatibilityBundle(packet, rawInput = {}) {
       channelEnvelope: toOpenClawChannelEnvelope(packet, rawInput),
       heartbeatEnvelope: toOpenClawHeartbeatEnvelope(packet)
     },
-    hindsight: {
-      retainCandidates: toHindsightRetainCandidates(packet)
+    memoryAuthority: MEMORY_LAYER_AUTHORITY,
+    graphiti: {
+      adapter: "graphiti",
+      provider: "zep_graphiti",
+      owner: "langgraph",
+      retainCandidates: toGraphitiRetainCandidates(packet)
     },
     validation: validateRuntimeCompatibility(packet)
   };
@@ -282,7 +315,10 @@ export function validateRuntimeCompatibility(packet) {
       langgraphState: Boolean(toLangGraphAgentState(packet).schema_version),
       openclawChannelEnvelope: Boolean(toOpenClawChannelEnvelope(packet).envelope_type),
       openclawHeartbeatEnvelope: Boolean(toOpenClawHeartbeatEnvelope(packet).envelope_type),
-      hindsightRetainCandidates: Array.isArray(toHindsightRetainCandidates(packet))
+      graphitiRetainCandidates: Array.isArray(toGraphitiRetainCandidates(packet)),
+      graphitiOwnedByLangGraph: MEMORY_LAYER_AUTHORITY.longTermProductMemory.owner === "langgraph",
+      workflowMemoryOwnedByLangGraph: MEMORY_LAYER_AUTHORITY.workflowMemory.owner === "langgraph",
+      openclawProductMemoryWriteBlocked: MEMORY_LAYER_AUTHORITY.workerMemory.productMemoryWriteAuthority === false
     }
   };
 }

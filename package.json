@@ -48,6 +48,7 @@
     "test:live:openclaw-multipage": "BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1 BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1 BRAINSTY_OPENCLAW_MULTI_PAGE=1 BRAINSTY_PORTAL_LIVE=1 node --test --test-name-pattern \"authenticated current-tab\" src/tests/openclaw-official-runtime.test.mjs",
     "test:live:openclaw-discovery": "BRAINSTY_OPENCLAW_AUTHENTICATED_LIVE=1 BRAINSTY_OPENCLAW_OFFICIAL_LIVE=1 BRAINSTY_OPENCLAW_USE_CURRENT_TAB=1 BRAINSTY_OPENCLAW_MULTI_PAGE=1 BRAINSTY_PORTAL_LIVE=1 node --test --test-name-pattern \"authenticated current-tab\" src/tests/openclaw-official-runtime.test.mjs",
     "test:memory:graphiti": "BRAINSTY_PRODUCT_MEMORY_ADAPTER=graphiti BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1 BRAINSTY_GRAPHITI_LIVE=1 GRAPHITI_BACKEND=falkordb FALKORDB_HOST=localhost FALKORDB_PORT=6380 GRAPHITI_GROUP_ID=brainstyworkers_test node --test src/tests/product-memory-graphiti.test.mjs",
+    "test:memory:architecture": "node --test src/tests/memory-architecture-authority.test.mjs src/tests/runtime-adapters.test.mjs",
     "test:memory:schema": "python3 tests/test_schema_contract.py",
     "test:memory:bedrock": "node --test src/tests/product-memory-bedrock.test.mjs",
     "test:orchestrator:live": "node --test src/tests/orchestrator-live.test.mjs",

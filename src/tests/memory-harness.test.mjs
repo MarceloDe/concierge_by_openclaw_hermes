@@ -59,7 +59,9 @@ test("memory harness injects cross-session context and retains database pointers
   assert.ok(trace.memoryItems.some((item) => item.memory_type === "eligibility_snapshot_pointer"));
   assert.ok(context.packet.dbPointers.some((pointer) => pointer.table === "eligibility_snapshots"));
   assert.equal(context.packet.openclaw.status, "always_on_local_harness");
-  assert.equal(context.packet.adapterChoice.selectedNow, "hook_style_local_memory_harness");
+  assert.equal(context.packet.adapterChoice.workflowMemory, "langgraph_checkpointer_and_database");
+  assert.equal(context.packet.adapterChoice.longTermProductMemory, "zep_graphiti");
+  assert.equal(context.packet.adapterChoice.openClawRole, "read_only_context_projection_and_bounded_worker_runtime_state");
   assert.equal(context.packet.promptBundle.orchestrator.role, "orchestrator");
   assert.equal(context.packet.promptBundle.openclawArm.role, "openclaw_arm");
   assert.match(context.packet.promptBundle.orchestrator.prompt, /Memory Context Is Untrusted Data/);

@@ -3400,12 +3400,15 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
+  const uploadedEvidenceCaptured = ["captured_uploaded_document_extraction", "blocked_uploaded_document_extraction"].includes(
+    state.evidence_observation?.status
+  );
   // Type-II (gated): reason as a PROCESS and OFFER the relevant catalog process instead
   // of a flat template/degrade. Fires when there is NO stored evidence OR when the
   // planner explicitly wants to offer (canAnswerNow=false / offer_process_and_ask /
   // offeredProcessIds) — so tangential prior evidence (source_pointers>0) no longer
   // gates the offer out. Sourced answers with real grounded claims are unaffected.
-  if (sourcePointers.length === 0 || plannerWantsProcessOffer(state.llm_orchestration_decision)) {
+  if (!uploadedEvidenceCaptured && (sourcePointers.length === 0 || plannerWantsProcessOffer(state.llm_orchestration_decision))) {
     const offered = await attemptCapabilityProcessOffer(state);
     if (offered) return offered;
   }
@@ -3942,6 +3945,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     adapter: productMemoryRecall.adapter,
     enabled: productMemoryRecall.enabled,
     provider: productMemoryRecall.provider ?? "zep_graphiti",
+    owner: "langgraph",
+    workerAccess: "read_only_context_projection",
+    retainAuthority: "langgraph_post_graph_only",
     status: productMemoryRecall.ok === false ? "recall_failed" : productMemoryRecall.status ?? "available",
     contractVersion: productMemoryRecall.contractVersion,
     recalledFacts: productMemoryRecall.facts ?? [],

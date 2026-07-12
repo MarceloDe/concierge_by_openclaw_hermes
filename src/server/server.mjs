@@ -1606,6 +1606,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: "All future phases use one Cortex-canonical RALPH loop, role-separated execution, non-mocked proof labels, dashboard scoring, and PR-based memory visibility."
       },
       {
+        key: "memory_layer_authority",
+        status: productMemory?.schemaReady ? "graphiti_runtime_schema_ready" : "graphiti_runtime_requires_live_proof",
+        target: "LangGraph owns workflow memory and Zep Graphiti retain/recall; OpenClaw receives bounded context and cannot write product memory directly."
+      },
+      {
         key: "continuous_procedural_memory_shadow",
         status: continuousIntelligence.status,
         target: "Phase 33 introduces typed CaseState, G0-G8 universal gate skeleton, PEMS maturity schema, and shadow-mode procedural reconstruction without letting it drive healthcare answers."

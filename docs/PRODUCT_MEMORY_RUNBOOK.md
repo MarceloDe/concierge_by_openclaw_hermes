@@ -73,7 +73,7 @@ npm run build
 npm run test:local
 ```
 
-Optional live local proof remains:
+Required live local proof before claiming Graphiti runtime readiness:
 
 ```bash
 npm run graphiti:falkordb
@@ -84,3 +84,5 @@ npm run test:memory:graphiti
 ```
 
 Do not run live Graphiti proof with PHI unless Bedrock and FalkorDB are confirmed inside the covered boundary and the clearance flag is deliberately set by the operator.
+
+Unit, contract, or isolated provider tests do not satisfy this runtime gate. Readiness requires a real Graphiti bridge process, a reachable FalkorDB backend, real retain and recall, and a LangGraph turn that consumes the recalled context.

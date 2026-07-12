@@ -207,15 +207,20 @@ const TOOL_REGISTRY = [
     config: { storesPhi: true, timestampType: "iso_8601_utc_text" }
   },
   {
-    tool_key: "hindsight_memory_adapter",
+    tool_key: "zep_graphiti_memory_adapter",
     tool_type: "memory",
-    title: "Hindsight temporal memory adapter",
+    title: "Zep Graphiti temporal product-memory adapter",
     risk_level: "medium",
-    integration_status: "deferred_until_runtime_approval",
-    approval_required: "memory_retention_policy_and_api_setup",
+    integration_status: "enabled_when_runtime_and_phi_clearance_are_configured",
+    approval_required: "phi_clearance_and_runtime_configuration",
     executor_key: "local_followup_planner",
     write_capable: 0,
-    config: { operations: ["recall", "retain", "reflect"] }
+    config: {
+      provider: "zep_graphiti",
+      backend: "falkordb",
+      owner: "langgraph",
+      operations: ["recall_before_graph", "retain_after_graph", "suppress"]
+    }
   },
   {
     tool_key: "aetna_cpb_lookup",
@@ -699,6 +704,8 @@ export async function seedRuntimeRegistries(store, { nowIso, createId }) {
   try {
     await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'web_search_authoritative_sources';");
     await store.all("DELETE FROM tool_registry WHERE tool_key = 'web_search_authoritative_sources';");
+    await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'hindsight_memory_adapter';");
+    await store.all("DELETE FROM tool_registry WHERE tool_key = 'hindsight_memory_adapter';");
   } catch {
     /* fresh store: nothing to retire */
   }
