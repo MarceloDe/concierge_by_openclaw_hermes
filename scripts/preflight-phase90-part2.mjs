@@ -2,7 +2,8 @@
 // Phase 90 Part 2 preflight (plan §9/§11 Phase 90).
 //
 // Part 1 landed every piece the plan allows WITHOUT founder action S1. Part 2 is blocked
-// on a real Aetna developer-portal registration; no code substitutes for it. This script
+// on a real Aetna developer-portal registration and issued sandbox credentials; no code
+// substitutes for them. This script
 // answers one question honestly: "if the credentials landed, could Part 2 start right now?"
 //
 // It NEVER prints a secret value. It reports presence, not content.
@@ -81,9 +82,9 @@ if (!process.env.BRAINSTY_AETNA_REDIRECT_URI) {
 }
 if (!aetnaReady) {
   blockers.push(
-    "FOUNDER ACTION S1 — register at developerportal.aetna.com (account+MFA, app+callback URL,\n" +
-      "    subscribe Provider Directory + sandbox Patient Access, security questionnaire IAL2=No,\n" +
-      "    download test-member credentials + client id/secret). Deliver via secret files, never in chat."
+    "AETNA S1 — complete developerportal.aetna.com review and obtain issued sandbox credentials\n" +
+      "    (app+callback URL, Provider Directory + sandbox Patient Access subscriptions,\n" +
+      "    questionnaire IAL2=No, test member + client id/secret). Deliver via secret files, never in chat."
   );
 }
 

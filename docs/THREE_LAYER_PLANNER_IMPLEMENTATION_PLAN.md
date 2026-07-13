@@ -650,3 +650,93 @@ Standing measurement loop: `npm run eval:planner` (live gpt-4.1) before/after AN
 15. **RESOLVED (Founder 2026-07-02) — derived-only confirmed.** No persisted tier column; the `risk_tier_assigned` audit event carries `workflow_id, capability_id, risk_tier, reason_code, policy_version, timestamp`; materialized reporting views are allowed but never the source of truth (§8.1). Spine YAML: `risk_tier_policy`.
 16. **RESOLVED (Founder 2026-07-02) — embedding-provider abstraction now.** Public/non-PHI classes → OpenAI `text-embedding-3-small` live (so Phase 87 retrieval CAN claim live readiness for PUBLIC data classes); PHI/member-doc classes → blocked-by-policy at the abstraction (never `contract_ready`-by-omission) until an OpenAI BAA or Bedrock/KMS profile is active; never embed unclassified data; `rag_chunks` carries the 13 required metadata fields (§5.1, §5.5). Spine YAML: `embedding_policy`.
 17. **RESOLVED (Founder 2026-07-02) — versioned payloads now + staged deploy policy.** Versioned interrupt payloads and replay-safety metadata land with Phase 88; the operational drain rule is allowed EARLY-phase; cross-version resume OR safe expire/reissue-with-user-notice becomes an acceptance criterion before broader production; an ambiguous post-deploy write is NEVER auto-executed (§4.3, Phase 88 acceptance). Spine YAML: `interrupt_policy.deployment_policy`.
+
+---
+
+## 14. CareRoute and Bill Guardian extension (Cortex-authoritative)
+
+This section mirrors the founder-approved plan from Cortex `origin/main` at
+`semantic/projects/workerprototype-openclaw-careroute-bill-guardian-phases-93-96.md`.
+Cortex remains the canonical product and sequencing source; a conflict is resolved in
+favor of that Cortex note and a repository amendment must follow. The PostgreSQL runtime
+ownership rules in `docs/POSTGRES_RUNTIME_AUTHORITY.md` remain binding.
+
+### Entry gate
+
+Phase 90 must land before Phase 93 implementation begins. Phases 91-92 remain unchanged
+and externally/signature gated. Phase 93 depends directly on Phase 90 and does not wait
+for Phases 91-92 when its use case can run on already proven rails. No connector module,
+table, or capability may land as scaffold-only work.
+
+### 14-phase-93 — Bill Guardian foundation
+
+Deliver a tenant-isolated, payer-neutral foundation with Aetna as the first enabled MVP
+payer, not a hardwired domain assumption. The vertical slice includes real bill and EOB
+ingestion, real MRF acquisition and contextual comparison, API-first accumulator/EOB/claim
+resolution with dedicated OpenClaw portal fallback only when the API does not return the
+required verified data, explicit portal/freshness states, versioned federal rule packs,
+evidence-backed action candidates, and claim-packet preparation.
+
+Acceptance:
+
+- Tenant boundaries are enforced in PostgreSQL queries, deferred-pointer dereference,
+  context hydration, tasks, approvals, and audit; a cross-tenant negative arm fails loud.
+- Uploaded bill and EOB are the P0 truth; member-authorized API or portal facts are next;
+  real MRF rows are contextual comparison and preserve source/hash/retrieval provenance.
+- Accumulator fallback exposes exactly `portal_verified`, `reauth_required`,
+  `portal_unavailable`, `not_displayed`, `ambiguous`, or `stale`; no missing value is
+  silently converted into a balance.
+- Federal GFE/PPDR, No Surprises Act, and 501(r) outputs carry version/date/source
+  pointers. Florida-specific rules stay disabled until legal review.
+- Outputs are action candidates, not definitive pay, illegal, or do-not-pay conclusions.
+  Letters remain draft-only. OpenClaw does not negotiate, contact a payer, file a dispute,
+  or perform final Submit.
+- Identifiable pilot PHI remains disabled until the named counterparty has executed the
+  required BAA/DPA and the relevant PostgreSQL, Graphiti, audit, and egress gates pass.
+- Real-runtime proof includes positive and negative PostgreSQL pointer arms, Redis loss and
+  rebuild, a real Graphiti/FalkorDB retain-to-recall relationship fact, and the relevant
+  browser/API evidence. A skip, fixture, mock provider, or scaffold cannot satisfy it.
+
+### 14-phase-94 — Deterministic CareRoute MVP
+
+Deliver deterministic scenario computation for generic prescriptions, outpatient imaging,
+and scheduled non-emergency outpatient office consultations, including telehealth when
+meaningfully comparable and in/out-of-network scenarios when sourced. Routine labs,
+emergency/urgent care, modality substitutions, medication changes, clinical deferral, and
+procedure-dependent specialty recommendations remain excluded.
+
+Acceptance:
+
+- Numeric cards are deterministic and source-pointer bounded.
+- Missing required variables produce structured `insufficient_data`, never silent failure.
+- The LLM may explain missing inputs and next evidence steps in patient language; it may
+  not invent numbers, accumulator values, savings, probabilities, or a definitive route.
+- Every guardrail-taxonomy release carries founder physician approval, version, date, and
+  source citations.
+
+### 14-phase-95 — Longitudinal and accumulator-aware engine
+
+Deliver verified-accumulator annual-cost and kappa calculations, calibration/back-testing
+infrastructure, estimated-savings-opportunity language, and prospective-validation
+preparation.
+
+Acceptance:
+
+- Annual-cost and kappa outputs require a sufficiently current verified accumulator.
+- If the accumulator is unavailable, only known current prices are shown, deductible
+  impact is explicitly unknown, and a patient-language explanation identifies the gap.
+- Retrospective claims are labeled `estimated savings opportunity` until prospective
+  validation exists.
+
+### 14-phase-96 — TPA and white-label pilot
+
+Deliver tenant presentation, sponsor workflows and dashboards, contract-gated identifiable
+data activation, de-identification controls, prospective outcome measurement, and controlled
+payer expansion beyond the Aetna MVP.
+
+Acceptance:
+
+- White-label surfaces never weaken the Phase 93 tenant boundary.
+- Identifiable data stays disabled until the applicable BAA/DPA and PHI runtime gates pass.
+- Each additional payer is disabled by default and requires its own real positive/negative
+  connector, pointer, audit, and source-provenance proof before activation.

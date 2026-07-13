@@ -10229,3 +10229,35 @@ Remaining:
 - Replaced the former file-checkpointer/embedded-database conversation restart test with two real child processes sharing a temporary PostgreSQL database and encrypted PostgreSQL checkpointer. After deleting checkpoint rows, the second process rehydrated the ordered conversation timeline from PostgreSQL.
 - Updated stale Phase 64, Phase 88, and Phase 89 assertions to the PostgreSQL-only runtime contract.
 - Final complete local result: 446 tests, 439 passed, 0 failed, 7 explicitly deferred live-data arms. The PostgreSQL single-authority proof remained 3/3, memory-authority proof remained 5/5, and the build passed.
+
+## 2026-07-13 — CareRoute ledger reconciliation and Phase 90 live entry gate
+
+RALPH state:
+
+- Requirements: reconcile the Cortex-approved Phases 93-96 into the repository ledger and
+  verify the actual next executable phase without creating mock or scaffold connectors.
+- Architecture: Phase 93 depends on Phase 90; 91-92 remain externally/signature gated.
+  PostgreSQL/Redis/Graphiti/OpenClaw authority remains unchanged.
+- Loop: extended the ledger/test/plan mirror and ran the protected Phase 90 Part 2 preflight.
+- Prove: Aetna sandbox metadata answered HTTP 200, the durable PostgreSQL checkpointer was
+  available, and the catalog/process substrate passed. The credential/key/scope gates failed
+  loudly and are recorded in `artifacts/phase90/phase90-part2-preflight-2026-07-13.md`.
+- Harden: no Phase 90 connector module was added. Phase 90 remains `in_progress`; Phase 93
+  remains `planned` until the full real sandbox acceptance lands.
+
+Current blockers:
+
+- Aetna app/test-member credentials and callback URI have not been issued/configured; portal
+  application status is Under Review.
+- Stedi free test/mock key is not configured.
+- UM self-funded/TPA Patient Access scope answer is not recorded.
+
+Verification:
+
+- Phase-ledger test: 5 passed, 0 failed.
+- PostgreSQL single-authority live gate: 3 passed, 0 failed.
+- Graphiti/FalkorDB live memory gate: 2 passed, 0 failed after binding the clean worktree
+  to the installed ignored Python runtime.
+- Build: passed after initializing the pinned Graphiti submodule.
+- Complete protected-runtime local gate: 447 total, 440 passed, 0 failed, 7 explicit
+  live-data skips.
