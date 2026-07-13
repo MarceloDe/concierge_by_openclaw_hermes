@@ -2948,3 +2948,25 @@ Sessions, graph state, approvals, tasks, pointers, and audit must commit and rec
 
 Consequences:
 Non-PostgreSQL driver and checkpointer values fail at boot. Missing deferred pointers fail loudly. The acceptance gate creates a real temporary PostgreSQL database, exercises live embeddings and Redis, closes and recreates the pool, resumes the interrupt, and verifies persisted rows and backing pointers. Legacy embedded-store support is isolated to test-only compatibility while those older unit tests are migrated; it cannot be selected by application runtime code.
+
+## 2026-07-13 — CareRoute starts after Phase 90, not after blocked Phases 91-92
+
+Problem:
+The Cortex plan approved Phases 93-96, but the repository phase ledger ended at Phase 92.
+That forced agents to infer the next phase from prose and created a risk that externally
+blocked production/write rails would incorrectly stall the evidence-first product work.
+
+Decision:
+Append Phases 93-96 to the binding ledger. Phase 93 depends on Phase 90. Phases 91-92 retain
+their existing dependencies, statuses, scope, and signature blockers. Phases 94-96 follow
+93 serially. No Phase 93 implementation begins until Phase 90 lands.
+
+Rationale:
+This exactly preserves the founder-approved sequence: finish the real sandbox rail first,
+allow Bill Guardian to use already proven rails, and keep production and write connectors
+honestly blocked until their agreements exist.
+
+Consequences:
+The next executable work is still Phase 90 Part 2. If credentials are absent, work stops at
+the loud external gate; it does not create connector scaffolds. CareRoute and Bill Guardian
+have an auditable future sequence without weakening runtime proof or contract gates.

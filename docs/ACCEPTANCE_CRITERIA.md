@@ -2680,3 +2680,17 @@ Focused proof:
 - Dashboard proof exposes `phase65_final_mvp_goal_evaluation` with score, decision, final answer, next recommended phase, and production blockers.
 - `/api/mvp/final-goal-evaluation` returns the same final evaluation check object.
 - Required gates: `npm run test:mvp:final`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phases 93-96 — CareRoute and Bill Guardian
+
+- `docs/db/phase-ledger.json` contains Phases 93-96 and the blocking test validates every
+  phase from 83 through 96.
+- Phase 93 depends on Phase 90 only; it does not falsely wait on externally blocked Phases
+  91-92, and it may not start while Phase 90 is `in_progress`.
+- Phase 90 external prerequisites are reported as `external_blocked`; missing credentials
+  never produce a scaffold connector or mock readiness claim.
+- Phase-specific real-runtime acceptance is binding at
+  `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-careroute-and-bill-guardian-extension-cortex-authoritative`.
+- PostgreSQL remains the only workflow/pointer/approval/task/audit authority, Redis remains
+  rebuildable cache only, Zep Graphiti/FalkorDB remains temporal facts only, and OpenClaw
+  remains bounded worker state with no product-memory authority.

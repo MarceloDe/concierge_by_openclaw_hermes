@@ -3402,3 +3402,23 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local` and `/api/mvp/final-goal-evaluation`.
 - Visual proof through the operator dashboard Phase 65 card.
+
+## 2026-07-13 — Phase ledger reconciliation for CareRoute and Bill Guardian
+
+The Cortex-authoritative CareRoute/Bill Guardian sequence is mirrored into the binding
+machine-readable ledger as Phases 93-96. Phase 93 depends directly on Phase 90 and does not
+depend on externally blocked Phases 91-92. Phase 90 remains the active implementation gate;
+no Phase 93 code begins until its real sandbox credential and member-rail acceptance closes.
+
+Implementation order:
+
+1. Finish Phase 90 with issued Aetna sandbox credentials, a real test-member OAuth/EOB read,
+   a real expiry-to-reauth arm, member-data rail proof, and the separately labeled Stedi test
+   contract arm.
+2. Keep Phases 91-92 unchanged and externally/signature gated.
+3. Start Phase 93 Bill Guardian foundation only after Phase 90 lands.
+4. Continue serially through Phase 94 deterministic CareRoute, Phase 95 longitudinal and
+   accumulator-aware calculations, and Phase 96 TPA/white-label pilot.
+
+Detailed scope and acceptance live in
+`docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-careroute-and-bill-guardian-extension-cortex-authoritative`.
