@@ -150,6 +150,7 @@ export class PostgresStore {
     this.dbPath = null;
     this.pool = options.pool ?? null;
     this.client = options.client ?? null;
+    this.poolOptions = options.poolOptions ?? {};
     this.ownsPool = !options.pool && !options.client;
   }
 
@@ -180,7 +181,7 @@ export class PostgresStore {
 
   async open() {
     if (this.client || this.pool) return this.client ?? this.pool;
-    this.pool = new pg.Pool(pgConnectionOptions(this.connectionString));
+    this.pool = new pg.Pool({ ...pgConnectionOptions(this.connectionString), ...this.poolOptions });
     return this.pool;
   }
 

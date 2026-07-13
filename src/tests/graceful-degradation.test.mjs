@@ -8,7 +8,7 @@ import {
   composeBestEffortAnswer,
   SANDBOX_PRIVACY_COPY
 } from "../concierge/gracefulDegradation.mjs";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";

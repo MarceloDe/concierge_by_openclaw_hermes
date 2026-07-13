@@ -767,8 +767,8 @@ if (!SCHEMA_SQL.includes("event_hash TEXT") || !SCHEMA_SQL.includes("previous_ev
 }
 
 const scope = describeLangGraphScope();
-if (!scope.activeHarness.includes("hook-style recall before orchestration")) {
-  throw new Error("LangGraph/Hindsight hook harness scope description is incomplete");
+if (!scope.activeHarness.includes("LangGraph-owned Zep Graphiti recall before orchestration")) {
+  throw new Error("LangGraph memory hook harness scope description is incomplete");
 }
 
 if (!scope.activeHarness.includes("real Zep Graphiti product-memory retain/recall when explicitly enabled")) {

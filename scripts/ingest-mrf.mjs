@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Phase 89 MRF ingest CLI (plan §9 MRF row / §11 Phase 89).
 //
-//   node scripts/ingest-mrf.mjs --db data/brainstyworkers.sqlite \
+//   BRAINSTY_DATABASE_URL_FILE=/run/secrets/brainsty_database_url node scripts/ingest-mrf.mjs \
 //     [--index-url <url>] [--file-url <url>] [--max-bytes N] \
 //     [--max-observations N] [--codes 27447,70553,...]
 //
@@ -13,7 +13,7 @@
 // for sizes because the live index carries none; skip it when re-ingesting a
 // known file).
 
-import { SqliteStore } from "../src/concierge/database.mjs";
+import { closeRuntimeDatabaseStore, getRuntimeDatabaseStore } from "../src/concierge/databaseFactory.mjs";
 import {
   fetchMrfIndex,
   selectSmallestInNetworkFile,
@@ -35,10 +35,6 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (!args.db || args.db === true) {
-  console.error("usage: node scripts/ingest-mrf.mjs --db <sqlite> [--index-url <url>] [--file-url <url>] [--max-bytes N] [--max-observations N] [--codes 27447,70553,...]");
-  process.exit(2);
-}
 
 const indexUrl = args["index-url"] && args["index-url"] !== true ? String(args["index-url"]) : DEFAULT_INDEX_URL;
 const maxBytes = args["max-bytes"] ? Number(args["max-bytes"]) : 200 * 1024 * 1024;
@@ -47,7 +43,7 @@ const billingCodeWhitelist = args.codes && args.codes !== true
   ? String(args.codes).split(",").map((code) => code.trim()).filter(Boolean)
   : null;
 
-const store = await new SqliteStore(String(args.db)).initialize();
+const store = await getRuntimeDatabaseStore(process.env);
 try {
   let fileUrl;
   let indexHash = null;
@@ -100,5 +96,5 @@ try {
   }, null, 2));
   process.exitCode = 1;
 } finally {
-  await store.close?.();
+  await closeRuntimeDatabaseStore();
 }

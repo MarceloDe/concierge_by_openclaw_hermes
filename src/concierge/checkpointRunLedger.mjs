@@ -32,7 +32,13 @@ export function processRuntimeEnabled(env = process.env) {
 // process:<workflow> convention, else null (legacy fixed-boundary behavior). Active+production only.
 export async function selectProcessForWorkflow(store, workflowKey) {
   if (!workflowKey || !processRuntimeEnabled()) return null;
-  let proc = await store.findOne("processes", { workflow_key: workflowKey, status: "active", lifecycle_state: "production" });
+  // Phase 90: a workflow may carry BOTH a canonical portal process and a rail-filtered
+  // API process — the ledger binds DETERMINISTICALLY to the lowest display_order
+  // (canonical spine first; rail processes are planner OFFERS, not ledger bindings).
+  let proc = await store.get(
+    "SELECT * FROM processes WHERE workflow_key = ? AND status = 'active' AND lifecycle_state = 'production' ORDER BY display_order ASC, process_key ASC LIMIT 1;",
+    [workflowKey]
+  );
   if (!proc) proc = await store.findOne("processes", { process_key: `process:${workflowKey}`, status: "active", lifecycle_state: "production" });
   return proc ?? null;
 }

@@ -9,7 +9,7 @@ import { once } from "node:events";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { createFhirClient } from "../concierge/connectors/fhirClient.mjs";
 import {
   upsertConnectorEndpoint,

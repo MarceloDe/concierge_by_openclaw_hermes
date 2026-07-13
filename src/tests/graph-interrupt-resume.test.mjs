@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";

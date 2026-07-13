@@ -7,7 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { flush_langfuse } from "../observability/langfuseClient.mjs";

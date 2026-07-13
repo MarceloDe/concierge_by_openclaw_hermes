@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { ORCHESTRATOR_FLOW_CASES, runOrchestratorFlowCases } from "../concierge/orchestratorDemo.mjs";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
 

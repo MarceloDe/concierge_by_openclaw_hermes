@@ -1,9 +1,8 @@
-import { DATABASE_ADAPTER_VERSION, DEFAULT_DB_PATH } from "./database.mjs";
 import { resolveDatabaseDriver } from "./databaseFactory.mjs";
 import { evaluateDatabaseSecretProfile, publicDatabaseSecretProfile, redactDatabaseUrl } from "./databaseSecretProfile.mjs";
 import { POSTGRES_ADAPTER_VERSION } from "./postgresStore.mjs";
 
-export const STORAGE_READINESS_VERSION = "2026-06-15.storage-readiness.v1";
+export const STORAGE_READINESS_VERSION = "2026-07-12.postgres-only-storage-readiness.v2";
 
 export function getStorageReadiness({ deployment = null, env = process.env } = {}) {
   const runtimeDriver = resolveDatabaseDriver(env);
@@ -25,7 +24,6 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
   const databaseSecretProfileReady = Boolean(deployment?.databaseSecretProfileReady ?? databaseSecretProfile.ready);
   const postgresDefaultRolloutReady = Boolean(deployment?.postgresDefaultRolloutReady ?? env.BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY === "1");
   const postgresProductionProfileReady = Boolean(deployment?.postgresProductionProfileReady);
-  const sqliteRuntimeReady = runtimeDriver === "sqlite" && DATABASE_ADAPTER_VERSION.includes("node-sqlite-bound-store");
   const postgresRuntimeSelected = runtimeDriver === "postgres";
   const postgresConfigured = Boolean(databaseUrl) || databaseSecretProfile.urlPresent || postgresComposeReady;
   const operationalGatesReady =
@@ -37,8 +35,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
   const productionGatesReady = operationalGatesReady && databaseSecretProfileReady && postgresDefaultRolloutReady;
   const fullMigrationReady = postgresRuntimeSelected && productionGatesReady;
   const migrationPending = !fullMigrationReady;
-  const status = postgresRuntimeSelected
-    ? fullMigrationReady
+  const status = fullMigrationReady
       ? "postgres_production_ready"
       : operationalGatesReady && databaseSecretProfileReady && !postgresDefaultRolloutReady
         ? "postgres_runtime_selected_secret_profile_ready_default_rollout_pending"
@@ -48,20 +45,7 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
           ? "postgres_runtime_selected_operational_gates_ready_secret_profile_pending"
         : postgresRuntimeSmokeReady
           ? "postgres_runtime_selected_parity_smoked"
-          : "postgres_runtime_selected_needs_parity_smoke"
-    : productionGatesReady
-      ? "postgres_production_gates_ready_sqlite_default"
-      : operationalGatesReady && databaseSecretProfileReady && !postgresDefaultRolloutReady
-        ? "postgres_secret_profile_ready_sqlite_default_rollout_pending"
-      : operationalGatesReady
-        ? "postgres_operational_gates_ready_sqlite_default_secret_profile_pending"
-      : postgresRuntimeSmokeReady
-        ? "postgres_adapter_parity_ready_sqlite_default"
-        : postgresLiveReady
-          ? "postgres_live_ready_sqlite_runtime"
-          : postgresComposeReady
-            ? "postgres_compose_profile_present_sqlite_runtime"
-          : "postgres_profile_missing";
+          : "postgres_runtime_selected_needs_runtime_smoke";
   const score = fullMigrationReady
     ? 100
     : postgresRuntimeSelected && operationalGatesReady && databaseSecretProfileReady
@@ -78,21 +62,20 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
 
   return {
     version: STORAGE_READINESS_VERSION,
-    ok: (sqliteRuntimeReady || postgresRuntimeSelected) && postgresComposeReady && postgresAdapterReady,
+    ok: postgresRuntimeSelected && postgresComposeReady && postgresAdapterReady,
     status,
     score,
     targetScore: 100,
     runtimeDriver,
-    runtimeAdapterVersion: DATABASE_ADAPTER_VERSION,
+    runtimeAdapterVersion: POSTGRES_ADAPTER_VERSION,
     postgresAdapterVersion: POSTGRES_ADAPTER_VERSION,
     appRuntimeMigratedToPostgres: postgresRuntimeSelected,
     fullMigrationReady,
     migrationPending,
     sqlite: {
-      enabled: sqliteRuntimeReady,
-      dbPath: env.BRAINSTY_DB_PATH ?? DEFAULT_DB_PATH,
-      boundedParameters: true,
-      sqliteShellOut: false
+      enabled: false,
+      runtimeSelectable: false,
+      status: "removed_from_runtime"
     },
     postgres: {
       target: databaseTarget === "postgres",
@@ -128,7 +111,8 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
       databaseSecretProfile: publicDatabaseSecretProfile(databaseSecretProfile),
       phiSeeded: false,
       transactionalTarget: "postgres",
-      localRuntimeStillSQLite: !postgresRuntimeSelected,
+      localRuntimeStillSQLite: false,
+      singlePostgresAuthority: postgresRuntimeSelected,
       boundParameterAdapter: postgresAdapterReady
     },
     nextAction: fullMigrationReady
@@ -141,8 +125,6 @@ export function getStorageReadiness({ deployment = null, env = process.env } = {
         ? "Add a real secret-manager or managed-secret profile before declaring database readiness at 100."
         : operationalGatesReady && databaseSecretProfileReady && !postgresDefaultRolloutReady
           ? "Run an isolated BRAINSTY_DB_DRIVER=postgres default-rollout rehearsal before broad rollout."
-        : postgresRuntimeSelected
-          ? "Expand endpoint and worker coverage before declaring full Postgres production migration."
-          : "Keep SQLite local runtime stable while expanding Postgres adapter parity, leases, and migration tests."
+        : "Expand endpoint, pointer, and worker coverage before declaring full PostgreSQL production readiness."
   };
 }

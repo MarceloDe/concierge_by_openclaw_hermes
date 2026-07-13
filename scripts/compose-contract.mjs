@@ -106,7 +106,7 @@ const COMPOSE_FRAGMENTS = [
   "WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_PRIVATE_LAUNCH_EXECUTION_READY:-0}",
   "WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED: ${WEFELLA_BROWSER_SANDBOX_PROVIDER_FINAL_HUMAN_REVIEWED:-0}",
   "BRAINSTY_CONNECTOR_API_BASE: http://fastapi:8000",
-  "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
+  "BRAINSTY_DB_DRIVER: postgres",
   "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
   "BRAINSTY_DATABASE_URL: ${BRAINSTY_DATABASE_URL:-postgresql://brainsty:brainsty-dev-only@postgres:5432/brainstyworkers?sslmode=disable}",
   "BRAINSTY_DATABASE_URL_FILE: ${BRAINSTY_DATABASE_URL_FILE:-}",
@@ -235,7 +235,7 @@ export async function assertDeploymentComposeContract({ verifyDockerConfig = fal
     files: REQUIRED_FILES,
     services: ["node-runtime", "fastapi", "mobile-pwa", "falkordb", "postgres"],
     storageRuntime: {
-      runtimeDriverDefault: "sqlite",
+      runtimeDriverDefault: "postgres",
       productionTarget: "postgres",
       composeService: "postgres",
       smokeCommand: "npm run storage:postgres:smoke",

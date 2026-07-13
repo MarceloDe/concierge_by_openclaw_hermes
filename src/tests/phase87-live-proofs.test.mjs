@@ -8,7 +8,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../concierge/secrets.mjs";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { fetchCmsDatasetRows, loadPublicApiArtifact } from "../concierge/publicDataClients.mjs";

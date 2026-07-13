@@ -72,7 +72,7 @@ except Exception as error:
         pass
 
 
-CONTRACT_VERSION = "2026-05-27.graphiti-product-memory.v1"
+CONTRACT_VERSION = "2026-07-12.graphiti-product-memory.v2"
 DEFAULT_BEDROCK_LLM_MODEL = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 DEFAULT_BEDROCK_SMALL_MODEL = "anthropic.claude-3-5-haiku-20241022-v1:0"
 DEFAULT_BEDROCK_EMBED_MODEL = "amazon.titan-embed-text-v2:0"
@@ -364,6 +364,7 @@ async def run(request: dict[str, Any]) -> dict[str, Any]:
             "ok": True,
             "contractVersion": CONTRACT_VERSION,
             "action": action,
+            "provider": "zep_graphiti",
             "backend": backend,
             "groupId": group_id,
             "schemaReady": True,

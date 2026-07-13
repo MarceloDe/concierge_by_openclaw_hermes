@@ -4,7 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { audit, listAuditEvents, verifyAuditChain } from "../concierge/audit.mjs";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 
 test("audit events are hash chained and tamper evident", async () => {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-audit-chain-"));

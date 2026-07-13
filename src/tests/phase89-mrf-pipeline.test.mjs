@@ -17,7 +17,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { gzipSync, createGunzip } from "node:zlib";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { queryMrfPriceEvidence } from "../concierge/mrfPricing.mjs";
 import {
   fetchMrfIndex,

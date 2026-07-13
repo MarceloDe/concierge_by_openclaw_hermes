@@ -83,7 +83,11 @@ export const TABLES = [
   "pdp_plans",
   "pdp_formulary",
   "pdp_pharmacy_network",
-  "pdp_pricing"
+  "pdp_pricing",
+  "connector_oauth_grants",
+  "member_data_rails",
+  "langgraph_checkpoints",
+  "langgraph_checkpoint_writes"
 ];
 
 export const SCHEMA_SQL = `
@@ -1611,6 +1615,41 @@ CREATE TABLE IF NOT EXISTS pdp_pharmacy_network (
   created_at TEXT NOT NULL
 );
 
+-- Phase 90 (plan §5.2): member-consent OAuth grants for API rails. Ciphertexts resolve
+-- ONLY through the secret backend (founder #5); token METADATA lives in columns,
+-- separately from the secret. An expired grant flips reauth_required and surfaces as a
+-- user-facing reconnect ask — never a silent retry. Owner: connectors/tokenVault.mjs.
+CREATE TABLE IF NOT EXISTS connector_oauth_grants (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  payer_key TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  access_token_ciphertext TEXT NOT NULL,
+  refresh_token_ciphertext TEXT,
+  token_envelope_json TEXT NOT NULL DEFAULT '{}',
+  access_token_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'connected',
+  expires_at TEXT,
+  consent_recorded_at TEXT NOT NULL,
+  reauth_required INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Phase 90 (plan §5.2/§9): per-member data-rail selection — a PROBED STORED FACT
+-- feeding the planner feasibility filter (rail selection is DATA, never a code switch).
+CREATE TABLE IF NOT EXISTS member_data_rails (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  payer_key TEXT NOT NULL,
+  rail TEXT NOT NULL,
+  probe_evidence_pointer TEXT,
+  probed_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS pdp_pricing (
   id TEXT PRIMARY KEY,
   contract_id TEXT NOT NULL,
@@ -1624,6 +1663,51 @@ CREATE TABLE IF NOT EXISTS pdp_pricing (
   dataset_pointer TEXT NOT NULL,
   row_content_hash TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
+);
+
+-- Phase 91 (plan §4.3, founder #4): the DURABLE LangGraph checkpointer — the declared
+-- production target. A pending interrupt in MemorySaver does not survive a restart, so
+-- consent/approval pauses were unusable under a production profile. Graph state carries
+-- PHI (user_input, memory_context), therefore the checkpoint and its metadata are
+-- CIPHERTEXT-ONLY columns (AES-256-GCM through the ONE secret backend, founder #5) —
+-- the same posture the file-mode saver already had, moved into the authoritative store.
+-- runtime_versions_json stamps the interrupt/planner/checkpointer schema versions so a
+-- post-deploy resume is either version-compatible or safely expired and re-asked (#17);
+-- an ambiguous post-deploy write is NEVER auto-executed.
+CREATE TABLE IF NOT EXISTS langgraph_checkpoints (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  checkpoint_ns TEXT NOT NULL DEFAULT '',
+  checkpoint_id TEXT NOT NULL,
+  parent_checkpoint_id TEXT,
+  checkpoint_serde_type TEXT NOT NULL,
+  checkpoint_ciphertext TEXT NOT NULL,
+  checkpoint_iv TEXT NOT NULL,
+  checkpoint_tag TEXT NOT NULL,
+  metadata_serde_type TEXT NOT NULL,
+  metadata_ciphertext TEXT NOT NULL,
+  metadata_iv TEXT NOT NULL,
+  metadata_tag TEXT NOT NULL,
+  runtime_versions_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (thread_id, checkpoint_ns, checkpoint_id)
+);
+
+CREATE TABLE IF NOT EXISTS langgraph_checkpoint_writes (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  checkpoint_ns TEXT NOT NULL DEFAULT '',
+  checkpoint_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  write_idx INTEGER NOT NULL,
+  channel TEXT NOT NULL,
+  value_serde_type TEXT NOT NULL,
+  value_ciphertext TEXT NOT NULL,
+  value_iv TEXT NOT NULL,
+  value_tag TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx)
 );
 `;
 

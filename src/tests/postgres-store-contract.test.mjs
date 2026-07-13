@@ -1,22 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createDatabaseStore, normalizeDatabaseDriver, resolveDatabaseDriver, PostgresStore, SqliteStore } from "../concierge/databaseFactory.mjs";
+import { createDatabaseStore, normalizeDatabaseDriver, resolveDatabaseDriver, PostgresStore, runtimePostgresAuthority } from "../concierge/databaseFactory.mjs";
 import { POSTGRES_ADAPTER_VERSION, toPostgresSql } from "../concierge/postgresStore.mjs";
 
-test("database factory keeps local sqlite default and selects Postgres by explicit driver", () => {
-  assert.equal(normalizeDatabaseDriver(undefined), "sqlite");
+test("database factory uses PostgreSQL in every runtime profile and rejects SQLite", () => {
+  assert.equal(normalizeDatabaseDriver(undefined), "postgres");
   assert.equal(normalizeDatabaseDriver("postgres"), "postgres");
-  assert.equal(normalizeDatabaseDriver("anything_else"), "sqlite");
-  assert.ok(createDatabaseStore({}) instanceof SqliteStore);
+  assert.throws(() => normalizeDatabaseDriver("sqlite"), (error) => error.failureClass === "non_postgres_runtime_forbidden");
+  assert.throws(() => normalizeDatabaseDriver("anything_else"), (error) => error.failureClass === "non_postgres_runtime_forbidden");
+  assert.ok(createDatabaseStore({}) instanceof PostgresStore);
   assert.ok(createDatabaseStore({ BRAINSTY_DB_DRIVER: "postgres", BRAINSTY_DATABASE_URL: "postgresql://user:pass@127.0.0.1:55432/db" }) instanceof PostgresStore);
 });
 
-test("database factory defaults production Postgres target to Postgres runtime", () => {
+test("database factory keeps one PostgreSQL authority across production and development", () => {
   assert.equal(resolveDatabaseDriver({ NODE_ENV: "production", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
   assert.equal(resolveDatabaseDriver({ BRAINSTY_RUNTIME_ENV: "production-candidate", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
-  assert.equal(resolveDatabaseDriver({ NODE_ENV: "production", BRAINSTY_DATABASE_TARGET: "sqlite" }), "sqlite");
-  assert.equal(resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }), "sqlite");
+  assert.throws(() => resolveDatabaseDriver({ NODE_ENV: "production", BRAINSTY_DATABASE_TARGET: "sqlite" }), /only runtime authority/);
+  assert.equal(resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
+  assert.equal(runtimePostgresAuthority({ BRAINSTY_DATABASE_URL: "postgresql://user:pass@127.0.0.1:55432/db" }).driver, "postgres");
   assert.ok(
     createDatabaseStore({
       NODE_ENV: "production",

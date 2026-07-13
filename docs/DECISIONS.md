@@ -2934,3 +2934,17 @@ Manual spans are more stable for this codebase than a broad callback-only integr
 
 Consequences:
 When `LANGFUSE_ENABLED=false` or keys are missing, the product runs normally with a no-op tracer. When configured, Langfuse receives sanitized trace/span metadata, failure classes, safe input/output summaries, route/workflow names, and source-pointer counts. Future operators can debug latency and routing mistakes without weakening deterministic safety rails or exposing raw healthcare data.
+
+## 2026-07-12 - One PostgreSQL Runtime Authority
+
+Problem:
+The application store supported secret-file PostgreSQL resolution, but the default LangGraph checkpointer constructed a separate store from only the direct URL environment variable. Local runtime selection and several operational CLIs also retained an embedded-database path. That allowed split-brain workflow state and made restart/pointer evidence weaker than the declared architecture.
+
+Decision:
+PostgreSQL is the only selectable runtime database and the only selectable LangGraph checkpointer. The server, LangGraph saver, ingestion jobs, planner evaluator, browser proof, and readiness contracts resolve the same secret-backed authority. Redis is rebuildable cache/mirror state only. Zep Graphiti/FalkorDB is long-term temporal-fact memory only. OpenClaw receives a bounded projection and has no independent product-memory write authority.
+
+Rationale:
+Sessions, graph state, approvals, tasks, pointers, and audit must commit and recover under one transactional authority. A real restart proof is more reliable than adapter-shape parity or an injected test store.
+
+Consequences:
+Non-PostgreSQL driver and checkpointer values fail at boot. Missing deferred pointers fail loudly. The acceptance gate creates a real temporary PostgreSQL database, exercises live embeddings and Redis, closes and recreates the pool, resumes the interrupt, and verifies persisted rows and backing pointers. Legacy embedded-store support is isolated to test-only compatibility while those older unit tests are migrated; it cannot be selected by application runtime code.

@@ -164,7 +164,7 @@ export function assertPlannerMetadataSafe(text) {
 // executable HOW, but only after verification. Backing tables
 // (workflow_definitions/openclaw_skills/tool_registry) WIN: a capability row marked
 // active still refuses to hydrate if its backing row is disabled. Authoritative store
-// is Postgres/SQLite; this never trusts the prompt-side pointer blindly.
+// is PostgreSQL; this never trusts the prompt-side pointer blindly.
 export const CAPABILITY_CATALOG_HYDRATE_VERSION = "2026-06-27.capability-hydrate.v1";
 
 // pointer = "<cacheKey>#<capability_key>" or a bare "<capability_key>".

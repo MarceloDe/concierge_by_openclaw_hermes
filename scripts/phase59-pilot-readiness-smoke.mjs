@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 
@@ -178,13 +177,12 @@ async function maybeRunAwsCheck() {
 }
 
 async function startServers() {
-  const dbDir = await mkdtemp(resolve(tmpdir(), "brainsty-phase59-"));
-  const dbPath = resolve(dbDir, "phase59.sqlite");
   spawnManaged("node_runtime", "node", ["src/server/server.mjs"], {
     env: {
       PORT: String(nodePort),
       HOST: "127.0.0.1",
-      BRAINSTY_DB_PATH: dbPath,
+      BRAINSTY_DB_DRIVER: "postgres",
+      BRAINSTY_DATABASE_TARGET: "postgres",
       NODE_ENV: "test"
     }
   });
@@ -207,7 +205,7 @@ async function startServers() {
     });
     await waitFor("Next mobile PWA", pwaBase, { json: false, timeout: 90000 });
   }
-  return { dbPath };
+  return { databaseAuthority: "postgres_runtime_secret_profile" };
 }
 
 function fastApiEndpointInventory(openapi) {
@@ -424,7 +422,7 @@ async function main() {
 
   try {
     const startup = await startServers();
-    result.checks.servers = { ok: true, status: "started", dbPath: startup.dbPath };
+    result.checks.servers = { ok: true, status: "started", databaseAuthority: startup.databaseAuthority };
     result.checks.fastapi = await exerciseFastApiV1();
     result.checks.nodeRuntime = await exerciseNodeRuntime();
     result.checks.pwa = await exercisePwa();

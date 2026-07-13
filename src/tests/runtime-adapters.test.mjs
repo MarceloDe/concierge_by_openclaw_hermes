@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore, createId, nowIso } from "../concierge/database.mjs";
+import { SqliteStore, createId, nowIso } from "./support/sqliteTestStore.mjs";
 import { runConciergeSlice } from "../concierge/langgraphCompatibility.mjs";
 import { seedCapabilityCatalog } from "../concierge/capabilityCatalogSeed.mjs";
 import { getMemoryContextForUser } from "../concierge/memoryHarness.mjs";
 import {
   buildRuntimeCompatibilityBundle,
-  toHindsightRetainCandidates,
+  MEMORY_LAYER_AUTHORITY,
+  toGraphitiRetainCandidates,
   toLangChainConfig,
   toLangGraphAgentState,
   toOpenClawChannelEnvelope,
@@ -92,12 +93,16 @@ test("runtime adapters map context packet to OpenClaw envelopes", async () => {
   assert.ok(channelEnvelope.allowed_tasks.includes("run_task_scoped_status_subagent"));
   assert.ok(Array.isArray(channelEnvelope.prior_sessions));
   assert.ok("product_memory" in channelEnvelope);
+  assert.equal(channelEnvelope.memory_authority.longTermProductMemory.runtime, "zep_graphiti");
+  assert.equal(channelEnvelope.memory_authority.longTermProductMemory.owner, "langgraph");
+  assert.equal(channelEnvelope.memory_authority.workflowMemory.runtime, "langgraph_checkpointer_and_database");
+  assert.equal(channelEnvelope.memory_authority.workerMemory.productMemoryWriteAuthority, false);
   assert.equal(heartbeatEnvelope.envelope_type, "openclaw_heartbeat");
   assert.equal(heartbeatEnvelope.action_mode, "inspect_and_propose_only");
   assert.equal(heartbeatEnvelope.instance.status, "always_on_local_harness");
 });
 
-test("runtime bundle includes future Hindsight retain candidates without calling Hindsight", async () => {
+test("runtime bundle exposes Graphiti retain candidates under LangGraph authority", async () => {
   const store = await testStore();
   const result = await runConciergeSlice(store, {
     message: "Prepare my Aetna memory for future sessions.",
@@ -112,12 +117,18 @@ test("runtime bundle includes future Hindsight retain candidates without calling
     email: "mocfelix@gmail.com",
     sessionId: result.session.id
   });
-  const candidates = toHindsightRetainCandidates(context.packet);
+  const candidates = toGraphitiRetainCandidates(context.packet);
   const bundle = buildRuntimeCompatibilityBundle(context.packet, { source: "test" });
 
   assert.ok(candidates.length >= 1);
   assert.ok(candidates.every((candidate) => candidate.user_id === result.user.id));
+  assert.ok(candidates.every((candidate) => candidate.adapter === "graphiti"));
+  assert.ok(candidates.every((candidate) => candidate.provider === "zep_graphiti"));
+  assert.ok(candidates.every((candidate) => candidate.owner === "langgraph"));
   assert.ok(candidates.every((candidate) => candidate.metadata.source_table));
   assert.equal(bundle.validation.compatible, true);
-  assert.equal(bundle.hindsight.retainCandidates.length, candidates.length);
+  assert.equal(bundle.graphiti.retainCandidates.length, candidates.length);
+  assert.equal(bundle.graphiti.owner, "langgraph");
+  assert.equal(bundle.memoryAuthority, MEMORY_LAYER_AUTHORITY);
+  assert.equal("hindsight" in bundle, false);
 });

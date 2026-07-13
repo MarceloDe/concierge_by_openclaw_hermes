@@ -23,7 +23,7 @@ export const DEFAULT_EXECUTORS = Object.freeze({
   },
   local_followup_planner: {
     executorKey: "local_followup_planner",
-    supportedTools: ["local_sqlite_memory", "approval_request_outbox"],
+    supportedTools: ["postgres_runtime_memory", "approval_request_outbox"],
     writeActionsEnabled: false,
     approvalRequired: true
   },

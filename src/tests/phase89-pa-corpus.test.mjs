@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { reviewResearchArtifact, searchResearchEvidence } from "../concierge/researchOps.mjs";
 import {
   PA_POLICY_CORPUS,

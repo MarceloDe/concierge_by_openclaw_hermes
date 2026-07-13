@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import {
   buildSafeProductMemoryEpisode,

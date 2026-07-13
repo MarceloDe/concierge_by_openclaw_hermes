@@ -301,6 +301,7 @@ function memorySkillTreeHints(state) {
 }
 
 export function buildLlmOrchestrationDecisionPayload(state) {
+  const uploadedDocuments = Array.isArray(state.raw_message?.uploadedDocuments) ? state.raw_message.uploadedDocuments : [];
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
     purpose:
@@ -324,6 +325,18 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     planIdentities: (state.context_packet?.planIdentities ?? []).slice(0, 4),
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
+    availableEvidence: {
+      uploadedDocuments: uploadedDocuments.slice(0, 6).map((document) => ({
+        uploadId: compact(document.uploadId, 120),
+        filename: compact(document.filename, 180),
+        contentType: compact(document.contentType, 80),
+        extractionStatus: compact(document.extraction?.status, 80),
+        extractionMethod: compact(document.extraction?.method, 80),
+        fieldLabels: (document.extraction?.fields ?? []).slice(0, 20).map((field) => compact(field.label, 80)),
+        sourceSpanCount: (document.extraction?.sourceSpans ?? []).length,
+        blockerCount: (document.extraction?.blockers ?? []).length
+      }))
+    },
     dynamicSkills: dynamicSkillHints(state),
     memorySkillTree: memorySkillTreeHints(state),
     productMemory: {
@@ -424,6 +437,7 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "OpenClaw workers may be powerful inside the delegated read-only task, but they do not choose the healthcare workflow.",
         "If authenticated portal evidence is needed, ask for manual login/readiness and read-only approval rather than claiming evidence exists.",
         "If source pointers are absent, say what evidence is missing.",
+        "AVAILABLE EVIDENCE: payload.availableEvidence contains masked evidence already attached to this turn. When an uploaded document has extractionStatus='completed', treat the document as present; do not ask the user to upload it again. Select only the matching workflow from payload.allowedWorkflows.",
         `CLASSIFICATION: set classification.taskClass to exactly one of ${TASK_CLASSES.join(" | ")}.`,
         "DATA LAYER: set data_layer to one or more of layer_1_public | layer_2_member_authorized_api | layer_3_portal_control. layer_1_public = public/no-auth data (RAG, MRF pricing, provider directory, CMS data, public web). layer_2_member_authorized_api = member-authorized payer APIs (SMART-on-FHIR/OAuth reads: coverage, claims/EOB, accumulators, eligibility, formulary, prior-auth status). layer_3_portal_control = authenticated portal control, ONLY where no suitable API exists or the user requests a portal action. Prefer lower layers: public before member data, API before portal control.",
         "RISK TIER: set risk_tier to one of low | medium | high | critical. low = answer from already-approved evidence, no new access (general education, public plan explanation, no PHI, no action). medium = member-specific read-only data or read-only portal/document observation (approval interrupt); provider search, cost estimate, benefits interpretation. high = requires an irreversible write action — claims submission, prior-auth packet submission, appeal filing, scheduling, messages, portal writes (single-use approval token; almost never yours to choose). critical = cancellations, enrollment changes, payment, ambiguous high-stakes action, human escalation, or safety refusal. The runtime computes a deterministic floor from policy results and the selected capabilities' approval scopes; you may RAISE the tier, never lower it below the floor.",

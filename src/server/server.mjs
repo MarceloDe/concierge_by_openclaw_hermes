@@ -2,7 +2,11 @@ import { createServer } from "node:http";
 import { access, readFile, readdir } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { listAuditEvents } from "../concierge/audit.mjs";
-import { createDatabaseStore } from "../concierge/databaseFactory.mjs";
+import {
+  closeRuntimeDatabaseStore,
+  getRuntimeDatabaseStore,
+  runtimePostgresAuthority
+} from "../concierge/databaseFactory.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";
 import { normalizeWebChat } from "../concierge/channelAdapter.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
@@ -220,7 +224,7 @@ const openClawRuntimeReadiness = await initializeOpenClawRuntime({ env: process.
 });
 console.log(`[runtime] openclaw gateway reachable=${openClawRuntimeReadiness.gatewayReachable} port=${openClawRuntimeReadiness.gatewayPort ?? "n/a"} startedPid=${openClawRuntimeReadiness.startedPid ?? "existing"} llmCredential=${openClawRuntimeReadiness.llmCredentialPresent ?? false}`);
 
-const store = await createDatabaseStore(process.env).initialize();
+const store = await getRuntimeDatabaseStore(process.env);
 // Seed the capability/process catalog (idempotent) so the Type-II process-offer
 // composer has offerable processes to reason over. FAIL LOUD (Phase 84 §10.26): a
 // silently-skipped seed leaves the planner with zero offerable capabilities, so any
@@ -714,7 +718,7 @@ async function safeDeploymentContractStatus() {
     "POSTGRES_PASSWORD: ${BRAINSTY_POSTGRES_PASSWORD:-brainsty-dev-only}",
     "${BRAINSTY_COMPOSE_POSTGRES_PORT:-55432}:5432",
     "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
-    "BRAINSTY_DB_DRIVER: ${BRAINSTY_DB_DRIVER:-sqlite}",
+    "BRAINSTY_DB_DRIVER: postgres",
     "BRAINSTY_DATABASE_TARGET: ${BRAINSTY_DATABASE_TARGET:-postgres}",
     "BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: ${BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY:-0}",
     "BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: ${BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY:-0}",
@@ -1199,9 +1203,7 @@ function buildPemsReviewerHistoryReviewRefinementProof(status) {
 async function buildPhase56HardeningProof() {
   const retentionStatus = retentionSweepDaemon.status();
   const lastRetentionTick = retentionStatus.lastTick;
-  const graphCheckpointerEncrypted = process.env.BRAINSTY_GRAPH_CHECKPOINTER === "file"
-    ? Boolean(process.env.BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY)
-    : true;
+  const graphCheckpointerEncrypted = Boolean(process.env.BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY);
   return {
     status: graphCheckpointerEncrypted && lastRetentionTick?.status === "tick_completed"
       ? "phase56_hardening_proof_ready"
@@ -1210,7 +1212,8 @@ async function buildPhase56HardeningProof() {
     score: graphCheckpointerEncrypted ? (lastRetentionTick?.status === "tick_completed" ? 100 : 85) : 0,
     target: 100,
     graphCheckpointer: {
-      fileMode: process.env.BRAINSTY_GRAPH_CHECKPOINTER === "file",
+      mode: "postgres",
+      fileMode: false,
       encryptedAtRestRequired: true,
       encryptedAtRestConfigured: graphCheckpointerEncrypted,
       rawCheckpointStateReturned: false
@@ -1229,8 +1232,9 @@ async function buildPhase56HardeningProof() {
       testOnlyObserveOverrideAvailable: true
     },
     database: {
-      sqliteAdapter: "node:sqlite",
-      shellOutSqlite3: false,
+      runtimeAdapter: "postgres",
+      singleAuthority: true,
+      sqliteRuntimeSelectable: false,
       boundParameterHelpers: true
     }
   };
@@ -1606,6 +1610,11 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
         target: "All future phases use one Cortex-canonical RALPH loop, role-separated execution, non-mocked proof labels, dashboard scoring, and PR-based memory visibility."
       },
       {
+        key: "memory_layer_authority",
+        status: productMemory?.schemaReady ? "graphiti_runtime_schema_ready" : "graphiti_runtime_requires_live_proof",
+        target: "LangGraph owns workflow memory and Zep Graphiti retain/recall; OpenClaw receives bounded context and cannot write product memory directly."
+      },
+      {
         key: "continuous_procedural_memory_shadow",
         status: continuousIntelligence.status,
         target: "Phase 33 introduces typed CaseState, G0-G8 universal gate skeleton, PEMS maturity schema, and shadow-mode procedural reconstruction without letting it drive healthcare answers."
@@ -1678,7 +1687,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       {
         key: "postgres_storage_profile",
         status: storage.status,
-        target: "Docker Compose defines a Postgres transactional storage target while the current app runtime remains safely on SQLite until migration tests pass."
+        target: "One PostgreSQL authority stores runtime state, checkpoints, context/source pointers, approvals, tasks, and audit in every environment."
       },
       {
         key: "postgres_docker_secret_runtime_profile",
@@ -1823,7 +1832,7 @@ async function connectorProofRun(runId = "server-connector-next-mobile-mvp") {
       {
         key: "phase68_postgres_production_default",
         status: phase68ProductionDatabase.status,
-        target: "Postgres is the production/default runtime store with 5-year retention, encrypted backup/restore drill, provider backup policy, and local SQLite dev fallback."
+        target: "Postgres is the only runtime store with 5-year retention, encrypted backup/restore drill, provider backup policy, and no SQLite runtime fallback."
       },
       {
         key: "phase69_bill_verification_mvp_flow",
@@ -3141,11 +3150,12 @@ async function serveStatic(req, res) {
 
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
+    const databaseAuthority = runtimePostgresAuthority(process.env);
     sendJson(res, 200, {
       ok: true,
-      databaseDriver: store.driver ?? "sqlite",
+      databaseDriver: store.driver,
       databaseAdapterVersion: store.adapterVersion,
-      dbPath: store.dbPath,
+      databaseAuthority,
       counts: await store.counts(),
       langGraphScope: describeLangGraphScope()
       ,
@@ -5109,6 +5119,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.error(`Retention sweeper daemon stop failed: ${error.message}`);
     }
     await shutdown_langfuse().catch(() => null);
+    await closeRuntimeDatabaseStore().catch((error) => {
+      console.error(`PostgreSQL runtime store close failed: ${error.message}`);
+    });
     server.close((error) => {
       if (error) console.error(`HTTP server close failed: ${error.message}`);
       process.exit(error ? 1 : 0);
@@ -5124,7 +5137,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   server.listen(PORT, HOST, () => {
     console.log(`Brainstyworkers AI Concierge running at http://${HOST}:${PORT}`);
-    console.log(`Database driver: ${store.driver ?? "sqlite"} ${store.dbPath ? `(${store.dbPath})` : ""}`.trim());
+    console.log(`Database driver: ${store.driver}; authority=${runtimePostgresAuthority(process.env).authorityId.slice(0, 16)}`);
     console.log(langfuseStartupLine());
     try {
       const runtimeCache = createRuntimeContextCache();

@@ -5,6 +5,9 @@
 > `~/projects/brain` graphify knowledge graph (1489 nodes / 1419 edges) applied to this
 > project's runtime. No insurance-specific result was assumed from the literature; each
 > paper contributes a domain-general mechanism transferred here.
+> Graphify is development-time knowledge-base provenance only. It is not imported,
+> deployed, or authorized as product memory; Zep Graphiti/FalkorDB is the runtime
+> long-term memory layer under LangGraph authority.
 
 ## 0. Scope and relationship to existing docs
 

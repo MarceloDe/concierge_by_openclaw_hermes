@@ -15,23 +15,20 @@ import {
   endTakeover
 } from "../src/concierge/browserStreamController.mjs";
 import { resolveActivePageCdpTarget, getOfficialOpenClawConfig } from "../src/concierge/openclawOfficialRuntime.mjs";
-import { SqliteStore } from "../src/concierge/database.mjs";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { closeRuntimeDatabaseStore, getRuntimeDatabaseStore } from "../src/concierge/databaseFactory.mjs";
+import { enrollDefaultMember } from "../src/concierge/enrollment.mjs";
 
 // OpenClaw's browser blocks file:// and non-allowlisted hosts, so we drive an
 // already-allowed page (example.com) and DOM-inject a focused test input via CDP.
 // This proves the relay identically: a real keystroke must land in a real field.
 const TARGET = "https://example.com/";
-const SESSION = "smoke-session";
+let SESSION = null;
 const RELAY_TEXT = "captcha-7421";
-const streamKey = `anon::${SESSION}`;
 
 function waitForFrame(timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { unsub(); reject(new Error("no screencast frame within timeout")); }, timeoutMs);
-    const unsub = subscribeBrowserFrames(streamKey, (frame) => {
+    const unsub = subscribeBrowserFrames(`anon::${SESSION}`, (frame) => {
       clearTimeout(timer); unsub(); resolve(frame);
     });
   });
@@ -75,8 +72,12 @@ const readInputValueViaCdp = () => cdpEval("document.getElementById('t')?.value 
 
 async function main() {
   const results = {};
-  const dir = await mkdtemp(join(tmpdir(), "brainsty-smoke-rb-"));
-  const store = await new SqliteStore(join(dir, "smoke.sqlite")).initialize();
+  const store = await getRuntimeDatabaseStore(process.env);
+  const enrollment = await enrollDefaultMember(store, {
+    name: "Remote Browser Runtime Proof",
+    email: `remote-browser-proof-${Date.now()}@example.test`
+  });
+  SESSION = enrollment.session.id;
 
   results.test_input_focused = await injectTestInput();
 
@@ -109,6 +110,7 @@ async function main() {
 
   await endTakeover({ store, takeoverId: req.takeoverId });
   await stopScreencast({ store, sessionId: SESSION });
+  await closeRuntimeDatabaseStore();
 
   const framePass = results.first_frame.bytes > 1000;
   const inputPass = typeof readBack === "string" && readBack.includes(RELAY_TEXT);

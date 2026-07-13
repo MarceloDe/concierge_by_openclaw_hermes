@@ -9,7 +9,7 @@ import {
   assertSafeSqlIdentifier,
   assertSafeTableName,
   SqliteStore
-} from "../concierge/database.mjs";
+} from "./support/sqliteTestStore.mjs";
 
 test("database high-level helpers reject unsafe table and column identifiers", async () => {
   const dir = await mkdtemp(join(tmpdir(), "brainsty-db-safety-"));
@@ -24,8 +24,8 @@ test("database high-level helpers reject unsafe table and column identifiers", a
   await assert.rejects(store.findOne("users", { "id OR 1=1": "x" }), /Unsafe SQL column/);
 });
 
-test("database store uses native sqlite adapter with migration ledger and no sqlite3 shell", async () => {
-  const source = await readFile(new URL("../concierge/database.mjs", import.meta.url), "utf8");
+test("legacy test-only store uses a bound embedded adapter with migration ledger and no shell", async () => {
+  const source = await readFile(new URL("./support/sqliteTestStore.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /node:child_process|spawn\(|execFile\(|sqlite3/);
   assert.match(source, /node:sqlite/);
 
@@ -35,7 +35,7 @@ test("database store uses native sqlite adapter with migration ledger and no sql
 
   const baseMigration = await store.findOne("schema_migrations", { migration_key: "schema:base" });
   assert.ok(baseMigration);
-  assert.match(baseMigration.details_json, /node-sqlite-bound-store/);
+  assert.match(baseMigration.details_json, /sqlite-test-only/);
 });
 
 test("database high-level helpers bind values and transactions roll back failed writes", async () => {

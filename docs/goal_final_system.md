@@ -22,7 +22,11 @@ GENERAL RULES
 - Operator assistant may use only registry-bound tools.
 - Write/destructive operator actions require proposal + human approval.
 - Frontend must never call OpenClaw/Hermes directly.
-- System must function with MockWorker when real workers are unavailable.
+- Long-term product memory is Zep Graphiti/FalkorDB and is recalled/retained only under LangGraph authority.
+- Workflow memory is the LangGraph checkpointer plus application database state.
+- OpenClaw receives a bounded, read-only product-memory projection and never owns product-memory writes.
+- Cortex is project/agent memory only; development knowledge-base tooling is not a runtime memory layer.
+- Missing real workers, APIs, or memory services must fail loudly as blocked/degraded. Mock or scaffold output never satisfies acceptance.
 - Use SSE for one-way streaming responses, with status polling fallback for recovery and reconnect scenarios.
 
 DELIVERABLES REQUIRED
@@ -646,10 +650,10 @@ Success criteria:
 F. WORKER ADAPTERS
 ==================================================
 
-F1. MockWorker mode
+F1. Real-worker fail-loud mode
 Success criteria:
-- System works end-to-end with mock worker.
-- Mock mode clearly visible in status UI/API.
+- An unavailable real worker produces an explicit blocked/degraded result.
+- No mock worker result is accepted as runtime or end-to-end proof.
 
 F2. OpenClaw worker mode
 Success criteria:
@@ -737,7 +741,7 @@ Do not mark the system complete unless at least these checks pass end-to-end:
 20. Approved write action executes once and is audit-logged.
 21. Rejected proposal causes no mutation.
 22. Audit log shows all write actions.
-23. MockWorker mode works.
+23. Missing real workers fail loudly and no mock result counts as proof.
 24. Real worker mode remains feature-flagged and bounded.
 
 FINAL OUTPUT REQUIRED
