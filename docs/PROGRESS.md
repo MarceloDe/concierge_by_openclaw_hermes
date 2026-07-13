@@ -10222,3 +10222,10 @@ Runtime proof:
 Remaining:
 
 - The large legacy unit-test suite still uses a test-only embedded compatibility store for fast isolated contract tests. That module is outside runtime selection and is explicitly marked test-only; live acceptance is PostgreSQL-only. Migrating every historical unit fixture to ephemeral PostgreSQL is a separate test-infrastructure cleanup, not a runtime fallback.
+
+### Merge-gate regression correction
+
+- The first complete `test:local` run exposed PostgreSQL connection exhaustion because Node starts many test-file processes and each imported the runtime LangGraph pool. The unit runner now uses an explicit `memory_test_only` saver under `NODE_TEST_CONTEXT`; this branch is unreachable in application runtime and is not accepted as durability proof. The live PostgreSQL suites call the production checkpointer directly.
+- Replaced the former file-checkpointer/embedded-database conversation restart test with two real child processes sharing a temporary PostgreSQL database and encrypted PostgreSQL checkpointer. After deleting checkpoint rows, the second process rehydrated the ordered conversation timeline from PostgreSQL.
+- Updated stale Phase 64, Phase 88, and Phase 89 assertions to the PostgreSQL-only runtime contract.
+- Final complete local result: 446 tests, 439 passed, 0 failed, 7 explicitly deferred live-data arms. The PostgreSQL single-authority proof remained 3/3, memory-authority proof remained 5/5, and the build passed.

@@ -28,6 +28,7 @@ export { assertSafeSqlIdentifier, assertSafeTableName, createId, insertConversat
 
 export const DEFAULT_DB_PATH = resolve("data/brainstyworkers.sqlite");
 export const SQLITE_TEST_ADAPTER_VERSION = "2026-07-12.sqlite-test-only.v1";
+export const DATABASE_ADAPTER_VERSION = SQLITE_TEST_ADAPTER_VERSION;
 const SQLITE_BUSY_TIMEOUT_MS = Number(process.env.BRAINSTY_SQLITE_BUSY_TIMEOUT_MS ?? 30000);
 
 function quote(value) {

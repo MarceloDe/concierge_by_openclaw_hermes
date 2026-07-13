@@ -225,7 +225,7 @@ test("Phase 89 arm 5: missing-release negative — bogus --dir exits loud with a
   const bogusDir = await mkdtemp(join(tmpdir(), "brainsty-p89-bogus-"));
   const run = spawnSync(
     process.execPath,
-    [SCRIPT_PATH, "--release", RELEASE_CYCLE, "--dir", bogusDir, "--db", join(bogusDir, "neg.sqlite")],
+    [SCRIPT_PATH, "--release", RELEASE_CYCLE, "--dir", bogusDir],
     { encoding: "utf8" }
   );
   assert.notEqual(run.status, 0, "a release dir without the expected files must exit non-zero, never a silent empty ingest");

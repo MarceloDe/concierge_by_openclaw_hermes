@@ -1,4 +1,4 @@
-import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
+import { Annotation, Command, END, MemorySaver, START, StateGraph, interrupt } from "@langchain/langgraph";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
 import { buildCheckpointResumePlan } from "./checkpointResumePlan.mjs";
@@ -77,7 +77,23 @@ import {
 
 export const LANGGRAPH_RUNNER_VERSION = "2026-07-02.langgraph-runner.phase83-84-three-layer-planner.v2";
 
-const { checkpointer, readiness: graphCheckpointerReadiness } = createGraphCheckpointer();
+// Node's test runner starts one process per test file. Giving every hermetic unit
+// process a PostgreSQL pool can exhaust the server before behavior assertions run.
+// This branch is unreachable in the application runtime and is never accepted as a
+// durability proof; the explicit live PostgreSQL suites call createGraphCheckpointer
+// directly and may force this module onto PostgreSQL for process-restart coverage.
+const unitTestCheckpointer = Boolean(process.env.NODE_TEST_CONTEXT) && process.env.BRAINSTY_FORCE_POSTGRES_TEST_CHECKPOINTER !== "1";
+const { checkpointer, readiness: graphCheckpointerReadiness } = unitTestCheckpointer
+  ? {
+      checkpointer: new MemorySaver(),
+      readiness: {
+        mode: "memory_test_only",
+        durable: false,
+        survivesRestart: false,
+        status: "test_only_not_runtime_acceptance"
+      }
+    }
+  : createGraphCheckpointer();
 const activeStores = new Map();
 
 function field(defaultValue = null) {

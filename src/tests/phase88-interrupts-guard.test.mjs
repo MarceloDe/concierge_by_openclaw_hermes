@@ -230,13 +230,19 @@ test("Phase 88: pure tier/scope maps — deriveRiskTier reason codes + gate-deri
   assert.equal(riskTierAuthorizedByGates({}), "low");
 });
 
-test("Phase 88: durable-interrupt boot gate — production profile + memory mode exits with a classified error; dev stays memory", () => {
+test("Phase 88: PostgreSQL checkpointer is mandatory in production, staging, and development", () => {
   assert.throws(
-    () => createGraphCheckpointer({ BRAINSTY_RUNTIME_ENV: "production" }),
-    (error) => error.failureClass === "non_durable_interrupts_in_production_profile"
+    () => createGraphCheckpointer({ BRAINSTY_RUNTIME_ENV: "production", BRAINSTY_GRAPH_CHECKPOINTER: "memory" }),
+    (error) => error.failureClass === "non_postgres_checkpointer_forbidden"
   );
-  assert.throws(() => createGraphCheckpointer({ NODE_ENV: "staging" }), (error) => error.failureClass === "non_durable_interrupts_in_production_profile");
-  const dev = createGraphCheckpointer({});
-  assert.equal(dev.readiness.mode, "memory");
-  assert.equal(dev.readiness.durable, false);
+  assert.throws(
+    () => createGraphCheckpointer({ NODE_ENV: "staging", BRAINSTY_GRAPH_CHECKPOINTER: "file" }),
+    (error) => error.failureClass === "non_postgres_checkpointer_forbidden"
+  );
+  const dev = createGraphCheckpointer({
+    BRAINSTY_GRAPH_CHECKPOINTER: "postgres",
+    BRAINSTY_GRAPH_CHECKPOINTER_ALLOW_TEST_KEY: "1"
+  });
+  assert.equal(dev.readiness.mode, "postgres");
+  assert.equal(dev.readiness.durable, true);
 });
