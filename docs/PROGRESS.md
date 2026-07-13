@@ -10243,7 +10243,9 @@ RALPH state:
   available, and the catalog/process substrate passed. The credential/key/scope gates failed
   loudly and are recorded in `artifacts/phase90/phase90-part2-preflight-2026-07-13.md`.
 - Harden: no Phase 90 connector module was added. Phase 90 remains `in_progress`; Phase 93
-  remains `planned` until the full real sandbox acceptance lands.
+  remains `planned` until the full real sandbox acceptance lands. The stale Phase 89 MRF
+  entry-gate blocker was removed only after reconciling it to the committed real-fetch
+  transcript and acceptance proof; the ledger test now fails if that inconsistency returns.
 
 Current blockers:
 
@@ -10254,10 +10256,13 @@ Current blockers:
 
 Verification:
 
-- Phase-ledger test: 5 passed, 0 failed.
+- Phase-ledger test: 6 passed, 0 failed.
+- Phase 89 MRF runtime refresh: 3 passed, 0 failed against the live public Aetna
+  `mrf.healthsparq.com` index and a bounded 50-observation slice; the idempotent second
+  ingest inserted 0 and skipped the 50 already-proven observations.
 - PostgreSQL single-authority live gate: 3 passed, 0 failed.
 - Graphiti/FalkorDB live memory gate: 2 passed, 0 failed after binding the clean worktree
   to the installed ignored Python runtime.
 - Build: passed after initializing the pinned Graphiti submodule.
-- Complete protected-runtime local gate: 447 total, 440 passed, 0 failed, 7 explicit
+- Complete protected-runtime local gate: 448 total, 441 passed, 0 failed, 7 explicit
   live-data skips.

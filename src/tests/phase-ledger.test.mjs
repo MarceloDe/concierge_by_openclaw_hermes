@@ -70,6 +70,23 @@ test("CareRoute extension starts after Phase 90 without waiting for blocked Phas
   }
 });
 
+test("landed Phase 89 has no stale MRF entry-gate blocker and retains its real proof", () => {
+  const ledger = loadLedger();
+  const phase89 = ledger.phases.find((entry) => entry.phase === 89);
+  assert.equal(phase89.status, "landed");
+  assert.deepEqual(phase89.blockers, []);
+
+  const transcriptPath = join(repoRoot, "artifacts", "phase89", "mrf-entry-gate-transcript.md");
+  const acceptanceProofPath = join(repoRoot, "artifacts", "phase89", "phase89-acceptance-proof.md");
+  assert.ok(existsSync(transcriptPath), "Phase 89 MRF entry-gate transcript must remain committed");
+  assert.ok(existsSync(acceptanceProofPath), "Phase 89 acceptance proof must remain committed");
+
+  const transcript = readFileSync(transcriptPath, "utf8");
+  const acceptanceProof = readFileSync(acceptanceProofPath, "utf8");
+  assert.match(transcript, /now VERIFIED by a real/i);
+  assert.match(acceptanceProof, /ENTRY GATE: first unauthenticated MRF fetch[^\n]*PASS \(VERIFIED LIVE\)/i);
+});
+
 test("acceptance pointers reference files that exist; signature-gated phases stay blocked_external", () => {
   const ledger = loadLedger();
   for (const entry of ledger.phases) {
