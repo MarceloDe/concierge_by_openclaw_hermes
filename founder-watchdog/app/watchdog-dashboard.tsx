@@ -52,7 +52,7 @@ function utcTimestamp(value: string) {
 
 function statusTone(status: string) {
   if (["implemented_proven", "landed", "running", "loaded", "configured", "code_ready", "durable_dependency_running", "durable_dependency_healthy", "service_healthy", "active_in_service"].includes(status)) return "green";
-  if (["implemented_dev", "implemented_unproven", "contract_ready", "in_progress", "test_only", "ingestion_on_demand", "deterministic_default", "host_service_running", "credential_present_in_source_workspace", "service_reachable_unverified", "module_load_verified_service_stopped", "durable_dependency_reachable_unverified"].includes(status)) return "amber";
+  if (["implemented_dev", "implemented_unproven", "contract_ready", "in_progress", "test_only", "ingestion_on_demand", "deterministic_default", "host_service_running", "credential_present_in_source_workspace", "service_reachable_unverified", "module_load_verified_service_stopped", "durable_dependency_reachable_unverified", "backend_healthy_phi_clearance_required", "backend_healthy_runtime_degraded", "backend_healthy_app_state_unverified"].includes(status)) return "amber";
   if (["blocked_external", "blocked_external_enrollment", "stopped", "not_loaded", "dependency_stopped", "durable_dependency_stopped", "credential_missing", "not_selectable", "service_stopped", "module_load_failed"].includes(status)) return "red";
   return "slate";
 }
@@ -202,7 +202,9 @@ function Overview({ m, go }: { m: Manifest; go: (view: string) => void }) {
           <ProbeCard name="Application" probe={m.liveProbes.app} note="Node API" />
           <ProbeCard name="Postgres" probe={m.liveProbes.postgres} note="Authority" />
           <ProbeCard name="Redis" probe={m.liveProbes.redis} note="Runtime mirror" />
-          <ProbeCard name="FalkorDB" probe={m.liveProbes.falkordb} note="Product memory" />
+          <ProbeCard name="FalkorDB" probe={m.liveProbes.falkordb} note="Graph backend · memory policy shown in Runtime" />
+          <ProbeCard name="FastAPI" probe={m.liveProbes.fastapi} note="Remote facade + Node check" />
+          <ProbeCard name="Mobile PWA" probe={m.liveProbes.mobilePwa} note="Next.js client" />
           <ProbeCard name="Langfuse" probe={m.liveProbes.langfuse} note="Trace UI" />
         </div>
       </section>
