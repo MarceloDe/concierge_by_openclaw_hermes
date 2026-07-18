@@ -2694,3 +2694,26 @@ Focused proof:
 - PostgreSQL remains the only workflow/pointer/approval/task/audit authority, Redis remains
   rebuildable cache only, Zep Graphiti/FalkorDB remains temporal facts only, and OpenClaw
   remains bounded worker state with no product-memory authority.
+
+## Founder Watchdog cross-phase control plane
+
+- A generated snapshot records the source commit, branch, generation time, phase-ledger
+  status, 11-node graph topology, 89-table Postgres schema, eight Redis namespaces, prompt
+  source, curated modules, API/driver inventory, and bounded local dependency probes.
+- Code/proof state and current runtime reachability render independently. Stopped services
+  stay visibly red even when their implementation has historical proof.
+- Phases 83-89 render landed, Phase 90 in progress, Phases 91-92 externally blocked, and
+  Phases 93-96 planned directly from `docs/db/phase-ledger.json`.
+- The prompt view exposes every direct project LLM/prompt boundary with source anchors and a
+  safe payload preview, and does not expose live identifiers, secrets, or PHI.
+- The configuration view renders the complete planner spine YAML and only variable-name
+  presence booleans; no environment value is exported.
+- The UI provides functional desktop and 390px mobile navigation, architecture, sequence,
+  module, prompt, database, Redis, API, configuration, roadmap, and proof interactions with
+  no horizontal document overflow.
+- Every curated source card has a local VS Code deep link and a GitHub line fallback. Browser
+  policy may block custom protocols; that limitation is stated rather than bypassed.
+- `npm test`, `npm run lint`, and the production build pass. Codex-browser QA shows no active
+  hydration/error overlay after deterministic UTC rendering.
+- The deployed Codex Site is private/owner-only and read-only. No operational toggle is
+  exposed without a separately accepted authenticated local bridge.

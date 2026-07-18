@@ -3422,3 +3422,40 @@ Implementation order:
 
 Detailed scope and acceptance live in
 `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-careroute-and-bill-guardian-extension-cortex-authoritative`.
+
+## 2026-07-18 — Founder Watchdog cross-phase control plane
+
+Goal: give the founder one private, source-linked view of project architecture, prompts,
+runtime state, data stores, API/driver inventory, configuration, roadmap, and proof without
+creating a second orchestration or trace authority.
+
+Build:
+
+- Generate a sanitized deploy manifest from the phase ledger, planner spine YAML,
+  Postgres schema snapshot, Redis namespace contract, prompt source, git commit, Graphify
+  AST map, and bounded local reachability probes.
+- Render separate truth dimensions for code/proof status and current reachability. A
+  runtime-selectable registry row is not automatically green when its dependency or backing
+  data is absent.
+- Provide Command, Architecture, Runtime, Modules, Prompts, Data & APIs, Configuration,
+  Roadmap, and Proof views, including four sequence paths and the 11-node LangGraph flow.
+- Link every curated module to a local `vscode://file/path:line` target and a universal
+  GitHub line fallback.
+- Keep prompt templates founder-visible while excluding live PHI-bearing payloads; link to
+  Langfuse for exact traces when its configured health endpoint is reachable.
+- Keep the hosted surface read-only. A future local control bridge requires its own threat
+  model, authentication, approval, audit, signed snapshots, and separate acceptance slice.
+
+Deployment loop:
+
+1. Implement and prove a project change.
+2. Run `npm run generate:watchdog` in the Site source.
+3. Build, test, and visually verify all views in the Codex browser.
+4. Commit the exact generated snapshot and deploy a private immutable Codex Sites version.
+
+Non-goals:
+
+- No agent-trace duplication, PHI, secrets, cookies, tokens, raw live prompt payloads, or
+  direct mutation of `runtime_selectable`, signature gates, safety rails, or approvals.
+- No claim that a stopped dependency, empty backing table, contract-ready connector, or
+  scaffold is running.

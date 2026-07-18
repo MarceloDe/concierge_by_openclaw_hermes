@@ -10266,3 +10266,43 @@ Verification:
 - Build: passed after initializing the pinned Graphiti submodule.
 - Complete protected-runtime local gate: 448 total, 441 passed, 0 failed, 7 explicit
   live-data skips.
+
+## 2026-07-18 — Founder Watchdog private Codex Site
+
+RALPH state:
+
+- Requirements: reviewed Cortex `origin/main`, the authoritative three-layer semantic and
+  episodic notes, the binding plan/spine/prompt/rationale/decision sources, the historical
+  product prompt, and the phase ledger before implementation.
+- Architecture: created a separate generated read-only projection with distinct implementation,
+  proof, runtime, catalog, and external-gate signals. It does not duplicate Langfuse traces or
+  become a runtime authority.
+- Loop: generated a sanitized manifest; implemented Command, Architecture, Runtime, Modules,
+  Prompts, Data & APIs, Configuration, Roadmap, and Proof views; added source links, four
+  sequence paths, 11 graph nodes, 89-table schema browsing, Redis namespaces, full spine YAML,
+  and drift warnings.
+- Prove: `npm run lint`, `npm test`, and the production Site build passed. Browser QA exercised
+  all nine views, write-blocked sequence behavior, prompt selection, database filtering and
+  column expansion, YAML section filtering, phase blockers, and a 390x844 responsive viewport.
+- Harden: browser screenshots caught and removed a locale-dependent hydration mismatch and
+  document-width overflow that build-only checks missed. The local VS Code URL is correct but
+  Codex browser security blocks custom-protocol launch; GitHub line links remain the verified
+  hosted fallback.
+
+Verified runtime snapshot:
+
+- OpenClaw gateway `:19789`, host PostgreSQL `:5432`, host Redis `:6379`, Hermes `:8790`, and
+  Chrome CDP `:9222` were reachable at snapshot generation.
+- Canonical Node `:4173`, configured Redis `:6381`, compose Postgres `:55432`, FalkorDB `:6380`,
+  FastAPI `:8000`, and configured Langfuse `:3100` were not reachable.
+- Current model invocation was not re-proven; the source workspace has an OpenAI credential
+  name present, but the dashboard does not expose its value or call that green.
+- Graphify AST extraction over first-party concierge code produced 1,548 nodes and 4,568 edges.
+- Focused project verification recorded 35 tests: 29 passed, 0 failed, 6 loud live-prerequisite
+  skips; Phase 89 live proof recorded 8/9 passing with one explicit large-data skip.
+
+Remaining boundary:
+
+- Hosted Sites cannot inspect localhost after deployment. Automatic live updates require a
+  future signed, authenticated, redacted collector; until then each deploy is an immutable,
+  timestamped source/runtime snapshot regenerated during the development loop.
