@@ -3459,3 +3459,19 @@ Non-goals:
   direct mutation of `runtime_selectable`, signature gates, safety rails, or approvals.
 - No claim that a stopped dependency, empty backing table, contract-ready connector, or
   scaffold is running.
+
+## 2026-07-18 — Founder Watchdog v2 correctness and live telemetry
+
+1. Generate only from the explicit checkout being built. Never prefer another local workspace
+   merely because it exists; production generation fails when that source checkout is dirty.
+2. Derive repository ownership from `git remote` and pin GitHub line links to the source commit.
+3. Record three separate runtime dimensions: implementation proof, isolated module-load proof,
+   and active service health. A stopped Node server cannot imply that LangGraph failed to load.
+4. Require protocol-aware health evidence: expected HTTP status/schema, Redis `PONG`, and
+   `pg_isready`; a responding 404 is reachable-only amber, never healthy green.
+5. Provide an optional loopback-only, origin-allowlisted, GET-only collector that regenerates
+   the sanitized manifest and lets the private Site refresh local evidence every 30 seconds.
+6. Verify every relevant pull request and `main` change through the Founder Watchdog GitHub
+   integrity workflow. Private Sites publishing remains an explicit versioned release action.
+7. Keep mutation outside this slice. The live collector cannot write configuration, prompts,
+   databases, worker state, credentials, capabilities, or payer systems.

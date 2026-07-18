@@ -1,12 +1,13 @@
 import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 
 const siteRoot = process.cwd();
 const repoRoot = resolve(siteRoot, "..");
-const canonicalWorkspace = "/Users/mfelix/projects/workerprototype_openclaw";
-const sourceRoot = await exists(canonicalWorkspace) ? canonicalWorkspace : repoRoot;
+const sourceRoot = resolve(process.env.WATCHDOG_SOURCE_ROOT || repoRoot);
+const vscodeRoot = resolve(process.env.WATCHDOG_VSCODE_ROOT || sourceRoot);
 const generatedAt = new Date().toISOString();
 
 async function exists(path) {
@@ -24,26 +25,56 @@ async function readJson(path) {
 
 function git(args, fallback = "unknown") {
   try {
-    return execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim() || fallback;
+    return execFileSync("git", args, { cwd: sourceRoot, encoding: "utf8" }).trim() || fallback;
   } catch {
     return fallback;
   }
 }
 
+function repositoryFromRemote(remote) {
+  const value = String(remote ?? "").trim().replace(/\.git$/, "");
+  const match = value.match(/github\.com[/:]([^/]+)\/([^/]+)$/i);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+if (!(await exists(join(sourceRoot, "src/concierge/langgraphRunner.mjs")))) {
+  throw new Error(`WATCHDOG_SOURCE_ROOT does not contain the Brainstyworkers runtime: ${sourceRoot}`);
+}
+
+const sourceBranch = git(["branch", "--show-current"]);
+const sourceCommit = git(["rev-parse", "HEAD"]);
+const sourceShortCommit = git(["rev-parse", "--short", "HEAD"]);
+const sourceDirty = Boolean(git(["status", "--porcelain"], ""));
+const repository = repositoryFromRemote(git(["remote", "get-url", "origin"], "")) ?? "MarceloDe/concierge_by_openclaw_hermes";
+const githubRepositoryUrl = `https://github.com/${repository}`;
+
+if (process.env.WATCHDOG_REQUIRE_CLEAN === "1" && sourceDirty) {
+  throw new Error(`Founder Watchdog production generation requires a clean source checkout: ${sourceRoot}`);
+}
+
 function source(path, line, symbol = null) {
-  const absolute = join(sourceRoot, path);
+  const absolute = join(vscodeRoot, path);
   return {
     path,
     line,
     symbol,
     absolute,
     vscodeUrl: `vscode://file/${absolute}:${line}`,
-    githubUrl: `https://github.com/mfelix/concierge_by_openclaw_hermes/blob/main/${path}#L${line}`
+    githubUrl: `${githubRepositoryUrl}/blob/${sourceCommit}/${path}#L${line}`
   };
 }
 
 function lineSlice(text, start, end) {
   return text.split("\n").slice(start - 1, end).join("\n");
+}
+
+function safeHttpUrl(value, fallback) {
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function tcpProbe(port, host = "127.0.0.1", timeoutMs = 650) {
@@ -54,7 +85,7 @@ async function tcpProbe(port, host = "127.0.0.1", timeoutMs = 650) {
       if (settled) return;
       settled = true;
       socket.destroy();
-      resolveProbe({ reachable, host, port });
+      resolveProbe({ reachable, healthy: null, evidence: reachable ? "tcp_connected_protocol_unverified" : "tcp_connect_failed", host, port });
     };
     socket.setTimeout(timeoutMs);
     socket.once("connect", () => settle(true));
@@ -63,14 +94,31 @@ async function tcpProbe(port, host = "127.0.0.1", timeoutMs = 650) {
   });
 }
 
-async function httpProbe(url, timeoutMs = 900) {
+async function httpProbe(url, { timeoutMs = 1200, expectedStatuses = [200], expectJson = false, validateJson = null } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { redirect: "manual", signal: controller.signal });
-    return { reachable: true, statusCode: response.status, url };
-  } catch {
-    return { reachable: false, statusCode: null, url };
+    const statusExpected = expectedStatuses.includes(response.status);
+    let payloadValid = !expectJson;
+    if (expectJson) {
+      try {
+        const payload = await response.json();
+        payloadValid = typeof validateJson === "function" ? Boolean(validateJson(payload)) : Boolean(payload && typeof payload === "object");
+      } catch {
+        payloadValid = false;
+      }
+    }
+    const healthy = statusExpected && payloadValid;
+    return {
+      reachable: true,
+      healthy,
+      statusCode: response.status,
+      evidence: healthy ? "expected_http_response" : statusExpected ? "response_schema_mismatch" : "unexpected_http_status",
+      url
+    };
+  } catch (error) {
+    return { reachable: false, healthy: false, statusCode: null, evidence: error?.name === "AbortError" ? "timeout" : "connection_failed", url };
   } finally {
     clearTimeout(timer);
   }
@@ -79,21 +127,110 @@ async function httpProbe(url, timeoutMs = 900) {
 async function firstReachableHttp(urls) {
   const probes = [];
   for (const url of urls) {
-    const probe = await httpProbe(url);
+    const probe = await httpProbe(url, { expectJson: true });
     probes.push(probe);
-    if (probe.reachable) return { ...probe, candidates: probes.map((item) => item.url) };
+    if (probe.healthy) return { ...probe, candidates: urls };
   }
-  return { ...probes[0], candidates: probes.map((item) => item.url) };
+  return { ...(probes.find((probe) => probe.reachable) ?? probes[0]), candidates: urls };
 }
 
-async function firstReachableTcp(ports, host = "127.0.0.1") {
+async function redisPingProbe(port, host = "127.0.0.1", timeoutMs = 900) {
+  return await new Promise((resolveProbe) => {
+    const socket = createConnection({ port, host });
+    let settled = false;
+    let connected = false;
+    const settle = (healthy, evidence) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolveProbe({ reachable: connected, healthy, evidence, host, port });
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => {
+      connected = true;
+      socket.write("*1\r\n$4\r\nPING\r\n");
+    });
+    socket.on("data", (chunk) => settle(String(chunk).startsWith("+PONG"), String(chunk).startsWith("+PONG") ? "redis_pong" : "unexpected_redis_response"));
+    socket.once("timeout", () => settle(false, connected ? "redis_ping_timeout" : "tcp_connect_timeout"));
+    socket.once("error", () => settle(false, "tcp_connect_failed"));
+  });
+}
+
+async function firstHealthyRedis(ports, host = "127.0.0.1") {
   const probes = [];
   for (const port of ports) {
-    const probe = await tcpProbe(port, host);
+    const probe = await redisPingProbe(port, host);
     probes.push(probe);
-    if (probe.reachable) return { ...probe, candidates: ports };
+    if (probe.healthy) return { ...probe, candidates: ports };
   }
-  return { ...probes[0], candidates: ports };
+  return { ...(probes.find((probe) => probe.reachable) ?? probes[0]), candidates: ports };
+}
+
+async function postgresReadinessProbe(port, host = "127.0.0.1") {
+  const tcp = await tcpProbe(port, host);
+  if (!tcp.reachable) return { ...tcp, healthy: false };
+  try {
+    const output = execFileSync("pg_isready", ["-h", host, "-p", String(port)], { encoding: "utf8", timeout: 1500 }).trim();
+    return { ...tcp, healthy: true, evidence: "pg_isready_accepting_connections", protocolDetail: output };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { ...tcp, healthy: null, evidence: "tcp_connected_pg_isready_unavailable" };
+    return { ...tcp, healthy: false, evidence: "pg_isready_not_accepting_connections" };
+  }
+}
+
+async function firstHealthyPostgres(ports, host = "127.0.0.1") {
+  const probes = [];
+  for (const port of ports) {
+    const probe = await postgresReadinessProbe(port, host);
+    probes.push(probe);
+    if (probe.healthy) return { ...probe, candidates: ports };
+  }
+  return { ...(probes.find((probe) => probe.reachable) ?? probes[0]), candidates: ports };
+}
+
+function orchestratorModuleProbe() {
+  const moduleUrl = pathToFileURL(join(sourceRoot, "src/concierge/langgraphRunner.mjs")).href;
+  const code = `
+    const module = await import(${JSON.stringify(moduleUrl)});
+    const graph = module.createBrainstyLangGraph();
+    const topology = module.describeBrainstyLangGraphTopology();
+    process.stdout.write(JSON.stringify({
+      loaded: Boolean(graph),
+      graphCompiled: Boolean(graph),
+      version: module.LANGGRAPH_RUNNER_VERSION,
+      nodeCount: topology.nodes.length,
+      nodes: topology.nodes,
+      checkpointerStatus: topology.checkpointer?.status ?? null
+    }));
+  `;
+  try {
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", code], {
+      cwd: sourceRoot,
+      encoding: "utf8",
+      timeout: 8000,
+      env: {
+        ...process.env,
+        BRAINSTY_GRAPH_CHECKPOINTER: "postgres",
+        BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY: "",
+        BRAINSTY_GRAPH_CHECKPOINTER_ALLOW_TEST_KEY: "1"
+      }
+    });
+    return {
+      ...JSON.parse(output.trim()),
+      healthy: true,
+      evidence: "isolated_module_import_and_graph_compile",
+      proofBoundary: "Uses the repository's explicit test-only encryption-key gate; no database query or model call is counted."
+    };
+  } catch (error) {
+    const detail = String(error?.stderr || error?.message || "module probe failed").split("\n").find(Boolean)?.slice(0, 280);
+    return {
+      loaded: false,
+      graphCompiled: false,
+      healthy: false,
+      evidence: error?.code === "ERR_MODULE_NOT_FOUND" || detail?.includes("ERR_MODULE_NOT_FOUND") ? "dependency_missing" : "module_import_failed",
+      detail
+    };
+  }
 }
 
 async function listFiles(root, output = []) {
@@ -139,13 +276,13 @@ function tableSummary([name, definition]) {
   };
 }
 
-const ledger = await readJson(join(repoRoot, "docs/db/phase-ledger.json"));
-const postgresSchema = await readJson(join(repoRoot, "docs/db/postgres-schema.json"));
-const redisKeys = await readJson(join(repoRoot, "docs/db/redis-keys.json"));
-const spineYaml = await readFile(join(repoRoot, "docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml"), "utf8");
-const decisionSource = await readFile(join(repoRoot, "src/concierge/llmOrchestrationDecision.mjs"), "utf8");
-const promptContractSource = await readFile(join(repoRoot, "src/concierge/promptContracts.mjs"), "utf8");
-const allSourceFiles = await listFiles(join(repoRoot, "src"));
+const ledger = await readJson(join(sourceRoot, "docs/db/phase-ledger.json"));
+const postgresSchema = await readJson(join(sourceRoot, "docs/db/postgres-schema.json"));
+const redisKeys = await readJson(join(sourceRoot, "docs/db/redis-keys.json"));
+const spineYaml = await readFile(join(sourceRoot, "docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml"), "utf8");
+const decisionSource = await readFile(join(sourceRoot, "src/concierge/llmOrchestrationDecision.mjs"), "utf8");
+const promptContractSource = await readFile(join(sourceRoot, "src/concierge/promptContracts.mjs"), "utf8");
+const allSourceFiles = await listFiles(join(sourceRoot, "src"));
 const moduleFiles = allSourceFiles.filter((path) => /\.(mjs|js|ts|tsx|py)$/.test(path));
 
 const promptPreviewState = {
@@ -162,21 +299,42 @@ const orchestratorTemplateSource = lineSlice(promptContractSource, 175, 244);
 const openclawTemplateSource = lineSlice(promptContractSource, 246, 355);
 const safePayloadPreview = JSON.stringify(promptPreviewState, null, 2);
 
-const envPath = join(sourceRoot, ".env.local");
+const configVariableNames = [
+  "OPENAI_API_KEY",
+  "BRAINSTY_REDIS_URL",
+  "BRAINSTY_DATABASE_URL",
+  "BRAINSTY_GRAPH_CHECKPOINTER_ENCRYPTION_KEY",
+  "LANGFUSE_HOST",
+  "LANGFUSE_PUBLIC_KEY",
+  "LANGFUSE_SECRET_KEY",
+  "FALKORDB_HOST",
+  "FALKORDB_PORT"
+];
+const configRoot = resolve(process.env.WATCHDOG_CONFIG_ROOT || sourceRoot);
+const envPaths = [join(configRoot, ".env.local"), join(configRoot, ".env")];
 const envNames = new Set();
 const safeEnvValues = new Map();
-if (await exists(envPath)) {
-  for (const line of (await readFile(envPath, "utf8")).split("\n")) {
-    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
-    if (match) {
-      envNames.add(match[1]);
-      if (["LANGFUSE_HOST"].includes(match[1])) safeEnvValues.set(match[1], match[2].trim().replace(/^['"]|['"]$/g, ""));
+for (const envPath of envPaths) {
+  if (await exists(envPath)) {
+    for (const line of (await readFile(envPath, "utf8")).split("\n")) {
+      const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (match) {
+        const value = match[2].trim().replace(/^['"]|['"]$/g, "");
+        if (value) envNames.add(match[1]);
+        if (match[1] === "LANGFUSE_HOST" && value) safeEnvValues.set(match[1], value);
+      }
     }
   }
 }
+for (const name of configVariableNames) {
+  const value = String(process.env[name] ?? "").trim();
+  if (value) envNames.add(name);
+  if (name === "LANGFUSE_HOST" && value) safeEnvValues.set(name, value);
+}
 const configured = (...names) => names.some((name) => envNames.has(name));
 
-const configuredLangfuseUrl = safeEnvValues.get("LANGFUSE_HOST") || "http://127.0.0.1:3100";
+const configuredLangfuseCandidate = safeEnvValues.get("LANGFUSE_HOST") || "http://127.0.0.1:3100";
+const configuredLangfuseUrl = safeHttpUrl(configuredLangfuseCandidate, "http://127.0.0.1:3100");
 const appProbe = await firstReachableHttp([
   "http://127.0.0.1:4173/api/health",
   "http://127.0.0.1:4226/api/health",
@@ -186,16 +344,22 @@ const liveProbes = {
   app: appProbe,
   openclaw: await httpProbe("http://127.0.0.1:19789/"),
   hermes: await httpProbe("http://127.0.0.1:8790/"),
-  chromeCdp: await httpProbe("http://127.0.0.1:9222/json/version"),
-  redis: await firstReachableTcp([6381, 6379]),
-  postgres: await firstReachableTcp([55432, 5432]),
-  falkordb: await tcpProbe(6380),
+  chromeCdp: await httpProbe("http://127.0.0.1:9222/json/version", {
+    expectJson: true,
+    validateJson: (payload) => Boolean(payload?.Browser && payload?.webSocketDebuggerUrl)
+  }),
+  redis: await firstHealthyRedis([6381, 6379]),
+  postgres: await firstHealthyPostgres([55432, 5432]),
+  falkordb: await redisPingProbe(6380),
   fastapi: await httpProbe("http://127.0.0.1:8000/docs"),
   langfuse: await httpProbe(`${configuredLangfuseUrl.replace(/\/$/, "")}/api/public/health`)
 };
+const moduleProbes = {
+  orchestrator: orchestratorModuleProbe()
+};
 
 let graphStats = null;
-const graphPath = join(repoRoot, "graphify-out/graph.json");
+const graphPath = join(sourceRoot, "graphify-out/graph.json");
 if (await exists(graphPath)) {
   const graph = await readJson(graphPath);
   graphStats = {
@@ -206,22 +370,28 @@ if (await exists(graphPath)) {
   };
 }
 
+function serviceRuntime(probe) {
+  if (probe?.healthy === true) return "service_healthy";
+  if (probe?.reachable) return "service_reachable_unverified";
+  return "service_stopped";
+}
+
 const modules = [
-  { id: "http-runtime", name: "Node HTTP runtime", domain: "Experience", description: "Serves the app, API, health, proof, research, prompt, and operator surfaces.", status: "implemented_proven", runtime: liveProbes.app.reachable ? "running" : "stopped", phase: "pre-83 foundation", source: source("src/server/server.mjs", 5092, "server") },
-  { id: "langgraph", name: "LangGraph master orchestrator", domain: "Orchestration", description: "Deterministic policy rails, one live LLM decision, DB-authored capability routing, worker dispatch, evidence, approval interrupt, and response composition.", status: "implemented_proven", runtime: liveProbes.app.reachable ? "loaded" : "not_loaded", phase: 84, source: source("src/concierge/langgraphRunner.mjs", 3745, "createBrainstyLangGraph") },
+  { id: "http-runtime", name: "Node HTTP runtime", domain: "Experience", description: "Serves the app, API, health, proof, research, prompt, and operator surfaces.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.app), phase: "pre-83 foundation", serviceEvidence: liveProbes.app, source: source("src/server/server.mjs", 5092, "server") },
+  { id: "langgraph", name: "LangGraph master orchestrator", domain: "Orchestration", description: "Deterministic policy rails, one live LLM decision, DB-authored capability routing, worker dispatch, evidence, approval interrupt, and response composition.", status: "implemented_proven", runtime: moduleProbes.orchestrator.loaded ? (liveProbes.app.healthy ? "active_in_service" : "module_load_verified_service_stopped") : "module_load_failed", phase: 84, loadEvidence: moduleProbes.orchestrator, serviceEvidence: liveProbes.app, source: source("src/concierge/langgraphRunner.mjs", 3745, "createBrainstyLangGraph") },
   { id: "planner-v2", name: "Decision Contract v2 planner", domain: "Orchestration", description: "Three prompt layers, three insurance data layers, strict JSON normalization, risk floor, and fail-closed capability gates.", status: "implemented_proven", runtime: configured("OPENAI_API_KEY") ? "credential_present_in_source_workspace" : "credential_missing", phase: 83, source: source("src/concierge/llmOrchestrationDecision.mjs", 424, "buildLlmOrchestrationDecisionMessages") },
-  { id: "catalog", name: "Capability portfolio & catalog", domain: "Orchestration", description: "Postgres-authored capability, process, workflow, skill, tool, graph-path, and planner-exposure truth.", status: "implemented_proven", runtime: liveProbes.postgres.reachable ? "running" : "dependency_stopped", phase: 87, source: source("src/concierge/capabilityCatalog.mjs", 1) },
+  { id: "catalog", name: "Capability portfolio & catalog", domain: "Orchestration", description: "Postgres-authored capability, process, workflow, skill, tool, graph-path, and planner-exposure truth.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.postgres), phase: 87, source: source("src/concierge/capabilityCatalog.mjs", 1) },
   { id: "policy", name: "Policy and approval guard", domain: "Safety", description: "Single pre-tool chokepoint; deterministic floors, consent checks, approval consumption, and write prohibitions.", status: "implemented_proven", runtime: "code_ready", phase: 88, source: source("src/concierge/policy.mjs", 316, "mcpPolicyGuard") },
-  { id: "openclaw", name: "OpenClaw worker runtime", domain: "Workers", description: "Delegated, bounded worker execution with skill registry, gateway isolation, read-only portal observation, and explicit human handoff.", status: "implemented_proven", runtime: liveProbes.openclaw.reachable ? "running" : "stopped", phase: 87, source: source("src/concierge/openclawOfficialRuntime.mjs", 634) },
-  { id: "hermes", name: "Hermes research worker adapter", domain: "Workers", description: "Optional bounded research-worker CLI. The host gateway can be live while project dispatch remains feature-gated and unproven.", status: "implemented_unproven", runtime: liveProbes.hermes.reachable ? "host_service_running" : "stopped", phase: "pre-83 foundation", source: source("src/concierge/researchOps.mjs", 1655) },
+  { id: "openclaw", name: "OpenClaw worker runtime", domain: "Workers", description: "Delegated, bounded worker execution with skill registry, gateway isolation, read-only portal observation, and explicit human handoff.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.openclaw), phase: 87, source: source("src/concierge/openclawOfficialRuntime.mjs", 634) },
+  { id: "hermes", name: "Hermes research worker adapter", domain: "Workers", description: "Optional bounded research-worker CLI. The host gateway can be live while project dispatch remains feature-gated and unproven.", status: "implemented_unproven", runtime: serviceRuntime(liveProbes.hermes), phase: "pre-83 foundation", source: source("src/concierge/researchOps.mjs", 1655) },
   { id: "llm-manager", name: "LLM manager worker", domain: "Workers", description: "Proposal-only optional worker mode; deterministic is default and writes remain behind kill switch plus consumed approval.", status: "implemented_proven", runtime: "deterministic_default", phase: 88, source: source("src/concierge/llmManagerWorker.mjs", 7, "getBrainstyWorkerRuntime") },
-  { id: "postgres", name: "Postgres authority", domain: "Data", description: "Authoritative runtime state, catalog, evidence, audit, checkpoint, consent, task, and memory pointer store.", status: "implemented_proven", runtime: liveProbes.postgres.reachable ? "running" : "stopped", phase: 85, source: source("src/concierge/postgresStore.mjs", 146, "PostgresStore") },
+  { id: "postgres", name: "Postgres authority", domain: "Data", description: "Authoritative runtime state, catalog, evidence, audit, checkpoint, consent, task, and memory pointer store.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.postgres), phase: 85, source: source("src/concierge/postgresStore.mjs", 146, "PostgresStore") },
   { id: "sqlite", name: "SQLite test adapter", domain: "Data", description: "Hermetic test/local compatibility adapter. It is not the production authority after Phase 85.", status: "implemented_dev", runtime: "test_only", phase: 85, source: source("src/tests/support/sqliteTestStore.mjs", 1) },
-  { id: "redis", name: "Redis runtime mirror", domain: "Data", description: "Losable fast mirror for runtime context, portfolio, consent, OAuth handles, LLM index, vector context, worker state, and idempotency.", status: "implemented_proven", runtime: liveProbes.redis.reachable ? "running" : "stopped", phase: 86, source: source("src/concierge/runtimeContextCache.mjs", 285, "createRuntimeContextCache") },
-  { id: "checkpointer", name: "Encrypted LangGraph checkpointer", domain: "Data", description: "AES-256-GCM checkpoint persistence with durable-interrupt gating and Postgres production mode.", status: "implemented_proven", runtime: liveProbes.postgres.reachable ? "durable_dependency_running" : "durable_dependency_stopped", phase: 91, source: source("src/concierge/graphCheckpointer.mjs", 210, "createGraphCheckpointer") },
-  { id: "graphiti", name: "Graphiti / FalkorDB product memory", domain: "Memory", description: "Advisory longitudinal product memory with safe episodes, replay queue, recall/retain probes, and Postgres pointers as authority.", status: "implemented_proven", runtime: liveProbes.falkordb.reachable ? "running" : "stopped", phase: "pre-83 foundation", source: source("src/concierge/productMemory.mjs", 445, "getProductMemoryStatus") },
-  { id: "langfuse", name: "Langfuse observability", domain: "Observability", description: "Traces agent, graph, and LLM checkpoints. The watchdog links out; it intentionally does not duplicate agent traces.", status: "implemented_proven", runtime: liveProbes.langfuse.reachable ? "running" : "stopped", phase: "pre-83 foundation", source: source("src/observability/langfuseClient.mjs", 67, "getLangfuseStatus") },
-  { id: "fastapi", name: "FastAPI remote facade", domain: "Experience", description: "Remote/mobile API boundary for sessions, tasks, approvals, documents, browser sessions, streams, and proof.", status: "implemented_proven", runtime: liveProbes.fastapi.reachable ? "running" : "stopped", phase: "pre-83 foundation", source: source("project/api/main.py", 239) },
+  { id: "redis", name: "Redis runtime mirror", domain: "Data", description: "Losable fast mirror for runtime context, portfolio, consent, OAuth handles, LLM index, vector context, worker state, and idempotency.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.redis), phase: 86, source: source("src/concierge/runtimeContextCache.mjs", 285, "createRuntimeContextCache") },
+  { id: "checkpointer", name: "Encrypted LangGraph checkpointer", domain: "Data", description: "AES-256-GCM checkpoint persistence with durable-interrupt gating and Postgres production mode.", status: "implemented_proven", runtime: moduleProbes.orchestrator.loaded && liveProbes.postgres.healthy ? "durable_dependency_healthy" : liveProbes.postgres.reachable ? "durable_dependency_reachable_unverified" : "durable_dependency_stopped", phase: 91, source: source("src/concierge/graphCheckpointer.mjs", 210, "createGraphCheckpointer") },
+  { id: "graphiti", name: "Graphiti / FalkorDB product memory", domain: "Memory", description: "Advisory longitudinal product memory with safe episodes, replay queue, recall/retain probes, and Postgres pointers as authority.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.falkordb), phase: "pre-83 foundation", source: source("src/concierge/productMemory.mjs", 445, "getProductMemoryStatus") },
+  { id: "langfuse", name: "Langfuse observability", domain: "Observability", description: "Traces agent, graph, and LLM checkpoints. The watchdog links out; it intentionally does not duplicate agent traces.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.langfuse), phase: "pre-83 foundation", source: source("src/observability/langfuseClient.mjs", 67, "getLangfuseStatus") },
+  { id: "fastapi", name: "FastAPI remote facade", domain: "Experience", description: "Remote/mobile API boundary for sessions, tasks, approvals, documents, browser sessions, streams, and proof.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.fastapi), phase: "pre-83 foundation", source: source("project/api/main.py", 239) },
   { id: "plan-net", name: "Plan-Net provider directory", domain: "Connectors", description: "Public no-signature provider directory rail with plan/network qualification and source timestamping.", status: "implemented_proven", runtime: "ingestion_on_demand", phase: 89, source: source("src/concierge/connectors/planNetDirectory.mjs", 1) },
   { id: "mrf", name: "MRF pricing pipeline", domain: "Connectors", description: "Public Transparency in Coverage ingestion and normalized pricing query substrate; real data coverage remains payer/geography dependent.", status: "implemented_proven", runtime: "ingestion_on_demand", phase: 89, source: source("src/concierge/connectors/mrfPipeline.mjs", 1) },
   { id: "fhir", name: "Generic FHIR client / Aetna rail", domain: "Connectors", description: "Generic throttled/paginated FHIR client and endpoint registry exist; the payer-specific Aetna Patient Access module is intentionally absent pending credentials.", status: "contract_ready", runtime: "blocked_external", phase: 90, source: source("src/concierge/connectors/fhirClient.mjs", 43) },
@@ -326,7 +496,7 @@ const prompts = [
     defaultModel: "inherits call site",
     status: "implemented_dev",
     description: "Unused helper for a future Langfuse-managed prompt override. Current authoritative prompt templates are code-built at their call sites.",
-    text: lineSlice(await readFile(join(repoRoot, "src/observability/prompts.mjs"), "utf8"), 1, 46),
+    text: lineSlice(await readFile(join(sourceRoot, "src/observability/prompts.mjs"), "utf8"), 1, 46),
     source: source("src/observability/prompts.mjs", 10, "get_prompt")
   },
   {
@@ -337,7 +507,7 @@ const prompts = [
     defaultModel: "gpt-4.1",
     status: "implemented_proven",
     description: "Direct ChatOpenAI call that composes an answer only from source-pointer-backed context.",
-    text: lineSlice(await readFile(join(repoRoot, "src/concierge/intelligence/sourcedAnswerComposer.mjs"), "utf8"), 22, 103),
+    text: lineSlice(await readFile(join(sourceRoot, "src/concierge/intelligence/sourcedAnswerComposer.mjs"), "utf8"), 22, 103),
     source: source("src/concierge/intelligence/sourcedAnswerComposer.mjs", 22)
   },
   {
@@ -348,7 +518,7 @@ const prompts = [
     defaultModel: "gpt-4.1",
     status: "implemented_proven",
     description: "Direct model call that turns a validated process decision into a concise user-facing offer.",
-    text: lineSlice(await readFile(join(repoRoot, "src/concierge/plannerResponseComposer.mjs"), "utf8"), 14, 80),
+    text: lineSlice(await readFile(join(sourceRoot, "src/concierge/plannerResponseComposer.mjs"), "utf8"), 14, 80),
     source: source("src/concierge/plannerResponseComposer.mjs", 14)
   },
   {
@@ -359,7 +529,7 @@ const prompts = [
     defaultModel: "gpt-4.1",
     status: "implemented_proven",
     description: "Direct model call with a deterministic fallback when evidence or model availability is degraded.",
-    text: lineSlice(await readFile(join(repoRoot, "src/concierge/gracefulDegradation.mjs"), "utf8"), 81, 174),
+    text: lineSlice(await readFile(join(sourceRoot, "src/concierge/gracefulDegradation.mjs"), "utf8"), 81, 174),
     source: source("src/concierge/gracefulDegradation.mjs", 81)
   },
   {
@@ -370,7 +540,7 @@ const prompts = [
     defaultModel: "gpt-4.1",
     status: "implemented_dev",
     description: "Advisory evaluation prompt; it cannot promote itself into trusted runtime behavior.",
-    text: lineSlice(await readFile(join(repoRoot, "src/concierge/continuousIntelligence.mjs"), "utf8"), 1984, 2106),
+    text: lineSlice(await readFile(join(sourceRoot, "src/concierge/continuousIntelligence.mjs"), "utf8"), 1984, 2106),
     source: source("src/concierge/continuousIntelligence.mjs", 1984)
   },
   {
@@ -381,7 +551,7 @@ const prompts = [
     defaultModel: "worker configured",
     status: "implemented_unproven",
     description: "Bounded JSON task envelope used for optional OpenClaw or Hermes research dispatch.",
-    text: lineSlice(await readFile(join(repoRoot, "src/concierge/researchOps.mjs"), "utf8"), 1655, 1665),
+    text: lineSlice(await readFile(join(sourceRoot, "src/concierge/researchOps.mjs"), "utf8"), 1655, 1665),
     source: source("src/concierge/researchOps.mjs", 1655)
   }
 ];
@@ -394,17 +564,18 @@ const modelRuntimes = [
 ];
 
 const manifest = {
-  schemaVersion: "2026-07-18.founder-watchdog.v1",
+  schemaVersion: "2026-07-18.founder-watchdog.v2",
   generatedAt,
   snapshot: {
-    repo: "mfelix/concierge_by_openclaw_hermes",
-    branch: git(["branch", "--show-current"]),
-    commit: git(["rev-parse", "HEAD"]),
-    shortCommit: git(["rev-parse", "--short", "HEAD"]),
+    repo: repository,
+    branch: sourceBranch,
+    commit: sourceCommit,
+    shortCommit: sourceShortCommit,
     sourceRoot,
-    dirty: Boolean(git(["status", "--porcelain"], "")),
+    vscodeRoot,
+    dirty: sourceDirty,
     policy: "Generated deploy snapshot. Re-run npm run generate:watchdog at each implementation deployment.",
-    controlBridge: "not_connected",
+    controlBridge: "local_read_only_collector_available",
     graphStats
   },
   truthLegend: [
@@ -440,6 +611,7 @@ const manifest = {
     source: source("src/concierge/capabilityCatalogSeed.mjs", 80)
   },
   liveProbes,
+  moduleProbes,
   modules,
   graphFlow,
   sequences,
@@ -475,9 +647,7 @@ const manifest = {
     source: source("docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml", 1),
     topLevelSections: [...spineYaml.matchAll(/^([a-zA-Z_][a-zA-Z0-9_]*):/gm)].map((match) => match[1]),
     rawYaml: spineYaml,
-    configuredEnvNames: [
-      "OPENAI_API_KEY", "BRAINSTY_REDIS_URL", "BRAINSTY_DATABASE_URL", "LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "FALKORDB_HOST", "FALKORDB_PORT"
-    ].map((name) => ({ name, configured: configured(name) })),
+    configuredEnvNames: configVariableNames.map((name) => ({ name, configured: configured(name) })),
     secretsPolicy: "Only variable names and configured/not-configured booleans are exported. Values, tokens, cookies, member data, and credentials are never included."
   },
   sourceEvidence: {
@@ -509,6 +679,13 @@ const manifest = {
         "Real CMS LCD/NCD policy crawl"
       ]
     },
+    orchestratorDiagnosis: {
+      rootCause: "The v1 dashboard inferred LangGraph module loading from the Node HTTP health probe. When port 4173 was stopped it labeled the orchestrator not_loaded even though that probe never attempted to import or compile the graph.",
+      correction: "v2 records an isolated module import/graph-compilation proof separately from the Node service health result.",
+      moduleProbe: moduleProbes.orchestrator,
+      serviceProbe: liveProbes.app,
+      source: source("src/concierge/langgraphRunner.mjs", 3872, "graph")
+    },
     driftWarnings: [
       { severity: "high", title: "Architecture docs lag runtime authority", detail: "SYSTEM_ARCHITECTURE.md still describes SQLite compatibility, 12 graph nodes, and 75 tables; origin/main is Postgres-only, 11 nodes, and 89 tables.", source: source("docs/SYSTEM_ARCHITECTURE.md", 1) },
       { severity: "high", title: "Database docs retain stale SQLite wording", detail: "DATABASE_POSTGRES.md and DATABASE_REDIS.md still describe a Postgres/SQLite authority split. The runtime factory now rejects non-Postgres authority.", source: source("docs/DATABASE_POSTGRES.md", 16) },
@@ -519,9 +696,10 @@ const manifest = {
   },
   links: {
     langfuse: configuredLangfuseUrl,
-    application: liveProbes.app.reachable ? liveProbes.app.url.replace("/api/health", "") : "http://localhost:4173",
+    application: liveProbes.app.healthy ? liveProbes.app.url.replace("/api/health", "") : "http://localhost:4173",
     openclaw: "http://localhost:19789",
-    repository: "https://github.com/mfelix/concierge_by_openclaw_hermes"
+    localCollector: "http://127.0.0.1:4189/manifest",
+    repository: githubRepositoryUrl
   }
 };
 

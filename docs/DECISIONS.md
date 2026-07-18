@@ -2997,3 +2997,24 @@ Each implementation deployment can regenerate and republish a source-pinned dash
 VS Code custom-protocol link is best effort and paired with a GitHub line fallback. Live prompt
 payloads and agent traces stay out of the Site. Stale documentation and configuration drift are
 shown explicitly instead of silently normalized away.
+
+## 2026-07-18 — Module load and process health are different evidence classes
+
+Problem:
+Founder Watchdog v1 set the LangGraph orchestrator runtime label from the Node `/api/health`
+port probe. With the Node process stopped, the dashboard displayed `not_loaded` without ever
+attempting to import `langgraphRunner.mjs`. The same probe treated any HTTP response, including
+404, as healthy, and source generation silently preferred a different dirty workspace.
+
+Decision:
+Bind generation to one explicit source checkout, derive immutable GitHub links from its remote
+and commit, and separate implementation, module-load, endpoint reachability, and protocol health.
+The LangGraph load probe may use only the repository's explicit test-key gate and must disclose
+that it proves import/compile—not a database, model, or end-to-end turn. A loopback-only GET
+collector may refresh sanitized evidence in the private Site; it has no mutation authority.
+
+Consequences:
+The orchestrator can honestly show “load verified / service stopped.” Hermes/CDP 404 responses
+are amber instead of green. Production snapshots become reproducible, GitHub fallbacks resolve,
+and the founder may refresh local state without introducing a payer, credential, PHI, or runtime
+control channel.

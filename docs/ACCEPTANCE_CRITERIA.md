@@ -2717,3 +2717,24 @@ Focused proof:
   hydration/error overlay after deterministic UTC rendering.
 - The deployed Codex Site is private/owner-only and read-only. No operational toggle is
   exposed without a separately accepted authenticated local bridge.
+
+### Founder Watchdog v2 corrective acceptance
+
+- A clean checkout produces `snapshot.sourceRoot` from that checkout and records the exact
+  branch/commit; `WATCHDOG_REQUIRE_CLEAN=1` fails before generation on a dirty source tree.
+- Every GitHub source link uses the repository derived from `origin` and returns the canonical
+  `MarceloDe/concierge_by_openclaw_hermes` commit-pinned path rather than the former 404 owner.
+- The LangGraph module probe imports `langgraphRunner.mjs`, compiles all 11 graph nodes through
+  the explicit test-only checkpointer-key gate, and records the proof boundary without claiming
+  a database query, model call, or active HTTP service.
+- When the Node API is stopped, the orchestrator renders `module load verified / service
+  stopped`; it never renders `not_loaded` solely from a failed port probe.
+- HTTP 404 is amber reachable-only, Redis is green only after `PONG`, PostgreSQL is green only
+  after `pg_isready`, and Chrome CDP is green only with the expected JSON fields.
+- The local collector binds only to `127.0.0.1`, accepts only GET/OPTIONS, allowlists the private
+  Site and local dev origins, exports only the sanitized manifest, and rejects other origins and
+  all mutation methods.
+- The Site can connect to the collector, replace snapshot evidence with live local evidence,
+  poll every 30 seconds, and return to a clear retry state when the collector is unavailable.
+- Lint, production build, rendered HTML tests, collector tests, source-link checks, desktop QA,
+  and 390px responsive QA pass before private redeployment.

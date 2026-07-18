@@ -27,7 +27,8 @@ test("server-renders the Founder Watchdog control plane", async () => {
   assert.match(html, /Architecture/);
   assert.match(html, /Prompts/);
   assert.match(html, /Data &amp; APIs/);
-  assert.match(html, /READ-ONLY DEPLOY/);
+  assert.match(html, /CONNECT LIVE/);
+  assert.match(html, /READ-ONLY/);
   assert.doesNotMatch(html, /Your site is taking shape|Building your site/);
 });
 
@@ -41,6 +42,14 @@ test("generated manifest is source-linked, sanitized, and complete", async () =>
   assert.ok(manifest.prompts.length >= 9);
   assert.ok(manifest.phases.some((phase) => phase.phase === 96 && phase.status === "planned"));
   assert.ok(manifest.modules.every((module) => module.source?.vscodeUrl && module.source?.githubUrl));
+  assert.equal(manifest.snapshot.repo, "MarceloDe/concierge_by_openclaw_hermes");
+  assert.ok(manifest.modules.every((module) => module.source.githubUrl.startsWith("https://github.com/MarceloDe/concierge_by_openclaw_hermes/blob/")));
+  assert.equal(manifest.moduleProbes.orchestrator.loaded, true);
+  assert.equal(manifest.moduleProbes.orchestrator.graphCompiled, true);
+  assert.equal(manifest.moduleProbes.orchestrator.nodeCount, 11);
+  assert.notEqual(manifest.modules.find((module) => module.id === "langgraph").runtime, "not_loaded");
+  assert.ok(Object.values(manifest.liveProbes).every((probe) => Object.hasOwn(probe, "healthy")));
+  assert.equal(manifest.links.localCollector, "http://127.0.0.1:4189/manifest");
   assert.ok(manifest.configuration.configuredEnvNames.every((item) => Object.keys(item).sort().join(",") === "configured,name"));
   assert.doesNotMatch(raw, /\bsk-[A-Za-z0-9_-]{10,}/);
   assert.doesNotMatch(raw, /postgresql:\/\/[^\s"']+:[^\s"']+@/);
