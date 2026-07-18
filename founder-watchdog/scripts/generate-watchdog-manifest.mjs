@@ -94,17 +94,37 @@ async function tcpProbe(port, host = "127.0.0.1", timeoutMs = 650) {
   });
 }
 
-async function httpProbe(url, { timeoutMs = 1200, expectedStatuses = [200], expectJson = false, validateJson = null } = {}) {
+async function httpProbe(
+  url,
+  {
+    timeoutMs = 1200,
+    expectedStatuses = [200],
+    expectJson = false,
+    validateJson = null,
+    summarizeJson = null,
+    expectText = false,
+    validateText = null
+  } = {}
+) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { redirect: "manual", signal: controller.signal });
     const statusExpected = expectedStatuses.includes(response.status);
-    let payloadValid = !expectJson;
+    let payloadValid = !expectJson && !expectText;
+    let details;
     if (expectJson) {
       try {
         const payload = await response.json();
         payloadValid = typeof validateJson === "function" ? Boolean(validateJson(payload)) : Boolean(payload && typeof payload === "object");
+        details = typeof summarizeJson === "function" ? summarizeJson(payload) : undefined;
+      } catch {
+        payloadValid = false;
+      }
+    } else if (expectText) {
+      try {
+        const payload = await response.text();
+        payloadValid = typeof validateText === "function" ? Boolean(validateText(payload)) : payload.length > 0;
       } catch {
         payloadValid = false;
       }
@@ -115,7 +135,8 @@ async function httpProbe(url, { timeoutMs = 1200, expectedStatuses = [200], expe
       healthy,
       statusCode: response.status,
       evidence: healthy ? "expected_http_response" : statusExpected ? "response_schema_mismatch" : "unexpected_http_status",
-      url
+      url,
+      ...(details === undefined ? {} : { details })
     };
   } catch (error) {
     return { reachable: false, healthy: false, statusCode: null, evidence: error?.name === "AbortError" ? "timeout" : "connection_failed", url };
@@ -124,10 +145,10 @@ async function httpProbe(url, { timeoutMs = 1200, expectedStatuses = [200], expe
   }
 }
 
-async function firstReachableHttp(urls) {
+async function firstReachableHttp(urls, options = { expectJson: true }) {
   const probes = [];
   for (const url of urls) {
-    const probe = await httpProbe(url, { expectJson: true });
+    const probe = await httpProbe(url, options);
     probes.push(probe);
     if (probe.healthy) return { ...probe, candidates: urls };
   }
@@ -339,20 +360,80 @@ const appProbe = await firstReachableHttp([
   "http://127.0.0.1:4173/api/health",
   "http://127.0.0.1:4226/api/health",
   "http://127.0.0.1:4426/api/health"
-]);
+], {
+  expectJson: true,
+  validateJson: (payload) => payload?.ok === true && payload?.databaseDriver === "postgres",
+  summarizeJson: (payload) => ({
+    databaseDriver: payload?.databaseDriver ?? null,
+    authority: payload?.databaseAuthority?.authoritativeFor ?? [],
+    redis: {
+      backend: payload?.redisRuntime?.backend ?? null,
+      productionReady: payload?.redisRuntime?.productionReady === true,
+      writeReadProbe: payload?.redisRuntime?.writeReadProbe === true,
+      cacheMetrics: payload?.redisRuntime?.cacheMetrics ?? null
+    },
+    productMemory: {
+      enabled: payload?.productMemory?.enabled === true,
+      status: payload?.productMemory?.status ?? null,
+      reason: payload?.productMemory?.reason ?? null,
+      replayQueue: payload?.productMemory?.replayQueue ?? null
+    },
+    openClaw: {
+      gatewayReachable: payload?.openClawRuntime?.gatewayReachable === true,
+      llmCredentialPresent: payload?.openClawRuntime?.llmCredentialPresent === true,
+      llmVerified: payload?.openClawRuntime?.llm?.verified === true,
+      llmProbeSkipped: payload?.openClawRuntime?.llm?.skipped === true
+    },
+    model: {
+      configured: payload?.openAI?.configured === true,
+      name: payload?.openAI?.model ?? null
+    },
+    storage: {
+      ok: payload?.storage?.ok === true,
+      status: payload?.storage?.status ?? null,
+      score: payload?.storage?.score ?? null,
+      targetScore: payload?.storage?.targetScore ?? null,
+      fullMigrationReady: payload?.storage?.fullMigrationReady === true,
+      secretProfileReady: payload?.storage?.safety?.secretProfileReady === true
+    }
+  })
+});
 const liveProbes = {
   app: appProbe,
   openclaw: await httpProbe("http://127.0.0.1:19789/"),
-  hermes: await httpProbe("http://127.0.0.1:8790/"),
-  chromeCdp: await httpProbe("http://127.0.0.1:9222/json/version", {
+  hermes: await httpProbe("http://127.0.0.1:8790/health", {
     expectJson: true,
-    validateJson: (payload) => Boolean(payload?.Browser && payload?.webSocketDebuggerUrl)
+    validateJson: (payload) => payload?.status === "ok" && payload?.platform === "hermes-agent",
+    summarizeJson: (payload) => ({ platform: payload?.platform ?? null })
+  }),
+  chromeCdp: await firstReachableHttp([
+    "http://127.0.0.1:9222/json/version",
+    "http://127.0.0.1:9223/json/version"
+  ], {
+    expectJson: true,
+    validateJson: (payload) => Boolean(payload?.Browser && payload?.webSocketDebuggerUrl),
+    summarizeJson: (payload) => ({ browser: payload?.Browser ?? null, protocolVersion: payload?.["Protocol-Version"] ?? null })
   }),
   redis: await firstHealthyRedis([6381, 6379]),
   postgres: await firstHealthyPostgres([55432, 5432]),
   falkordb: await redisPingProbe(6380),
-  fastapi: await httpProbe("http://127.0.0.1:8000/docs"),
-  langfuse: await httpProbe(`${configuredLangfuseUrl.replace(/\/$/, "")}/api/public/health`)
+  fastapi: await httpProbe("http://127.0.0.1:8000/api/v1/health", {
+    expectJson: true,
+    validateJson: (payload) => payload?.status === "ok" && payload?.node_runtime_ok === true,
+    summarizeJson: (payload) => ({ version: payload?.version ?? null, nodeRuntimeOk: payload?.node_runtime_ok === true, authMode: payload?.auth?.mode ?? null })
+  }),
+  mobilePwa: await firstReachableHttp([
+    "http://127.0.0.1:3002/",
+    "http://127.0.0.1:3000/"
+  ], {
+    expectText: true,
+    validateText: (payload) => /Brainstyworkers/i.test(payload) && /Mobile/i.test(payload) && /Concierge/i.test(payload)
+  }),
+  langfuse: await httpProbe(`${configuredLangfuseUrl.replace(/\/$/, "")}/api/public/health`, {
+    expectJson: true,
+    validateJson: (payload) => String(payload?.status).toUpperCase() === "OK",
+    summarizeJson: (payload) => ({ version: payload?.version ?? null })
+  })
 };
 const moduleProbes = {
   orchestrator: orchestratorModuleProbe()
@@ -376,6 +457,14 @@ function serviceRuntime(probe) {
   return "service_stopped";
 }
 
+function productMemoryRuntime() {
+  const memory = liveProbes.app?.details?.productMemory;
+  if (!liveProbes.falkordb?.healthy) return serviceRuntime(liveProbes.falkordb);
+  if (memory?.status === "degraded") return `backend_healthy_${memory.reason || "runtime_degraded"}`;
+  if (memory?.enabled === true && memory?.status) return `backend_healthy_${memory.status}`;
+  return "backend_healthy_app_state_unverified";
+}
+
 const modules = [
   { id: "http-runtime", name: "Node HTTP runtime", domain: "Experience", description: "Serves the app, API, health, proof, research, prompt, and operator surfaces.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.app), phase: "pre-83 foundation", serviceEvidence: liveProbes.app, source: source("src/server/server.mjs", 5092, "server") },
   { id: "langgraph", name: "LangGraph master orchestrator", domain: "Orchestration", description: "Deterministic policy rails, one live LLM decision, DB-authored capability routing, worker dispatch, evidence, approval interrupt, and response composition.", status: "implemented_proven", runtime: moduleProbes.orchestrator.loaded ? (liveProbes.app.healthy ? "active_in_service" : "module_load_verified_service_stopped") : "module_load_failed", phase: 84, loadEvidence: moduleProbes.orchestrator, serviceEvidence: liveProbes.app, source: source("src/concierge/langgraphRunner.mjs", 3745, "createBrainstyLangGraph") },
@@ -389,9 +478,10 @@ const modules = [
   { id: "sqlite", name: "SQLite test adapter", domain: "Data", description: "Hermetic test/local compatibility adapter. It is not the production authority after Phase 85.", status: "implemented_dev", runtime: "test_only", phase: 85, source: source("src/tests/support/sqliteTestStore.mjs", 1) },
   { id: "redis", name: "Redis runtime mirror", domain: "Data", description: "Losable fast mirror for runtime context, portfolio, consent, OAuth handles, LLM index, vector context, worker state, and idempotency.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.redis), phase: 86, source: source("src/concierge/runtimeContextCache.mjs", 285, "createRuntimeContextCache") },
   { id: "checkpointer", name: "Encrypted LangGraph checkpointer", domain: "Data", description: "AES-256-GCM checkpoint persistence with durable-interrupt gating and Postgres production mode.", status: "implemented_proven", runtime: moduleProbes.orchestrator.loaded && liveProbes.postgres.healthy ? "durable_dependency_healthy" : liveProbes.postgres.reachable ? "durable_dependency_reachable_unverified" : "durable_dependency_stopped", phase: 91, source: source("src/concierge/graphCheckpointer.mjs", 210, "createGraphCheckpointer") },
-  { id: "graphiti", name: "Graphiti / FalkorDB product memory", domain: "Memory", description: "Advisory longitudinal product memory with safe episodes, replay queue, recall/retain probes, and Postgres pointers as authority.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.falkordb), phase: "pre-83 foundation", source: source("src/concierge/productMemory.mjs", 445, "getProductMemoryStatus") },
+  { id: "graphiti", name: "Graphiti / FalkorDB product memory", domain: "Memory", description: "Advisory longitudinal product memory with safe episodes, replay queue, recall/retain probes, and Postgres pointers as authority.", status: "implemented_proven", runtime: productMemoryRuntime(), phase: "pre-83 foundation", serviceEvidence: liveProbes.falkordb, applicationEvidence: liveProbes.app?.details?.productMemory ?? null, source: source("src/concierge/productMemory.mjs", 445, "getProductMemoryStatus") },
   { id: "langfuse", name: "Langfuse observability", domain: "Observability", description: "Traces agent, graph, and LLM checkpoints. The watchdog links out; it intentionally does not duplicate agent traces.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.langfuse), phase: "pre-83 foundation", source: source("src/observability/langfuseClient.mjs", 67, "getLangfuseStatus") },
   { id: "fastapi", name: "FastAPI remote facade", domain: "Experience", description: "Remote/mobile API boundary for sessions, tasks, approvals, documents, browser sessions, streams, and proof.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.fastapi), phase: "pre-83 foundation", source: source("project/api/main.py", 239) },
+  { id: "mobile-pwa", name: "Next.js mobile PWA", domain: "Experience", description: "Mobile-first concierge surface routed through the FastAPI facade and the same Node/LangGraph runtime authority.", status: "implemented_proven", runtime: serviceRuntime(liveProbes.mobilePwa), phase: "pre-83 foundation", source: source("apps/mobile-next/app/page.jsx", 1) },
   { id: "plan-net", name: "Plan-Net provider directory", domain: "Connectors", description: "Public no-signature provider directory rail with plan/network qualification and source timestamping.", status: "implemented_proven", runtime: "ingestion_on_demand", phase: 89, source: source("src/concierge/connectors/planNetDirectory.mjs", 1) },
   { id: "mrf", name: "MRF pricing pipeline", domain: "Connectors", description: "Public Transparency in Coverage ingestion and normalized pricing query substrate; real data coverage remains payer/geography dependent.", status: "implemented_proven", runtime: "ingestion_on_demand", phase: 89, source: source("src/concierge/connectors/mrfPipeline.mjs", 1) },
   { id: "fhir", name: "Generic FHIR client / Aetna rail", domain: "Connectors", description: "Generic throttled/paginated FHIR client and endpoint registry exist; the payer-specific Aetna Patient Access module is intentionally absent pending credentials.", status: "contract_ready", runtime: "blocked_external", phase: 90, source: source("src/concierge/connectors/fhirClient.mjs", 43) },

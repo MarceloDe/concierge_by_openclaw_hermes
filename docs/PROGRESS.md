@@ -10331,3 +10331,27 @@ Remaining boundary:
   views without document overflow, live-collector connect/poll behavior, source-link targets,
   and a fresh 390x844 mobile render with a 390px document width. Private Sites publishing is
   the release operation for this verified build, not a separate implementation layer.
+
+## 2026-07-18 — Complete local runtime and truthful dashboard refresh
+
+- Started Colima and the existing project infrastructure. PostgreSQL `:55432` passed
+  `pg_isready`; runtime Redis `:6381` and FalkorDB `:6380` returned `PONG`.
+- Started Node on `:4173`; boot proved PostgreSQL authority, Redis production-ready write/read,
+  the 39-capability/13-process catalog seed, existing OpenClaw gateway reachability, and enabled
+  Langfuse configuration.
+- Started FastAPI on `:8000`; `/api/v1/health` returned `status=ok` and
+  `node_runtime_ok=true`. Started the Next.js mobile PWA on `:3002` because Colima's automatic
+  FalkorDB UI forwarding occupied host `:3000`.
+- Confirmed OpenClaw `:19789`, Hermes `/health` on `:8790`, Chrome/CDP schema on `:9223`, and
+  Langfuse `:3100/api/public/health` are healthy.
+- Corrected false-negative probes for Hermes and Chrome/CDP, upgraded FastAPI to its real health
+  contract, added the mobile PWA as a curated module, and carried a sanitized Node runtime summary
+  into the manifest.
+- The orchestrator independently imported and compiled all 11 nodes with checkpointer status
+  `ready`; its running Node service also passed health, so it now renders `active in service`.
+- FalkorDB is healthy, while the application's Graphiti contract is intentionally amber with
+  `phi_clearance_required`; no product-memory payload was sent and the replay queue is empty.
+- Dashboard lint, production build, and all three dashboard/collector tests passed. Codex-browser
+  QA proved live-collector connection, all corrected runtime cards, the 11-node architecture,
+  blocked write sequence, prompt observatory/Langfuse link, source-link wiring, and a mobile
+  Runtime view with document width equal to viewport width after fixing model-card overflow.

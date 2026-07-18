@@ -2738,3 +2738,17 @@ Focused proof:
   poll every 30 seconds, and return to a clear retry state when the collector is unavailable.
 - Lint, production build, rendered HTML tests, collector tests, source-link checks, desktop QA,
   and 390px responsive QA pass before private redeployment.
+
+### Founder Watchdog runtime-fidelity completion
+
+- Hermes is green only when `/health` returns the expected `hermes-agent` JSON contract.
+- Chrome/CDP is green only when an active candidate endpoint returns `Browser` and
+  `webSocketDebuggerUrl`; a 404 on another candidate remains rejected evidence.
+- FastAPI is green only when `/api/v1/health` returns `status=ok` and `node_runtime_ok=true`.
+- The mobile PWA is a first-class curated module and is green only when the rendered page carries
+  the Brainstyworkers mobile-concierge identity.
+- The Node health summary records only sanitized runtime facts; no secret value, raw prompt,
+  user data, token, or private payload is exported.
+- FalkorDB may be healthy while Graphiti utilization is amber due to `phi_clearance_required`;
+  the dashboard must show both facts without collapsing them into a false green memory claim.
+- Desktop and 390px Runtime rendering have no document-level horizontal overflow.

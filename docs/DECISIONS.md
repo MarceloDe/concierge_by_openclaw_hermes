@@ -3018,3 +3018,17 @@ The orchestrator can honestly show “load verified / service stopped.” Hermes
 are amber instead of green. Production snapshots become reproducible, GitHub fallbacks resolve,
 and the founder may refresh local state without introducing a payer, credential, PHI, or runtime
 control channel.
+
+## 2026-07-18 — Backend health does not imply feature utilization
+
+Decision:
+Runtime probes use each service's real contract, and the manifest may include only a sanitized
+projection of application health. Infrastructure availability and application utilization remain
+separate evidence classes. In particular, a FalkorDB `PONG` proves the graph backend is running;
+it does not prove Graphiti sent or retained a product-memory payload. When the application reports
+`phi_clearance_required`, product memory is shown amber even though FalkorDB is healthy.
+
+Consequences:
+The dashboard can show the locally runnable stack green without disguising policy, production,
+credential, signature, or live-invocation gaps. No health probe may promote a blocked capability
+into the executable catalog.

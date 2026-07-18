@@ -3475,3 +3475,19 @@ Non-goals:
    integrity workflow. Private Sites publishing remains an explicit versioned release action.
 7. Keep mutation outside this slice. The live collector cannot write configuration, prompts,
    databases, worker state, credentials, capabilities, or payer systems.
+
+## 2026-07-18 — Founder Watchdog runtime-fidelity completion
+
+1. Start the complete locally supported application stack before generating the release
+   snapshot: Node, FastAPI, the mobile PWA, PostgreSQL, Redis, FalkorDB, OpenClaw, Hermes,
+   Langfuse, and the browser/CDP substrate.
+2. Probe each HTTP service through its real health contract rather than a generic root URL.
+   FastAPI must additionally prove `node_runtime_ok`; Chrome/CDP must return its schema on the
+   actual active CDP endpoint.
+3. Carry a sanitized subset of the Node health contract into the manifest so database driver,
+   Redis write/read readiness, storage posture, model configuration, OpenClaw reachability, and
+   product-memory policy state remain distinguishable.
+4. Treat FalkorDB availability and Graphiti product-memory utilization as separate facts. A
+   healthy graph backend remains amber for product-memory use while PHI clearance is absent.
+5. Keep the local collector stateless/read-only and the hosted Site immutable per version;
+   durable application state remains in PostgreSQL, with Redis as a rebuildable mirror.
