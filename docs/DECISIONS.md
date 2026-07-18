@@ -2970,3 +2970,30 @@ Consequences:
 The next executable work is still Phase 90 Part 2. If credentials are absent, work stops at
 the loud external gate; it does not create connector scaffolds. CareRoute and Bill Guardian
 have an auditable future sequence without weakening runtime proof or contract gates.
+
+## 2026-07-18 — Founder Watchdog is a generated read-only projection
+
+Problem:
+The project has multiple operator dashboards and proof artifacts, but the founder lacked one
+current view connecting roadmap state, architecture, prompts, runtime processes, database
+utilization, configuration, and exact source. A binary green/red implementation flag would
+also conflate landed code, historical acceptance proof, current reachability, catalog
+selectability, and external authorization.
+
+Decision:
+Build the Founder Watchdog as a private Codex Site generated from canonical repository inputs
+and sanitized local probes. Store independent status dimensions and render them together. Keep
+Postgres as application authority, the phase ledger as phase authority, the spine YAML as
+planner/configuration authority, and Langfuse as trace authority. The Site is a projection, not
+a new control plane or data authority.
+
+Configuration controls are read-only visualizations. A hosted page cannot directly mutate a
+local OpenClaw gateway, database, credential store, policy gate, or `runtime_selectable` row.
+Any future mutation path must be a separately approved authenticated/audited local bridge that
+produces proposals or reviewed diffs, never an arbitrary toggle around deterministic gates.
+
+Consequences:
+Each implementation deployment can regenerate and republish a source-pinned dashboard. A local
+VS Code custom-protocol link is best effort and paired with a GitHub line fallback. Live prompt
+payloads and agent traces stay out of the Site. Stale documentation and configuration drift are
+shown explicitly instead of silently normalized away.
