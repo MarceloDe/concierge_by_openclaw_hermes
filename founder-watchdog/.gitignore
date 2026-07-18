@@ -40,3 +40,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Generated from the parent repository during dev/build/release.
+/app/generated/watchdog-manifest.json
+/public/watchdog-manifest.json

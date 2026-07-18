@@ -10303,6 +10303,31 @@ Verified runtime snapshot:
 
 Remaining boundary:
 
-- Hosted Sites cannot inspect localhost after deployment. Automatic live updates require a
-  future signed, authenticated, redacted collector; until then each deploy is an immutable,
-  timestamped source/runtime snapshot regenerated during the development loop.
+- Hosted Sites cannot inspect localhost server-side after deployment. The v2 loop adds an
+  optional browser-to-loopback read-only collector for the owner on this Mac; without that
+  local connection, each deploy remains an immutable timestamped snapshot.
+
+## 2026-07-18 — Founder Watchdog v2 corrective loop (verified)
+
+- Root cause reproduced: v1 mapped `liveProbes.app.reachable` directly to the LangGraph
+  `loaded/not_loaded` label. It never probed the module.
+- A clean isolated import initially failed loud because the required encrypted Postgres
+  checkpointer key was absent. Re-running through the repository's explicit test-only key gate
+  imported the module, compiled the graph, and returned all 11 canonical nodes; no DB query or
+  model call is counted by that proof.
+- Source generation now targets the selected checkout, derives the GitHub repository from
+  `origin`, pins links to the source commit, and supports clean-checkout enforcement.
+- Runtime probes now distinguish healthy, reachable-but-unverified, and stopped. Redis requires
+  `PONG`; PostgreSQL requires `pg_isready`; HTTP probes require the expected status and optional
+  JSON shape.
+- Added a loopback-only, origin-allowlisted, GET-only live collector and Site connection control.
+  The collector refreshes sanitized evidence only and has no operational write authority.
+- Added a GitHub integrity workflow for relevant pull requests and `main` changes.
+- Removed the unused Drizzle template/configuration from the dashboard package, upgraded the
+  Cloudflare/Vite/Wrangler development toolchain, and pinned a patched PostCSS override;
+  `npm audit` now reports zero production or development dependency vulnerabilities.
+- Verification passed: dashboard lint, production build, all three dashboard/collector tests,
+  25 focused LangGraph topology/runner/decision tests, parent-project build, all nine desktop
+  views without document overflow, live-collector connect/poll behavior, source-link targets,
+  and a fresh 390x844 mobile render with a 390px document width. Private Sites publishing is
+  the release operation for this verified build, not a separate implementation layer.

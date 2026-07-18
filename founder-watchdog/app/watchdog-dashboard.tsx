@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type SourceRef = {
   path: string;
@@ -51,10 +51,16 @@ function utcTimestamp(value: string) {
 }
 
 function statusTone(status: string) {
-  if (["implemented_proven", "landed", "running", "loaded", "configured", "code_ready", "durable_dependency_running"].includes(status)) return "green";
-  if (["implemented_dev", "implemented_unproven", "contract_ready", "in_progress", "test_only", "ingestion_on_demand", "deterministic_default", "host_service_running", "credential_present_in_source_workspace"].includes(status)) return "amber";
-  if (["blocked_external", "blocked_external_enrollment", "stopped", "not_loaded", "dependency_stopped", "durable_dependency_stopped", "credential_missing", "not_selectable"].includes(status)) return "red";
+  if (["implemented_proven", "landed", "running", "loaded", "configured", "code_ready", "durable_dependency_running", "durable_dependency_healthy", "service_healthy", "active_in_service"].includes(status)) return "green";
+  if (["implemented_dev", "implemented_unproven", "contract_ready", "in_progress", "test_only", "ingestion_on_demand", "deterministic_default", "host_service_running", "credential_present_in_source_workspace", "service_reachable_unverified", "module_load_verified_service_stopped", "durable_dependency_reachable_unverified"].includes(status)) return "amber";
+  if (["blocked_external", "blocked_external_enrollment", "stopped", "not_loaded", "dependency_stopped", "durable_dependency_stopped", "credential_missing", "not_selectable", "service_stopped", "module_load_failed"].includes(status)) return "red";
   return "slate";
+}
+
+function probeRuntime(probe: any) {
+  if (probe?.healthy === true) return "service_healthy";
+  if (probe?.reachable) return "service_reachable_unverified";
+  return "service_stopped";
 }
 
 function StatusPill({ status, compact = false }: { status: string; compact?: boolean }) {
@@ -114,16 +120,19 @@ function Metric({ label, value, detail, accent = "plain" }: { label: string; val
 }
 
 function ProbeCard({ name, probe, note }: { name: string; probe: any; note: string }) {
-  const running = Boolean(probe?.reachable);
+  const healthy = probe?.healthy === true;
+  const reachable = Boolean(probe?.reachable);
+  const state = healthy ? "HEALTHY" : reachable ? "REACHABLE · UNVERIFIED" : "NOT REACHABLE";
   return (
-    <article className={`probe-card ${running ? "is-up" : "is-down"}`}>
+    <article className={`probe-card ${healthy ? "is-up" : reachable ? "is-partial" : "is-down"}`}>
       <div className="probe-top">
         <span className="live-lamp" />
-        <span>{running ? "REACHABLE" : "NOT REACHABLE"}</span>
+        <span>{state}</span>
       </div>
       <h3>{name}</h3>
       <p>{note}</p>
       <code>{probe?.url ?? `${probe?.host}:${probe?.port}`}</code>
+      <small className="probe-evidence">{human(probe?.evidence)}</small>
     </article>
   );
 }
@@ -131,7 +140,7 @@ function ProbeCard({ name, probe, note }: { name: string; probe: any; note: stri
 function Overview({ m, go }: { m: Manifest; go: (view: string) => void }) {
   const phase = m.phases.find((item: any) => item.phase === m.summary.currentPhase);
   const blockers = phase?.blockers ?? [];
-  const runningCount = m.modules.filter((module: any) => ["running", "loaded", "configured", "code_ready", "durable_dependency_running"].includes(module.runtime)).length;
+  const runningCount = m.modules.filter((module: any) => ["service_healthy", "active_in_service", "running", "loaded", "durable_dependency_healthy"].includes(module.runtime)).length;
   return (
     <div className="view-stack">
       <section className="hero-panel">
@@ -272,9 +281,14 @@ function Architecture({ m }: { m: Manifest }) {
 
 function Runtime({ m }: { m: Manifest }) {
   const liveEntries = Object.entries(m.liveProbes);
+  const diagnosis = m.sourceEvidence.orchestratorDiagnosis;
   return (
     <div className="view-stack">
-      <SectionHead eyebrow="Runtime" title="Two-axis truth: proof and process" copy="Implementation status is derived from source and phase evidence. Runtime state is a bounded local reachability probe captured during generation." action={<a className="primary-button link-button" href={m.links.langfuse} target="_blank" rel="noreferrer">Open Langfuse ↗</a>} />
+      <SectionHead eyebrow="Runtime" title="Three-axis truth: source, load, and service" copy="Implementation proof, module-load proof, and service health are independent. A stopped HTTP process can no longer mislabel an importable LangGraph module as missing." action={<a className="primary-button link-button" href={m.links.langfuse} target="_blank" rel="noreferrer">Open Langfuse ↗</a>} />
+      <section className="panel orchestrator-diagnosis">
+        <div><p className="eyebrow">Orchestrator diagnosis</p><h3>LangGraph load is verified independently</h3><p>{diagnosis.correction}</p><small>{diagnosis.moduleProbe.proofBoundary}</small></div>
+        <div className="diagnosis-signals"><RuntimeSignal runtime={diagnosis.moduleProbe.loaded ? "loaded" : "module_load_failed"} /><RuntimeSignal runtime={probeRuntime(diagnosis.serviceProbe)} /><SourceLinks source={diagnosis.source} minimal /></div>
+      </section>
       <section className="probe-grid">
         {liveEntries.map(([name, probe]: [string, any]) => <ProbeCard key={name} name={name} probe={probe} note={name === "openclaw" ? "Bounded worker gateway" : name === "app" ? "Concierge Node API" : "Infrastructure dependency"} />)}
       </section>
@@ -295,7 +309,7 @@ function Runtime({ m }: { m: Manifest }) {
         <div className="runtime-table table-shell">
           <div className="table-row table-header"><span>Module</span><span>Domain</span><span>Implementation</span><span>Current snapshot</span><span>Source</span></div>
           {m.modules.map((module: any) => (
-            <div className="table-row" key={module.id}><span><b>{module.name}</b><small>{module.description}</small></span><span>{module.domain}</span><span><StatusPill status={module.status} compact /></span><span><RuntimeSignal runtime={module.runtime} /></span><span><SourceLinks source={module.source} minimal /></span></div>
+            <div className="table-row" key={module.id}><span><b>{module.name}</b><small>{module.description}</small></span><span>{module.domain}</span><span><StatusPill status={module.status} compact /></span><span><RuntimeSignal runtime={module.runtime} />{module.loadEvidence ? <small className="runtime-detail">{module.loadEvidence.nodeCount} nodes compiled</small> : null}</span><span><SourceLinks source={module.source} minimal /></span></div>
           ))}
         </div>
       </section>
@@ -317,6 +331,7 @@ function Modules({ m }: { m: Manifest }) {
           <article className="module-card" key={module.id}>
             <div className="module-card-head"><span className="module-domain">{module.domain}</span><RuntimeSignal runtime={module.runtime} /></div>
             <h3>{module.name}</h3><p>{module.description}</p>
+            {module.loadEvidence ? <div className="module-load-proof"><b>{module.loadEvidence.nodeCount} graph nodes compiled</b><span>{module.loadEvidence.evidence}</span></div> : null}
             <div className="module-meta"><StatusPill status={module.status} compact /><span>Phase {module.phase}</span></div>
             <SourceLinks source={module.source} />
           </article>
@@ -391,7 +406,7 @@ function Configuration({ m }: { m: Manifest }) {
   return (
     <div className="view-stack">
       <SectionHead eyebrow="Configuration" title="The visual YAML spine" copy="This is the full founder-owned, versioned configuration—rendered read-only. Production toggles must flow through code, database policy derivation, tests, and approval gates." action={<SourceLinks source={m.configuration.source} />} />
-      <section className="control-warning"><div className="lock-mark">⌁</div><div><b>Authenticated local control bridge: not connected</b><p>Hosted Sites cannot safely mutate local OpenClaw, databases, credentials, or runtime_selectable rows. Visual filters work here; operational controls remain intentionally locked until a signed local bridge is designed and approved.</p></div><span>READ ONLY</span></section>
+      <section className="control-warning"><div className="lock-mark">⌁</div><div><b>Live telemetry available · writable control bridge locked</b><p>The loopback collector refreshes sanitized read-only evidence from this Mac. Hosted Sites cannot mutate local OpenClaw, databases, credentials, prompts, or runtime_selectable rows; operational controls require a separate authenticated approval design.</p></div><span>READ ONLY</span></section>
       <section className="config-grid">
         <article className="panel env-panel"><p className="eyebrow">Configuration presence</p><h3>Required runtime variables</h3><p>Presence only. Values never leave the local generator.</p><div className="env-list">{m.configuration.configuredEnvNames.map((item: any) => <div key={item.name}><code>{item.name}</code><span className={item.configured ? "configured" : "missing"}>{item.configured ? "configured" : "not configured"}</span></div>)}</div><small>{m.configuration.secretsPolicy}</small></article>
         <article className="panel registry-panel"><p className="eyebrow">Non-negotiable registry split</p><h3>Visibility ≠ executability</h3><div className="registry-rule"><span>1</span><div><b>Capability Registry</b><p>Roadmap and planner visibility. May include unimplemented rows.</p></div></div><div className="registry-rule active"><span>2</span><div><b>Executable Tool Catalog</b><p>The only LangGraph dispatch authority. Requires real backing.</p></div></div><div className="registry-rule"><span>3</span><div><b>Planner Exposure Contract</b><p>Defines explain, prepare, ask, or escalate behavior.</p></div></div></article>
@@ -434,13 +449,14 @@ function Proof({ m }: { m: Manifest }) {
         <article className="panel"><p className="eyebrow">Catalog inventory</p><h3>Registry claims need a runtime overlay</h3><div className="proof-facts catalog-facts"><div><b>{m.capabilityInventory.total}</b><span>capabilities</span></div><div><b>{m.capabilityInventory.implementedRuntimeClaim}</b><span>runtime claims</span></div><div><b>{m.capabilityInventory.activeProcesses}</b><span>processes</span></div><div><b>{m.capabilityInventory.processSteps}</b><span>steps</span></div></div><p className="section-copy">{m.capabilityInventory.caveat}</p><SourceLinks source={m.capabilityInventory.source} /></article>
         <article className="panel"><p className="eyebrow">Focused verification</p><h3>{m.sourceEvidence.focusedVerification.passed} passed · {m.sourceEvidence.focusedVerification.failed} failed · {m.sourceEvidence.focusedVerification.skippedLoud} loud skips</h3><ul className="verification-list">{m.sourceEvidence.focusedVerification.claims.map((claim: string) => <li key={claim}>{claim}</li>)}</ul></article>
       </section>
+      <section className="panel orchestrator-root-cause"><p className="eyebrow">Corrected classification</p><h3>Why the orchestrator previously said “not loaded”</h3><p>{m.sourceEvidence.orchestratorDiagnosis.rootCause}</p><div><RuntimeSignal runtime={m.moduleProbes.orchestrator.loaded ? "loaded" : "module_load_failed"} /><RuntimeSignal runtime={probeRuntime(m.liveProbes.app)} /><SourceLinks source={m.sourceEvidence.orchestratorDiagnosis.source} /></div></section>
       <section className="panel"><SectionHead eyebrow="Drift watchdog" title="Source-of-truth conflicts detected during review" copy="These are not hidden. Each card points to the stale or conflicting source that future implementation should reconcile." /><div className="drift-grid">{m.sourceEvidence.driftWarnings.map((warning: any) => <article className={warning.severity} key={warning.title}><div><span>{warning.severity}</span><h3>{warning.title}</h3></div><p>{warning.detail}</p><SourceLinks source={warning.source} minimal /></article>)}</div></section>
       <section className="two-column proof-columns">
         <article className="panel"><p className="eyebrow">Canonical inputs</p><h3>Sources refreshed before implementation</h3><div className="proof-doc-list">{m.sourceEvidence.canonicalDocs.map((doc: SourceRef) => <div key={doc.path}><span>{doc.path}</span><SourceLinks source={doc} minimal /></div>)}</div></article>
         <article className="panel"><p className="eyebrow">Deployment contract</p><h3>How the dashboard stays current</h3><ol className="deploy-loop"><li><span>1</span><p><b>Implement</b>Change source, schema, ledger, or spine configuration.</p></li><li><span>2</span><p><b>Generate</b><code>npm run generate:watchdog</code> reads the repo and safe probes.</p></li><li><span>3</span><p><b>Verify</b>Build and browser-check every clickable view.</p></li><li><span>4</span><p><b>Deploy</b>Publish a private, immutable Sites version.</p></li></ol></article>
       </section>
-      <section className="panel"><SectionHead eyebrow="Current reachability evidence" title="Local probe results at generation time" /><div className="raw-proof-grid">{Object.entries(m.liveProbes).map(([name, probe]: [string, any]) => <div key={name}><div><b>{name}</b><RuntimeSignal runtime={probe.reachable ? "running" : "stopped"} /></div><pre>{JSON.stringify(probe, null, 2)}</pre></div>)}</div></section>
-      <section className="panel caveat-panel"><div className="caveat-mark">!</div><div><h3>What this site deliberately does not do</h3><p>No agent trace duplication, no PHI, no secrets, no credential values, no cookies, no arbitrary runtime toggles, and no claim that a scaffold is real. Langfuse remains the trace plane; Postgres remains authority; a future control bridge requires separate authentication and threat-model approval.</p></div></section>
+      <section className="panel"><SectionHead eyebrow="Current health evidence" title="Protocol-aware local probes at generation time" /><div className="raw-proof-grid">{Object.entries(m.liveProbes).map(([name, probe]: [string, any]) => <div key={name}><div><b>{name}</b><RuntimeSignal runtime={probeRuntime(probe)} /></div><pre>{JSON.stringify(probe, null, 2)}</pre></div>)}</div></section>
+      <section className="panel caveat-panel"><div className="caveat-mark">!</div><div><h3>Read-only live connection, never a hidden control channel</h3><p>The optional loopback collector can refresh sanitized status and source evidence on this Mac. It cannot mutate OpenClaw, capabilities, credentials, prompts, databases, or payer systems. Langfuse remains the trace plane; Postgres remains authority; writable controls still require a separately approved authenticated command bridge.</p></div></section>
     </div>
   );
 }
@@ -448,18 +464,43 @@ function Proof({ m }: { m: Manifest }) {
 export function WatchdogDashboard({ manifest }: { manifest: Manifest }) {
   const [activeView, setActiveView] = useState("overview");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [currentManifest, setCurrentManifest] = useState(manifest);
+  const [liveState, setLiveState] = useState<"snapshot" | "connecting" | "connected" | "error">("snapshot");
+  const [liveError, setLiveError] = useState("");
+  const collectorUrl = manifest.links.localCollector;
+  const refreshLive = useCallback(async () => {
+    setLiveState((state) => state === "connected" ? state : "connecting");
+    try {
+      const response = await fetch(`${collectorUrl}?at=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`collector returned ${response.status}`);
+      const nextManifest = await response.json();
+      if (!nextManifest?.schemaVersion || !nextManifest?.snapshot?.commit) throw new Error("collector returned an invalid manifest");
+      setCurrentManifest(nextManifest);
+      setLiveState("connected");
+      setLiveError("");
+    } catch (error) {
+      setLiveState("error");
+      setLiveError(String(error instanceof Error ? error.message : error));
+    }
+  }, [collectorUrl]);
+  useEffect(() => {
+    if (liveState !== "connected") return;
+    const timer = window.setInterval(() => void refreshLive(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [liveState, refreshLive]);
+  const m = currentManifest;
   const activeLabel = useMemo(() => views.find(([id]) => id === activeView)?.[1] ?? "Command", [activeView]);
   const go = (view: string) => { setActiveView(view); setMenuOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const contents: Record<string, React.ReactNode> = {
-    overview: <Overview m={manifest} go={go} />,
-    architecture: <Architecture m={manifest} />,
-    runtime: <Runtime m={manifest} />,
-    modules: <Modules m={manifest} />,
-    prompts: <Prompts m={manifest} />,
-    data: <DataApis m={manifest} />,
-    config: <Configuration m={manifest} />,
-    roadmap: <Roadmap m={manifest} />,
-    proof: <Proof m={manifest} />
+    overview: <Overview m={m} go={go} />,
+    architecture: <Architecture m={m} />,
+    runtime: <Runtime m={m} />,
+    modules: <Modules m={m} />,
+    prompts: <Prompts m={m} />,
+    data: <DataApis m={m} />,
+    config: <Configuration m={m} />,
+    roadmap: <Roadmap m={m} />,
+    proof: <Proof m={m} />
   };
   return (
     <main className="watchdog-shell">
@@ -467,13 +508,13 @@ export function WatchdogDashboard({ manifest }: { manifest: Manifest }) {
         <div className="brand"><span className="brand-mark">W</span><div><b>FOUNDER</b><strong>WATCHDOG</strong></div></div>
         <p className="nav-label">CONTROL PLANE</p>
         <nav>{views.map(([id, label], index) => <button className={activeView === id ? "active" : ""} onClick={() => go(id)} key={id}><span>{String(index + 1).padStart(2, "0")}</span>{label}<i>›</i></button>)}</nav>
-        <div className="sidebar-bottom"><div className="snapshot-chip"><span className={manifest.snapshot.dirty ? "amber" : "green"} /><div><small>DEPLOY SNAPSHOT</small><b>{manifest.snapshot.shortCommit}</b></div></div><a href={manifest.links.repository} target="_blank" rel="noreferrer">Repository ↗</a></div>
+        <div className="sidebar-bottom"><div className="snapshot-chip"><span className={liveState === "connected" ? "green" : m.snapshot.dirty ? "amber" : "green"} /><div><small>{liveState === "connected" ? "LIVE LOCAL" : "DEPLOY SNAPSHOT"}</small><b>{m.snapshot.shortCommit}</b></div></div><a href={m.links.repository} target="_blank" rel="noreferrer">Repository ↗</a></div>
       </aside>
       <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation">{menuOpen ? "×" : "☰"}</button>
       <section className="workspace">
-        <header className="topbar"><div><span>Brainstyworkers /</span><b>{activeLabel}</b></div><div className="topbar-actions"><span className="read-only-badge">READ-ONLY DEPLOY</span><a href={manifest.links.langfuse} target="_blank" rel="noreferrer">Langfuse ↗</a><a href={manifest.links.application} target="_blank" rel="noreferrer">Local app ↗</a></div></header>
+        <header className="topbar"><div><span>Brainstyworkers /</span><b>{activeLabel}</b></div><div className="topbar-actions"><button className={`live-connect ${liveState}`} onClick={() => void refreshLive()} title={liveError || "Connect to the read-only loopback collector on this Mac"}>{liveState === "connected" ? "LIVE CONNECTED" : liveState === "connecting" ? "CONNECTING…" : liveState === "error" ? "RETRY LIVE" : "CONNECT LIVE"}</button><span className="read-only-badge">READ-ONLY</span><a href={m.links.langfuse} target="_blank" rel="noreferrer">Langfuse ↗</a><a href={m.links.application} target="_blank" rel="noreferrer">Local app ↗</a></div></header>
         <div className="content-frame">{contents[activeView]}</div>
-        <footer><span>Founder Watchdog · {manifest.schemaVersion}</span><span>Generated {utcTimestamp(manifest.generatedAt)} · commit {manifest.snapshot.shortCommit}</span></footer>
+        <footer><span>Founder Watchdog · {m.schemaVersion} · {liveState === "connected" ? "live local evidence" : "deploy snapshot"}</span><span>Generated {utcTimestamp(m.generatedAt)} · commit {m.snapshot.shortCommit}</span></footer>
       </section>
     </main>
   );
