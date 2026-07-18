@@ -5,7 +5,8 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 const siteRoot = resolve(new URL("..", import.meta.url).pathname);
-const repoRoot = resolve(siteRoot, "..");
+const repoRoot = resolve(process.env.WATCHDOG_SOURCE_ROOT || resolve(siteRoot, ".."));
+const vscodeRoot = resolve(process.env.WATCHDOG_VSCODE_ROOT || repoRoot);
 
 async function waitForCollector(child, expected, timeoutMs = 12_000) {
   let output = "";
@@ -29,7 +30,7 @@ test("loopback collector serves sanitized live evidence and rejects writes/origi
       ...process.env,
       WATCHDOG_LIVE_PORT: String(port),
       WATCHDOG_SOURCE_ROOT: repoRoot,
-      WATCHDOG_VSCODE_ROOT: repoRoot,
+      WATCHDOG_VSCODE_ROOT: vscodeRoot,
       WATCHDOG_ALLOWED_ORIGINS: "http://localhost:3000"
     },
     stdio: ["ignore", "pipe", "pipe"]
