@@ -122,8 +122,7 @@
       "owner": "codex",
       "blockers": [
         "Aetna sandbox app and all six Patient Access V2 product subscriptions are approved; live sandbox OAuth and EOB persistence/read-back are proven, while the five-minute token-expiry/reauth arm remains",
-        "Stedi free test/mock API key is not configured; production BAA/key remain prohibited until Phase 91 standing is confirmed",
-        "UM self-funded/TPA Patient Access scope is not confirmed in writing; the developer approval does not establish plan/product eligibility"
+        "Stedi free test/mock API key is not configured; production BAA/key remain prohibited until Phase 91 standing is confirmed"
       ]
     },
     {

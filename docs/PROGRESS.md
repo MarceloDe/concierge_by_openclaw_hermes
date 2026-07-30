@@ -10241,6 +10241,18 @@ Proof and remaining risk:
 - Verification passed: Phase 90 focused suite 6/6; runner/decision/ledger suite
   31/31; full local suite 445 passed, 0 failed, 7 expected skips out of 452;
   security review; production build; zero-vulnerability audit; and diff check.
+
+## 2026-07-30 — Founder interim UM rail decision
+
+- Decision: the University of Miami employer plan is not in the Aetna Patient
+  Access API scope for current product behavior.
+- Runtime disposition: keep the UM plan `portal_only`; do not offer or initiate
+  Patient Access OAuth for that plan.
+- Configuration: `BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=no`.
+- Boundary: this plan-specific decision does not disable Aetna sandbox
+  development or API access for another plan proven eligible.
+- Reconsideration requires both written Aetna/UM scope evidence and a new
+  explicit founder decision. Production access remains Phase 91-gated.
 # Memory Runtime Authority Correction — LangGraph + Zep Graphiti + OpenClaw
 
 Date: 2026-07-12

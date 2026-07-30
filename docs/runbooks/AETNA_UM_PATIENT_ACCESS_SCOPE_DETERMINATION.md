@@ -4,9 +4,15 @@ Date: 2026-07-30
 
 ## Current disposition
 
-`unconfirmed` — treat the University of Miami self-funded/TPA member rail as
-`portal_only` until both Aetna and the UM plan administrator confirm in writing
-that the exact employer plan/product is eligible for Aetna Patient Access.
+`no` — founder interim decision recorded 2026-07-30.
+
+The University of Miami employer plan is `portal_only`. Do not initiate or
+offer Aetna Patient Access API authorization for this plan. Keep
+`BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=no` and keep its `member_data_rails` outcome
+`portal_only`.
+
+This is a plan-specific decision. It does not disable the Aetna connector for
+eligible plans or invalidate the Aetna-issued synthetic sandbox proof.
 
 The approved Aetna Third-Party Developer app proves that the application may use
 the sandbox. It does **not** prove that every Aetna-administered commercial plan
@@ -26,7 +32,11 @@ Official references:
 - CMS, Patient Access API FAQ:
   https://www.cms.gov/priorities/burden-reduction/overview/interoperability/frequently-asked-questions/patient-access-api
 
-## Required confirmations
+## Reconsideration procedure
+
+No external confirmation is required to keep the current conservative
+`portal_only` decision. Complete the steps below only if the founder later asks
+to reconsider API eligibility.
 
 ### 1. UM Benefits / plan administrator
 
@@ -58,17 +68,20 @@ identifier from UM Benefits first.
 
 ## Recording the answer
 
-Only after the written responses agree:
+Only after the written responses agree **and** the founder explicitly changes
+the current decision:
 
 - Eligible: set `BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=yes`.
-- Not eligible: set `BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=no` and keep the
-  member's data rail `portal_only`.
+- Not eligible or no new founder decision: keep
+  `BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=no` and the member's data rail
+  `portal_only`.
 - Conflicting or conditional answers: leave the variable unset and keep the
   rail `portal_only`.
 
 The environment value records a plan-level decision only. It must never contain
 PHI, credentials, a member identifier, or free-form correspondence.
 
-An eligible answer authorizes planning, not production PHI access. Production
+An eligible answer plus a new founder decision authorizes planning, not
+production PHI access. Production
 member OAuth and real-member proof remain Phase 91 work and require the
 documented consent, standing, vault, audit, and deployment gates.

@@ -46,11 +46,13 @@ contract test locks the Layer 2-before-Layer 3 rule.
 
 ## UM scope boundary
 
-The Aetna authorization page stated that its current data transfer supports
-Medicare member data. That screen and the approved developer application do not
-prove that the University of Miami self-funded/TPA employer plan is eligible.
-The plan remains `portal_only` until written Aetna and UM plan-administrator
-confirmation follows:
+Founder interim decision on 2026-07-30: the University of Miami employer plan
+is not an API rail. It remains `portal_only`. The Aetna authorization page
+stated that its current data transfer supports Medicare member data, and the
+approved developer application does not establish UM plan eligibility.
+
+This does not invalidate the synthetic sandbox API proof and does not disable
+the connector for another plan proven eligible. Reconsideration follows:
 
 `docs/runbooks/AETNA_UM_PATIENT_ACCESS_SCOPE_DETERMINATION.md`
 
