@@ -79,7 +79,7 @@
   "required_apis": {
     "connectors": [
       "graphiti_recall",
-      "local_sqlite_claim_lookup",
+      "postgres_claim_lookup",
       "document_candidate_approval"
     ]
   },

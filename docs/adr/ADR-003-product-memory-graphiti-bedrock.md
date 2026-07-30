@@ -26,5 +26,6 @@ The system can be deployed with product memory disabled, degraded, or fully enab
 
 ## Verification
 
-- `npm run test:memory:bedrock` proves the mocked Bedrock provider contract, configurable Python path, clearance gate, boot probe, and masking behavior.
+- `npm run test:memory:bedrock` checks the isolated Bedrock client contract, configurable Python path, clearance gate, boot probe, and masking behavior; it is not runtime acceptance proof.
 - `npm run test:docker:contract` keeps compose disabled defaults and Graphiti runtime packaging under test.
+- Runtime acceptance additionally requires the real Graphiti bridge, real FalkorDB retain/recall, and a real LangGraph memory-consumption turn.

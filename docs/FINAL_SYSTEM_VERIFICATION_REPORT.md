@@ -183,7 +183,7 @@ The strongest local MVP path is real and well-instrumented. The remaining incomp
 
 | ID | Status | Evidence / next action |
 | --- | --- | --- |
-| F1 | PASSING | MockWorker mode works, is visible, and remains untrusted. |
+| F1 | PASSING | Missing real workers fail loudly; mock output is excluded from runtime and end-to-end acceptance proof. |
 | F2 | BLOCKED BY EXTERNAL DEPENDENCY | OpenClaw adapter contract, feature flag, typed envelope, and injected-command tests pass; live proof requires configured OpenClaw runtime/profile and authenticated portal/source context. |
 | F3 | BLOCKED BY EXTERNAL DEPENDENCY | Hermes adapter contract and injected-command tests pass; live proof requires a configured Hermes CLI/provider environment. |
 | F4 | PASSING | Worker skill proposals are stored/reviewable and never auto-applied in production behavior. |
@@ -226,7 +226,7 @@ The strongest local MVP path is real and well-instrumented. The remaining incomp
 | H20 | PASSING | Approved write action executes once and is audit-logged. |
 | H21 | PASSING | Rejected proposal causes no mutation. |
 | H22 | PASSING | Audit log shows write actions. |
-| H23 | PASSING | MockWorker mode works. |
+| H23 | PASSING | Missing real workers fail loudly and no mock result counts as proof. |
 | H24 | PASSING | Real worker modes remain feature-flagged and bounded. |
 
 ## Blocked By External Dependency

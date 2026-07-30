@@ -8,11 +8,12 @@ import { getStorageReadiness } from "../concierge/storageReadiness.mjs";
 const app = await readFile(new URL("../app/app.js", import.meta.url), "utf8");
 const server = await readFile(new URL("../server/server.mjs", import.meta.url), "utf8");
 
-test("Phase 68 defaults production Postgres target to Postgres without changing local dev default", () => {
+test("Phase 68 makes PostgreSQL the only production and local runtime authority", () => {
   assert.equal(resolveDatabaseDriver({ NODE_ENV: "production", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
   assert.equal(resolveDatabaseDriver({ BRAINSTY_RUNTIME_ENV: "production-candidate", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
-  assert.equal(resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }), "sqlite");
-  assert.equal(resolveDatabaseDriver({}), "sqlite");
+  assert.equal(resolveDatabaseDriver({ NODE_ENV: "development", BRAINSTY_DATABASE_TARGET: "postgres" }), "postgres");
+  assert.equal(resolveDatabaseDriver({}), "postgres");
+  assert.throws(() => resolveDatabaseDriver({ BRAINSTY_DB_DRIVER: "sqlite" }), /only runtime authority/);
 });
 
 test("Phase 68 Postgres production proof locks retention, state scope, and backup/restore policy", () => {

@@ -238,9 +238,9 @@ function resourcesFrom(value, resourceType) {
   return value.entry.map((entry) => entry?.resource).filter((resource) => resource?.resourceType === resourceType);
 }
 
-async function collectSearch(client, path, resourceType, maxPages) {
+async function collectSearch(client, path, resourceType, maxPages, params = {}) {
   const resources = [];
-  for await (const page of client.searchAll(path, {}, { maxPages })) {
+  for await (const page of client.searchAll(path, params, { maxPages })) {
     resources.push(...resourcesFrom(page, resourceType));
   }
   return resources;
@@ -332,6 +332,9 @@ export async function syncAetnaSandboxPatientAccess(store, {
     baseUrl: fhirBaseUrl,
     authMode: "bearer",
     bearerToken: grant.accessToken,
+    // Aetna rejects the shared client's implicit _count on Coverage. Add page
+    // sizing only to query surfaces that advertise it.
+    defaultCount: null,
     perHostMinIntervalMs: 0
   });
   const patientPath = patientId
@@ -343,8 +346,18 @@ export async function syncAetnaSandboxPatientAccess(store, {
     throw classifiedError("Aetna Patient Access returned no Patient resource.", "aetna_patient_access_member_not_found");
   }
   const [coverages, eobs] = await Promise.all([
-    collectSearch(client, "v2/patientaccess/Coverage", "Coverage", maxPages),
-    collectSearch(client, "v2/patientaccess/ExplanationOfBenefit", "ExplanationOfBenefit", maxPages)
+    collectSearch(
+      client,
+      "v2/patientaccess/Coverage",
+      "Coverage",
+      maxPages
+    ),
+    collectSearch(
+      client,
+      "v2/patientaccess/ExplanationOfBenefit",
+      "ExplanationOfBenefit",
+      maxPages
+    )
   ]);
   const snapshot = {
     id: createId("snapshot"),
@@ -361,12 +374,22 @@ export async function syncAetnaSandboxPatientAccess(store, {
   const balances = [];
   for (const eob of eobs) {
     const source = `${snapshot.source_url}/ExplanationOfBenefit/${encodeURIComponent(eob?.id ?? "unknown")}`;
-    const claim = normalizeClaim(eob, snapshot.id, source);
-    await store.insert("claim_items", claim);
+    const existingClaim = await store.get(
+      "SELECT * FROM claim_items WHERE source = ? ORDER BY created_at DESC LIMIT 1;",
+      [source]
+    );
+    const claim = existingClaim ?? normalizeClaim(eob, snapshot.id, source);
+    if (!existingClaim) await store.insert("claim_items", claim);
     claims.push(claim);
     for (const balance of normalizeBalances(eob, snapshot.id, source)) {
-      await store.insert("coverage_balances", balance);
-      balances.push(balance);
+      const existingBalance = await store.get(
+        `SELECT * FROM coverage_balances
+         WHERE source = ? AND balance_type = ? AND label = ?
+         ORDER BY created_at DESC LIMIT 1;`,
+        [source, balance.balance_type, balance.label]
+      );
+      if (!existingBalance) await store.insert("coverage_balances", balance);
+      balances.push(existingBalance ?? balance);
     }
   }
   const event = await audit(store, sessionId, "aetna_patient_access.sync_completed", {

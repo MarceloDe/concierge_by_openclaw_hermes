@@ -1,4 +1,4 @@
-import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
+import { Annotation, Command, END, MemorySaver, START, StateGraph, interrupt } from "@langchain/langgraph";
 import { audit } from "./audit.mjs";
 import { buildAi2UiBlocksFromState } from "./ai2uiBlocks.mjs";
 import { buildCheckpointResumePlan } from "./checkpointResumePlan.mjs";
@@ -63,6 +63,7 @@ import { composeSourcedAnswerWithOpenAI } from "./intelligence/sourcedAnswerComp
 import { publishRuntimeEvent } from "./runtimeEvents.mjs";
 import { composeBestEffortAnswer, proposeBasicClarification } from "./gracefulDegradation.mjs";
 import { createGraphCheckpointer } from "./graphCheckpointer.mjs";
+import { CHECKPOINT_RUNTIME_VERSIONS, resumeCompatibility } from "./graphCheckpointerStore.mjs";
 import { observedLangGraphNode, runWithTraceContext, start_checkpoint, summarizeNodeOutput, withCheckpoint } from "../observability/checkpoints.mjs";
 import { readWorkerRuntimeState, recordWorkerDispatchState } from "./workerRuntimeState.mjs";
 import { classifyBrowserRemoteReadiness } from "./browserRemoteReadiness.mjs";
@@ -76,7 +77,23 @@ import {
 
 export const LANGGRAPH_RUNNER_VERSION = "2026-07-02.langgraph-runner.phase83-84-three-layer-planner.v2";
 
-const { checkpointer, readiness: graphCheckpointerReadiness } = createGraphCheckpointer();
+// Node's test runner starts one process per test file. Giving every hermetic unit
+// process a PostgreSQL pool can exhaust the server before behavior assertions run.
+// This branch is unreachable in the application runtime and is never accepted as a
+// durability proof; the explicit live PostgreSQL suites call createGraphCheckpointer
+// directly and may force this module onto PostgreSQL for process-restart coverage.
+const unitTestCheckpointer = Boolean(process.env.NODE_TEST_CONTEXT) && process.env.BRAINSTY_FORCE_POSTGRES_TEST_CHECKPOINTER !== "1";
+const { checkpointer, readiness: graphCheckpointerReadiness } = unitTestCheckpointer
+  ? {
+      checkpointer: new MemorySaver(),
+      readiness: {
+        mode: "memory_test_only",
+        durable: false,
+        survivesRestart: false,
+        status: "test_only_not_runtime_acceptance"
+      }
+    }
+  : createGraphCheckpointer();
 const activeStores = new Map();
 
 function field(defaultValue = null) {
@@ -3399,12 +3416,15 @@ async function composeResponseNode(state) {
   const user = userFromContext(state.context_packet);
   const portal = portalFromContext(state.context_packet);
   const routeSummary = summarizeRoute(state.workflow_route);
+  const uploadedEvidenceCaptured = ["captured_uploaded_document_extraction", "blocked_uploaded_document_extraction"].includes(
+    state.evidence_observation?.status
+  );
   // Type-II (gated): reason as a PROCESS and OFFER the relevant catalog process instead
   // of a flat template/degrade. Fires when there is NO stored evidence OR when the
   // planner explicitly wants to offer (canAnswerNow=false / offer_process_and_ask /
   // offeredProcessIds) — so tangential prior evidence (source_pointers>0) no longer
   // gates the offer out. Sourced answers with real grounded claims are unaffected.
-  if (sourcePointers.length === 0 || plannerWantsProcessOffer(state.llm_orchestration_decision)) {
+  if (!uploadedEvidenceCaptured && (sourcePointers.length === 0 || plannerWantsProcessOffer(state.llm_orchestration_decision))) {
     const offered = await attemptCapabilityProcessOffer(state);
     if (offered) return offered;
   }
@@ -3857,6 +3877,34 @@ function hasPendingApprovalInterrupt(snapshot) {
   return Boolean(snapshot.tasks?.some((task) => task?.name === "approval_pause" || task?.interrupts?.length));
 }
 
+// Phase 91 (§4.3 deploy acceptance, founder #17): a pending interrupt written by a
+// PREVIOUS deploy may encode a different interrupt/planner/checkpointer schema. Resuming
+// it would replay an approval whose meaning has changed — an ambiguous post-deploy
+// action. Durable savers stamp their runtime versions; on a mismatch we EXPIRE the stale
+// thread and let the run re-raise the interrupt, so the user is asked again with the
+// current contract. Non-durable savers carry no stamp and are never resumed across a
+// restart anyway, so they report compatible and behave exactly as before.
+async function resolveResumeCompatibility(store, { threadId, sessionId }) {
+  if (typeof checkpointer.runtimeVersionsForThread !== "function") {
+    return { compatible: true, action: "resume", reason: "checkpointer_not_version_stamped" };
+  }
+  const stored = await checkpointer.runtimeVersionsForThread(threadId);
+  if (stored === null) return { compatible: true, action: "resume", reason: "no_stored_checkpoint" };
+  const verdict = resumeCompatibility(stored);
+  if (!verdict.compatible) {
+    await checkpointer.deleteThread(threadId);
+    await audit(store, sessionId, "graph_interrupt.expired_schema_change", {
+      threadId,
+      reason: verdict.reason,
+      mismatched: verdict.mismatched ?? [],
+      storedRuntimeVersions: stored,
+      currentRuntimeVersions: CHECKPOINT_RUNTIME_VERSIONS,
+      userFacingEffect: "the pending approval was re-asked under the current contract; nothing was executed"
+    });
+  }
+  return verdict;
+}
+
 function interruptedStatePatch(state) {
   const interrupts = Array.isArray(state.__interrupt__) ? state.__interrupt__ : state.__interrupt__ ? [state.__interrupt__] : [];
   if (!interrupts.length) return state;
@@ -3913,6 +3961,9 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
     adapter: productMemoryRecall.adapter,
     enabled: productMemoryRecall.enabled,
     provider: productMemoryRecall.provider ?? "zep_graphiti",
+    owner: "langgraph",
+    workerAccess: "read_only_context_projection",
+    retainAuthority: "langgraph_post_graph_only",
     status: productMemoryRecall.ok === false ? "recall_failed" : productMemoryRecall.status ?? "available",
     contractVersion: productMemoryRecall.contractVersion,
     recalledFacts: productMemoryRecall.facts ?? [],
@@ -4039,8 +4090,15 @@ export async function runLangGraphOrchestration(store, { user, session, channel 
   let state;
   try {
     const checkpointState = rawMessage?.approvalToken ? await graph.getState(config).catch(() => null) : null;
+    const pendingInterrupt = Boolean(rawMessage?.approvalToken) && hasPendingApprovalInterrupt(checkpointState);
+    const resumeVerdict = pendingInterrupt
+      ? await resolveResumeCompatibility(store, {
+          threadId: session.langgraph_thread_id,
+          sessionId: session.id
+        })
+      : { compatible: true, action: "resume", reason: "no_pending_interrupt" };
     const graphInput =
-      rawMessage?.approvalToken && hasPendingApprovalInterrupt(checkpointState)
+      pendingInterrupt && resumeVerdict.compatible
         ? new Command({
             resume: rawMessage.approvalToken,
             update: initialState

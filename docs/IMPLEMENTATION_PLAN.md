@@ -3402,3 +3402,92 @@ Gates:
 - `npm run test:local`.
 - API proof through `/api/proof/runs/local` and `/api/mvp/final-goal-evaluation`.
 - Visual proof through the operator dashboard Phase 65 card.
+
+## 2026-07-13 — Phase ledger reconciliation for CareRoute and Bill Guardian
+
+The Cortex-authoritative CareRoute/Bill Guardian sequence is mirrored into the binding
+machine-readable ledger as Phases 93-96. Phase 93 depends directly on Phase 90 and does not
+depend on externally blocked Phases 91-92. Phase 90 remains the active implementation gate;
+no Phase 93 code begins until its real sandbox credential and member-rail acceptance closes.
+
+Implementation order:
+
+1. Finish Phase 90 with issued Aetna sandbox credentials, a real test-member OAuth/EOB read,
+   a real expiry-to-reauth arm, member-data rail proof, and the separately labeled Stedi test
+   contract arm.
+2. Keep Phases 91-92 unchanged and externally/signature gated.
+3. Start Phase 93 Bill Guardian foundation only after Phase 90 lands.
+4. Continue serially through Phase 94 deterministic CareRoute, Phase 95 longitudinal and
+   accumulator-aware calculations, and Phase 96 TPA/white-label pilot.
+
+Detailed scope and acceptance live in
+`docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-careroute-and-bill-guardian-extension-cortex-authoritative`.
+
+## 2026-07-18 — Founder Watchdog cross-phase control plane
+
+Goal: give the founder one private, source-linked view of project architecture, prompts,
+runtime state, data stores, API/driver inventory, configuration, roadmap, and proof without
+creating a second orchestration or trace authority.
+
+Build:
+
+- Generate a sanitized deploy manifest from the phase ledger, planner spine YAML,
+  Postgres schema snapshot, Redis namespace contract, prompt source, git commit, Graphify
+  AST map, and bounded local reachability probes.
+- Render separate truth dimensions for code/proof status and current reachability. A
+  runtime-selectable registry row is not automatically green when its dependency or backing
+  data is absent.
+- Provide Command, Architecture, Runtime, Modules, Prompts, Data & APIs, Configuration,
+  Roadmap, and Proof views, including four sequence paths and the 11-node LangGraph flow.
+- Link every curated module to a local `vscode://file/path:line` target and a universal
+  GitHub line fallback.
+- Keep prompt templates founder-visible while excluding live PHI-bearing payloads; link to
+  Langfuse for exact traces when its configured health endpoint is reachable.
+- Keep the hosted surface read-only. A future local control bridge requires its own threat
+  model, authentication, approval, audit, signed snapshots, and separate acceptance slice.
+
+Deployment loop:
+
+1. Implement and prove a project change.
+2. Run `npm run generate:watchdog` in the Site source.
+3. Build, test, and visually verify all views in the Codex browser.
+4. Commit the exact generated snapshot and deploy a private immutable Codex Sites version.
+
+Non-goals:
+
+- No agent-trace duplication, PHI, secrets, cookies, tokens, raw live prompt payloads, or
+  direct mutation of `runtime_selectable`, signature gates, safety rails, or approvals.
+- No claim that a stopped dependency, empty backing table, contract-ready connector, or
+  scaffold is running.
+
+## 2026-07-18 — Founder Watchdog v2 correctness and live telemetry
+
+1. Generate only from the explicit checkout being built. Never prefer another local workspace
+   merely because it exists; production generation fails when that source checkout is dirty.
+2. Derive repository ownership from `git remote` and pin GitHub line links to the source commit.
+3. Record three separate runtime dimensions: implementation proof, isolated module-load proof,
+   and active service health. A stopped Node server cannot imply that LangGraph failed to load.
+4. Require protocol-aware health evidence: expected HTTP status/schema, Redis `PONG`, and
+   `pg_isready`; a responding 404 is reachable-only amber, never healthy green.
+5. Provide an optional loopback-only, origin-allowlisted, GET-only collector that regenerates
+   the sanitized manifest and lets the private Site refresh local evidence every 30 seconds.
+6. Verify every relevant pull request and `main` change through the Founder Watchdog GitHub
+   integrity workflow. Private Sites publishing remains an explicit versioned release action.
+7. Keep mutation outside this slice. The live collector cannot write configuration, prompts,
+   databases, worker state, credentials, capabilities, or payer systems.
+
+## 2026-07-18 — Founder Watchdog runtime-fidelity completion
+
+1. Start the complete locally supported application stack before generating the release
+   snapshot: Node, FastAPI, the mobile PWA, PostgreSQL, Redis, FalkorDB, OpenClaw, Hermes,
+   Langfuse, and the browser/CDP substrate.
+2. Probe each HTTP service through its real health contract rather than a generic root URL.
+   FastAPI must additionally prove `node_runtime_ok`; Chrome/CDP must return its schema on the
+   actual active CDP endpoint.
+3. Carry a sanitized subset of the Node health contract into the manifest so database driver,
+   Redis write/read readiness, storage posture, model configuration, OpenClaw reachability, and
+   product-memory policy state remain distinguishable.
+4. Treat FalkorDB availability and Graphiti product-memory utilization as separate facts. A
+   healthy graph backend remains amber for product-memory use while PHI clearance is absent.
+5. Keep the local collector stateless/read-only and the hosted Site immutable per version;
+   durable application state remains in PostgreSQL, with Redis as a rebuildable mirror.

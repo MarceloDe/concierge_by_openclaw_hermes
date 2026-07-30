@@ -18,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { TABLES, SCHEMA_SQL } from "../concierge/schema.mjs";
 
 const POSTGRES_SCHEMA_JSON_PATH = resolve(import.meta.dirname, "../../docs/db/postgres-schema.json");

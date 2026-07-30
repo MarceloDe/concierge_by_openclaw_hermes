@@ -101,7 +101,7 @@
   "required_apis": {
     "connectors": [
       "graphiti_recall",
-      "local_sqlite_source_pointer_lookup",
+      "postgres_source_pointer_lookup",
       "research_trusted_retrieval"
     ]
   },

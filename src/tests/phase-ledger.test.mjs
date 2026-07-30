@@ -13,7 +13,7 @@ const ledgerPath = join(repoRoot, "docs", "db", "phase-ledger.json");
 
 const REQUIRED_FIELDS = ["phase", "title", "status", "dependencies", "docs_touched", "acceptance_criteria_file", "owner", "blockers"];
 const ALLOWED_STATUSES = new Set(["planned", "in_progress", "landed", "blocked_external"]);
-const PLAN_PHASE_RANGE = { from: 83, to: 92 };
+const PLAN_PHASE_RANGE = { from: 83, to: 96 };
 
 function loadLedger() {
   return JSON.parse(readFileSync(ledgerPath, "utf8"));
@@ -41,7 +41,7 @@ test("every entry carries the founder-required fields with valid values", () => 
   }
 });
 
-test("every plan phase 83-92 has a ledger entry and dependencies resolve", () => {
+test("every plan phase 83-96 has a ledger entry and dependencies resolve", () => {
   const ledger = loadLedger();
   const byPhase = new Map(ledger.phases.map((entry) => [entry.phase, entry]));
   for (let phase = PLAN_PHASE_RANGE.from; phase <= PLAN_PHASE_RANGE.to; phase += 1) {
@@ -53,6 +53,38 @@ test("every plan phase 83-92 has a ledger entry and dependencies resolve", () =>
       assert.ok(dep < entry.phase, `phase ${entry.phase} dependency ${dep} must be an earlier phase`);
     }
   }
+});
+
+test("CareRoute extension starts after Phase 90 without waiting for blocked Phases 91-92", () => {
+  const ledger = loadLedger();
+  const phase93 = ledger.phases.find((entry) => entry.phase === 93);
+  assert.deepEqual(phase93.dependencies, [90]);
+  assert.equal(phase93.status, "planned");
+  assert.ok(!phase93.dependencies.includes(91));
+  assert.ok(!phase93.dependencies.includes(92));
+
+  for (const [phase, dependency] of [[94, 93], [95, 94], [96, 95]]) {
+    const entry = ledger.phases.find((item) => item.phase === phase);
+    assert.deepEqual(entry.dependencies, [dependency], `phase ${phase} must follow phase ${dependency}`);
+    assert.equal(entry.status, "planned", `phase ${phase} must not be marked started before its dependency lands`);
+  }
+});
+
+test("landed Phase 89 has no stale MRF entry-gate blocker and retains its real proof", () => {
+  const ledger = loadLedger();
+  const phase89 = ledger.phases.find((entry) => entry.phase === 89);
+  assert.equal(phase89.status, "landed");
+  assert.deepEqual(phase89.blockers, []);
+
+  const transcriptPath = join(repoRoot, "artifacts", "phase89", "mrf-entry-gate-transcript.md");
+  const acceptanceProofPath = join(repoRoot, "artifacts", "phase89", "phase89-acceptance-proof.md");
+  assert.ok(existsSync(transcriptPath), "Phase 89 MRF entry-gate transcript must remain committed");
+  assert.ok(existsSync(acceptanceProofPath), "Phase 89 acceptance proof must remain committed");
+
+  const transcript = readFileSync(transcriptPath, "utf8");
+  const acceptanceProof = readFileSync(acceptanceProofPath, "utf8");
+  assert.match(transcript, /now VERIFIED by a real/i);
+  assert.match(acceptanceProof, /ENTRY GATE: first unauthenticated MRF fetch[^\n]*PASS \(VERIFIED LIVE\)/i);
 });
 
 test("acceptance pointers reference files that exist; signature-gated phases stay blocked_external", () => {

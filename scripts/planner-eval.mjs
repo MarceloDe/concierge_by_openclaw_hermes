@@ -3,11 +3,9 @@
 // (live gpt-4.1) and scores demand extraction + workflow/process selection against expectations.
 // This is the measurement loop for "increase final performance" — run it before/after prompt or
 // catalog changes to see if accuracy moved. Usage: node scripts/planner-eval.mjs
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { loadLocalEnvOnce } from "../src/concierge/secrets.mjs";
-import { SqliteStore, createId, nowIso } from "../src/concierge/database.mjs";
+import { createId, nowIso } from "../src/concierge/database.mjs";
+import { closeRuntimeDatabaseStore, getRuntimeDatabaseStore } from "../src/concierge/databaseFactory.mjs";
 import { enrollDefaultMember } from "../src/concierge/enrollment.mjs";
 import { seedCapabilityCatalog } from "../src/concierge/capabilityCatalogSeed.mjs";
 import { runLangGraphOrchestration } from "../src/concierge/langgraphRunner.mjs";
@@ -32,7 +30,7 @@ const DATA_LAYERS = ["layer_1_public", "layer_2_member_authorized_api", "layer_3
 async function main() {
   await loadLocalEnvOnce();
   process.env.BRAINSTY_TYPE_II_COMPOSER = "1";
-  const store = await new SqliteStore(join(await mkdtemp(join(tmpdir(), "planner-eval-")), "g.sqlite")).initialize();
+  const store = await getRuntimeDatabaseStore(process.env);
   await seedCapabilityCatalog(store, { nowIso, createId });
 
   const rows = [];
@@ -92,7 +90,7 @@ async function main() {
   console.log(`  workflow graph (v2): ${pct("workflowGraphOk")}`);
   console.log(`  capability source  : ${pct("capabilitySourceOk")} (db_catalog required — Phase 86)`);
   console.log("\n(Inspect the full per-node hydration of any case in Langfuse: planner.start -> Input.full_prompt.)");
-  await store.close?.();
+  await closeRuntimeDatabaseStore();
 }
 
 main().catch((err) => { console.error("planner-eval failed:", err?.message ?? err); process.exit(1); });

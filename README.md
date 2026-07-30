@@ -49,6 +49,17 @@ The system was pivoted from a restricted-context MVP to a **three-data-layer pla
 | Proof discipline | Per-phase acceptance artifacts under `artifacts/phase8x/`; `test:local` 431 passing; live suites per phase (`test:phase89:live`, `test:redis:*`) |
 | Current blockers | Founder S1 (Aetna portal registration → Phase 90 Part 2), S2 + signatures (Phases 91/92), production Postgres checkpointer (named Phase 91-window item) |
 
+### Memory authority
+
+| Layer | Runtime authority | Boundary |
+| --- | --- | --- |
+| Project/agent memory | Cortex | Implementation context and cross-agent decisions only; never healthcare product state |
+| Workflow memory | LangGraph checkpointer plus application database | Sessions, graph state, approvals, tasks, audit, and restart/resume |
+| Long-term product memory | Zep Graphiti over FalkorDB | Temporal retain/recall invoked by LangGraph before and after graph execution |
+| Worker continuity | OpenClaw task runtime state | Bounded task context projected by LangGraph; OpenClaw cannot write product memory directly |
+
+Graphiti is the only product context-graph runtime. Development-time knowledge-base analysis tools are not application dependencies and have no memory authority.
+
 ## Screenshots
 
 The screenshots below are README-safe copies with login fields redacted.
@@ -78,7 +89,10 @@ flowchart LR
   Node --> Skills["OpenClaw skill registry<br/>executor registry<br/>worker policy"]
   Node --> Composer["LLM sourced answer composer<br/>claim/source validator"]
   Node --> DB["Deterministic app state<br/>SQLite local, Postgres target"]
-  Node --> Memory["Product memory<br/>Graphiti/Zep direction"]
+  Graph --> WorkflowMemory["Workflow memory<br/>checkpointer + application DB"]
+  Graph --> Memory["Long-term product memory<br/>Zep Graphiti + FalkorDB"]
+  Graph --> Skills
+  Skills --> WorkerMemory["Bounded worker continuity<br/>OpenClaw runtime state"]
   Node --> Audit["Audit, retention, egress<br/>runtime events"]
 
   Facade --> Browser["BrowserSandboxProvider<br/>steel-self-host"]

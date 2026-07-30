@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { buildContextPacket } from "../concierge/memoryHarness.mjs";
 import {
@@ -16,6 +16,7 @@ import {
   syncAetnaSandboxPatientAccess
 } from "../concierge/connectors/aetnaPatientAccess.mjs";
 import { memberDataRail } from "../concierge/connectors/tokenVault.mjs";
+import { buildLlmOrchestrationDecisionMessages } from "../concierge/llmOrchestrationDecision.mjs";
 
 process.env.BRAINSTY_REDIS_URL = "";
 process.env.REDIS_URL = "";
@@ -70,6 +71,7 @@ test("Phase 90: Aetna OAuth state is session-bound, expiring, and single-use", a
 
 test("Phase 90: Aetna sandbox contract flow stores encrypted token, performs FHIR read, persists EOB/balance pointers, and records api_covered", async (t) => {
   let tokenRequest = null;
+  const fhirRequests = [];
   const service = await listen(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "POST" && url.pathname === "/oauth2/token") {
@@ -91,6 +93,7 @@ test("Phase 90: Aetna sandbox contract flow stores encrypted token, performs FHI
       response.end(JSON.stringify({ resourceType: "OperationOutcome" }));
       return;
     }
+    fhirRequests.push(url);
     response.writeHead(200, { "content-type": "application/fhir+json" });
     if (url.pathname.endsWith("/Patient/sandbox-patient-1")) {
       response.end(JSON.stringify({ resourceType: "Patient", id: "sandbox-patient-1" }));
@@ -154,6 +157,11 @@ test("Phase 90: Aetna sandbox contract flow stores encrypted token, performs FHI
   assert.equal(sync.structured.coverageBalances.length, 1);
   assert.equal(sync.structured.claims[0].share_amount, 42.5);
   assert.equal(sync.structured.coverageBalances[0].remaining_amount, 750);
+  const coverageRequest = fhirRequests.find((url) => url.pathname.endsWith("/Coverage"));
+  assert.equal(coverageRequest.searchParams.has("_revinclude"), false);
+  assert.equal(coverageRequest.searchParams.has("_count"), false);
+  const eobRequest = fhirRequests.find((url) => url.pathname.endsWith("/ExplanationOfBenefit"));
+  assert.equal(eobRequest.searchParams.has("_count"), false);
   const rail = await memberDataRail(store, { userId: user.id, payerKey: "aetna" });
   assert.equal(rail.rail, "api_covered");
   assert.match(rail.probeEvidencePointer, /^audit_events#/);
@@ -161,4 +169,33 @@ test("Phase 90: Aetna sandbox contract flow stores encrypted token, performs FHI
   const laterContext = await buildContextPacket(store, { user, session, userInput: "What did my recent claim cost?" });
   assert.ok(laterContext.packet.dbPointers.some((pointer) => pointer.table === "claim_items"));
   assert.ok(laterContext.packet.dbPointers.some((pointer) => pointer.table === "coverage_balances"));
+
+  const claimCountBeforeRepeat = await store.get("SELECT COUNT(*) AS count FROM claim_items;");
+  const balanceCountBeforeRepeat = await store.get("SELECT COUNT(*) AS count FROM coverage_balances;");
+  const repeatedSync = await syncAetnaSandboxPatientAccess(store, {
+    userId: user.id,
+    sessionId: session.id,
+    portalAccountId: portal.id,
+    grantId: oauth.grantId,
+    patientId: oauth.patientId,
+    fhirBaseUrl: service.baseUrl
+  });
+  assert.equal(repeatedSync.synced, true);
+  assert.equal((await store.get("SELECT COUNT(*) AS count FROM claim_items;")).count, claimCountBeforeRepeat.count);
+  assert.equal((await store.get("SELECT COUNT(*) AS count FROM coverage_balances;")).count, balanceCountBeforeRepeat.count);
+});
+
+test("Phase 90: planner prefers persisted Patient Access evidence over portal control", () => {
+  const [system] = buildLlmOrchestrationDecisionMessages({
+    user_input: "What did my recent claim cost?",
+    context_packet: {
+      dbPointers: [{
+        table: "claim_items",
+        id: "claim_pointer_only",
+        sourceUrl: "https://vteapif1.aetna.com/fhirdemo/v1/patientaccess/ExplanationOfBenefit"
+      }]
+    }
+  });
+  assert.match(system.content, /persisted Patient Access Coverage\/EOB pointers/);
+  assert.match(system.content, /never require portal control merely because the evidence came from the preferred API layer/);
 });

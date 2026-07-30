@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createId, SqliteStore } from "../concierge/database.mjs";
+import { createId, SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { sweepExpiredRuntimeState } from "../concierge/retentionPolicy.mjs";
 import { createRetentionSweepDaemon } from "../concierge/retentionScheduler.mjs";

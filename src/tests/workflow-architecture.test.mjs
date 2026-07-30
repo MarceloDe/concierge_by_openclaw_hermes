@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { buildContextPacket } from "../concierge/memoryHarness.mjs";
 import { toLangGraphAgentState, toOpenClawHeartbeatEnvelope } from "../concierge/runtimeAdapters.mjs";
@@ -27,7 +27,9 @@ test("runtime registries are seeded during database initialization", async () =>
   assert.ok(workflows.some((row) => row.workflow_key === "pharmacy_formulary"));
   assert.ok(workflows.some((row) => row.workflow_key === "denial_appeal_preparation"));
   assert.ok(tools.some((row) => row.tool_key === "openclaw_authenticated_browser"));
-  assert.ok(tools.some((row) => row.tool_key === "hindsight_memory_adapter"));
+  const graphitiMemory = tools.find((row) => row.tool_key === "zep_graphiti_memory_adapter");
+  assert.ok(graphitiMemory);
+  assert.equal(graphitiMemory.integration_status, "enabled_when_runtime_and_phi_clearance_are_configured");
   assert.ok(sources.some((row) => row.source_key === "cms_icd10_files"));
   assert.ok(sources.some((row) => row.source_key === "aetna_clinical_policy_bulletins"));
   const browserSkill = skills.find((row) => row.skill_key === "insurance_portal_browser");
@@ -51,7 +53,7 @@ test("context packet injects workflow readiness, journey, tools, sources, and Op
   assert.equal(context.packet.timestampType, "iso_8601_utc_text");
   assert.ok(architecture.readiness.some((item) => item.workflowKey === "eligibility_benefits_navigation"));
   assert.ok(architecture.routeCandidates[0].routeScore > 0);
-  assert.ok(architecture.tools.some((tool) => tool.key === "local_sqlite_memory"));
+  assert.ok(architecture.tools.some((tool) => tool.key === "postgres_runtime_memory"));
   assert.ok(architecture.knowledgeSources.some((source) => source.key === "aetna_member_portal"));
   assert.ok(architecture.openclawSkills.some((skill) => skill.key === "insurance_portal_browser"));
 

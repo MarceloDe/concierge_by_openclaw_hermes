@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore, DEFAULT_DB_PATH } from "../concierge/database.mjs";
+import { SqliteStore, DEFAULT_DB_PATH } from "./support/sqliteTestStore.mjs";
 import { enrollDefaultMember } from "../concierge/enrollment.mjs";
 import { runLangGraphOrchestration } from "../concierge/langgraphRunner.mjs";
 import { createReadOnlyObservationApproval } from "../concierge/approvalResume.mjs";

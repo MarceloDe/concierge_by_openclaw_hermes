@@ -2680,3 +2680,75 @@ Focused proof:
 - Dashboard proof exposes `phase65_final_mvp_goal_evaluation` with score, decision, final answer, next recommended phase, and production blockers.
 - `/api/mvp/final-goal-evaluation` returns the same final evaluation check object.
 - Required gates: `npm run test:mvp:final`, `npm run build`, `npm run test:local`, API proof, and visual dashboard proof.
+
+## Phases 93-96 — CareRoute and Bill Guardian
+
+- `docs/db/phase-ledger.json` contains Phases 93-96 and the blocking test validates every
+  phase from 83 through 96.
+- Phase 93 depends on Phase 90 only; it does not falsely wait on externally blocked Phases
+  91-92, and it may not start while Phase 90 is `in_progress`.
+- Phase 90 external prerequisites are reported as `external_blocked`; missing credentials
+  never produce a scaffold connector or mock readiness claim.
+- Phase-specific real-runtime acceptance is binding at
+  `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-careroute-and-bill-guardian-extension-cortex-authoritative`.
+- PostgreSQL remains the only workflow/pointer/approval/task/audit authority, Redis remains
+  rebuildable cache only, Zep Graphiti/FalkorDB remains temporal facts only, and OpenClaw
+  remains bounded worker state with no product-memory authority.
+
+## Founder Watchdog cross-phase control plane
+
+- A generated snapshot records the source commit, branch, generation time, phase-ledger
+  status, 11-node graph topology, 89-table Postgres schema, eight Redis namespaces, prompt
+  source, curated modules, API/driver inventory, and bounded local dependency probes.
+- Code/proof state and current runtime reachability render independently. Stopped services
+  stay visibly red even when their implementation has historical proof.
+- Phases 83-89 render landed, Phase 90 in progress, Phases 91-92 externally blocked, and
+  Phases 93-96 planned directly from `docs/db/phase-ledger.json`.
+- The prompt view exposes every direct project LLM/prompt boundary with source anchors and a
+  safe payload preview, and does not expose live identifiers, secrets, or PHI.
+- The configuration view renders the complete planner spine YAML and only variable-name
+  presence booleans; no environment value is exported.
+- The UI provides functional desktop and 390px mobile navigation, architecture, sequence,
+  module, prompt, database, Redis, API, configuration, roadmap, and proof interactions with
+  no horizontal document overflow.
+- Every curated source card has a local VS Code deep link and a GitHub line fallback. Browser
+  policy may block custom protocols; that limitation is stated rather than bypassed.
+- `npm test`, `npm run lint`, and the production build pass. Codex-browser QA shows no active
+  hydration/error overlay after deterministic UTC rendering.
+- The deployed Codex Site is private/owner-only and read-only. No operational toggle is
+  exposed without a separately accepted authenticated local bridge.
+
+### Founder Watchdog v2 corrective acceptance
+
+- A clean checkout produces `snapshot.sourceRoot` from that checkout and records the exact
+  branch/commit; `WATCHDOG_REQUIRE_CLEAN=1` fails before generation on a dirty source tree.
+- Every GitHub source link uses the repository derived from `origin` and returns the canonical
+  `MarceloDe/concierge_by_openclaw_hermes` commit-pinned path rather than the former 404 owner.
+- The LangGraph module probe imports `langgraphRunner.mjs`, compiles all 11 graph nodes through
+  the explicit test-only checkpointer-key gate, and records the proof boundary without claiming
+  a database query, model call, or active HTTP service.
+- When the Node API is stopped, the orchestrator renders `module load verified / service
+  stopped`; it never renders `not_loaded` solely from a failed port probe.
+- HTTP 404 is amber reachable-only, Redis is green only after `PONG`, PostgreSQL is green only
+  after `pg_isready`, and Chrome CDP is green only with the expected JSON fields.
+- The local collector binds only to `127.0.0.1`, accepts only GET/OPTIONS, allowlists the private
+  Site and local dev origins, exports only the sanitized manifest, and rejects other origins and
+  all mutation methods.
+- The Site can connect to the collector, replace snapshot evidence with live local evidence,
+  poll every 30 seconds, and return to a clear retry state when the collector is unavailable.
+- Lint, production build, rendered HTML tests, collector tests, source-link checks, desktop QA,
+  and 390px responsive QA pass before private redeployment.
+
+### Founder Watchdog runtime-fidelity completion
+
+- Hermes is green only when `/health` returns the expected `hermes-agent` JSON contract.
+- Chrome/CDP is green only when an active candidate endpoint returns `Browser` and
+  `webSocketDebuggerUrl`; a 404 on another candidate remains rejected evidence.
+- FastAPI is green only when `/api/v1/health` returns `status=ok` and `node_runtime_ok=true`.
+- The mobile PWA is a first-class curated module and is green only when the rendered page carries
+  the Brainstyworkers mobile-concierge identity.
+- The Node health summary records only sanitized runtime facts; no secret value, raw prompt,
+  user data, token, or private payload is exported.
+- FalkorDB may be healthy while Graphiti utilization is amber due to `phi_clearance_required`;
+  the dashboard must show both facts without collapsing them into a false green memory claim.
+- Desktop and 390px Runtime rendering have no document-level horizontal overflow.

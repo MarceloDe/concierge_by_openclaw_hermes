@@ -9,7 +9,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Find in-network providers by specialty and location from the payer's Plan-Net provider directory, with cited directory source URLs.",
     required_user_fields: ["user.id"],
     required_data_pointers: ["provider_directory_entries"],
-    required_tools: ["provider_directory_public_api", "local_sqlite_memory"],
+    required_tools: ["provider_directory_public_api", "postgres_runtime_memory"],
     memory_scopes: ["session", "episodic"]
   },
   {
@@ -19,7 +19,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Estimate negotiated in-network prices for a shoppable procedure code from Transparency-in-Coverage MRF observations, always cited and always with the non-guarantee disclaimer.",
     required_user_fields: ["user.id"],
     required_data_pointers: ["mrf_price_observations"],
-    required_tools: ["pricing_mrf_query_db", "local_sqlite_memory"],
+    required_tools: ["pricing_mrf_query_db", "postgres_runtime_memory"],
     memory_scopes: ["session", "episodic"]
   },
   {
@@ -29,7 +29,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Confirm plan, eligibility, benefit categories, balances, and source pointers from the payer portal.",
     required_user_fields: ["user.id", "user.email", "portal_account"],
     required_data_pointers: ["portal_accounts"],
-    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory"],
+    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "postgres_runtime_memory"],
     memory_scopes: ["session", "episodic", "semantic"]
   },
   {
@@ -39,7 +39,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Find claim records, status, dates, patient responsibility, and next payer/member actions.",
     required_user_fields: ["user.id", "user.email", "portal_account"],
     required_data_pointers: ["claim_items", "eligibility_snapshots"],
-    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory"],
+    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "postgres_runtime_memory"],
     memory_scopes: ["episodic", "long_term"]
   },
   {
@@ -49,7 +49,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Review medication coverage, formulary tier, pharmacy benefit requirements, copay/coinsurance signals, and source pointers from plan documents or the authenticated payer portal.",
     required_user_fields: ["user.id", "user.email", "portal_account"],
     required_data_pointers: ["eligibility_snapshots", "portal_accounts"],
-    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "local_sqlite_memory", "public_web_search"],
+    required_tools: ["openclaw_authenticated_browser", "payer_portal_reader", "postgres_runtime_memory", "public_web_search"],
     memory_scopes: ["session", "episodic", "semantic", "long_term"]
   },
   {
@@ -89,7 +89,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Review uploaded or locally captured artifacts and traces, extract structured evidence, and identify missing data.",
     required_user_fields: ["user.id", "user.email"],
     required_data_pointers: ["extraction_artifacts", "audit_events"],
-    required_tools: ["local_sqlite_memory", "document_trace_parser"],
+    required_tools: ["postgres_runtime_memory", "document_trace_parser"],
     memory_scopes: ["session", "episodic", "reflection"]
   },
   {
@@ -99,7 +99,7 @@ const WORKFLOW_DEFINITIONS = [
     description: "Pause execution for user approval, missing credentials handled by the user, or high-risk external actions.",
     required_user_fields: ["user.id", "user.email"],
     required_data_pointers: ["approval_gates"],
-    required_tools: ["local_sqlite_memory"],
+    required_tools: ["postgres_runtime_memory"],
     memory_scopes: ["session", "episodic"]
   }
 ];
@@ -196,26 +196,36 @@ const TOOL_REGISTRY = [
     config: { storesSourcePointers: true }
   },
   {
-    tool_key: "local_sqlite_memory",
+    tool_key: "postgres_runtime_memory",
     tool_type: "memory",
-    title: "Local SQLite session and memory harness",
+    title: "Authoritative PostgreSQL runtime state and pointer store",
     risk_level: "medium",
-    integration_status: "enabled_local",
-    approval_required: "local_phi_storage_approval",
+    integration_status: "runtime_required",
+    approval_required: "postgres_phi_storage_boundary",
     executor_key: "local_followup_planner",
     write_capable: 0,
-    config: { storesPhi: true, timestampType: "iso_8601_utc_text" }
+    config: {
+      driver: "postgres",
+      authoritativeFor: ["sessions", "agent_state", "context_packets", "source_pointers", "approvals", "tasks", "audit"],
+      storesPhi: true,
+      timestampType: "iso_8601_utc_text"
+    }
   },
   {
-    tool_key: "hindsight_memory_adapter",
+    tool_key: "zep_graphiti_memory_adapter",
     tool_type: "memory",
-    title: "Hindsight temporal memory adapter",
+    title: "Zep Graphiti temporal product-memory adapter",
     risk_level: "medium",
-    integration_status: "deferred_until_runtime_approval",
-    approval_required: "memory_retention_policy_and_api_setup",
+    integration_status: "enabled_when_runtime_and_phi_clearance_are_configured",
+    approval_required: "phi_clearance_and_runtime_configuration",
     executor_key: "local_followup_planner",
     write_capable: 0,
-    config: { operations: ["recall", "retain", "reflect"] }
+    config: {
+      provider: "zep_graphiti",
+      backend: "falkordb",
+      owner: "langgraph",
+      operations: ["recall_before_graph", "retain_after_graph", "suppress"]
+    }
   },
   {
     tool_key: "aetna_cpb_lookup",
@@ -651,9 +661,9 @@ const OPENCLAW_SKILLS = [
     description: "Inspect pending jobs, due dates, open tasks, last context packet, and propose approval-gated next actions.",
     status: "enabled_local_harness",
     risk_level: "medium",
-    allowed_tools: ["local_sqlite_memory", "gmail_inbox_reader", "whatsapp_sender", "openclaw_authenticated_browser"],
+    allowed_tools: ["postgres_runtime_memory", "gmail_inbox_reader", "whatsapp_sender", "openclaw_authenticated_browser"],
     fallback_strategy: {
-      order: ["local_sqlite_memory", "approval_request_outbox", "manual_user_followup"],
+      order: ["postgres_runtime_memory", "approval_request_outbox", "manual_user_followup"],
       stopCondition: "external_adapter_not_approved"
     },
     prompt_contract: {
@@ -699,6 +709,10 @@ export async function seedRuntimeRegistries(store, { nowIso, createId }) {
   try {
     await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'web_search_authoritative_sources';");
     await store.all("DELETE FROM tool_registry WHERE tool_key = 'web_search_authoritative_sources';");
+    await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'hindsight_memory_adapter';");
+    await store.all("DELETE FROM tool_registry WHERE tool_key = 'hindsight_memory_adapter';");
+    await store.all("DELETE FROM workflow_tool_requirements WHERE tool_key = 'local_sqlite_memory';");
+    await store.all("DELETE FROM tool_registry WHERE tool_key = 'local_sqlite_memory';");
   } catch {
     /* fresh store: nothing to retire */
   }

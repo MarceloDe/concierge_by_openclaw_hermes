@@ -7,7 +7,7 @@ import { recordOutboundPayloadObservation } from "./outboundPayloadObservability
 import { loadLocalEnvOnce } from "./secrets.mjs";
 import { buildGraphitiMemoryNamespaces } from "./trustedAnswerDriving.mjs";
 
-export const PRODUCT_MEMORY_CONTRACT_VERSION = "2026-05-27.graphiti-product-memory.v1";
+export const PRODUCT_MEMORY_CONTRACT_VERSION = "2026-07-12.graphiti-product-memory.v2";
 export const PRODUCT_MEMORY_REPLAY_QUEUE_VERSION = "2026-06-15.product-memory-replay-queue.v1";
 const BRIDGE_PATH = resolve("tools/graphiti/graphiti_bridge.py");
 const DEFAULT_PYTHON_PATH = ".venv-graphiti/bin/python";
@@ -469,7 +469,7 @@ export async function getProductMemoryStatus({ requireEnabled = false, store = n
           : null
       }
     );
-    return { ...status, adapter: "graphiti", enabled: true, config, replayQueue };
+    return { ...status, adapter: "graphiti", provider: "zep_graphiti", enabled: true, config, replayQueue };
   } catch (error) {
     if (requireEnabled) throw error;
     return {
@@ -567,6 +567,16 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
     planId: state.context_packet?.portalAccount?.payer ?? state.workflow ?? "plan",
     scenarioKey: state.workflow ?? "general"
   });
+  const workflow = state.workflow ?? "unknown_workflow";
+  const graphitiEvidenceRelationships = sourcePointers.flatMap((pointer, index) => {
+    const pointerName = `${pointer.table ?? "unknown_table"}/${pointer.id ?? `unknown_${index + 1}`}`;
+    const evidenceName = `StoredHealthcareEvidence${index + 1}`;
+    const summary = pointer.summary ? ` The stored evidence summary is: ${pointer.summary}.` : "";
+    return [
+      `WorkflowCase ${workflow} cites EvidencePointer ${pointerName}.`,
+      `EvidencePointer ${pointerName} supports ${evidenceName}.${summary}`
+    ];
+  });
   return {
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
     memoryKind: "safe_healthcare_workflow_summary",
@@ -578,10 +588,10 @@ export function buildSafeProductMemoryEpisode({ user, session, state, localMemor
     approvalState: state.approval_resume?.status ?? null,
     evidenceStatus: state.evidence_observation?.status ?? null,
     graphitiExtractionText: [
-      `BrainstyMember workflow ${state.workflow ?? "unknown"} had outcome ${state.workflow_outcome ?? "unknown"}.`,
-      sourcePointers.length
-        ? `BrainstyMember answer must cite stored source pointers ${sourcePointers.map((pointer) => `${pointer.table}/${pointer.id}`).join(", ")}.`
-        : "BrainstyMember answer has no healthcare evidence source pointer yet."
+      `BrainstyMember completed WorkflowCase ${workflow}.`,
+      `WorkflowCase ${workflow} had WorkflowOutcome ${state.workflow_outcome ?? "unknown_outcome"}.`,
+      ...graphitiEvidenceRelationships,
+      ...(sourcePointers.length ? [] : [`WorkflowCase ${workflow} has NoStoredHealthcareEvidence.`])
     ].join(" "),
     memoryNamespaces,
     sourcePointers,
@@ -705,9 +715,9 @@ export async function retainProductMemoryFromGraphRun(store, { user, session, st
     action: "retain",
     groupId: config.groupId,
     name: `Brainsty ${state.workflow ?? "workflow"} ${session.id}`,
-    episodeBody,
-    source: "json",
-    sourceDescription: "Brainstyworkers product memory safe workflow summary",
+    episodeBody: episodeBody.graphitiExtractionText,
+    source: "text",
+    sourceDescription: "Brainstyworkers masked Graphiti relationship summary",
     referenceTime: nowIso()
   };
   const retainOnce = (attempt) =>
@@ -888,7 +898,7 @@ export async function probeProductMemory({ store = null, user, session, query = 
     contractVersion: PRODUCT_MEMORY_CONTRACT_VERSION,
     memoryKind: "safe_probe_summary",
     graphitiExtractionText:
-      "BrainstyMember asked about deductible remaining. EligibilitySnapshot probe is the source pointer for the benefits answer.",
+      "BrainstyMember completed WorkflowCase eligibility_benefits_navigation. WorkflowCase eligibility_benefits_navigation cites EvidencePointer eligibility_snapshots/probe. EvidencePointer eligibility_snapshots/probe supports DeductibleEvidence.",
     userPointer: `users/${user.id}`,
     sessionPointer: `sessions/${session?.id ?? "probe"}`,
     workflow: "eligibility_benefits_navigation",
@@ -905,9 +915,9 @@ export async function probeProductMemory({ store = null, user, session, query = 
     action: "retain",
     groupId: status.config.groupId,
     name: `Brainsty product memory probe ${Date.now()}`,
-    episodeBody: safeEpisode,
-    source: "json",
-    sourceDescription: "Brainstyworkers product memory probe",
+    episodeBody: safeEpisode.graphitiExtractionText,
+    source: "text",
+    sourceDescription: "Brainstyworkers masked Graphiti relationship probe",
     referenceTime: nowIso()
   }, {
     observability: {

@@ -11,6 +11,7 @@ data/
 !data/.gitkeep
 eng.traineddata
 *.log
+graphify-out/
 concierge_by_openclaw_hermes/
 project/deployment/secrets/*
 !project/deployment/secrets/

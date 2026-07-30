@@ -68,7 +68,7 @@
   },
   "required_apis": {
     "connectors": [
-      "local_sqlite_source_pointer_lookup"
+      "postgres_source_pointer_lookup"
     ]
   },
   "success_model": {

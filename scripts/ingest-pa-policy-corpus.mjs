@@ -26,14 +26,15 @@
 // skipped LOUD — the challenge page is never stored as policy evidence.
 //
 // Usage:
-//   node scripts/ingest-pa-policy-corpus.mjs --db data/brainstyworkers.sqlite [--limit 3] [--delay-ms 1500]
+//   node scripts/ingest-pa-policy-corpus.mjs [--limit 3] [--delay-ms 1500]
 //
 // Exit codes: 0 = at least one page ingested or verified unchanged;
 //             2 = ALL fetches failed (classified pa_policy_corpus_all_fetches_failed).
 
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { SqliteStore, createId, nowIso } from "../src/concierge/database.mjs";
+import { createId, nowIso } from "../src/concierge/database.mjs";
+import { closeRuntimeDatabaseStore, getRuntimeDatabaseStore } from "../src/concierge/databaseFactory.mjs";
 import { executeResearchRun, startManualResearchRun } from "../src/concierge/researchOps.mjs";
 
 export const PA_POLICY_CRAWLER_VERSION = "2026-07-03.phase89-pa-policy-corpus-crawler.v1";
@@ -492,11 +493,10 @@ export async function ingestPaPolicyCorpus(
 }
 
 function parseArgs(argv) {
-  const args = { db: null, limit: DEFAULT_LIMIT, delayMs: DEFAULT_DELAY_MS };
+  const args = { limit: DEFAULT_LIMIT, delayMs: DEFAULT_DELAY_MS };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
-    if (key === "--db") args.db = argv[++i];
-    else if (key === "--limit") args.limit = Number(argv[++i]);
+    if (key === "--limit") args.limit = Number(argv[++i]);
     else if (key === "--delay-ms") args.delayMs = Number(argv[++i]);
     else if (key === "--help" || key === "-h") args.help = true;
     else throw new PaPolicyCrawlerError(`Unknown argument: ${key}`, "pa_policy_crawler_bad_arguments");
@@ -506,15 +506,14 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (args.help || !args.db) {
-    console.error("Usage: node scripts/ingest-pa-policy-corpus.mjs --db <sqlite-path> [--limit 3] [--delay-ms 1500]");
-    process.exit(args.help ? 0 : 2);
+  if (args.help) {
+    console.error("Usage: node scripts/ingest-pa-policy-corpus.mjs [--limit 3] [--delay-ms 1500] (PostgreSQL from runtime secret profile)");
+    return;
   }
-  const store = await new SqliteStore(args.db).initialize();
+  const store = await getRuntimeDatabaseStore(process.env);
   try {
     const summary = await ingestPaPolicyCorpus(store, { limit: args.limit, delayMs: args.delayMs });
     console.log(JSON.stringify(summary, null, 2));
-    process.exit(0);
   } catch (error) {
     console.error(
       JSON.stringify(
@@ -528,7 +527,9 @@ async function main() {
         2
       )
     );
-    process.exit(2);
+    process.exitCode = 2;
+  } finally {
+    await closeRuntimeDatabaseStore();
   }
 }
 

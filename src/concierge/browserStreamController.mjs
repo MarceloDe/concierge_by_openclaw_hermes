@@ -12,7 +12,7 @@
 //     approval gate (audited via approvalGate) and is session/host/time-bound.
 //   * We relay raw input events (key/mouse/text) but DO NOT log their values — audit
 //     records aggregate counts only, so a password or captcha solution never lands in
-//     the hash-chained audit or the SQLite store.
+//     the hash-chained audit or the authoritative PostgreSQL store.
 //   * Screencast frames are broadcast in-memory only (never written to the DB) because
 //     they are high-frequency and may contain the user's own portal content.
 //

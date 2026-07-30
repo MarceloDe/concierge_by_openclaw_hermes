@@ -301,6 +301,7 @@ function memorySkillTreeHints(state) {
 }
 
 export function buildLlmOrchestrationDecisionPayload(state) {
+  const uploadedDocuments = Array.isArray(state.raw_message?.uploadedDocuments) ? state.raw_message.uploadedDocuments : [];
   return {
     contractVersion: LLM_ORCHESTRATION_DECISION_VERSION,
     purpose:
@@ -324,6 +325,18 @@ export function buildLlmOrchestrationDecisionPayload(state) {
     planIdentities: (state.context_packet?.planIdentities ?? []).slice(0, 4),
     routeCandidates: routeCandidatesFrom(state),
     sourcePointers: sourcePointerHints(state),
+    availableEvidence: {
+      uploadedDocuments: uploadedDocuments.slice(0, 6).map((document) => ({
+        uploadId: compact(document.uploadId, 120),
+        filename: compact(document.filename, 180),
+        contentType: compact(document.contentType, 80),
+        extractionStatus: compact(document.extraction?.status, 80),
+        extractionMethod: compact(document.extraction?.method, 80),
+        fieldLabels: (document.extraction?.fields ?? []).slice(0, 20).map((field) => compact(field.label, 80)),
+        sourceSpanCount: (document.extraction?.sourceSpans ?? []).length,
+        blockerCount: (document.extraction?.blockers ?? []).length
+      }))
+    },
     dynamicSkills: dynamicSkillHints(state),
     memorySkillTree: memorySkillTreeHints(state),
     productMemory: {
@@ -424,6 +437,7 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "OpenClaw workers may be powerful inside the delegated read-only task, but they do not choose the healthcare workflow.",
         "If authenticated portal evidence is needed, ask for manual login/readiness and read-only approval rather than claiming evidence exists.",
         "If source pointers are absent, say what evidence is missing.",
+        "AVAILABLE EVIDENCE: payload.availableEvidence contains masked evidence already attached to this turn. When an uploaded document has extractionStatus='completed', treat the document as present; do not ask the user to upload it again. Select only the matching workflow from payload.allowedWorkflows.",
         `CLASSIFICATION: set classification.taskClass to exactly one of ${TASK_CLASSES.join(" | ")}.`,
         "DATA LAYER: set data_layer to one or more of layer_1_public | layer_2_member_authorized_api | layer_3_portal_control. layer_1_public = public/no-auth data (RAG, MRF pricing, provider directory, CMS data, public web). layer_2_member_authorized_api = member-authorized payer APIs (SMART-on-FHIR/OAuth reads: coverage, claims/EOB, accumulators, eligibility, formulary, prior-auth status). layer_3_portal_control = authenticated portal control, ONLY where no suitable API exists or the user requests a portal action. Prefer lower layers: public before member data, API before portal control.",
         "RISK TIER: set risk_tier to one of low | medium | high | critical. low = answer from already-approved evidence, no new access (general education, public plan explanation, no PHI, no action). medium = member-specific read-only data or read-only portal/document observation (approval interrupt); provider search, cost estimate, benefits interpretation. high = requires an irreversible write action — claims submission, prior-auth packet submission, appeal filing, scheduling, messages, portal writes (single-use approval token; almost never yours to choose). critical = cancellations, enrollment changes, payment, ambiguous high-stakes action, human escalation, or safety refusal. The runtime computes a deterministic floor from policy results and the selected capabilities' approval scopes; you may RAISE the tier, never lower it below the floor.",
@@ -433,7 +447,7 @@ export function buildLlmOrchestrationDecisionMessages(state) {
         "DATA MINIMIZATION: request only the minimum necessary data; never request PHI unless required. Source preference order: 1) public RAG/API, 2) member-authorized FHIR/API, 3) logged portal control, 4) manual user upload/input. Never use public social media or forums as authoritative sources for personalized plan, coverage, claim, or medical-policy decisions — social content may be used only as weak signal for user-confusion patterns, never final answers.",
         "WORKFLOW GRAPH: when you recommend a process, populate workflow_graph.processId with recommendedProcessId and workflow_graph.steps ONLY from that process's steps in offerableProcesses (echo each step's boundary and capabilityPointer; never invent steps). Echo checkpointResumePlan.resumeCheckpointId into workflow_graph.resumeFromCheckpointId when resuming.",
         "Reason as a PROCESS: if you cannot answer now (no evidence, or you need user/plan details), set capabilityAssessment.canAnswerNow=false, set userDataSufficiency, set responseStrategy='offer_process_and_ask', set clarificationNeeded=true with a concrete userFacingNextQuestion, and populate offeredProcessIds/recommendedProcessId from offerableProcesses (never invent a process id not in that list).",
-        "A member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence; they require authenticated portal evidence. For ANY such current-balance/amount question, set canAnswerNow=false and responseStrategy='offer_process_and_ask' (offer the portal-lookup process) EVEN IF research or policy evidence is present. Research/policy evidence supports only general coverage explanations, never a live balance.",
+        "A member's CURRENT / real-time figures — out-of-pocket balance or maximum, deductible balance, accumulators, copay/coinsurance owed, claim-specific amounts, or 'what do I still owe' — CANNOT be known from research/policy/general evidence. They require authenticated member evidence from layer_2_member_authorized_api (for example persisted Patient Access Coverage/EOB pointers) or, only when no suitable API evidence exists, layer_3_portal_control. If matching current authenticated member evidence is already present, set canAnswerNow=true and responseStrategy='answer_from_evidence'; never require portal control merely because the evidence came from the preferred API layer. If it is absent, set canAnswerNow=false and responseStrategy='offer_process_and_ask' using the lowest available rail. Research/policy evidence supports only general coverage explanations, never a live balance.",
         "DEMAND EXTRACTION (do this first): set extractedDemand (what the user wants, in one sentence), targetOutcome (the concrete final info/action), and informationNeeds (the specific data required to fulfill it). Build collectedUserData from conversationHistory + the current message — every datum the user has ALREADY provided (payer, member_id, claim_id, drug, the data they want). informationNeeds MINUS what's in collectedUserData = what you still need (drives clarificationNeeded + missingPlanDetails). Never list a need the user already satisfied.",
         "If you can answer from cited evidence (general coverage/policy facts that are actually present), set canAnswerNow=true and responseStrategy='answer_from_evidence'.",
         "Use conversationHistory (recent prior turns). NEVER re-ask for information the user already gave (payer name, the data they want) and NEVER repeat an offer you already made. If you ALREADY offered the portal-lookup process in a prior turn AND the user's latest message accepts/confirms/proceeds (e.g. 'ready', 'yes', 'ok', 'let's go', names the payer, names the data), DO NOT re-explain the offer — keep responseStrategy='offer_process_and_ask' with the offeredProcessIds set, set clarificationNeeded=false, and set userFacingNextQuestion to a SINGLE short instruction to use the live portal action (the UI shows a 'Connect portal (live)' button).",

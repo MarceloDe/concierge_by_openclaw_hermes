@@ -233,9 +233,10 @@ Conditional edges: `routeAfterInputPolicy` (L3395), `routeAfterWorkflowRouter` (
 
 | File | Key exports | Responsibility |
 |---|---|---|
-| `src/concierge/databaseFactory.mjs` | `createDatabaseStore`, `resolveDatabaseDriver`, `normalizeDatabaseDriver`, `isProductionDatabaseProfile` | Selects SQLite vs Postgres store from env and returns the store to `.initialize()`. |
-| `src/concierge/database.mjs` | `SqliteStore`, `nowIso`, `createId`, `DEFAULT_DB_PATH`, `DATABASE_ADAPTER_VERSION`, `assertSafeTableName`, `assertSafeSqlIdentifier` | node:sqlite-backed bound store + id/time helpers + SQL identifier safety. |
-| `src/concierge/postgresStore.mjs` | `PostgresStore`, `toPostgresSql`, `DEFAULT_POSTGRES_URL`, `POSTGRES_ADAPTER_VERSION` | `pg`-backed store with SQLite-parity API (`$n` param rewriting). |
+| `src/concierge/databaseFactory.mjs` | `createDatabaseStore`, `getRuntimeDatabaseStore`, `runtimePostgresAuthority`, `resolveDatabaseDriver` | Resolves one secret-backed PostgreSQL authority and one process-global store/pool; rejects every non-PostgreSQL runtime selection. |
+| `src/concierge/database.mjs` | `nowIso`, `createId`, `assertSafeTableName`, `assertSafeSqlIdentifier`, `insertConversationMessage` | Runtime-independent id/time and SQL-safety helpers; it contains no database engine. |
+| `src/concierge/postgresStore.mjs` | `PostgresStore`, `toPostgresSql`, `DEFAULT_POSTGRES_URL`, `POSTGRES_ADAPTER_VERSION` | `pg`-backed authoritative runtime store with bound-parameter translation and pooled connections. |
+| `src/concierge/deferredPointerStore.mjs` | `parseDeferredPointer`, `dereferenceDeferredPointer` | PostgreSQL-only deferred-pointer dereference with loud missing-row and missing-backing-artifact failures. |
 | `src/concierge/schema.mjs` | `TABLES`, `SCHEMA_SQL`, `COLUMN_MIGRATIONS` | Canonical table list (75 tables) + `CREATE TABLE` DDL + additive column migrations. |
 
 #### Schema table list (`TABLES`, 75 tables)

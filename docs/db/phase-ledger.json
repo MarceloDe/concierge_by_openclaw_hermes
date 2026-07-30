@@ -1,6 +1,6 @@
 {
-  "version": "2026-07-02.phase-ledger.v1",
-  "source_of_truth_note": "Machine-readable phase ledger (founder decision #12, spine YAML phase_ledger_policy). Agents must never infer phase order from prose. Numbering reconciled against the Cortex ledger 2026-07-02: no conflict, 83-92 kept. Statuses: planned | in_progress | landed | blocked_external.",
+  "version": "2026-07-13.phase-ledger.v2",
+  "source_of_truth_note": "Machine-readable phase ledger (founder decision #12, spine YAML phase_ledger_policy). Agents must never infer phase order from prose. Phases 83-92 remain binding. Phases 93-96 were appended from Cortex origin/main semantic/projects/workerprototype-openclaw-careroute-bill-guardian-phases-93-96.md on 2026-07-13. Phase 93 depends on Phase 90 and intentionally does not depend on externally blocked Phases 91-92. Statuses: planned | in_progress | landed | blocked_external.",
   "plan": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md",
   "phases": [
     {
@@ -106,9 +106,7 @@
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-89",
       "owner": "claude-code",
-      "blockers": [
-        "ENTRY GATE: first unauthenticated MRF fetch committed as an artifacts/ transcript (UNVERIFIED external claim)"
-      ]
+      "blockers": []
     },
     {
       "phase": 90,
@@ -123,7 +121,9 @@
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-90",
       "owner": "codex",
       "blockers": [
-        "Aetna Interoperability review pending after Third-Party Developer sandbox questionnaire submission on 2026-07-11; client credentials and test-member issuance require approval"
+        "Aetna sandbox app and all six Patient Access V2 product subscriptions are approved; live sandbox OAuth and EOB persistence/read-back are proven, while the five-minute token-expiry/reauth arm remains",
+        "Stedi free test/mock API key is not configured; production BAA/key remain prohibited until Phase 91 standing is confirmed",
+        "UM self-funded/TPA Patient Access scope is not confirmed in writing; the developer approval does not establish plan/product eligibility"
       ]
     },
     {
@@ -163,6 +163,75 @@
         "SIGNATURE: clearinghouse trading-partner enrollment + per-payer submitter IDs + certification testing",
         "out-of-band compliance/legal sign-off per docs/EXECUTION_ARCHITECTURE_V2.md",
         "WEFELLA_EXECUTION_WRITE_ENABLED=0 remains the committed default; write workers flip runtime_selectable only via the deterministic capability-policy derivation"
+      ]
+    },
+    {
+      "phase": 93,
+      "title": "Bill Guardian foundation",
+      "status": "planned",
+      "dependencies": [
+        90
+      ],
+      "docs_touched": [
+        "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-93",
+        "docs/POSTGRES_RUNTIME_AUTHORITY.md"
+      ],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-93",
+      "owner": null,
+      "blockers": [
+        "Phase 90 must be landed before Phase 93 implementation begins",
+        "identifiable pilot PHI remains disabled until the named counterparty has an executed BAA/DPA and the relevant runtime gates pass",
+        "Florida-specific legal rule activation requires legal review"
+      ]
+    },
+    {
+      "phase": 94,
+      "title": "Deterministic CareRoute MVP",
+      "status": "planned",
+      "dependencies": [
+        93
+      ],
+      "docs_touched": [
+        "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-94"
+      ],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-94",
+      "owner": null,
+      "blockers": [
+        "Founder physician review is required for every versioned guardrail-taxonomy release"
+      ]
+    },
+    {
+      "phase": 95,
+      "title": "Longitudinal and accumulator-aware engine",
+      "status": "planned",
+      "dependencies": [
+        94
+      ],
+      "docs_touched": [
+        "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-95"
+      ],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-95",
+      "owner": null,
+      "blockers": [
+        "Annual-cost and kappa calculations require a verified and sufficiently current accumulator; unknown impact must stay explicit",
+        "Retrospective results remain estimated savings opportunity until prospective validation"
+      ]
+    },
+    {
+      "phase": 96,
+      "title": "TPA and white-label pilot",
+      "status": "planned",
+      "dependencies": [
+        95
+      ],
+      "docs_touched": [
+        "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-96"
+      ],
+      "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#14-phase-96",
+      "owner": null,
+      "blockers": [
+        "Identifiable pilot data activation requires the applicable BAA/DPA and runtime PHI gates",
+        "Each payer beyond the Aetna MVP remains disabled until independently proven"
       ]
     }
   ]

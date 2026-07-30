@@ -1005,7 +1005,7 @@ function renderConnectorProof(payload) {
           <dt>Egress</dt>
           <dd>${escapeHtml(phase56Check?.egress?.defaultEnforcementMode ?? "enforced")} by default</dd>
           <dt>Database</dt>
-          <dd>${escapeHtml(phase56Check?.database?.sqliteAdapter ?? "node:sqlite")} · shell-out sqlite3 ${escapeHtml(phase56Check?.database?.shellOutSqlite3 ? "present" : "absent")}</dd>
+          <dd>${escapeHtml(phase56Check?.database?.runtimeAuthority ?? "PostgreSQL")} · embedded runtime database disabled</dd>
         </dl>
       </article>
     ` : ""}
@@ -1105,7 +1105,7 @@ function renderConnectorProof(payload) {
           <dt>Score</dt>
           <dd>${escapeHtml(phase68Score.score)} / ${escapeHtml(phase68Score.target)} · ${escapeHtml(phase68Score.status)}</dd>
           <dt>Runtime</dt>
-          <dd>production ${escapeHtml(phase68Check?.readiness?.runtimeDriver ?? phase68Score.runtimeDriver ?? "postgres")} · local dev fallback SQLite</dd>
+          <dd>runtime ${escapeHtml(phase68Check?.readiness?.runtimeDriver ?? phase68Score.runtimeDriver ?? "postgres")} · one PostgreSQL authority</dd>
           <dt>State scope</dt>
           <dd>${escapeHtml((phase68Check?.runtimeStateScope ?? []).join(", ") || "sessions, tasks, audit, evidence, uploads, skill queue, browser state")}</dd>
           <dt>Retention</dt>
@@ -1113,7 +1113,7 @@ function renderConnectorProof(payload) {
           <dt>Backup</dt>
           <dd>${escapeHtml(phase68Check?.backupRestore?.required ?? phase68Score.backupRestore ?? "encrypted_cloud_backup_restore_drill")} · local Docker is dev-only</dd>
           <dt>Safety</dt>
-          <dd>secret profile ${escapeHtml(phase68Check?.checks?.secretProfileRequired ? "required" : "attention")} · shell-out sqlite3 ${escapeHtml(phase68Check?.checks?.sqliteShellOutAbsent ? "absent" : "attention")}</dd>
+          <dd>secret profile ${escapeHtml(phase68Check?.checks?.secretProfileRequired ? "required" : "attention")} · non-PostgreSQL runtime selection rejected</dd>
         </dl>
       </article>
     ` : ""}

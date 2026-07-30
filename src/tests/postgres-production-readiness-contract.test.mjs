@@ -122,35 +122,9 @@ test("storage readiness stays below 100 when default rollout is not rehearsed", 
   assert.equal(readiness.postgres.defaultRolloutReady, false);
 });
 
-test("storage readiness does not claim full migration when production gates pass but SQLite remains default", () => {
-  const readiness = getStorageReadiness({
-    deployment: {
-      postgresRuntimeReady: true,
-      postgresLiveReady: true,
-      postgresAdapterRuntimeReady: true,
-      postgresRuntimeSmokeReady: true,
-      postgresProductionSmokeReady: true,
-      postgresWorkerLeaseReady: true,
-      postgresBackupRestoreReady: true,
-      postgresEndpointParityReady: true,
-      databaseSecretProfileReady: true,
-      postgresDefaultRolloutReady: true
-    },
-    env: {
-      BRAINSTY_DB_DRIVER: "sqlite",
-      BRAINSTY_DATABASE_TARGET: "postgres",
-      BRAINSTY_POSTGRES_RUNTIME_SMOKE_READY: "1",
-      BRAINSTY_POSTGRES_PRODUCTION_SMOKE_READY: "1",
-      BRAINSTY_POSTGRES_WORKER_LEASE_READY: "1",
-      BRAINSTY_POSTGRES_BACKUP_RESTORE_READY: "1",
-      BRAINSTY_POSTGRES_ENDPOINT_PARITY_READY: "1",
-      BRAINSTY_DATABASE_SECRET_PROFILE_READY: "1",
-      BRAINSTY_POSTGRES_DEFAULT_ROLLOUT_READY: "1"
-    }
-  });
-  assert.equal(readiness.status, "postgres_production_gates_ready_sqlite_default");
-  assert.equal(readiness.score, 95);
-  assert.equal(readiness.fullMigrationReady, false);
-  assert.equal(readiness.migrationPending, true);
-  assert.equal(readiness.appRuntimeMigratedToPostgres, false);
+test("storage readiness refuses a SQLite runtime instead of reporting a fallback", () => {
+  assert.throws(
+    () => getStorageReadiness({ env: { BRAINSTY_DB_DRIVER: "sqlite", BRAINSTY_DATABASE_TARGET: "postgres" } }),
+    (error) => error.failureClass === "non_postgres_runtime_forbidden"
+  );
 });

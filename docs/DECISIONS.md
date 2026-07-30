@@ -2934,3 +2934,101 @@ Manual spans are more stable for this codebase than a broad callback-only integr
 
 Consequences:
 When `LANGFUSE_ENABLED=false` or keys are missing, the product runs normally with a no-op tracer. When configured, Langfuse receives sanitized trace/span metadata, failure classes, safe input/output summaries, route/workflow names, and source-pointer counts. Future operators can debug latency and routing mistakes without weakening deterministic safety rails or exposing raw healthcare data.
+
+## 2026-07-12 - One PostgreSQL Runtime Authority
+
+Problem:
+The application store supported secret-file PostgreSQL resolution, but the default LangGraph checkpointer constructed a separate store from only the direct URL environment variable. Local runtime selection and several operational CLIs also retained an embedded-database path. That allowed split-brain workflow state and made restart/pointer evidence weaker than the declared architecture.
+
+Decision:
+PostgreSQL is the only selectable runtime database and the only selectable LangGraph checkpointer. The server, LangGraph saver, ingestion jobs, planner evaluator, browser proof, and readiness contracts resolve the same secret-backed authority. Redis is rebuildable cache/mirror state only. Zep Graphiti/FalkorDB is long-term temporal-fact memory only. OpenClaw receives a bounded projection and has no independent product-memory write authority.
+
+Rationale:
+Sessions, graph state, approvals, tasks, pointers, and audit must commit and recover under one transactional authority. A real restart proof is more reliable than adapter-shape parity or an injected test store.
+
+Consequences:
+Non-PostgreSQL driver and checkpointer values fail at boot. Missing deferred pointers fail loudly. The acceptance gate creates a real temporary PostgreSQL database, exercises live embeddings and Redis, closes and recreates the pool, resumes the interrupt, and verifies persisted rows and backing pointers. Legacy embedded-store support is isolated to test-only compatibility while those older unit tests are migrated; it cannot be selected by application runtime code.
+
+## 2026-07-13 — CareRoute starts after Phase 90, not after blocked Phases 91-92
+
+Problem:
+The Cortex plan approved Phases 93-96, but the repository phase ledger ended at Phase 92.
+That forced agents to infer the next phase from prose and created a risk that externally
+blocked production/write rails would incorrectly stall the evidence-first product work.
+
+Decision:
+Append Phases 93-96 to the binding ledger. Phase 93 depends on Phase 90. Phases 91-92 retain
+their existing dependencies, statuses, scope, and signature blockers. Phases 94-96 follow
+93 serially. No Phase 93 implementation begins until Phase 90 lands.
+
+Rationale:
+This exactly preserves the founder-approved sequence: finish the real sandbox rail first,
+allow Bill Guardian to use already proven rails, and keep production and write connectors
+honestly blocked until their agreements exist.
+
+Consequences:
+The next executable work is still Phase 90 Part 2. If credentials are absent, work stops at
+the loud external gate; it does not create connector scaffolds. CareRoute and Bill Guardian
+have an auditable future sequence without weakening runtime proof or contract gates.
+
+## 2026-07-18 — Founder Watchdog is a generated read-only projection
+
+Problem:
+The project has multiple operator dashboards and proof artifacts, but the founder lacked one
+current view connecting roadmap state, architecture, prompts, runtime processes, database
+utilization, configuration, and exact source. A binary green/red implementation flag would
+also conflate landed code, historical acceptance proof, current reachability, catalog
+selectability, and external authorization.
+
+Decision:
+Build the Founder Watchdog as a private Codex Site generated from canonical repository inputs
+and sanitized local probes. Store independent status dimensions and render them together. Keep
+Postgres as application authority, the phase ledger as phase authority, the spine YAML as
+planner/configuration authority, and Langfuse as trace authority. The Site is a projection, not
+a new control plane or data authority.
+
+Configuration controls are read-only visualizations. A hosted page cannot directly mutate a
+local OpenClaw gateway, database, credential store, policy gate, or `runtime_selectable` row.
+Any future mutation path must be a separately approved authenticated/audited local bridge that
+produces proposals or reviewed diffs, never an arbitrary toggle around deterministic gates.
+
+Consequences:
+Each implementation deployment can regenerate and republish a source-pinned dashboard. A local
+VS Code custom-protocol link is best effort and paired with a GitHub line fallback. Live prompt
+payloads and agent traces stay out of the Site. Stale documentation and configuration drift are
+shown explicitly instead of silently normalized away.
+
+## 2026-07-18 — Module load and process health are different evidence classes
+
+Problem:
+Founder Watchdog v1 set the LangGraph orchestrator runtime label from the Node `/api/health`
+port probe. With the Node process stopped, the dashboard displayed `not_loaded` without ever
+attempting to import `langgraphRunner.mjs`. The same probe treated any HTTP response, including
+404, as healthy, and source generation silently preferred a different dirty workspace.
+
+Decision:
+Bind generation to one explicit source checkout, derive immutable GitHub links from its remote
+and commit, and separate implementation, module-load, endpoint reachability, and protocol health.
+The LangGraph load probe may use only the repository's explicit test-key gate and must disclose
+that it proves import/compile—not a database, model, or end-to-end turn. A loopback-only GET
+collector may refresh sanitized evidence in the private Site; it has no mutation authority.
+
+Consequences:
+The orchestrator can honestly show “load verified / service stopped.” Hermes/CDP 404 responses
+are amber instead of green. Production snapshots become reproducible, GitHub fallbacks resolve,
+and the founder may refresh local state without introducing a payer, credential, PHI, or runtime
+control channel.
+
+## 2026-07-18 — Backend health does not imply feature utilization
+
+Decision:
+Runtime probes use each service's real contract, and the manifest may include only a sanitized
+projection of application health. Infrastructure availability and application utilization remain
+separate evidence classes. In particular, a FalkorDB `PONG` proves the graph backend is running;
+it does not prove Graphiti sent or retained a product-memory payload. When the application reports
+`phi_clearance_required`, product memory is shown amber even though FalkorDB is healthy.
+
+Consequences:
+The dashboard can show the locally runnable stack green without disguising policy, production,
+credential, signature, or live-invocation gaps. No health probe may promote a blocked capability
+into the executable catalog.

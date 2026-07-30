@@ -51,7 +51,9 @@ function baseState({ user, session, portal }) {
     memory: {
       scope: "session_only",
       crossSessionMemory: false,
-      hindsightDeferred: true
+      workflowMemory: "langgraph_checkpointer_and_database",
+      crossSessionProductMemory: "zep_graphiti_when_enabled",
+      productMemoryOwner: "langgraph"
     },
     portal: portal
       ? {

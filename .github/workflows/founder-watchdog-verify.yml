@@ -1,0 +1,54 @@
+name: Founder Watchdog integrity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "founder-watchdog/**"
+      - "src/**"
+      - "project/api/**"
+      - "docs/THREE_LAYER_**"
+      - "docs/db/**"
+      - ".github/workflows/founder-watchdog-verify.yml"
+  push:
+    branches: [main]
+    paths:
+      - "founder-watchdog/**"
+      - "src/**"
+      - "project/api/**"
+      - "docs/THREE_LAYER_**"
+      - "docs/db/**"
+      - ".github/workflows/founder-watchdog-verify.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            founder-watchdog/package-lock.json
+      - name: Install runtime dependencies
+        run: npm ci
+      - name: Install dashboard dependencies
+        working-directory: founder-watchdog
+        run: npm ci
+      - name: Verify generated evidence and UI
+        working-directory: founder-watchdog
+        env:
+          WATCHDOG_SOURCE_ROOT: ${{ github.workspace }}
+          WATCHDOG_VSCODE_ROOT: /Users/mfelix/projects/workerprototype_openclaw
+          WATCHDOG_REQUIRE_CLEAN: "1"
+        run: |
+          npm run lint
+          npm test

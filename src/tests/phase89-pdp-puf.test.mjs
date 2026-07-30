@@ -32,7 +32,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteStore } from "../concierge/database.mjs";
+import { SqliteStore } from "./support/sqliteTestStore.mjs";
 
 const SCRIPT_PATH = resolve(import.meta.dirname, "../../scripts/ingest-cms-pdp-puf.mjs");
 const RELEASE_CYCLE = "2026Q1_SPUF_20260408";
@@ -225,7 +225,7 @@ test("Phase 89 arm 5: missing-release negative — bogus --dir exits loud with a
   const bogusDir = await mkdtemp(join(tmpdir(), "brainsty-p89-bogus-"));
   const run = spawnSync(
     process.execPath,
-    [SCRIPT_PATH, "--release", RELEASE_CYCLE, "--dir", bogusDir, "--db", join(bogusDir, "neg.sqlite")],
+    [SCRIPT_PATH, "--release", RELEASE_CYCLE, "--dir", bogusDir],
     { encoding: "utf8" }
   );
   assert.notEqual(run.status, 0, "a release dir without the expected files must exit non-zero, never a silent empty ingest");

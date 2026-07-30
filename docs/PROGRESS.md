@@ -10204,3 +10204,232 @@ Proof and remaining risk:
 - The focused HTTP service is contract evidence only, never a live-provider claim.
 - Real sandbox OAuth, test-member EOB read-back, token-expiry live proof, PDex
   formulary, Stedi mock contract proof, and planner rail evals remain before Phase 90 completion.
+
+## 2026-07-30 — Phase 90 live Aetna OAuth/EOB proof and UM scope boundary
+
+RALPH state:
+
+- Requirements: prove the already-approved Aetna sandbox application against the
+  real VTE runtime while keeping UM self-funded plan eligibility separate from
+  developer-app eligibility.
+- Architecture: retained secret-file credentials, single-use OAuth state,
+  encrypted token-vault storage, structured pointer persistence, and
+  data-driven member rails. No production member or runtime control was used.
+- Loop: reconciled the Phase 90 branch with current `origin/main`, repaired the
+  fresh PostgreSQL bootstrap ordering, completed live Aetna OAuth, and hardened
+  the connector for the VTE sandbox's supported search shape.
+- Prove: the real sandbox returned 43 Coverage resources and 45 EOB resources;
+  the callback persisted snapshot/claim pointers, changed the member rail to
+  `api_covered`, and emitted OAuth/sync audit events. A later independent
+  process rebuilt context with the persisted snapshot and bounded claim
+  pointers. Focused tests cover read-back, single-use state, expiry
+  classification, repeat-sync idempotency, and the Layer 2-before-portal
+  planner rule.
+- Harden: no balance is fabricated when the synthetic response omits
+  `costToBeneficiary`/`benefitBalance`. UM commercial-plan scope remains
+  fail-closed as `portal_only` until written Aetna and UM confirmation.
+
+Proof and remaining risk:
+
+- See `artifacts/phase90/phase90-aetna-live-oauth-eob-proof-2026-07-30.md`.
+- The developer-app approval does not establish eligibility for UM's
+  self-funded/TPA employer plan. The decision procedure is in
+  `docs/runbooks/AETNA_UM_PATIENT_ACCESS_SCOPE_DETERMINATION.md`.
+- Remaining blockers are the live five-minute reauth arm, PDex formulary, Stedi
+  free test/mock proof, written UM scope confirmation, and an Aetna synthetic
+  response with balance fields if Aetna can supply one.
+- Verification passed: Phase 90 focused suite 6/6; runner/decision/ledger suite
+  31/31; full local suite 445 passed, 0 failed, 7 expected skips out of 452;
+  security review; production build; zero-vulnerability audit; and diff check.
+# Memory Runtime Authority Correction — LangGraph + Zep Graphiti + OpenClaw
+
+Date: 2026-07-12
+
+RALPH state:
+
+- Requirements: remove Graphify and legacy generic-Hindsight vocabulary from executable runtime authority. Graphify remains only development-time knowledge-base provenance. Product long-term memory is Zep Graphiti; workflow memory belongs to LangGraph; OpenClaw workers receive a bounded context projection and cannot write product memory directly.
+- Architecture: added one explicit memory-layer authority contract. Cortex is agent/project memory only; LangGraph checkpointer plus the application database hold workflow state; Zep Graphiti over FalkorDB provides temporal retain/recall; OpenClaw retains only bounded worker continuity.
+- Loop: replaced the stale Hindsight adapter bundle and registry row, migrated existing registry data to `zep_graphiti_memory_adapter`, and made uploaded-document evidence visible to the LLM planner without exposing raw document text.
+- Prove: exercised the actual Python Graphiti bridge, live OpenAI extraction/embedding calls, live FalkorDB, the running Node API, the runtime compatibility endpoint, and the rendered MVP in the Codex browser. No mock or scaffold result is counted as runtime acceptance.
+- Harden: corrected Graphiti retention from a single-entity JSON episode that produced no searchable facts to a masked multi-entity text episode that produces explicit source-pointer relationships. Missing Graphiti/OpenAI runtime state continues to fail loudly.
+
+Implemented:
+
+- Added `MEMORY_LAYER_AUTHORITY` and a `graphiti` compatibility bundle owned by LangGraph.
+- Removed the executable Hindsight adapter export and stale registry/config fields; added deletion migration for the old registry row.
+- Added `memory-architecture-authority.test.mjs` to prevent Graphify runtime dependencies and OpenClaw product-memory write authority.
+- Updated normal retention and the operator probe to Graphiti text episodes under contract `2026-07-12.graphiti-product-memory.v2` while preserving structured safe episodes locally for audit/replay.
+- Updated goal proof so `memory_layer_authority` is explicit and procedural promotion remains reviewer-gated.
+
+Runtime proof:
+
+- `npm run test:memory:graphiti` passed 2/2 against live FalkorDB and OpenAI, including an uploaded-document pointer retained in one session and recalled in another.
+- `POST /api/product-memory/probe` returned `nodeCount=4`, `edgeCount=3`, `factCount=3`; recalled facts included `eligibility_snapshots/probe`.
+- `GET /api/product-memory/status` returned `adapter=graphiti`, `provider=zep_graphiti`, `backend=falkordb`, `schemaReady=true`, and contract v2.
+- `GET /api/runtime/compatibility` returned `compatible=true`, LangGraph ownership for workflow and long-term memory, and `openclawProductMemoryWriteBlocked=true`.
+- `GET /api/mvp/final-goal-evaluation` returned score `100` and `memory_layer_authority=achieved_with_live_runtime_gate`.
+- Codex browser loaded `/mvp` as `Brainstyworkers Concierge MVP`; the runtime proof UI rendered and browser console error count was zero.
+- The 446-test local suite produced 435 passes and 8 intentional live-data skips; its 3 placeholder-environment failures were rerun with the protected runtime configuration and all passed. Focused architecture, contract, goal, build-check, and diff-check gates passed.
+
+Remaining follow-up:
+
+- Production PHI use remains contingent on the configured HIPAA boundary and explicit `BRAINSTY_PRODUCT_MEMORY_PHI_CLEARED=1`; the runtime refuses provider payloads without it.
+- Authenticated payer-portal proof remains a separate user-controlled, approval-gated OpenClaw requirement and is not implied by the Graphiti memory proof.
+
+## 2026-07-12 - PostgreSQL Single Runtime Authority and Restart/Pointer Proof
+
+Implemented:
+
+- Removed the embedded database from application runtime and made PostgreSQL the only accepted driver in every profile.
+- Added one secret-file-aware, process-global PostgreSQL store/pool shared by the server and LangGraph checkpointer, with a hashed authority guard against mid-process database changes.
+- Made PostgreSQL the only selectable LangGraph checkpointer; memory and file modes fail with `non_postgres_checkpointer_forbidden`.
+- Converted runtime ingestion, provider-directory, planner-evaluation, Redis cross-process, remote-browser, and pilot-readiness scripts to the PostgreSQL authority.
+- Added PostgreSQL-only deferred-pointer dereference with loud `deferred_pointer_missing` and `deferred_pointer_backing_missing` negative arms.
+- Updated registry keys and OpenClaw skill contracts from local-database names to PostgreSQL runtime/pointer names.
+- Added `docs/POSTGRES_RUNTIME_AUTHORITY.md` and permanent runtime architecture contract tests.
+
+Runtime proof:
+
+- `npm run test:postgres:single-authority`: 3/3 passed. The live arm created a real temporary PostgreSQL database from a secret file and proved shared app/checkpointer identity, encrypted interrupt persistence and resume across pool restart, PostgreSQL rows for sessions/context/checkpoints/approvals/tasks/audit/RAG, real deferred-pointer/backing-artifact resolution, loud nonexistent-pointer rejection, and Redis rebuild from PostgreSQL.
+- `npm run test:memory:architecture`: 5/5 passed; Graphiti is long-term memory, LangGraph/PostgreSQL owns workflow memory, Graphify has no runtime dependency, and OpenClaw product-memory writes are blocked.
+- Live Graphiti/FalkorDB arms passed for safe temporal facts and cross-session uploaded-document pointer recall using the real Graphiti bridge and OpenAI.
+- Running `/api/health` returned driver `postgres` and the complete single-authority role contract. `/api/runtime/compatibility` returned LangGraph/database workflow ownership, Zep Graphiti long-term ownership, and `openclawProductMemoryWriteBlocked=true`.
+- Codex in-app browser loaded the local application with the correct title and zero console errors.
+- Compose contract, storage contract, PostgreSQL production-profile contract, build check, syntax checks, and `git diff --check` passed.
+
+Remaining:
+
+- The large legacy unit-test suite still uses a test-only embedded compatibility store for fast isolated contract tests. That module is outside runtime selection and is explicitly marked test-only; live acceptance is PostgreSQL-only. Migrating every historical unit fixture to ephemeral PostgreSQL is a separate test-infrastructure cleanup, not a runtime fallback.
+
+### Merge-gate regression correction
+
+- The first complete `test:local` run exposed PostgreSQL connection exhaustion because Node starts many test-file processes and each imported the runtime LangGraph pool. The unit runner now uses an explicit `memory_test_only` saver under `NODE_TEST_CONTEXT`; this branch is unreachable in application runtime and is not accepted as durability proof. The live PostgreSQL suites call the production checkpointer directly.
+- Replaced the former file-checkpointer/embedded-database conversation restart test with two real child processes sharing a temporary PostgreSQL database and encrypted PostgreSQL checkpointer. After deleting checkpoint rows, the second process rehydrated the ordered conversation timeline from PostgreSQL.
+- Updated stale Phase 64, Phase 88, and Phase 89 assertions to the PostgreSQL-only runtime contract.
+- Final complete local result: 446 tests, 439 passed, 0 failed, 7 explicitly deferred live-data arms. The PostgreSQL single-authority proof remained 3/3, memory-authority proof remained 5/5, and the build passed.
+
+## 2026-07-13 — CareRoute ledger reconciliation and Phase 90 live entry gate
+
+RALPH state:
+
+- Requirements: reconcile the Cortex-approved Phases 93-96 into the repository ledger and
+  verify the actual next executable phase without creating mock or scaffold connectors.
+- Architecture: Phase 93 depends on Phase 90; 91-92 remain externally/signature gated.
+  PostgreSQL/Redis/Graphiti/OpenClaw authority remains unchanged.
+- Loop: extended the ledger/test/plan mirror and ran the protected Phase 90 Part 2 preflight.
+- Prove: Aetna sandbox metadata answered HTTP 200, the durable PostgreSQL checkpointer was
+  available, and the catalog/process substrate passed. The credential/key/scope gates failed
+  loudly and are recorded in `artifacts/phase90/phase90-part2-preflight-2026-07-13.md`.
+- Harden: no Phase 90 connector module was added. Phase 90 remains `in_progress`; Phase 93
+  remains `planned` until the full real sandbox acceptance lands. The stale Phase 89 MRF
+  entry-gate blocker was removed only after reconciling it to the committed real-fetch
+  transcript and acceptance proof; the ledger test now fails if that inconsistency returns.
+
+Current blockers:
+
+- Aetna app/test-member credentials and callback URI have not been issued/configured; portal
+  application status is Under Review.
+- Stedi free test/mock key is not configured.
+- UM self-funded/TPA Patient Access scope answer is not recorded.
+
+Verification:
+
+- Phase-ledger test: 6 passed, 0 failed.
+- Phase 89 MRF runtime refresh: 3 passed, 0 failed against the live public Aetna
+  `mrf.healthsparq.com` index and a bounded 50-observation slice; the idempotent second
+  ingest inserted 0 and skipped the 50 already-proven observations.
+- PostgreSQL single-authority live gate: 3 passed, 0 failed.
+- Graphiti/FalkorDB live memory gate: 2 passed, 0 failed after binding the clean worktree
+  to the installed ignored Python runtime.
+- Build: passed after initializing the pinned Graphiti submodule.
+- Complete protected-runtime local gate: 448 total, 441 passed, 0 failed, 7 explicit
+  live-data skips.
+
+## 2026-07-18 — Founder Watchdog private Codex Site
+
+RALPH state:
+
+- Requirements: reviewed Cortex `origin/main`, the authoritative three-layer semantic and
+  episodic notes, the binding plan/spine/prompt/rationale/decision sources, the historical
+  product prompt, and the phase ledger before implementation.
+- Architecture: created a separate generated read-only projection with distinct implementation,
+  proof, runtime, catalog, and external-gate signals. It does not duplicate Langfuse traces or
+  become a runtime authority.
+- Loop: generated a sanitized manifest; implemented Command, Architecture, Runtime, Modules,
+  Prompts, Data & APIs, Configuration, Roadmap, and Proof views; added source links, four
+  sequence paths, 11 graph nodes, 89-table schema browsing, Redis namespaces, full spine YAML,
+  and drift warnings.
+- Prove: `npm run lint`, `npm test`, and the production Site build passed. Browser QA exercised
+  all nine views, write-blocked sequence behavior, prompt selection, database filtering and
+  column expansion, YAML section filtering, phase blockers, and a 390x844 responsive viewport.
+- Harden: browser screenshots caught and removed a locale-dependent hydration mismatch and
+  document-width overflow that build-only checks missed. The local VS Code URL is correct but
+  Codex browser security blocks custom-protocol launch; GitHub line links remain the verified
+  hosted fallback.
+
+Verified runtime snapshot:
+
+- OpenClaw gateway `:19789`, host PostgreSQL `:5432`, host Redis `:6379`, Hermes `:8790`, and
+  Chrome CDP `:9222` were reachable at snapshot generation.
+- Canonical Node `:4173`, configured Redis `:6381`, compose Postgres `:55432`, FalkorDB `:6380`,
+  FastAPI `:8000`, and configured Langfuse `:3100` were not reachable.
+- Current model invocation was not re-proven; the source workspace has an OpenAI credential
+  name present, but the dashboard does not expose its value or call that green.
+- Graphify AST extraction over first-party concierge code produced 1,548 nodes and 4,568 edges.
+- Focused project verification recorded 35 tests: 29 passed, 0 failed, 6 loud live-prerequisite
+  skips; Phase 89 live proof recorded 8/9 passing with one explicit large-data skip.
+
+Remaining boundary:
+
+- Hosted Sites cannot inspect localhost server-side after deployment. The v2 loop adds an
+  optional browser-to-loopback read-only collector for the owner on this Mac; without that
+  local connection, each deploy remains an immutable timestamped snapshot.
+
+## 2026-07-18 — Founder Watchdog v2 corrective loop (verified)
+
+- Root cause reproduced: v1 mapped `liveProbes.app.reachable` directly to the LangGraph
+  `loaded/not_loaded` label. It never probed the module.
+- A clean isolated import initially failed loud because the required encrypted Postgres
+  checkpointer key was absent. Re-running through the repository's explicit test-only key gate
+  imported the module, compiled the graph, and returned all 11 canonical nodes; no DB query or
+  model call is counted by that proof.
+- Source generation now targets the selected checkout, derives the GitHub repository from
+  `origin`, pins links to the source commit, and supports clean-checkout enforcement.
+- Runtime probes now distinguish healthy, reachable-but-unverified, and stopped. Redis requires
+  `PONG`; PostgreSQL requires `pg_isready`; HTTP probes require the expected status and optional
+  JSON shape.
+- Added a loopback-only, origin-allowlisted, GET-only live collector and Site connection control.
+  The collector refreshes sanitized evidence only and has no operational write authority.
+- Added a GitHub integrity workflow for relevant pull requests and `main` changes.
+- Removed the unused Drizzle template/configuration from the dashboard package, upgraded the
+  Cloudflare/Vite/Wrangler development toolchain, and pinned a patched PostCSS override;
+  `npm audit` now reports zero production or development dependency vulnerabilities.
+- Verification passed: dashboard lint, production build, all three dashboard/collector tests,
+  25 focused LangGraph topology/runner/decision tests, parent-project build, all nine desktop
+  views without document overflow, live-collector connect/poll behavior, source-link targets,
+  and a fresh 390x844 mobile render with a 390px document width. Private Sites publishing is
+  the release operation for this verified build, not a separate implementation layer.
+
+## 2026-07-18 — Complete local runtime and truthful dashboard refresh
+
+- Started Colima and the existing project infrastructure. PostgreSQL `:55432` passed
+  `pg_isready`; runtime Redis `:6381` and FalkorDB `:6380` returned `PONG`.
+- Started Node on `:4173`; boot proved PostgreSQL authority, Redis production-ready write/read,
+  the 39-capability/13-process catalog seed, existing OpenClaw gateway reachability, and enabled
+  Langfuse configuration.
+- Started FastAPI on `:8000`; `/api/v1/health` returned `status=ok` and
+  `node_runtime_ok=true`. Started the Next.js mobile PWA on `:3002` because Colima's automatic
+  FalkorDB UI forwarding occupied host `:3000`.
+- Confirmed OpenClaw `:19789`, Hermes `/health` on `:8790`, Chrome/CDP schema on `:9223`, and
+  Langfuse `:3100/api/public/health` are healthy.
+- Corrected false-negative probes for Hermes and Chrome/CDP, upgraded FastAPI to its real health
+  contract, added the mobile PWA as a curated module, and carried a sanitized Node runtime summary
+  into the manifest.
+- The orchestrator independently imported and compiled all 11 nodes with checkpointer status
+  `ready`; its running Node service also passed health, so it now renders `active in service`.
+- FalkorDB is healthy, while the application's Graphiti contract is intentionally amber with
+  `phi_clearance_required`; no product-memory payload was sent and the replay queue is empty.
+- Dashboard lint, production build, and all three dashboard/collector tests passed. Codex-browser
+  QA proved live-collector connection, all corrected runtime cards, the 11-node architecture,
+  blocked write sequence, prompt observatory/Langfuse link, source-link wiring, and a mobile
+  Runtime view with document width equal to viewport width after fixing model-card overflow.

@@ -21,7 +21,7 @@ function baseAudit(overrides = {}) {
     productMemory: { adapter: "graphiti", enabled: true, status: "degraded", schemaReady: false },
     storage: {
       ok: true,
-      runtimeDriver: "sqlite",
+      runtimeDriver: "postgres",
       postgres: { productionProfileReady: false, defaultRolloutReady: false }
     },
     deployment: {
@@ -58,7 +58,7 @@ test("Phase 64 audit distinguishes regular-user MVP readiness from production co
   assert.equal(audit.productionScore < audit.productionTarget, true);
   assert.equal(audit.userMvp.readyForRegularUserPilot, true);
   assert.equal(audit.memoryPosture.advisoryOnly, true);
-  assert.equal(audit.blockers.some((blocker) => blocker.includes("Postgres production")), true);
+  assert.equal(audit.blockers.some((blocker) => blocker.includes("PostgreSQL single-authority")), true);
   assert.equal(audit.blockers.some((blocker) => blocker.includes("Graphiti/Zep")), true);
   assert.equal(audit.blockers.some((blocker) => blocker.includes("OpenClaw")), true);
 });
