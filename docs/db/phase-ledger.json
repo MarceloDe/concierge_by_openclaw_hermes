@@ -119,11 +119,10 @@
         "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#9"
       ],
       "acceptance_criteria_file": "docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md#11-phase-90",
-      "owner": "claude-code",
+      "owner": "codex",
       "blockers": [
-        "Aetna sandbox app review and credential issuance: questionnaire submitted; portal status Under Review; client id, client secret, callback URI, and test-member credential files are not yet configured",
-        "Stedi free test/mock API key is not configured; production BAA/key remain prohibited until Phase 91 standing is confirmed",
-        "UM self-funded/TPA Patient Access scope answer is not yet recorded"
+        "Aetna sandbox app and all six Patient Access V2 product subscriptions are approved; live sandbox OAuth and EOB persistence/read-back are proven, while the five-minute token-expiry/reauth arm remains",
+        "Stedi free test/mock API key is not configured; production BAA/key remain prohibited until Phase 91 standing is confirmed"
       ]
     },
     {

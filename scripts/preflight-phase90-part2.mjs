@@ -101,16 +101,23 @@ if (!stedi.ok) {
 
 // --- 3. The one architectural question S1 must answer ---
 const umScope = process.env.BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE;
+const validUmScope = new Set(["yes", "no"]).has(String(umScope ?? "").trim().toLowerCase());
 record(
   "S1 · UM self-funded/TPA group in scope for Patient Access?",
-  Boolean(umScope),
-  umScope ? `recorded: ${umScope}` : "unanswered — set BRAINSTY_UM_PATIENT_ACCESS_IN_SCOPE=yes|no during registration"
+  validUmScope,
+  validUmScope
+    ? `recorded: ${String(umScope).trim().toLowerCase()}`
+    : umScope
+      ? "invalid — use exactly yes or no after written confirmation"
+      : "unanswered — obtain written Aetna + UM plan-administrator confirmation"
 );
-if (!umScope) {
+if (!validUmScope) {
   blockers.push(
-    "ANSWER DURING REGISTRATION — is UM's self-funded/TPA group IN SCOPE for Patient Access?\n" +
+    "WRITTEN SCOPE CONFIRMATION — is UM's self-funded/TPA group IN SCOPE for Patient Access?\n" +
+      "    The developer-app approval does not answer plan/product eligibility. Obtain a written\n" +
+      "    answer from Aetna Interoperability support and UM Benefits/plan administration first.\n" +
       "    Out of scope ⇒ that member's rail stays portal_only forever and the portal-login\n" +
-      "    processes remain the offered route. The answer becomes a member_data_rails row."
+      "    processes remain the offered route. Record only yes|no; never put PHI in this variable."
   );
 }
 
