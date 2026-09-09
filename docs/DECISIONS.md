@@ -3032,3 +3032,8 @@ Consequences:
 The dashboard can show the locally runnable stack green without disguising policy, production,
 credential, signature, or live-invocation gaps. No health probe may promote a blocked capability
 into the executable catalog.
+
+
+## 2026-09-09 — First value creates continuity
+
+Use existing LangGraph, DB process catalog, agent_tasks and scheduled_jobs. No separate disease router, price bot or scheduler. The new design is documentation-only and runtime_selectable=false. A hypothetical case never activates patient monitoring; a real authorized case creates an open internal task with explicit pending/active state.

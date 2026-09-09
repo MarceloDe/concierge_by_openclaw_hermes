@@ -2752,3 +2752,8 @@ Focused proof:
 - FalkorDB may be healthy while Graphiti utilization is amber due to `phi_clearance_required`;
   the dashboard must show both facts without collapsing them into a false green memory claim.
 - Desktop and 390px Runtime rendering have no document-level horizontal overflow.
+
+
+## 2026-09-09 — Value-delivery journey acceptance
+
+See [delivery slices and proof](value-delivery/ENGINEERING_JOURNEY.md#7-delivery-slices-and-proof). First answer plus open task must be durable and idempotent; no monitoring claim before real dispatcher proof; no all-inclusive estimate with procedure gaps; no realized savings without outcome evidence.

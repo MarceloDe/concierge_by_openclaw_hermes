@@ -10445,3 +10445,8 @@ Remaining boundary:
   QA proved live-collector connection, all corrected runtime cards, the 11-node architecture,
   blocked write sequence, prompt observatory/Langfuse link, source-link wiring, and a mobile
   Runtime view with document width equal to viewport width after fixing model-card overflow.
+
+
+## 2026-09-09 — Emergency and prescription journey design saved
+
+Saved the [casebook, engineering graphs and machine-readable design](value-delivery/README.md), grounded in current source architecture. Current follow-up hook only handles claim_submitted; current user heartbeat inspects jobs without invoking external adapters. No runtime code, payer action, patient job, phase status or deployment changed. Original personal evidence remains outside this repository.

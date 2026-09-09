@@ -3491,3 +3491,8 @@ Non-goals:
    healthy graph backend remains amber for product-memory use while PHI clearance is absent.
 5. Keep the local collector stateless/read-only and the hosted Site immutable per version;
    durable application state remains in PostgreSQL, with Redis as a rebuildable mirror.
+
+
+## 2026-09-09 — Concrete first-value journeys
+
+The founder requested emergency financial clarity with automatic episode follow-up and exact-prescription price comparison. See [the journey package](value-delivery/README.md). Treat VD-01–VD-05 as proposed acceptance slices under the existing phase ledger, not new completed phases.
