@@ -1,0 +1,478 @@
+{
+  "schema_version": "brainsty.value_delivery.design.v1",
+  "status": "proposed",
+  "runtime_selectable": false,
+  "dispatchable": false,
+  "artifact_type": "engineering_design_not_runtime_workflow",
+  "source_commit": "7b9d1ee34f0cbf9ea0cf9b974727d3a186c14b0e",
+  "case_examples": [
+    {
+      "id": "emergency_financial_clarity",
+      "clinical_context": "hypothetical_afib_possible_cardioversion",
+      "live_patient_job_created": false
+    },
+    {
+      "id": "prescription_value_check",
+      "drug_example": "generic tadalafil 5 mg tablet",
+      "live_patient_job_created": false,
+      "live_prices_included": false
+    }
+  ],
+  "nodes": [
+    {
+      "id": "intake",
+      "purpose": "Resolve patient/proxy, care context and administrative goal",
+      "existing_spine_seam": "input_policy",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "hydrate",
+      "purpose": "Hydrate plan, case, consent and executable catalog",
+      "existing_spine_seam": "recall_context",
+      "existing_tool_keys_to_hydrate": [
+        "plan_identity_resolver"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "plan",
+      "purpose": "Select authored process steps",
+      "existing_spine_seam": "llm_decision",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "guard",
+      "purpose": "Validate workflow and dispatch authority",
+      "existing_spine_seam": "plan_journey",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "member_evidence",
+      "purpose": "Read eligible member rail; UM uses portal only",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "openclaw_authenticated_browser",
+        "payer_portal_reader",
+        "payer_fhir_patient_access_api"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "facility",
+      "purpose": "Verify exact facility/network and service-date context",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "provider_directory_public_api"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "benefits",
+      "purpose": "Resolve benefit versions and accumulator",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "employer_benefits_doc_rag"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "estimate",
+      "purpose": "Separate known portions, unknowns and eligible ceiling",
+      "existing_spine_seam": "case_state_shadow",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "first_value",
+      "purpose": "Persist sourced card revision and open task atomically",
+      "existing_spine_seam": "compose_response",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "activation",
+      "purpose": "Validate consent, connector readiness and scheduling policy",
+      "existing_spine_seam": "plan_journey",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "wait",
+      "purpose": "Checkpoint until event, due time or requested user detail",
+      "existing_spine_seam": "approval_pause",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "resume",
+      "purpose": "Acquire lease; revalidate consent; resume unfinished work",
+      "existing_spine_seam": "recall_context",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "care_team",
+      "purpose": "Separate role, employment, billing group and network evidence",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "provider_directory_public_api",
+        "document_trace_parser"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "procedures",
+      "purpose": "Capture planned/performed service details, without clinical advice",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "document_trace_parser"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "claims",
+      "purpose": "Observe claim/EOB revisions with deduplication and reversals",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "payer_portal_reader",
+        "openclaw_document_downloader"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "reconcile",
+      "purpose": "Match EOB responsibility, invoices and payments",
+      "existing_spine_seam": "case_state_shadow",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "notify",
+      "purpose": "Publish meaningful changes on authorized channel",
+      "existing_spine_seam": "compose_response",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "close",
+      "purpose": "Close with acknowledged gaps and late-event reopen policy",
+      "existing_spine_seam": "case_state_shadow",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "rx_match",
+      "purpose": "Confirm exact prescription and valid claim baseline",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "payer_portal_reader"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "rx_quotes",
+      "purpose": "Collect timestamped branch/program-specific offers",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "public_web_search",
+        "public_web_scraper_openclaw"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "rx_compare",
+      "purpose": "Compare full cash outlay, fees, membership and accumulator tradeoff",
+      "existing_spine_seam": "case_state_shadow",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "rx_select",
+      "purpose": "Capture user selection and required final confirmation",
+      "existing_spine_seam": "approval_pause",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "rx_fill",
+      "purpose": "Verify actual dispensing/payment and claim reversal",
+      "existing_spine_seam": "observe_evidence",
+      "existing_tool_keys_to_hydrate": [
+        "document_trace_parser"
+      ],
+      "status": "proposed",
+      "runtime_selectable": false
+    },
+    {
+      "id": "outcome",
+      "purpose": "Record verified savings separately from projections",
+      "existing_spine_seam": "case_state_shadow",
+      "existing_tool_keys_to_hydrate": [],
+      "status": "proposed",
+      "runtime_selectable": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "intake",
+      "to": "hydrate",
+      "condition": "authorized administrative scope"
+    },
+    {
+      "from": "hydrate",
+      "to": "plan",
+      "condition": "context ready"
+    },
+    {
+      "from": "plan",
+      "to": "guard",
+      "condition": "authored process selected"
+    },
+    {
+      "from": "guard",
+      "to": "member_evidence",
+      "condition": "runtime tool and consent gates pass"
+    },
+    {
+      "from": "member_evidence",
+      "to": "facility",
+      "condition": "episode journey"
+    },
+    {
+      "from": "facility",
+      "to": "benefits",
+      "condition": "match or explicit gap recorded"
+    },
+    {
+      "from": "benefits",
+      "to": "estimate",
+      "condition": "available evidence sufficient for bounded answer"
+    },
+    {
+      "from": "estimate",
+      "to": "first_value",
+      "condition": "known and unknown portions validated"
+    },
+    {
+      "from": "first_value",
+      "to": "activation",
+      "condition": "task/card transaction committed"
+    },
+    {
+      "from": "activation",
+      "to": "wait",
+      "condition": "active schedule or explicit pending state persisted"
+    },
+    {
+      "from": "wait",
+      "to": "resume",
+      "condition": "event or permitted due time"
+    },
+    {
+      "from": "resume",
+      "to": "care_team",
+      "condition": "new care detail"
+    },
+    {
+      "from": "care_team",
+      "to": "procedures",
+      "condition": "role facts separated"
+    },
+    {
+      "from": "procedures",
+      "to": "estimate",
+      "condition": "estimate-affecting evidence"
+    },
+    {
+      "from": "resume",
+      "to": "claims",
+      "condition": "claims read due"
+    },
+    {
+      "from": "claims",
+      "to": "reconcile",
+      "condition": "new or revised evidence"
+    },
+    {
+      "from": "reconcile",
+      "to": "notify",
+      "condition": "meaningful change"
+    },
+    {
+      "from": "reconcile",
+      "to": "wait",
+      "condition": "unchanged or unresolved"
+    },
+    {
+      "from": "notify",
+      "to": "close",
+      "condition": "settled and gaps acknowledged"
+    },
+    {
+      "from": "notify",
+      "to": "wait",
+      "condition": "still open"
+    },
+    {
+      "from": "close",
+      "to": "resume",
+      "condition": "late claim or reversal"
+    },
+    {
+      "from": "member_evidence",
+      "to": "rx_match",
+      "condition": "medication journey"
+    },
+    {
+      "from": "rx_match",
+      "to": "rx_quotes",
+      "condition": "exact-match fields known"
+    },
+    {
+      "from": "rx_match",
+      "to": "wait",
+      "condition": "required field missing"
+    },
+    {
+      "from": "rx_quotes",
+      "to": "rx_compare",
+      "condition": "qualified offers or explicit unavailability"
+    },
+    {
+      "from": "rx_compare",
+      "to": "first_value",
+      "condition": "comparison sourced"
+    },
+    {
+      "from": "resume",
+      "to": "rx_select",
+      "condition": "user selects offer"
+    },
+    {
+      "from": "rx_select",
+      "to": "rx_fill",
+      "condition": "approved action if needed; final price accepted"
+    },
+    {
+      "from": "rx_fill",
+      "to": "outcome",
+      "condition": "receipt and latest claim verified"
+    },
+    {
+      "from": "outcome",
+      "to": "close",
+      "condition": "resolution criteria met"
+    },
+    {
+      "from": "resume",
+      "to": "rx_quotes",
+      "condition": "quote expiry or authorized refill event"
+    }
+  ],
+  "job_contract": {
+    "activation_event": "episode_registered_or_first_value_delivered",
+    "creation": "atomic_with_first_value_revision",
+    "deduplication_scope": [
+      "tenant_id",
+      "user_id",
+      "case_id",
+      "purpose"
+    ],
+    "storage": [
+      "agent_tasks",
+      "scheduled_jobs",
+      "workflow_checkpoint_runs",
+      "agent_outbox"
+    ],
+    "auto_create_open_task": true,
+    "auto_activate_external_access": false,
+    "business_states": [
+      "open",
+      "waiting_for_user",
+      "pending_approval",
+      "blocked_integration",
+      "reauth_required",
+      "active",
+      "paused",
+      "closed"
+    ],
+    "lifecycle_values_require_runtime_mapping": true,
+    "dispatch_preconditions": [
+      "patient_or_verified_proxy",
+      "valid_scoped_consent",
+      "runtime_selectable_capability",
+      "actual_dispatcher_available",
+      "rail_supported",
+      "session_or_token_valid",
+      "approved_background_policy",
+      "lease_acquired"
+    ],
+    "um_rail": "portal_only",
+    "portal_background_policy": "not_implied_by_refresh_token_API_sync_policy",
+    "notification_policy": "meaningful_changes_only_on_authorized_channel",
+    "close_on_discharge": false,
+    "close_after_90_days_automatically": false,
+    "late_event": "reopen_same_case"
+  },
+  "engineering_work_item": {
+    "id": "VD-01",
+    "status": "open",
+    "kind": "proposed_engineering_work_not_patient_job",
+    "title": "First sourced emergency card plus durable open episode task",
+    "next_step": "Register and prove one authored process within existing phase dependencies",
+    "completion_requires": [
+      "real_evidence_pointer_readback_after_restart",
+      "atomic_card_task_persistence",
+      "concurrent_event_deduplication",
+      "missing_evidence_preserved",
+      "proxy_and_tenant_negative_tests",
+      "actual_scheduler_proof_before_monitoring_claim"
+    ]
+  },
+  "future_events": [
+    "episode_registered",
+    "first_value_delivered",
+    "care_detail_received",
+    "admission_status_changed",
+    "procedure_updated",
+    "claim_revision_observed",
+    "invoice_received",
+    "payment_received",
+    "discharge_reported",
+    "medication_quote_expired",
+    "fill_confirmed",
+    "consent_revoked"
+  ],
+  "numeric_rules": {
+    "representation": "integer_cents",
+    "complete_episode_total_if_procedure_gaps": "null",
+    "annual_limit": "conditional_eligible_ceiling_not_expected_cost",
+    "membership_break_even": "ceil(incremental_fee/per_fill_savings) only if per_fill_savings > 0",
+    "realized_savings_requires": "actual_fill_or_corrected_bill_and_payment_evidence"
+  }
+}
