@@ -1,4 +1,4 @@
-# Brainstyworkers AI Concierge — System Documentation Index
+# CoreOfCare — System Documentation Index
 
 > Navigation-first documentation. Every page below was generated from a **real
 > investigation** of the running system (live Postgres `information_schema`
