@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Brainstyworkers Concierge",
-  description: "Mobile-first Brainstyworkers concierge PWA",
+  title: "CoreOfCare",
+  description: "Mobile-first CoreOfCare health-insurance resolution client",
   manifest: "/manifest.json"
 };
 
