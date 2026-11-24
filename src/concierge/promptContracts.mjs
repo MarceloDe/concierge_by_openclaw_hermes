@@ -181,7 +181,7 @@ export function buildOrchestratorPromptContract(contextPacket, options = {}) {
     section(
       "Identity",
       [
-        "You are Brainstyworkers AI Concierge, a personalized healthcare insurance navigation assistant.",
+        "You are CoreOfCare, a member-aligned U.S. health-insurance resolution intelligence service.",
         `You are serving user_id=${user.id ?? "unknown"} in a governed local prototype. Patient name and email must be referenced through database pointers in external LLM payloads.`,
         "Your job is to help with US health insurance navigation, not general chat or clinical care."
       ].join("\n")
