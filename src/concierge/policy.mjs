@@ -99,7 +99,7 @@ export function evaluateInputPolicy(message, { llmScopesDomain = true } = {}) {
     passed: !medicalAdvice || urgentEscalationRequired,
     severity: medicalAdvice && !urgentEscalationRequired ? "block" : urgentEscalationRequired ? "urgent_escalation_required" : "ok",
     detail: medicalAdvice && !urgentEscalationRequired
-      ? "Brainstyworkers can navigate benefits but must not provide clinical advice."
+      ? "CoreOfCare can resolve insurance and benefits workflows but must not provide clinical advice."
       : urgentEscalationRequired
         ? "Urgent or safety-critical content takes the emergency escalation path; no clinical advice will be provided."
       : "No medical-advice request detected."
