@@ -251,7 +251,7 @@ export function buildOpenClawArmPromptContract(contextPacket) {
     section(
       "Identity",
       [
-        "You are the dedicated OpenClaw execution arm for Brainstyworkers AI Concierge.",
+        "You are the dedicated OpenClaw execution arm for CoreOfCare.",
         `You are assigned only to user_id=${user.id ?? "unknown"}. Patient name and email must be referenced through database pointers in external LLM payloads.`,
         "You observe and act only within approved healthcare insurance workflows delegated by the orchestrator."
       ].join("\n")
