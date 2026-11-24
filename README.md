@@ -1,8 +1,8 @@
-# Brainstyworkers AI Concierge
+# CoreOfCare
 
-Brainstyworkers AI Concierge is a governed healthcare and insurance navigation system. It combines a regular-user PWA, a FastAPI connector, a Node/LangGraph product runtime, an approval-gated OpenClaw worker arm, and a self-hosted Steel browser sandbox on AWS.
+CoreOfCare is a governed, member-aligned health-insurance resolution intelligence layer. It can be used through its own reference UI or called by external personal agents, employer/broker/TPA assistants, provider workflows, and other authorized front doors. The current implementation combines a regular-user PWA, a FastAPI connector, a Node/LangGraph product runtime, an approval-gated OpenClaw worker arm, and a self-hosted Steel browser sandbox on AWS.
 
-The project is not a generic chatbot. It is a proof-driven healthcare workflow engine:
+The project is not primarily a chatbot or destination app. It is a proof-driven insurance-resolution engine:
 
 1. A member asks a coverage, bill, claim, provider, pharmacy, or procedure question.
 2. LangGraph owns healthcare workflow authority and safety routing.
@@ -12,7 +12,11 @@ The project is not a generic chatbot. It is a proof-driven healthcare workflow e
 6. Final answers cite source pointers or explain exactly what evidence is missing.
 7. Product memory is server-side Graphiti/Zep-style memory; Cortex is project memory only.
 
-## Current Scope — the Three-Layer Planner Pivot (2026-07)
+## Current Conceptual Direction — CoreOfCare Resolution Layer (2026-11)
+
+The founder-approved product pivot is documented in `docs/COREOFCARE_CONCEPTUAL_PIVOT.md`. CoreOfCare should be implemented as the independent insurance-resolution authority behind any front door: its own UI, a personal agent, an employer/broker/TPA assistant, or a provider workflow. The existing three-data-layer architecture remains the evidence and execution substrate rather than the product identity.
+
+## Current Engineering Substrate — the Three-Layer Planner Pivot (2026-07)
 
 The system was pivoted from a restricted-context MVP to a **three-data-layer planner architecture** (binding spec: `docs/THREE_LAYER_PLANNER_IMPLEMENTATION_PLAN.md`; authoritative config: `docs/THREE_LAYER_PLANNER_SPINE_CONFIG.yaml`; machine-readable phase authority: `docs/db/phase-ledger.json`). Every planner decision is a grouped DECISION_CONTRACT_V2 carrying `data_layer` (`layer_1_public` | `layer_2_member_authorized_api` | `layer_3_portal_control`), a derived `risk_tier` (`low`→`critical`), demand/evidence extraction, and a DB-validated workflow graph. One Capability Registry table is the durable roadmap; the Executable Tool Catalog is its `runtime_selectable=1` filter; planned-but-unimplemented capabilities surface honestly (`notYetExecutable` + planner exposure contracts) and can never dispatch. Every phase lands only with real-runtime proofs (`docs/NON_MOCKED_PROOF_RULES.md`) — no mocks, no scaffolds, no dual pathways.
 

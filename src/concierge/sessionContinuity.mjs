@@ -219,7 +219,7 @@ export async function buildSessionExport(store, { sessionId, userId }) {
     : "- No stored source pointers yet.";
   const content = maskDirectIdentifiers(
     [
-      `# Brainstyworkers Concierge Session Export`,
+      `# CoreOfCare Resolution Session Export`,
       "",
       `Generated: ${nowIso()}`,
       `Session: ${continuity.session.id}`,

@@ -1,6 +1,6 @@
 ---
 name: insurance-portal-browser
-description: Observe a user-authenticated insurance portal for Brainstyworkers AI Concierge, extract approved read-only facts with source pointers, and stop before credentials or irreversible actions.
+description: Observe a user-authenticated insurance portal for CoreOfCare, extract approved read-only facts with source pointers, and stop before credentials or irreversible actions.
 skill_key: insurance_portal_browser
 risk_level: high
 status: repo_artifact_ready_adapter_execution_gated
@@ -8,7 +8,7 @@ status: repo_artifact_ready_adapter_execution_gated
 
 # Insurance Portal Browser
 
-Use this skill only as the Brainstyworkers OpenClaw execution arm for user-approved insurance portal observation and extraction. The skill consumes a task envelope from the LangGraph orchestrator or local runtime adapter and returns observed facts, source pointers, status updates, subtasks, worker-memory updates, actions taken, approvals required, and blockers.
+Use this skill only as the CoreOfCare OpenClaw execution arm for user-approved insurance portal observation and extraction. The skill consumes a task envelope from the LangGraph orchestrator or local runtime adapter and returns observed facts, source pointers, status updates, subtasks, worker-memory updates, actions taken, approvals required, and blockers.
 
 This skill is the healthcare safety envelope. It does not replace `browser-automation`; it requires `browser-automation` as the browser-control substrate and `ocr-local` as the local visual evidence companion.
 
@@ -25,7 +25,7 @@ The worker should be adaptive and persistent inside the assigned LangGraph task.
 ## Required Companion Skills
 
 - `browser-automation`: required for OpenClaw browser status checks, profile selection, tab hygiene, stable tab labels, read-before-click snapshots, fresh ARIA refs, narrow actions, stale-ref recovery, and precise manual blocker reporting.
-- `ocr-local`: required for local screenshot OCR. OCR must run from the dedicated Brainstyworkers OpenClaw workspace and must not call an external OCR API.
+- `ocr-local`: required for local screenshot OCR. OCR must run from the dedicated CoreOfCare OpenClaw workspace and must not call an external OCR API.
 
 The `insurance-portal-browser` contract governs what the browser worker may do. The `browser-automation` skill governs how the worker operates the browser safely and reliably inside that contract.
 
