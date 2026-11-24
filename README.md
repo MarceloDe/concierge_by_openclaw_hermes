@@ -14,7 +14,7 @@ The project is not primarily a chatbot or destination app. It is a proof-driven 
 
 ## Current Conceptual Direction — CoreOfCare Resolution Layer (2026-11)
 
-The founder-approved product pivot is documented in `docs/COREOFCARE_CONCEPTUAL_PIVOT.md`. CoreOfCare should be implemented as the independent insurance-resolution authority behind any front door: its own UI, a personal agent, an employer/broker/TPA assistant, or a provider workflow. The existing three-data-layer architecture remains the evidence and execution substrate rather than the product identity.
+The founder-approved product pivot is documented in `docs/COREOFCARE_CONCEPTUAL_PIVOT.md`. Reusable onboarding instructions for coding/research/product agents are in `docs/COREOFCARE_AGENT_ALIGNMENT_PROMPT.md`. CoreOfCare should be implemented as the independent insurance-resolution authority behind any front door: its own UI, a personal agent, an employer/broker/TPA assistant, or a provider workflow. The existing three-data-layer architecture remains the evidence and execution substrate rather than the product identity.
 
 ## Current Engineering Substrate — the Three-Layer Planner Pivot (2026-07)
 
