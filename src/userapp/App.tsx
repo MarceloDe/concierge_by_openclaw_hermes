@@ -78,7 +78,7 @@ export function App() {
           id: mkId(),
           role: "assistant",
           text:
-            `Hi ${s.member.name.split(" ")[0]} — I'm your Brainsty shield. I'm independent; no insurer pays me.\n\n` +
+            `Hi ${s.member.name.split(" ")[0]} — I'm CoreOfCare, your health-insurance resolution layer.\n\n` +
             `Ask me anything about your ${s.member.payer} coverage, or pick a shortcut below. ` +
             `When we need your portal, I'll open the live ${s.member.payer} browser and hand you the keyboard for login.`
         }
@@ -146,8 +146,8 @@ export function App() {
           <div className="hero">
             <Shield size={44} />
           </div>
-          <h1>Brainsty</h1>
-          <p>Your independent healthcare shield. Understand your coverage, fight surprise bills, and reach your insurer's portal — safely.</p>
+          <h1>CoreOfCare</h1>
+          <p>Verify what your plan should do, coordinate the next step, and stay with the case until the outcome is documented.</p>
           <button className="start" onClick={begin} disabled={starting}>
             {starting ? "Starting…" : "Start session"}
           </button>
@@ -164,7 +164,7 @@ export function App() {
           <Shield size={20} />
         </div>
         <div>
-          <div className="title">Brainsty</div>
+          <div className="title">CoreOfCare</div>
           <div className="sub">{session.member.payer} · {session.member.name}</div>
         </div>
         <div className="spacer" />
